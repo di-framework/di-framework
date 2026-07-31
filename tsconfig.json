@@ -14,6 +14,7 @@
 
     // Bundler mode
     "moduleResolution": "bundler",
+    "customConditions": ["bun"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
@@ -29,5 +30,9 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["node_modules", "packages/examples/packages/deno-sandboxes/**/*"]
+  "exclude": [
+    "node_modules",
+    "packages/examples/packages/deno-sandboxes/**/*",
+    "packages/examples/packages/deno-http/**/*"
+  ]
 }

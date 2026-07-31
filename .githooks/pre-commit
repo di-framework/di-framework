@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+bunx biome check --staged --write --files-ignore-unknown=true --no-errors-on-unmatched
+bun run tsc

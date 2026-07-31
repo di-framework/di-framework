@@ -17,35 +17,18 @@
     "test": "bun test",
     "publish": "bun run packages/bin/cmd/publish.ts",
     "link-cli": "(cd packages/bin && bun link >/dev/null 2>&1)",
-    "postinstall": "bun link-cli && echo 'di-framework <command> [args...]'",
+    "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework <command> [args...]'",
     "tsc": "tsc",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "prepare": "husky"
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "^2.5.6",
     "@types/bun": "latest",
-    "eslint": "^10.0.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.5",
-    "happy-dom": "^20.0.10",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "prettier": "^3.8.1",
-    "typescript-eslint": "^8.56.0"
+    "happy-dom": "^20.11.1"
   },
   "peerDependencies": {
-    "typescript": "^5"
-  },
-  "lint-staged": {
-    "*.{ts,js,tsx,jsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,yml,yaml}": [
-      "prettier --write"
-    ]
+    "typescript": "^5.9.3"
   }
 }
