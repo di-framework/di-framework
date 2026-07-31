@@ -1,0 +1,127 @@
+name: Auto Tag
+
+# Cuts a release tag when dependencies change on master -- primarily so
+# Dependabot security updates ship to users instead of sitting in the repo.
+#
+# Order matters: the version bump is committed to master FIRST, and the tag
+# is placed on that commit.
+#
+# Requires a RELEASE_TOKEN secret. Tags pushed with the default GITHUB_TOKEN
+# do not trigger `on: push: tags`, so release workflows would never fire.
+#
+# The token needs write access to repository contents.
+#   - Fine-grained PAT: Contents -> Read and write, scoped to this repo
+#   - Classic PAT:      public_repo (or `repo` if private)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "bun.lock"
+      - "package-lock.json"
+      - "yarn.lock"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Which component to bump"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+concurrency:
+  group: auto-tag
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Fail early if RELEASE_TOKEN is missing
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is not set. A tag pushed with the default" \
+                 "GITHUB_TOKEN will not trigger tag-based release workflows."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compute next version
+        id: version
+        run: |
+          set -euo pipefail
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ -z "$CURRENT" ] || [ "$CURRENT" = "undefined" ]; then
+            echo "::error::could not read version from package.json"
+            exit 1
+          fi
+
+          BUMP="${{ github.event.inputs.bump || 'patch' }}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          # strip any prerelease suffix from PATCH
+          PATCH=${PATCH%%-*}
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+            *) echo "::error::unknown bump type: $BUMP"; exit 1 ;;
+          esac
+
+          NEXT="$MAJOR.$MINOR.$PATCH"
+
+          if git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; then
+            echo "::error::tag v$NEXT already exists"
+            exit 1
+          fi
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "next=$NEXT"       >> "$GITHUB_OUTPUT"
+          echo "Bumping $CURRENT -> $NEXT ($BUMP)"
+
+      - name: Apply version to package.json
+        run: |
+          set -euo pipefail
+          NEXT="${{ steps.version.outputs.next }}"
+          npm version "$NEXT" --no-git-tag-version --allow-same-version
+
+      - name: Commit, tag, and push
+        run: |
+          set -euo pipefail
+          NEXT="${{ steps.version.outputs.next }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add package.json
+          # Include lockfile if npm/bun rewrote it
+          git add -u bun.lock package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null || true
+          git commit -m "chore(release): v$NEXT"
+
+          git tag -a "v$NEXT" -m "Release v$NEXT"
+          git push origin HEAD:master
+          git push origin "v$NEXT"
+
+          echo "Tagged v$NEXT"
+          echo "### Released \`v$NEXT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Bumped from \`${{ steps.version.outputs.current }}\`." >> "$GITHUB_STEP_SUMMARY"
