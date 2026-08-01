@@ -4,12 +4,15 @@
     "paths": {
       "@di-framework/di-framework/container": ["../di-framework/container.ts"],
       "@di-framework/di-framework/decorators": ["../di-framework/decorators.ts"],
-      "@di-framework/di-framework-http": ["../di-framework-http/index.ts"]
+      "@di-framework/di-framework-http": ["../di-framework-http/index.ts"],
+      "@di-framework/graphql": ["../graphql/index.ts"],
+      "@di-framework/graphql/core": ["../graphql/core.ts"]
     }
   },
   "include": [
     "packages/advanced/**/*.ts",
     "packages/basic/**/*.ts",
+    "packages/graphql/**/*.ts",
     "packages/http-router/**/*.ts",
     "packages/services/**/*.ts",
     "packages/test-example/**/*.ts"

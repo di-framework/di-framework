@@ -1,0 +1,123 @@
+directive @key(fields: String!) on OBJECT
+
+directive @context(name: String!) on OBJECT | FIELD_DEFINITION
+
+scalar DateTime
+
+scalar JSON
+
+"""How the shelves are organised."""
+enum Genre {
+  Fiction
+  NonFiction
+  Poetry
+  Reference
+}
+
+"""Where a loan is in its life."""
+enum LoanState {
+  Active
+  Returned
+}
+
+"""A title to add to the catalog."""
+input BookInput {
+  title: String!
+  author: String!
+  genre: Genre!
+  publishedAt: DateTime!
+  copies: Int
+}
+
+"""A review to post."""
+input ReviewInput {
+  bookId: ID!
+  rating: Int!
+  body: String
+}
+
+"""A title the library owns copies of."""
+type Book @key(fields: "id") @context(name: "Catalog") {
+  id: ID! @context(name: "Catalog")
+  """Where to find it on the shelf."""
+  shelfLabel: String! @context(name: "Catalog")
+  """Years since publication."""
+  age: Int! @context(name: "Catalog")
+  title: String! @context(name: "Catalog")
+  author: String! @context(name: "Catalog")
+  genre: Genre! @context(name: "Catalog")
+  publishedAt: DateTime! @context(name: "Catalog")
+  """Copies the library owns, on the shelf or not."""
+  copies: Int! @context(name: "Catalog")
+  """Unmodelled extras. An escape hatch — prefer real fields."""
+  metadata: JSON @context(name: "Catalog")
+  """Newest first."""
+  reviews: [Review!]! @context(name: "Reviews")
+  """Null until somebody has an opinion."""
+  averageRating: Float @context(name: "Reviews")
+  """Copies currently checked out."""
+  onLoan: Int! @context(name: "Lending")
+}
+
+"""A book in somebody’s hands."""
+type Loan @key(fields: "id") @context(name: "Lending") {
+  id: ID! @context(name: "Lending")
+  """The title on loan."""
+  book: Book @context(name: "Lending")
+  renewable: Boolean! @context(name: "Lending")
+  """Negative once it is overdue."""
+  daysRemaining: Int! @context(name: "Lending")
+  memberId: ID! @context(name: "Lending")
+  dueAt: DateTime! @context(name: "Lending")
+  state: LoanState! @context(name: "Lending")
+  renewals: Int! @context(name: "Lending")
+}
+
+"""A member's verdict on a title."""
+type Review @context(name: "Reviews") {
+  id: ID! @context(name: "Reviews")
+  memberId: ID! @context(name: "Reviews")
+  """One to five stars."""
+  rating: Int! @context(name: "Reviews")
+  body: String @context(name: "Reviews")
+  postedAt: DateTime! @context(name: "Reviews")
+  headline: String! @context(name: "Reviews")
+}
+
+type Query {
+  """One title, by id."""
+  book(id: ID!): Book @context(name: "Catalog")
+  """Every title, optionally filtered by genre."""
+  books(genre: Genre, limit: Int = 10): [Book!]! @context(name: "Catalog")
+  """Most recent reviews across the catalog."""
+  latestReviews(limit: Int = 5): [Review!]! @context(name: "Reviews")
+  loan(id: ID!): Loan @context(name: "Lending")
+  """Everything the signed-in member has out."""
+  myLoans: [Loan!]! @context(name: "Lending")
+}
+
+type Mutation {
+  """Acquire a new title."""
+  addBook(input: BookInput!): Book! @context(name: "Catalog")
+  """Post a review as the signed-in member."""
+  postReview(input: ReviewInput!): Review! @context(name: "Reviews")
+  """Borrow a title."""
+  checkOut(bookId: ID!): Loan! @context(name: "Lending")
+  """Give the book back."""
+  loanCheckIn(
+    """Identifies the Loan the action is performed on."""
+    id: ID!
+  ): Loan! @context(name: "Lending")
+  """Keep it a little longer."""
+  loanRenew(
+    """Identifies the Loan the action is performed on."""
+    id: ID!
+    days: Int! = 14
+  ): Loan! @context(name: "Lending")
+}
+
+type Subscription {
+  reviewPosted(bookId: ID): Review! @context(name: "Reviews")
+  """Every checkout, or just one member’s."""
+  loanCheckedOut(memberId: ID): Loan! @context(name: "Lending")
+}

@@ -1,0 +1,62 @@
+scalar DateTime
+
+scalar JSON
+
+enum Genre {
+  Fiction
+  NonFiction
+  Poetry
+  Reference
+}
+
+input BookInput {
+  title: String!
+  author: String!
+  genre: Genre!
+  publishedAt: DateTime!
+  copies: Int
+}
+
+input ReviewInput {
+  bookId: ID!
+  rating: Int!
+  body: String
+}
+
+type Book {
+  id: ID!
+  shelfLabel: String!
+  age: Int!
+  title: String!
+  author: String!
+  genre: Genre!
+  publishedAt: DateTime!
+  copies: Int!
+  metadata: JSON
+  reviews: [Review!]!
+  averageRating: Float
+}
+
+type Review {
+  id: ID!
+  memberId: ID!
+  rating: Int!
+  body: String
+  postedAt: DateTime!
+  headline: String!
+}
+
+type Query {
+  book(id: ID!): Book
+  books(genre: Genre, limit: Int = 10): [Book!]!
+  latestReviews(limit: Int = 5): [Review!]!
+}
+
+type Mutation {
+  addBook(input: BookInput!): Book!
+  postReview(input: ReviewInput!): Review!
+}
+
+type Subscription {
+  reviewPosted(bookId: ID): Review!
+}

@@ -9,7 +9,8 @@
     "./packages/examples",
     "./packages/di-framework",
     "./packages/di-framework-http",
-    "./packages/di-framework-repo"
+    "./packages/di-framework-repo",
+    "./packages/graphql"
   ],
   "scripts": {
     "build": "bun run packages/bin/cmd/build.ts",
