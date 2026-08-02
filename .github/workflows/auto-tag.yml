@@ -1,16 +1,5 @@
 name: Auto Tag
 
-# Cuts a release when dependencies change on main -- primarily so
-# Dependabot security updates ship to users instead of sitting in the repo.
-#
-# Repository rules require pull requests into main (no direct push). Flow:
-#   1. Open a release/* branch with the version bump
-#   2. Open a PR and enable auto-merge (waits for required checks)
-#   3. After merge, tag the merge commit on main and dispatch Release
-#
-# Tags created with GITHUB_TOKEN do not re-trigger `on: push: tags`, so
-# Release is started via workflow_dispatch.
-
 on:
   push:
     branches: [main]
