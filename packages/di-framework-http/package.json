@@ -41,7 +41,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "itty-router": "^5.0.22"
+    "itty-router": "^5.0.24"
   },
   "devDependencies": {
     "@types/bun": "latest",
