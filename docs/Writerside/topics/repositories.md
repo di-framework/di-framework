@@ -1,4 +1,4 @@
-# Repositories (df-repo)
+# Repositories
 
 `@di-framework/repo` provides a coherent abstraction of repositories and storage adapters, allowing you to decouple your business logic from the underlying storage technology. It integrates seamlessly with `@di-framework/core`.
 

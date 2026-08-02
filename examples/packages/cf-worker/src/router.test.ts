@@ -98,11 +98,11 @@ describe('cf-worker router', () => {
   test('badRequest returns a 400 JSON response', async () => {
     const res = badRequest('Nope');
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'Nope' });
+    expect((await res.json()) as unknown).toEqual({ error: 'Nope' });
 
     const defaults = badRequest();
     expect(defaults.status).toBe(400);
-    expect(await defaults.json()).toEqual({ error: 'Bad request' });
+    expect((await defaults.json()) as unknown).toEqual({ error: 'Bad request' });
   });
 
   test('counter routes with mock Durable Object', async () => {

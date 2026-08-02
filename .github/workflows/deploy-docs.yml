@@ -3,23 +3,117 @@ name: Deploy Documentation
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'examples/packages/docs-search/**'
+      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
+    inputs:
+      full_reindex:
+        description: 'Force full Vectorize re-embed (ignore content hashes)'
+        type: boolean
+        default: false
 
 env:
   INSTANCE: 'Writerside/d'
   DOCKER_VERSION: '2.1.1479-p3869'
+  DOCS_SEARCH_DIR: examples/packages/docs-search
+  # Must match Worker var GITHUB_OIDC_AUDIENCE
+  OIDC_AUDIENCE: di-framework-docs-search
 
 permissions:
   contents: read
   pages: write
-  id-token: write
+  id-token: write # GitHub OIDC → worker mints reindex token (no Cloudflare API secrets)
 
 concurrency:
   group: 'pages'
   cancel-in-progress: false
 
 jobs:
+  # Build corpus → exchange OIDC for worker token → POST /reindex (no CF creds)
+  index-search:
+    name: Index docs search
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install monorepo dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Rebuild search corpus from Writerside topics
+        working-directory: ${{ env.DOCS_SEARCH_DIR }}
+        run: bun run corpus
+
+      - name: Resolve search Worker URL
+        id: worker
+        env:
+          # Override with vars.DOCS_SEARCH_URL if needed; default is the zone host
+          DOCS_SEARCH_URL: ${{ vars.DOCS_SEARCH_URL }}
+        run: |
+          set -euo pipefail
+          URL="${DOCS_SEARCH_URL:-https://di-framework.dev/api/docs/search}"
+          URL="${URL%/}"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Worker: $URL"
+
+      - name: Mint reindex token via Worker (GitHub OIDC)
+        id: auth
+        env:
+          DOCS_SEARCH_URL: ${{ steps.worker.outputs.url }}
+          OIDC_AUDIENCE: ${{ env.OIDC_AUDIENCE }}
+        run: |
+          set -euo pipefail
+          # Request an OIDC JWT for this workflow run (no long-lived secrets)
+          OIDC=$(curl -fsSL \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${OIDC_AUDIENCE}" \
+            | jq -r .value)
+          echo "::add-mask::$OIDC"
+
+          WORKER="${DOCS_SEARCH_URL}"
+          RESP=$(curl -fsS -X POST "${WORKER}/auth/token" \
+            -H "Authorization: Bearer ${OIDC}" \
+            -H "Content-Type: application/json")
+          TOKEN=$(echo "$RESP" | jq -r .access_token)
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::Worker did not return access_token: $RESP"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "worker=$WORKER" >> "$GITHUB_OUTPUT"
+          echo "Minted reindex token (expires $(echo "$RESP" | jq -r .expires_at))"
+
+      - name: Push corpus + incremental Vectorize reindex
+        env:
+          WORKER: ${{ steps.auth.outputs.worker }}
+          TOKEN: ${{ steps.auth.outputs.token }}
+          FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full_reindex || false }}
+          CORPUS: ${{ env.DOCS_SEARCH_DIR }}/data/corpus.json
+        run: |
+          set -euo pipefail
+          if [ "$FULL" = "true" ]; then
+            ENDPOINT="${WORKER}/reindex?full=1"
+          else
+            ENDPOINT="${WORKER}/reindex"
+          fi
+          echo "POST $ENDPOINT (corpus from $CORPUS)"
+          curl -fsS -X POST "$ENDPOINT" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @"$CORPUS" \
+            | tee /tmp/reindex.json
+          echo
+          jq -e '.ok == true' /tmp/reindex.json >/dev/null
+
   build:
+    name: Build Writerside site
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -44,7 +138,8 @@ jobs:
           path: dir
 
   deploy:
-    needs: build
+    name: Deploy GitHub Pages
+    needs: [build, index-search]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     environment:

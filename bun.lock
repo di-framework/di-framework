@@ -7,6 +7,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.6",
         "@types/bun": "latest",
+        "bun-types": "1.3.14",
         "happy-dom": "^20.11.1",
       },
       "peerDependencies": {
@@ -43,9 +44,22 @@
       "name": "di-worker-example",
       "version": "0.0.0",
       "devDependencies": {
-        "@cloudflare/workers-types": "latest",
         "@di-framework/core": "workspace:*",
         "typescript": "latest",
+        "wrangler": "latest",
+      },
+    },
+    "examples/packages/docs-search": {
+      "name": "@di-framework/docs-search-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/repo": "workspace:*",
+        "jose": "^6.0.11",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
         "wrangler": "latest",
       },
     },
@@ -90,7 +104,7 @@
         "bun": "^1.3.14",
       },
       "devDependencies": {
-        "@types/bun": "latest",
+        "@types/bun": "^1.3.14",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -108,7 +122,7 @@
     },
     "packages/di-framework-graphql": {
       "name": "@di-framework/graphql",
-      "version": "3.0.2",
+      "version": "4.0.0",
       "devDependencies": {
         "@types/bun": "latest",
         "graphql": "^17.0.2",
@@ -190,6 +204,8 @@
     "@di-framework/cli": ["@di-framework/cli@workspace:packages/di-framework-cli"],
 
     "@di-framework/core": ["@di-framework/core@workspace:packages/di-framework-core"],
+
+    "@di-framework/docs-search-example": ["@di-framework/docs-search-example@workspace:examples/packages/docs-search"],
 
     "@di-framework/graphql": ["@di-framework/graphql@workspace:packages/di-framework-graphql"],
 
@@ -442,6 +458,8 @@
     "happy-dom": ["happy-dom@20.11.1", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-XSt8tMzbW9ymE7687xztkO1ckR7qJNQ3LywY9vlYGhGi3zXrGBHuUo2Cl1ztZaICW+1eAGdkLbj6iwVqDT33kg=="],
 
     "itty-router": ["itty-router@5.0.24", "", {}, "sha512-PXij1qGKtE6jg3dLgrTRdh/Frovl5Wc4Av67sD2xfhDPrgNt4u79++/il8/c/OfZGkhD/8uYJub8tjo+H165rA=="],
+
+    "jose": ["jose@6.2.7", "", {}, "sha512-hq1OB1bALKfydZNoViyg6hPVGV4i93ny9Op+n4zP5RSf7SCZEXa/TsG2O3IEr7+WlHRTPnpqDmHfMH6qXAD60w=="],
 
     "kleur": ["kleur@4.1.5", "", {}, "sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ=="],
 

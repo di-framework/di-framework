@@ -1,0 +1,25 @@
+{
+  "name": "@di-framework/docs-search-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Writerside docs search on Cloudflare Workers — showcase of @di-framework/core + repo + Workers AI",
+  "scripts": {
+    "corpus": "bun run scripts/build-corpus.ts",
+    "dev": "wrangler dev",
+    "deploy": "bun run corpus && wrangler deploy",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/repo": "workspace:*",
+    "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5",
+    "wrangler": "latest"
+  }
+}

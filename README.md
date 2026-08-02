@@ -1,6 +1,6 @@
 # @di-framework/core
 
-[Documentation](https://di-framework.github.io/di-framework)
+[Documentation](https://docs.di-framework.dev)
 
 ```
 npm i @di-framework/core

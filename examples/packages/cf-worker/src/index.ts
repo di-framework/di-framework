@@ -38,12 +38,8 @@ export class MyDurableObject extends DurableObject<Env> {
    * @param ctx - The interface for interacting with Durable Object state
    * @param env - The interface to reference bindings declared in wrangler.jsonc
    */
-  constructor(
-    state: DurableObjectState,
-    env: Env,
-    private readonly ctx: ExecutionContext,
-  ) {
-    super(state, env, ctx);
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env);
   }
 
   /**

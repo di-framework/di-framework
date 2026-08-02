@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext"],
+    "types": ["@cloudflare/workers-types", "@types/bun"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@di-framework/core": ["../../../packages/di-framework-core/container.ts"],
+      "@di-framework/core/*": ["../../../packages/di-framework-core/*"],
+      "@di-framework/repo": ["../../../packages/di-framework-repo/src/index.ts"],
+      "@di-framework/repo/*": ["../../../packages/di-framework-repo/src/*"]
+    }
+  },
+  "include": ["src/**/*", "scripts/**/*", "data/**/*.json"]
+}
