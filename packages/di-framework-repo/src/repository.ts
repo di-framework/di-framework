@@ -1,8 +1,18 @@
 import type { StorageAdapter } from './adapter';
+import { withDerivedQueries } from './query-derivation';
 import type { EntityId, PaginatedResult } from './types';
 
 export abstract class BaseRepository<E, ID = EntityId> {
-  protected constructor(protected readonly adapter: StorageAdapter<E, ID>) {}
+  /**
+   * Returns a Proxy that derives `findBy…` / `existsBy…` / … at call time.
+   * For IDE completion, assert the variable type, e.g.
+   * `const repo = new InMemoryRepository<User, string>() as Derived<InMemoryRepository<User, string>>`.
+   */
+  protected constructor(protected readonly adapter: StorageAdapter<E, ID>) {
+    // Intentionally return a Proxy so `new Subclass()` is already derivation-enabled.
+    // biome-ignore lint/correctness/noConstructorReturn: proxy wrap for derived query methods
+    return withDerivedQueries(this as BaseRepository<E, ID>) as this;
+  }
 
   protected normalizeId(id: ID): ID {
     // Default normalization (stringify) – can be overridden by subclasses if needed
