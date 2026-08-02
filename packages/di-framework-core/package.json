@@ -5,9 +5,15 @@
   "main": "./dist/container.js",
   "types": "./dist/container.d.ts",
   "module": "./dist/container.js",
-  "author": "github.com/di-framework",
+  "author": "@di-framework Contributors",
+  "license": "MIT",
   "private": false,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-core"
+  },
   "keywords": [
     "dependency-injection",
     "di",
@@ -39,12 +45,6 @@
       "import": "./dist/types.js",
       "types": "./dist/types.d.ts"
     }
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/di-framework/di-framework",
-    "directory": "packages/di-framework-core"
   },
   "bugs": {
     "url": "https://github.com/di-framework/di-framework/issues"
