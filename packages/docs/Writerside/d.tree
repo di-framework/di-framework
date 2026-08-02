@@ -11,6 +11,7 @@
     <toc-element topic="quick-start.md"/>
     <toc-element topic="repositories.md"/>
     <toc-element topic="http-router.md"/>
+    <toc-element topic="graphql.md"/>
     <toc-element topic="api-reference.md"/>
     <toc-element topic="advanced-usage.md"/>
     <toc-element topic="error-handling.md"/>
