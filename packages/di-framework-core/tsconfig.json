@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    "baseUrl": "."
+    // Package build does not need monorepo path aliases from the root config
+    "paths": {}
   },
   "include": ["container.ts", "decorators.ts", "types.ts", "tests/**/*.ts"]
 }

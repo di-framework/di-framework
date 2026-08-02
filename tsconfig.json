@@ -30,16 +30,16 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "baseUrl": ".",
+    // TS 7+: baseUrl removed; path values must be relative (leading ./)
     "paths": {
-      "@di-framework/core": ["packages/di-framework-core/container.ts"],
-      "@di-framework/core/*": ["packages/di-framework-core/*"],
-      "@di-framework/http": ["packages/di-framework-http/index.ts"],
-      "@di-framework/http/*": ["packages/di-framework-http/*"],
-      "@di-framework/repo": ["packages/di-framework-repo/src/index.ts"],
-      "@di-framework/repo/*": ["packages/di-framework-repo/src/*"],
-      "@di-framework/graphql": ["packages/di-framework-graphql/index.ts"],
-      "@di-framework/graphql/*": ["packages/di-framework-graphql/*"]
+      "@di-framework/core": ["./packages/di-framework-core/container.ts"],
+      "@di-framework/core/*": ["./packages/di-framework-core/*"],
+      "@di-framework/http": ["./packages/di-framework-http/index.ts"],
+      "@di-framework/http/*": ["./packages/di-framework-http/*"],
+      "@di-framework/repo": ["./packages/di-framework-repo/src/index.ts"],
+      "@di-framework/repo/*": ["./packages/di-framework-repo/src/*"],
+      "@di-framework/graphql": ["./packages/di-framework-graphql/index.ts"],
+      "@di-framework/graphql/*": ["./packages/di-framework-graphql/*"]
     }
   },
   "exclude": [

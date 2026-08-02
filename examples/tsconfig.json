@@ -2,7 +2,7 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@di-framework/core": ["../packages/di-framework/container.ts"],
+      "@di-framework/core": ["../packages/di-framework-core/container.ts"],
       "@di-framework/core/*": ["../packages/di-framework-core/*"],
       "@di-framework/http": ["../packages/di-framework-http/index.ts"],
       "@di-framework/http/*": ["../packages/di-framework-http/*"],
