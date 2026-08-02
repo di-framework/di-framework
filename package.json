@@ -1,6 +1,6 @@
 {
   "name": "di-framework",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "module": "build.ts",
   "type": "module",
   "private": true,
