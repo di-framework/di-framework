@@ -65,7 +65,7 @@ describe('publish command', () => {
         const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
         expect(pkgJson.repository).toBeDefined();
         expect(typeof pkgJson.repository).toBe('object');
-        expect(pkgJson.repository.url).toBe('https://github.com/geoffsee/di-framework');
+        expect(pkgJson.repository.url).toBe('https://github.com/di-framework/di-framework');
       }
     });
   });

@@ -1,6 +1,6 @@
 # @di-framework/graphql
 
-Radically object-oriented, decorator-driven GraphQL for [di-framework](https://github.com/geoffsee/di-framework).
+Radically object-oriented, decorator-driven GraphQL for [di-framework](https://github.com/di-framework/di-framework).
 
 Your domain classes **are** the schema. There is no SDL document to keep in sync, no resolver map, and no field-by-field mapping layer — decorators declare semantic *exposure* (`@Field`, `@Action`), *ownership* (`@BoundedContext`) and *boundaries* (`@SemanticType({ boundary: true })`), and the schema falls out of that.
 

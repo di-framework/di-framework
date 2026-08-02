@@ -18,17 +18,17 @@
       "default": "./dist/core.js"
     }
   },
-  "author": "github.com/geoffsee",
+  "author": "github.com/di-framework",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/geoffsee/di-framework",
+    "url": "https://github.com/di-framework/di-framework",
     "directory": "packages/graphql"
   },
   "bugs": {
-    "url": "https://github.com/geoffsee/di-framework/issues"
+    "url": "https://github.com/di-framework/di-framework/issues"
   },
-  "homepage": "https://github.com/geoffsee/di-framework#readme",
+  "homepage": "https://github.com/di-framework/di-framework#readme",
   "keywords": [
     "graphql",
     "dependency-injection",

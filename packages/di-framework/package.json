@@ -5,7 +5,7 @@
   "main": "./dist/container.js",
   "types": "./dist/container.d.ts",
   "module": "./dist/container.js",
-  "author": "github.com/geoffsee",
+  "author": "github.com/di-framework",
   "type": "module",
   "keywords": [
     "dependency-injection",
@@ -42,13 +42,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/geoffsee/di-framework",
+    "url": "https://github.com/di-framework/di-framework",
     "directory": "packages/di-framework"
   },
   "bugs": {
-    "url": "https://github.com/geoffsee/di-framework/issues"
+    "url": "https://github.com/di-framework/di-framework/issues"
   },
-  "homepage": "https://github.com/geoffsee/di-framework#readme",
+  "homepage": "https://github.com/di-framework/di-framework#readme",
   "scripts": {
     "test": "bun test"
   },
