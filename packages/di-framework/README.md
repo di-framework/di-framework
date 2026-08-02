@@ -1,8 +1,8 @@
 # di-framework
 
-[![CI](https://github.com/geoffsee/di-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/geoffsee/di-framework/actions/workflows/ci.yml)
+[![CI](https://github.com/di-framework/di-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/di-framework/di-framework/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/di-framework.svg)](https://www.npmjs.com/package/di-framework)
-[![license](https://img.shields.io/github/license/geoffsee/di-framework.svg)](LICENSE)
+[![license](https://img.shields.io/github/license/di-framework/di-framework.svg)](LICENSE)
 
 A lightweight, type-safe Dependency Injection framework for TypeScript using decorators. This framework automatically manages service instantiation, dependency resolution, and lifecycle management.
 

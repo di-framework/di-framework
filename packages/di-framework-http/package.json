@@ -13,17 +13,17 @@
       "default": "./dist/index.js"
     }
   },
-  "author": "github.com/geoffsee",
+  "author": "github.com/di-framework",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/geoffsee/di-framework",
+    "url": "https://github.com/di-framework/di-framework",
     "directory": "packages/di-framework-http"
   },
   "bugs": {
-    "url": "https://github.com/geoffsee/di-framework/issues"
+    "url": "https://github.com/di-framework/di-framework/issues"
   },
-  "homepage": "https://github.com/geoffsee/di-framework#readme",
+  "homepage": "https://github.com/di-framework/di-framework#readme",
   "bin": {
     "di-framework-http": "./dist/src/cli.js"
   },
