@@ -15,7 +15,11 @@ export interface RegisteredEndpoint {
 }
 
 export class Registry {
-  private targets = new Set<any>();
+  private targets: Set<any>;
+
+  constructor() {
+    this.targets = new Set();
+  }
 
   addTarget(target: any) {
     this.targets.add(target);

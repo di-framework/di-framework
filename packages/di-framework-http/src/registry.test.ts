@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { Controller, Endpoint } from '../src/decorators.ts';
-import Registry from '../src/registry.ts';
+import Registry, { Registry as RegistryClass } from '../src/registry.ts';
 
 describe('HTTP Registry', () => {
   it('addTarget registers a target', () => {
@@ -12,6 +12,14 @@ describe('HTTP Registry', () => {
   it('getTargets returns a Set of registered targets', () => {
     const targets = Registry.getTargets();
     expect(targets instanceof Set).toBe(true);
+  });
+
+  it('constructs an isolated Registry instance', () => {
+    const local = new RegistryClass();
+    const target = class Isolated {};
+    local.addTarget(target);
+    expect(local.getTargets().has(target)).toBe(true);
+    expect(Registry.getTargets().has(target)).toBe(false);
   });
 });
 

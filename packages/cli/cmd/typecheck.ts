@@ -207,9 +207,12 @@ export async function typecheck() {
   process.exit(0);
 }
 
+/** Shared entrypoint error handler (kept separate so tests can cover it). */
+export function handleTypecheckFailure(err: unknown): never {
+  console.error('❌ Fatal error while running typecheck:', err);
+  process.exit(2);
+}
+
 if (import.meta.main) {
-  typecheck().catch((err) => {
-    console.error('❌ Fatal error while running typecheck:', err);
-    process.exit(2);
-  });
+  typecheck().catch(handleTypecheckFailure);
 }

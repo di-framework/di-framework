@@ -56,6 +56,26 @@ describe('createGraphQLHandler', () => {
 
     const missingQuery = await run(new Request('http://localhost/graphql'));
     expect(missingQuery.status).toBe(400);
+
+    const missingBodyQuery = await run(
+      new Request('http://localhost/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ variables: {} }),
+      }),
+    );
+    expect(missingBodyQuery.status).toBe(400);
+
+    const withVariables = await run(
+      new Request(
+        'http://localhost/graphql?query=' +
+          encodeURIComponent('{ echo(message: "via-get") }') +
+          '&variables=' +
+          encodeURIComponent('{}'),
+      ),
+    );
+    expect(withVariables.status).toBe(200);
+    expect(await withVariables.json()).toEqual({ data: { echo: 'via-get' } });
   });
 
   it('reports validation errors without executing', async () => {

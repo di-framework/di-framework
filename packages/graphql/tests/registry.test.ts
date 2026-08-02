@@ -167,3 +167,21 @@ describe('SemanticRegistry', () => {
     });
   });
 });
+
+describe('getRegistry bootstrap', () => {
+  it('creates a fresh process registry when the global key is missing', async () => {
+    const { getRegistry, setRegistry, SemanticRegistry } = await import('../src/registry.ts');
+    const KEY = Symbol.for('@di-framework/graphql-registry');
+    const previous = (globalThis as any)[KEY];
+    try {
+      delete (globalThis as any)[KEY];
+      const created = getRegistry();
+      expect(created).toBeInstanceOf(SemanticRegistry);
+      expect(getRegistry()).toBe(created);
+    } finally {
+      (globalThis as any)[KEY] = previous ?? new SemanticRegistry();
+      // Keep the suite's domain registry in place if tests already swapped it.
+      if (previous) setRegistry(previous);
+    }
+  });
+});

@@ -189,10 +189,16 @@ export function serve(port = Number(process.env.PORT ?? 4000)) {
   });
 }
 
-if (import.meta.main) {
-  const server = serve();
+/** Shared entrypoint so tests can cover the boot banner without import.meta.main. */
+export function startFromMain(port = Number(process.env.PORT ?? 4000)) {
+  const server = serve(port);
   console.log(`GraphiQL  http://localhost:${server.port}`);
   console.log(`GraphQL   http://localhost:${server.port}/graphql`);
   console.log(`SDL       http://localhost:${server.port}/schema.graphql`);
   console.log(`contexts  ${library.contexts.join(', ')}`);
+  return server;
+}
+
+if (import.meta.main) {
+  startFromMain();
 }

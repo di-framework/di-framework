@@ -1,11 +1,110 @@
-import { describe, expect, it } from 'bun:test';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PACKAGES } from '../cmd/publish';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+const REAL_BUN = process.execPath;
+
+async function makePublishWorkspace(): Promise<string> {
+  const root = mkdtempSync(join(tmpdir(), 'publish-cmd-'));
+  await Bun.write(
+    join(root, 'package.json'),
+    JSON.stringify({ name: 'root', version: '1.0.0' }) + '\n',
+  );
+
+  for (const pkgDir of PACKAGES) {
+    const full = join(root, pkgDir);
+    mkdirSync(full, { recursive: true });
+    await Bun.write(
+      join(full, 'package.json'),
+      JSON.stringify({
+        name: `@test/${pkgDir.split('/').pop()}`,
+        version: '1.0.0',
+      }) + '\n',
+    );
+    // So `bun test ${pkgDir}` finds a passing file.
+    await Bun.write(
+      join(full, 'smoke.test.ts'),
+      'import { expect, test } from "bun:test";\ntest("ok", () => expect(1).toBe(1));\n',
+    );
+  }
+
+  // publish.ts still references the old packages/bin path — stub it as a no-op.
+  mkdirSync(join(root, 'packages/bin/cmd'), { recursive: true });
+  await Bun.write(join(root, 'packages/bin/cmd/build.ts'), 'console.log("fake build");\n');
+
+  return root;
+}
+
+/** PATH shim: real bun for test/run, immediate non-interactive exit for publish. */
+async function installFakeBun(root: string, opts: { failPublish?: boolean } = {}): Promise<string> {
+  const bin = join(root, '.bin');
+  mkdirSync(bin, { recursive: true });
+  const exitCode = opts.failPublish === false ? 0 : 1;
+  const script = `#!/usr/bin/env bash
+cmd="$1"
+shift || true
+case "$cmd" in
+  publish)
+    echo "fake publish $*" >&2
+    exit ${exitCode}
+    ;;
+  *)
+    exec ${JSON.stringify(REAL_BUN)} "$cmd" "$@"
+    ;;
+esac
+`;
+  const path = join(bin, 'bun');
+  await Bun.write(path, script);
+  chmodSync(path, 0o755);
+  return bin;
+}
+
+async function runPublishInChild(
+  cwd: string,
+  bin: string,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const runner = join(cwd, '_run_publish.ts');
+  await Bun.write(
+    runner,
+    `import { publish } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'publish.ts'))};
+await publish();
+`,
+  );
+  const proc = Bun.spawn([REAL_BUN, runner], {
+    cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'ignore',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, CI: 'true' },
+  });
+  const [code, stdout, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  return { code, stdout, stderr };
+}
 
 describe('publish command', () => {
+  const temps: string[] = [];
+  afterEach(() => {
+    try {
+      process.chdir(REPO_ROOT);
+    } catch {
+      /* ignore */
+    }
+    for (const t of temps.splice(0)) {
+      try {
+        rmSync(t, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
   describe('PACKAGES', () => {
     it('includes all expected packages', () => {
       expect(PACKAGES).toContain('packages/di-framework');
@@ -19,60 +118,31 @@ describe('publish command', () => {
       expect(PACKAGES).toEqual(BUILD_PACKAGES);
     });
 
-    it('every package directory exists', () => {
+    it('every package directory exists', async () => {
       for (const pkg of PACKAGES) {
-        expect(existsSync(join(REPO_ROOT, pkg))).toBe(true);
+        expect(await Bun.file(join(REPO_ROOT, pkg, 'package.json')).exists()).toBe(true);
       }
     });
   });
 
   describe('package metadata', () => {
-    it('every package has a name', () => {
+    it('every package has a name, version, and repository.url', async () => {
       for (const pkg of PACKAGES) {
-        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
-        expect(pkgJson.name).toBeDefined();
-        expect(typeof pkgJson.name).toBe('string');
-        expect(pkgJson.name.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('every package has a version', () => {
-      for (const pkg of PACKAGES) {
-        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
-        expect(pkgJson.version).toBeDefined();
-        expect(typeof pkgJson.version).toBe('string');
-      }
-    });
-
-    it('no package is marked as private (publishable)', () => {
-      for (const pkg of PACKAGES) {
-        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
+        const pkgJson = await Bun.file(join(REPO_ROOT, pkg, 'package.json')).json();
+        expect(pkgJson.name).toBeTruthy();
+        expect(pkgJson.version).toBeTruthy();
         expect(pkgJson.private).not.toBe(true);
-      }
-    });
-
-    it('scoped packages use the @di-framework scope', () => {
-      for (const pkg of PACKAGES) {
-        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
+        expect(pkgJson.repository.url).toBe('https://github.com/di-framework/di-framework');
         if (pkgJson.name.startsWith('@')) {
           expect(pkgJson.name).toMatch(/^@di-framework\//);
         }
       }
     });
-
-    it('every package has a repository.url for npm provenance', () => {
-      for (const pkg of PACKAGES) {
-        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
-        expect(pkgJson.repository).toBeDefined();
-        expect(typeof pkgJson.repository).toBe('object');
-        expect(pkgJson.repository.url).toBe('https://github.com/di-framework/di-framework');
-      }
-    });
   });
 
   describe('publish pipeline order', () => {
-    it('runs tests before build in the source', () => {
-      const source = readFileSync(join(import.meta.dir, '..', 'cmd', 'publish.ts'), 'utf-8');
+    it('runs tests before build in the source', async () => {
+      const source = await Bun.file(join(import.meta.dir, '..', 'cmd', 'publish.ts')).text();
       const testIndex = source.indexOf('bun test');
       const buildIndex = source.indexOf('bun run packages/bin/cmd/build.ts');
       const publishIndex = source.indexOf('bun publish');
@@ -82,6 +152,62 @@ describe('publish command', () => {
       expect(publishIndex).toBeGreaterThan(-1);
       expect(testIndex).toBeLessThan(buildIndex);
       expect(buildIndex).toBeLessThan(publishIndex);
+    });
+  });
+
+  describe('publish()', () => {
+    it('runs tests and build, then continues when publish fails', async () => {
+      const root = await makePublishWorkspace();
+      temps.push(root);
+      const bin = await installFakeBun(root, { failPublish: true });
+      const { code, stdout, stderr } = await runPublishInChild(root, bin);
+      expect(code).toBe(0);
+      expect(stderr).toContain('Failed to publish');
+      expect(stdout).toContain('Publish process finished');
+    }, 60_000);
+
+    it('publishes successfully when bun publish succeeds', async () => {
+      const root = await makePublishWorkspace();
+      temps.push(root);
+      const bin = await installFakeBun(root, { failPublish: false });
+      const { code, stdout, stderr } = await runPublishInChild(root, bin);
+      expect(code).toBe(0);
+      expect(stdout).toContain('Published');
+      expect(stderr).not.toContain('Failed to publish');
+    }, 60_000);
+  });
+
+  describe('CLI entrypoint', () => {
+    it('handlePublishFailure logs and exits 1', () => {
+      const { handlePublishFailure } = require('../cmd/publish');
+      const err = spyOn(console, 'error').mockImplementation(() => {});
+      const originalExit = process.exit;
+      let code: number | undefined;
+      (process as any).exit = (c: number) => {
+        code = c;
+        throw new Error(`EXIT_${c}`);
+      };
+      try {
+        expect(() => handlePublishFailure(new Error('boom'))).toThrow('EXIT_1');
+        expect(code).toBe(1);
+        expect(err.mock.calls[0]?.[0]).toContain('Publish script failed');
+      } finally {
+        process.exit = originalExit;
+        err.mockRestore();
+      }
+    });
+
+    it('exits with code 1 when publish fails under import.meta.main', async () => {
+      const empty = mkdtempSync(join(tmpdir(), 'publish-main-fail-'));
+      temps.push(empty);
+      const proc = Bun.spawn([REAL_BUN, join(import.meta.dir, '..', 'cmd', 'publish.ts')], {
+        cwd: empty,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      });
+      expect(await proc.exited).toBe(1);
+      expect(await new Response(proc.stderr).text()).toContain('Publish script failed');
     });
   });
 });

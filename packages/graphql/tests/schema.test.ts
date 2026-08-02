@@ -153,4 +153,26 @@ describe('semantic schema', () => {
     // The Orders extension of User is gone with its context.
     expect(usersOnly.objects[0]?.fields.map((field) => field.name)).not.toContain('orders');
   });
+
+  it('constructs domain entity classes directly', () => {
+    const { User, Order, OrderState, OrderService, UserOrders } =
+      require('./domain.ts') as typeof import('./domain.ts');
+    const user = new User('u9', 'Grace Hopper', 'grace@example.com');
+    expect(user.displayName()).toBe('Grace');
+
+    const order = new Order('o9', 'u9', 10, OrderState.Pending);
+    expect(order.cancellable()).toBe(true);
+
+    const orders = useContainer().resolve(OrderService);
+    expect(orders.forUser('u1').length).toBeGreaterThan(0);
+
+    const extension = useContainer().resolve(UserOrders);
+    expect(extension.orders({ id: 'u1', name: 'Ada', email: 'a@b.c' }).length).toBeGreaterThan(0);
+  });
+
+  it('returns validation errors from subscribe without opening a stream', async () => {
+    const result = await api.subscribe({ query: 'subscription { nope }' });
+    expect(Symbol.asyncIterator in (result as any)).toBe(false);
+    expect((result as any).errors?.length).toBeGreaterThan(0);
+  });
 });
