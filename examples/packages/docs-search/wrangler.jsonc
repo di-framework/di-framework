@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "di-framework-docs-search",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-11-09",
+  // Public host is di-framework.dev (zone on this Cloudflare account)
+  "workers_dev": false,
+  "preview_urls": false,
+  // Path-style mount; handler strips BASE_PATH before routing
+  "routes": [
+    {
+      "pattern": "di-framework.dev/api/docs/search*",
+      "zone_name": "di-framework.dev"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  // Workers AI → embeddings (@cf/google/embeddinggemma-300m → 768-d)
+  "ai": {
+    "binding": "AI"
+  },
+  // Vectorize → store + ANN query (dims must match model; Gemma = 768)
+  //   wrangler vectorize create di-docs-search --dimensions=768 --metric=cosine
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "di-docs-search"
+    }
+  ],
+  // Durable content-hash manifest for incremental sync
+  "kv_namespaces": [
+    {
+      "binding": "INDEX_STATE",
+      "id": "3a8c028fb4914e689bd1ac54319b169a"
+    }
+  ],
+  "vars": {
+    // Canonical docs host (GitHub Pages custom domain)
+    "DOCS_BASE_URL": "https://docs.di-framework.dev",
+    "BASE_PATH": "/api/docs/search",
+    "EMBEDDING_MODEL": "@cf/google/embeddinggemma-300m",
+    "CORS_ORIGINS": "https://docs.di-framework.dev,https://di-framework.github.io,http://localhost:4321,http://127.0.0.1:4321",
+    // GitHub Actions OIDC (must match workflow OIDC_AUDIENCE)
+    "GITHUB_OIDC_AUDIENCE": "di-framework-docs-search",
+    "GITHUB_REPOSITORY": "di-framework/di-framework",
+    "GITHUB_OIDC_REQUIRE_MAIN": "true",
+    "REINDEX_TOKEN_TTL_SECONDS": "600"
+  }
+  // Secrets (set locally — never in GitHub):
+  //   wrangler secret put TOKEN_SIGNING_KEY
+}

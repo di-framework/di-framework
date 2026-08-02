@@ -32,7 +32,7 @@ describe('createGraphQLHandler', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { echo: '>>hi' } });
+    expect((await response.json()) as unknown).toEqual({ data: { echo: '>>hi' } });
   });
 
   it('executes a GET query', async () => {
@@ -40,7 +40,7 @@ describe('createGraphQLHandler', () => {
       new Request('http://localhost/graphql?query={ echo(message: "hi") }'),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { echo: 'hi' } });
+    expect((await response.json()) as unknown).toEqual({ data: { echo: 'hi' } });
   });
 
   it('rejects other methods and malformed bodies', async () => {
@@ -75,7 +75,7 @@ describe('createGraphQLHandler', () => {
       ),
     );
     expect(withVariables.status).toBe(200);
-    expect(await withVariables.json()).toEqual({ data: { echo: 'via-get' } });
+    expect((await withVariables.json()) as unknown).toEqual({ data: { echo: 'via-get' } });
   });
 
   it('reports validation errors without executing', async () => {

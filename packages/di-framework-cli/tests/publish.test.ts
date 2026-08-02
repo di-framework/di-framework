@@ -132,6 +132,7 @@ describe('publish command', () => {
   describe('package metadata', () => {
     it('every package has a name, version, and repository.url', async () => {
       for (const pkg of PACKAGES) {
+        //@ts-expect-error - Property 'json' does not exist on type 'BunFile'.
         const pkgJson = await Bun.file(join(REPO_ROOT, pkg, 'package.json')).json();
         expect(pkgJson.name).toBeTruthy();
         expect(pkgJson.version).toBeTruthy();
