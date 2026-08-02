@@ -51,12 +51,16 @@
   },
   "homepage": "https://github.com/di-framework/di-framework#readme",
   "scripts": {
+    "build": "rm -rf dist && bun x tsc -p tsconfig.build.json",
+    "postinstall": "bun run build",
     "test": "bun test"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "typescript": "^5"
+  },
   "files": [
     "dist",
     "README.md",
