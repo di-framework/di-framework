@@ -16,6 +16,7 @@
     "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework <command> [args...]'",
     "tsc": "tsc",
     "lint": "biome check .",
+    "typecheck": "bun x tsc -b --noEmit",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "release:patch": "gh workflow run auto-tag.yml -f bump=patch"
