@@ -4,6 +4,16 @@
   "private": false,
   "type": "module",
   "main": "main.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geoffsee/di-framework",
+    "directory": "packages/bin"
+  },
+  "bugs": {
+    "url": "https://github.com/geoffsee/di-framework/issues"
+  },
+  "homepage": "https://github.com/geoffsee/di-framework#readme",
   "bin": {
     "di-framework": "dist/di-framework"
   },

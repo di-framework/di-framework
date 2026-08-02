@@ -20,7 +20,15 @@
   },
   "author": "github.com/geoffsee",
   "license": "MIT",
-  "repository": "https://github.com/geoffsee/di-framework",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geoffsee/di-framework",
+    "directory": "packages/graphql"
+  },
+  "bugs": {
+    "url": "https://github.com/geoffsee/di-framework/issues"
+  },
+  "homepage": "https://github.com/geoffsee/di-framework#readme",
   "keywords": [
     "graphql",
     "dependency-injection",

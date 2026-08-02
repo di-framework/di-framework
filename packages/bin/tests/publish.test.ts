@@ -59,6 +59,15 @@ describe('publish command', () => {
         }
       }
     });
+
+    it('every package has a repository.url for npm provenance', () => {
+      for (const pkg of PACKAGES) {
+        const pkgJson = JSON.parse(readFileSync(join(REPO_ROOT, pkg, 'package.json'), 'utf-8'));
+        expect(pkgJson.repository).toBeDefined();
+        expect(typeof pkgJson.repository).toBe('object');
+        expect(pkgJson.repository.url).toBe('https://github.com/geoffsee/di-framework');
+      }
+    });
   });
 
   describe('publish pipeline order', () => {
