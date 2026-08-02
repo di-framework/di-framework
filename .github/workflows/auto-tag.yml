@@ -1,14 +1,5 @@
 name: Auto Tag
 
-# Cuts a release tag when dependencies change on main -- primarily so
-# Dependabot security updates ship to users instead of sitting in the repo.
-#
-# Order matters: the version bump is committed to main FIRST, and the tag
-# is placed on that commit.
-#
-# Pushes use the job GITHUB_TOKEN (contents: write). Tags created with that
-# token do not re-trigger other `on: push: tags` workflows, so Release is
-# started explicitly via workflow_dispatch after the tag is pushed.
 
 on:
   push:
@@ -33,6 +24,7 @@ concurrency:
 permissions:
   contents: write
   actions: write
+  pull-requests: write
 
 jobs:
   tag:
@@ -64,7 +56,6 @@ jobs:
 
           BUMP="${{ github.event.inputs.bump || 'patch' }}"
           IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          # strip any prerelease suffix from PATCH
           PATCH=${PATCH%%-*}
 
           case "$BUMP" in
@@ -83,6 +74,7 @@ jobs:
 
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT"       >> "$GITHUB_OUTPUT"
+          echo "branch=release/v$NEXT" >> "$GITHUB_OUTPUT"
           echo "Bumping $CURRENT -> $NEXT ($BUMP)"
 
       - name: Apply version to package.json
@@ -91,36 +83,101 @@ jobs:
           NEXT="${{ steps.version.outputs.next }}"
           npm version "$NEXT" --no-git-tag-version --allow-same-version
 
-      - name: Commit, tag, and push
-        id: push
+      - name: Open release PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+          CURRENT: ${{ steps.version.outputs.current }}
+          BRANCH: ${{ steps.version.outputs.branch }}
         run: |
           set -euo pipefail
-          NEXT="${{ steps.version.outputs.next }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git checkout -b "$BRANCH"
           git add package.json
-          # Include lockfile if npm/bun rewrote it
           git add -u bun.lock package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null || true
           git commit -m "chore(release): v$NEXT"
+          git push -u origin "$BRANCH"
 
-          git tag -a "v$NEXT" -m "Release v$NEXT"
-          git push origin HEAD:main
-          git push origin "v$NEXT"
+          # Avoid duplicate open PRs for the same branch
+          PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then
+            echo "Reusing open PR #$PR"
+          else
+            gh pr create \
+              --title "chore(release): v$NEXT" \
+              --body "$(printf '%s\n' \
+                "Automated version bump \`$CURRENT\` → \`$NEXT\` from Auto Tag." \
+                "" \
+                "After merge, Auto Tag will create tag \`v$NEXT\` and dispatch the Release workflow.")" \
+              --base main \
+              --head "$BRANCH"
+            PR=$(gh pr view "$BRANCH" --json number --jq .number)
+            echo "Opened PR #$PR"
+          fi
 
-          echo "Tagged v$NEXT"
-          echo "### Released \`v$NEXT\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Bumped from \`${{ steps.version.outputs.current }}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "number=$PR" >> "$GITHUB_OUTPUT"
 
-      - name: Trigger Release workflow
+          # Auto-merge when required checks (Test, CodeQL) pass.
+          # Repo allows squash/rebase only (ruleset).
+          gh pr merge "$PR" --auto --squash || {
+            echo "::warning::Could not enable auto-merge (may already be enabled or admin merge required)."
+          }
+
+          echo "### Release PR" >> "$GITHUB_STEP_SUMMARY"
+          echo "Opened/updated PR #$PR for \`v$NEXT\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Waiting for required checks, then auto-merge." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for PR merge
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.pr.outputs.number }}
           NEXT: ${{ steps.version.outputs.next }}
         run: |
           set -euo pipefail
-          # GITHUB_TOKEN tag pushes do not fire `on: push: tags`. Always
-          # dispatch Release so npm publish still runs for this version.
+          # Up to ~30 minutes for Test + CodeQL
+          for i in $(seq 1 90); do
+            STATE=$(gh pr view "$PR" --json state,mergedAt --jq '{state,mergedAt}')
+            MERGED=$(echo "$STATE" | jq -r '.mergedAt // empty')
+            OPEN=$(echo "$STATE" | jq -r '.state')
+            if [ -n "$MERGED" ]; then
+              echo "PR #$PR merged at $MERGED"
+              exit 0
+            fi
+            if [ "$OPEN" = "CLOSED" ]; then
+              echo "::error::PR #$PR was closed without merging"
+              exit 1
+            fi
+            echo "Waiting for merge ($i/90)..."
+            sleep 20
+          done
+          echo "::error::Timed out waiting for PR #$PR to merge"
+          exit 1
+
+      - name: Tag merge commit and dispatch Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+          CURRENT: ${{ steps.version.outputs.current }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          if git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; then
+            echo "Tag v$NEXT already exists"
+          else
+            git tag -a "v$NEXT" -m "Release v$NEXT"
+            git push origin "v$NEXT"
+            echo "Tagged v$NEXT"
+          fi
+
+          # GITHUB_TOKEN tag pushes do not fire `on: push: tags`
           gh workflow run release.yml --ref "v${NEXT}"
-          echo "Dispatched Release for v${NEXT}" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Released \`v$NEXT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Bumped from \`$CURRENT\`. Release workflow dispatched." >> "$GITHUB_STEP_SUMMARY"
