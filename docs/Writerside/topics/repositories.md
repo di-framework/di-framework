@@ -53,19 +53,39 @@ import { Container } from '../../di-framework/decorators'; // Wrong: relative id
 
 ## Usage with @di-framework/di-framework
 
-The `@Repository` decorator automatically registers your repository with the `@di-framework/di-framework` container.
+Define a model with Spring/JPA-style `@Model`, `@Id`, and optional `@GeneratedValue` (the class is the type), then register a repository with `@Repository`.
 
 ```typescript
-import { Repository, InMemoryRepository } from '@di-framework/di-framework-repo';
+import {
+  GeneratedValue,
+  GenerationType,
+  Id,
+  IdKind,
+  Model,
+  Repository,
+  InMemoryRepository,
+} from '@di-framework/di-framework-repo';
 
-interface User {
-  id: number;
-  name: string;
+@Model()
+class User {
+  @Id()
+  @GeneratedValue({ strategy: GenerationType.Identity })
+  id!: number;
+
+  @Id({ kind: IdKind.Public })
+  @GeneratedValue({ strategy: GenerationType.UUID }) // UUIDv7
+  publicId!: string;
+
+  name!: string;
 }
 
 @Repository()
 class UserRepository extends InMemoryRepository<User, number> {}
 ```
+
+`IdKind` covers multi-context identity (`Primary`, `Public`, `External`, `Legacy`, `Tenant`, `Version`). Multiple `Primary` fields express a composite primary key. `@GeneratedValue` stacks with `@Id` like JPA; `GenerationType` matches Jakarta (`Auto`, `Identity`, `Sequence`, `Table`, `UUID`), and **UUID means UUIDv7** in this framework.
+
+Plain interfaces still work if you do not need model metadata. Read metadata with `getModelMetadata` / `getIdentities` / `getPrimaryId` / `isModel`. Foreign keys to other models are not `@Id` kinds.
 
 ### Injecting Repositories
 

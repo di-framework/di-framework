@@ -9,6 +9,7 @@ A coherent abstraction of repositories and storage adapters for TypeScript, with
 - **Built-in Pagination**: Standardized `Page` and `PaginatedResult` types with built-in support in adapters and repositories.
 - **In-Memory Implementation**: Includes a fully functional `InMemoryRepository` for prototyping and testing.
 - **DI Integration**: Seamlessly integrates with `di-framework` via the `@Repository` decorator.
+- **Models**: Optional Spring/JPA-style `@Model`, `@Id`, and `@GeneratedValue` for multi-context identity metadata.
 
 ## Installation
 
@@ -42,7 +43,60 @@ import { Container } from '../../di-framework/decorators'; // Wrong: relative id
 
 ## Basic Usage
 
-### 1. Define your Entity
+### 1. Define your Model
+
+Use `@Model` on a class. Mark identity fields with `@Id` and optional `@GeneratedValue` (stacked like Spring/JPA). The class **is** the TypeScript type — no separate interface is required. Storage can still use plain objects assignable to that shape.
+
+```typescript
+import {
+  GeneratedValue,
+  GenerationType,
+  Id,
+  IdKind,
+  Model,
+} from '@di-framework/di-framework-repo';
+
+@Model()
+class User {
+  @Id()
+  @GeneratedValue({ strategy: GenerationType.Identity })
+  id!: number;
+
+  @Id({ kind: IdKind.Public })
+  @GeneratedValue({ strategy: GenerationType.UUID }) // UUIDv7 in this framework
+  publicId!: string;
+
+  name!: string;
+  email!: string;
+}
+```
+
+#### Identity contexts (`IdKind`)
+
+A model may have several identity fields — each identifies the record in a different context:
+
+| Kind | Typical field | Role |
+| --- | --- | --- |
+| `Primary` (default) | `id` | Database / repository primary key. Several `Primary` fields = composite PK. |
+| `Public` | `publicId` | Safe id for URLs / APIs (often UUIDv7). |
+| `External` | `stripeCustomerId` | Id assigned by another system. |
+| `Legacy` | `legacyId` | Retained during migration. |
+| `Tenant` | `tenantId` | Owning org / customer (may also be part of a composite PK). |
+| `Version` | `versionId` | Particular revision. |
+
+`@Id` is for identities **of this model**. Foreign keys to other models are not `IdKind`s (relations stay separate).
+
+#### Generation (`GenerationType`)
+
+Aligned with Jakarta Persistence `GenerationType`: `Auto`, `Identity`, `Sequence`, `Table`, `UUID`.
+
+- `@GeneratedValue` must be stacked with `@Id` on the same property.
+- Default strategy when `@GeneratedValue()` is used without options is `Auto`.
+- **`GenerationType.UUID` means UUIDv7** (RFC 9562 time-ordered), not random v4 — intentional default for index-friendly keys.
+
+Metadata is optional for repositories today — use `getModelMetadata` / `getIdentities` / `getPrimaryId` / `isModel` when adapters need it. Repositories still take an explicit id type parameter (`InMemoryRepository<User, number>`).
+
+Plain interfaces still work if you prefer them:
 
 ```typescript
 interface User {
@@ -72,7 +126,23 @@ class UserRepository extends InMemoryRepository<User, number> {
 Use the `@Repository` decorator to automatically register your repository with the `di-framework` container.
 
 ```typescript
-import { Repository } from '@di-framework/di-framework-repo';
+import {
+  GeneratedValue,
+  GenerationType,
+  Id,
+  Model,
+  Repository,
+  InMemoryRepository,
+} from '@di-framework/di-framework-repo';
+
+@Model()
+class User {
+  @Id()
+  @GeneratedValue({ strategy: GenerationType.Identity })
+  id!: number;
+  name!: string;
+  email!: string;
+}
 
 @Repository()
 class UserRepository extends InMemoryRepository<User, number> {
@@ -119,7 +189,15 @@ class MyRepository extends BaseRepository<User, number> {
 
 ### Decorators
 
+- `@Model()`: Marks a class as a domain data model.
+- `@Id(options?)`: Marks an identity field (`kind?: IdKind`, default `Primary`).
+- `@GeneratedValue(options?)`: Stacked with `@Id`; `strategy?: GenerationType` (default `Auto`). UUID ⇒ UUIDv7.
 - `@Repository(options)`: Registers the class as a singleton in `di-framework`.
+
+### Identity helpers
+
+- `IdKind` / `GenerationType`: const objects + string unions.
+- `getModelMetadata` / `getIdentities` / `getPrimaryId` / `isModel`.
 
 ### Types
 
