@@ -56,8 +56,6 @@ curl 'http://127.0.0.1:8787/preview-search/docs/d?query=repository'
 curl http://127.0.0.1:8787/
 ```
 
-Without AI/Vectorize bindings (unit tests), the worker uses a **deterministic bag-of-chars embedder** + **in-memory cosine index** so the DI/repo path still runs.
-
 ## Deploy
 
 ### Auth model (no Cloudflare API tokens in GitHub)

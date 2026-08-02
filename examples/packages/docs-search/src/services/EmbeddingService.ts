@@ -56,19 +56,3 @@ export function bagOfChars(text: string, dims: number): number[] {
   const norm = Math.sqrt(v.reduce((a, b) => a + b * b, 0)) || 1;
   return v.map((x) => x / norm);
 }
-
-export function cosineSimilarity(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < n; i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    dot += x * y;
-    na += x * x;
-    nb += y * y;
-  }
-  const d = Math.sqrt(na) * Math.sqrt(nb);
-  return d === 0 ? 0 : dot / d;
-}

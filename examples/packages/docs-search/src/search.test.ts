@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
 import { DocPage } from './models/DocPage';
 import { DocumentRepository } from './repositories/DocumentRepository';
-import { bagOfChars, cosineSimilarity, EmbeddingService } from './services/EmbeddingService';
+import { EmbeddingService } from './services/EmbeddingService';
 import { lexicalScore, makeSnippet, SearchService, tokenize } from './services/SearchService';
 import { VectorIndexService } from './services/VectorIndexService';
 
@@ -33,11 +33,6 @@ describe('tokenize + lexical helpers', () => {
   test('snippet surrounds first match', () => {
     const s = makeSnippet('aaa repository bbb adapter ccc', ['repository'], 40);
     expect(s.toLowerCase()).toContain('repository');
-  });
-
-  test('cosine similarity of identical bags is ~1', () => {
-    const a = bagOfChars('hello world', 16);
-    expect(cosineSimilarity(a, a)).toBeCloseTo(1, 5);
   });
 });
 
@@ -99,12 +94,12 @@ describe('incremental Vectorize sync', () => {
     // wait - skipped is pages.length - toUpsert. pages = a,c both upserted → skipped 0
     expect(sync.total).toBe(2);
 
+    // Without Vectorize binding, search uses lexical fallback over the repo
     const res = await search.search({ query: 'gamma brand new', maxHits: 5 });
     expect(res.hits.some((h) => h.objectID === 'c')).toBe(true);
 
-    // beta should not appear via vector path (deleted); lexical fallback only if vectors empty for query
+    // b was deleted from the repo — must not appear
     const beta = await search.search({ query: 'beta content repositories', maxHits: 5 });
-    // may still hit a via weak similarity; assert b is gone from hits
     expect(beta.hits.every((h) => h.objectID !== 'b')).toBe(true);
   });
 

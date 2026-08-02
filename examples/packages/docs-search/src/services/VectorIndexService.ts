@@ -35,11 +35,11 @@ type Manifest = Record<string, string>; // id → contentHash
  * - only embed/upsert new or changed ids
  * - `deleteByIds` for ids that left the corpus
  *
- * Falls back to in-memory index + manifest when bindings are unbound (tests).
+ * Without Vectorize (unit tests): skip remote upsert/delete; keep a local
+ * content-hash manifest only. Query returns [] → SearchService lexical fallback.
  */
 @Container()
 export class VectorIndexService {
-  private memory = new Map<string, { values: number[]; metadata: Record<string, string> }>();
   private memoryManifest: Manifest = {};
 
   constructor(
@@ -138,76 +138,42 @@ export class VectorIndexService {
       },
     }));
 
-    if (this.hasVectorize()) {
-      const chunk = 50;
-      for (let i = 0; i < rows.length; i += chunk) {
-        await this.env().VECTORIZE.upsert(rows.slice(i, i + chunk));
-      }
-    } else {
-      for (const row of rows) {
-        this.memory.set(row.id, { values: row.values, metadata: row.metadata });
-      }
+    if (!this.hasVectorize()) return;
+
+    const chunk = 50;
+    for (let i = 0; i < rows.length; i += chunk) {
+      await this.env().VECTORIZE.upsert(rows.slice(i, i + chunk));
     }
   }
 
   async deleteByIds(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    if (this.hasVectorize()) {
-      const chunk = 100;
-      for (let i = 0; i < ids.length; i += chunk) {
-        await this.env().VECTORIZE.deleteByIds(ids.slice(i, i + chunk));
-      }
-    } else {
-      for (const id of ids) this.memory.delete(id);
+    if (ids.length === 0 || !this.hasVectorize()) return;
+    const chunk = 100;
+    for (let i = 0; i < ids.length; i += chunk) {
+      await this.env().VECTORIZE.deleteByIds(ids.slice(i, i + chunk));
     }
   }
 
   /**
-   * Embed the query with Workers AI, then ANN-query Vectorize.
+   * Embed the query with Workers AI, then ANN-query Vectorize (cosine metric).
+   * Without Vectorize, returns [] so SearchService uses lexical fallback.
    */
   async query(queryText: string, opts: { topK: number; product?: string }): Promise<VectorMatch[]> {
+    if (!this.hasVectorize()) {
+      return [];
+    }
+
     const vector = await this.embeddings.embedOne(queryText);
     const topK = Math.min(Math.max(opts.topK, 1), 50);
-
-    if (this.hasVectorize()) {
-      const result = await this.env().VECTORIZE.query(vector, {
-        topK,
-        returnMetadata: 'all',
-        ...(opts.product ? { filter: { product: opts.product } } : {}),
-      });
-      return (result.matches ?? []).map((m) => ({
-        id: m.id,
-        score: m.score,
-        metadata: m.metadata as Record<string, string> | undefined,
-      }));
-    }
-
-    const scored: VectorMatch[] = [];
-    for (const [id, row] of this.memory) {
-      if (opts.product && row.metadata.product !== opts.product) continue;
-      scored.push({
-        id,
-        score: cosine(vector, row.values),
-        metadata: row.metadata,
-      });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, topK);
+    const result = await this.env().VECTORIZE.query(vector, {
+      topK,
+      returnMetadata: 'all',
+      ...(opts.product ? { filter: { product: opts.product } } : {}),
+    });
+    return (result.matches ?? []).map((m) => ({
+      id: m.id,
+      score: m.score,
+      metadata: m.metadata as Record<string, string> | undefined,
+    }));
   }
-}
-
-function cosine(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < n; i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    dot += x * y;
-    na += x * x;
-    nb += y * y;
-  }
-  const d = Math.sqrt(na) * Math.sqrt(nb);
-  return d === 0 ? 0 : dot / d;
 }
