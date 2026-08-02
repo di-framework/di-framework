@@ -19,7 +19,8 @@ function notFound(message = 'Not found') {
   return json({ error: message }, { status: 404 });
 }
 
-function badRequest(message = 'Bad request') {
+/** Exported for tests; used when a request body cannot be parsed. */
+export function badRequest(message = 'Bad request') {
   return json({ error: message }, { status: 400 });
 }
 

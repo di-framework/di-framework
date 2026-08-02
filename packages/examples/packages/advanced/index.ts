@@ -313,7 +313,8 @@ export async function runAdvancedExamples(): Promise<void> {
   const testContainer = new DIContainer();
   testContainer.register(ConfigService);
   testContainer.register(TestEmailService);
-  // In a real test, you'd also register NotificationService, etc.
+  const testEmail = testContainer.resolve(TestEmailService);
+  testEmail.send('tester@example.com', 'Ping', 'from test container');
   console.log('✓ Test container created with mock services\n');
 
   // Example 3: Configuration Service
@@ -321,6 +322,7 @@ export async function runAdvancedExamples(): Promise<void> {
   const config = container.resolve(ConfigService);
   console.log('Config:', config.getAll());
   const api = container.resolve(ApiService);
+  api.setConfig(config);
   await api.call('/users');
   console.log();
 
@@ -329,6 +331,7 @@ export async function runAdvancedExamples(): Promise<void> {
   const handler = container.resolve(RequestHandler);
   const logger1 = container.resolve(RequestLogger);
   const logger2 = container.resolve(RequestLogger);
+  logger1.onInit();
   console.log(`Same instance? ${logger1.getRequestId() === logger2.getRequestId()}`); // false
   await handler.handle('/data', logger1);
   console.log();
@@ -341,6 +344,7 @@ export async function runAdvancedExamples(): Promise<void> {
   console.log('First call:', cachedData.getData('user:1'));
   console.log('Second call (cached):', cachedData.getData('user:1'));
   console.log('New data:', cachedData.getData('user:2'));
+  cache.clear();
   (cache as any).onDestroy?.();
   console.log();
 

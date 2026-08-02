@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { useContainer } from '@di-framework/di-framework/container';
 import {
   BoundedContext,
@@ -11,11 +11,12 @@ import {
   setRegistry,
 } from '@di-framework/graphql';
 import type { ExecutionResult } from 'graphql';
-import { QueryStats } from './domain/catalog.ts';
+import { Book, QueryStats } from './domain/catalog.ts';
 import type { LibraryContext } from './domain/context.ts';
-import { ReviewRepository } from './domain/reviews.ts';
+import { BookAvailability, Loan, LoanService } from './domain/lending.ts';
+import { BookReviews, ReviewRepository, ReviewsPortal } from './domain/reviews.ts';
 import { library, publicCatalog } from './schema.ts';
-import { handler, serve } from './server.ts';
+import { handler, serve, startFromMain } from './server.ts';
 
 function run(query: string, context: LibraryContext = { memberId: 'm1' }, variables?: any) {
   return library.execute({ query, context, variables });
@@ -110,12 +111,11 @@ describe('the schema the decorators produced', () => {
 
 describe('resolution', () => {
   it('hydrates repository rows so the class methods apply', async () => {
-    const result = data(await run('{ book(id: "b1") { title shelfLabel genre } }'));
-    expect(result.book).toEqual({
-      title: 'The Left Hand of Darkness',
-      shelfLabel: 'FIC-GUIN-b1',
-      genre: 'Fiction',
-    });
+    const result = data(await run('{ book(id: "b1") { title shelfLabel genre age } }'));
+    expect(result.book.title).toBe('The Left Hand of Darkness');
+    expect(result.book.shelfLabel).toBe('FIC-GUIN-b1');
+    expect(result.book.genre).toBe('Fiction');
+    expect(typeof result.book.age).toBe('number');
   });
 
   it('serializes DateTime and JSON scalars', async () => {
@@ -303,6 +303,54 @@ describe('http', () => {
   });
 });
 
+describe('domain edge cases', () => {
+  it('constructs Book and Loan entities and reads derived fields', () => {
+    const book = new Book(
+      'b9',
+      'Title',
+      'Ursula K. Le Guin',
+      'Fiction',
+      new Date('1969-01-01T00:00:00.000Z'),
+      2,
+      null,
+    );
+    expect(book.age()).toBeGreaterThan(0);
+
+    const loan = new Loan(
+      'l9',
+      'b9',
+      'm1',
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      'Active',
+      0,
+    );
+    expect(loan.daysRemaining()).toBeGreaterThan(0);
+  });
+
+  it('calls non-batched extension and repository helpers directly', () => {
+    const loans = useContainer().resolve(LoanService);
+    const availability = useContainer().resolve(BookAvailability);
+    const bookRow = { id: 'b1' } as any;
+    expect(availability.onLoan(bookRow)).toBeGreaterThanOrEqual(0);
+    expect(availability.onLoanForBooks([bookRow])).toHaveLength(1);
+    expect(loans.activeCountForBooks(['b1', 'missing'])).toHaveLength(2);
+
+    const reviews = useContainer().resolve(ReviewRepository);
+    expect(reviews.forBook('b1').length).toBeGreaterThan(0);
+    expect(reviews.latest(2)).toHaveLength(2);
+
+    const bookReviews = useContainer().resolve(BookReviews);
+    expect(bookReviews.reviews(bookRow).length).toBeGreaterThan(0);
+    expect(typeof bookReviews.averageRating(bookRow)).toBe('number');
+
+    const portal = useContainer().resolve(ReviewsPortal);
+    expect(portal.latestReviews(1)).toHaveLength(1);
+    expect(portal.latestReviews(null).length).toBeGreaterThanOrEqual(1);
+    const row = reviews.forBook('b1')[0]!;
+    expect(portal.reviewPosted(row, null)).toEqual(row);
+  });
+});
+
 describe('the server', () => {
   it('serves GraphiQL at the root and the SDL beside it', async () => {
     const server = serve(0);
@@ -384,4 +432,122 @@ describe('the server', () => {
       server.stop(true);
     }
   });
+
+  it('handles graphql-transport-ws protocol edge cases', async () => {
+    const server = serve(0);
+    try {
+      async function openSocket() {
+        const socket = new WebSocket(
+          `ws://localhost:${server.port}/graphql`,
+          'graphql-transport-ws',
+        );
+        await new Promise<void>((resolve, reject) => {
+          socket.addEventListener('open', () => resolve());
+          socket.addEventListener('error', () => reject(new Error('socket error')));
+        });
+        return socket;
+      }
+
+      // Invalid JSON closes with 4400.
+      {
+        const socket = await openSocket();
+        const closed = new Promise<number>((resolve) =>
+          socket.addEventListener('close', (ev) => resolve(ev.code)),
+        );
+        socket.send('not-json');
+        expect(await closed).toBe(4400);
+      }
+
+      const socket = await openSocket();
+      const inbox: any[] = [];
+      socket.addEventListener('message', (event) => inbox.push(JSON.parse(String(event.data))));
+
+      socket.send(JSON.stringify({ type: 'connection_init', payload: {} }));
+      await waitFor(() => inbox.some((m) => m.type === 'connection_ack'));
+
+      socket.send(JSON.stringify({ type: 'ping' }));
+      await waitFor(() => inbox.some((m) => m.type === 'pong'));
+      socket.send(JSON.stringify({ type: 'pong' }));
+
+      // Query over the websocket transport (non-subscription path).
+      socket.send(
+        JSON.stringify({
+          id: 'q1',
+          type: 'subscribe',
+          payload: { query: '{ books { id } }' },
+        }),
+      );
+      await waitFor(() => inbox.some((m) => m.id === 'q1' && m.type === 'next'));
+      await waitFor(() => inbox.some((m) => m.id === 'q1' && m.type === 'complete'));
+
+      // Invalid subscription → error payload (no async iterator).
+      socket.send(
+        JSON.stringify({
+          id: 'bad',
+          type: 'subscribe',
+          payload: { query: 'subscription { notAField }' },
+        }),
+      );
+      await waitFor(() =>
+        inbox.some((m) => m.id === 'bad' && (m.type === 'error' || m.type === 'next')),
+      );
+
+      // Start a real subscription then complete it early.
+      socket.send(
+        JSON.stringify({
+          id: 'sub1',
+          type: 'subscribe',
+          payload: { query: 'subscription { reviewPosted { id } }' },
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 30));
+      socket.send(JSON.stringify({ id: 'sub1', type: 'complete' }));
+
+      // Malformed query hits isSubscription's catch and runs as a query.
+      socket.send(
+        JSON.stringify({
+          id: 'parse-fail',
+          type: 'subscribe',
+          payload: { query: 'not valid graphql {{{' },
+        }),
+      );
+      await waitFor(() =>
+        inbox.some((m) => m.id === 'parse-fail' && (m.type === 'next' || m.type === 'error')),
+      );
+
+      const closed = new Promise<number>((resolve) =>
+        socket.addEventListener('close', (ev) => resolve(ev.code)),
+      );
+      socket.send(JSON.stringify({ type: 'nope' }));
+      expect(await closed).toBe(4400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it('logs endpoints when started via startFromMain', () => {
+    const log = spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const server = startFromMain(0);
+      expect(log.mock.calls.some((c) => String(c[0]).includes('GraphiQL'))).toBe(true);
+      expect(log.mock.calls.some((c) => String(c[0]).includes('GraphQL'))).toBe(true);
+      expect(log.mock.calls.some((c) => String(c[0]).includes('SDL'))).toBe(true);
+      expect(log.mock.calls.some((c) => String(c[0]).includes('contexts'))).toBe(true);
+      server.stop(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
 });
+
+function waitFor(predicate: () => boolean, timeout = 2000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const tick = () => {
+      if (predicate()) return resolve();
+      if (Date.now() - start > timeout) return reject(new Error('waitFor timed out'));
+      setTimeout(tick, 10);
+    };
+    tick();
+  });
+}

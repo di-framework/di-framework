@@ -40,9 +40,12 @@ export async function publish() {
   console.log('\n🏁 Publish process finished!');
 }
 
+/** Shared entrypoint error handler (kept separate so tests can cover it). */
+export function handlePublishFailure(err: unknown): never {
+  console.error('❌ Publish script failed:', err);
+  process.exit(1);
+}
+
 if (import.meta.main) {
-  publish().catch((err) => {
-    console.error('❌ Publish script failed:', err);
-    process.exit(1);
-  });
+  publish().catch(handlePublishFailure);
 }

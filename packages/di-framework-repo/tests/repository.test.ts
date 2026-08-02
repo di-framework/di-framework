@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { StorageAdapter } from '../src/adapter';
-import { BaseRepository, SoftDeleteRepository } from '../src/repository';
+import { BaseRepository, EntityRepository, SoftDeleteRepository } from '../src/repository';
 
 interface User {
   id: string;
@@ -146,6 +146,21 @@ class MySoftDeleteRepo extends SoftDeleteRepository<SoftUser, string> {
     super(adapter);
   }
 }
+
+describe('EntityRepository', () => {
+  test('can be extended and constructed through BaseRepository', async () => {
+    class ConcreteEntityRepo extends EntityRepository<User, string> {
+      constructor(adapter: StorageAdapter<User, string>) {
+        super(adapter);
+      }
+    }
+
+    const adapter = new MockAdapter<User, string>();
+    const repo = new ConcreteEntityRepo(adapter);
+    await repo.findAll();
+    expect(adapter.findAll).toHaveBeenCalled();
+  });
+});
 
 describe('SoftDeleteRepository', () => {
   test('softDeleteAndNotify orchestrates calls', async () => {

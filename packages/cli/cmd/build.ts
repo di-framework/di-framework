@@ -45,9 +45,12 @@ export async function build() {
   console.log('\n✨ All builds completed successfully!');
 }
 
+/** Shared entrypoint error handler (kept separate so tests can cover it). */
+export function handleBuildFailure(err: unknown): never {
+  console.error('❌ Build failed:', err);
+  process.exit(1);
+}
+
 if (import.meta.main) {
-  build().catch((err) => {
-    console.error('❌ Build failed:', err);
-    process.exit(1);
-  });
+  build().catch(handleBuildFailure);
 }

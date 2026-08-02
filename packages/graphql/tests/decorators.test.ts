@@ -178,10 +178,43 @@ describe('field declarations', () => {
     });
   });
 
+  it('stableStringifies array arguments when batching', async () => {
+    await withRegistry(async (registry) => {
+      @Portal()
+      class ArrayBatchPortal {
+        @Field(() => [String], { batch: true })
+        tags(@Arg('ids', () => [String]) ids: string[]): string[] {
+          return ids.map((id) => id.toUpperCase());
+        }
+      }
+
+      const api = buildSemanticSchema({ registry });
+      const result = await api.execute({
+        query: '{ a: tags(ids: ["x", "y"]) b: tags(ids: ["x", "y"]) }',
+      });
+      expect(result.data).toEqual({ a: ['X', 'Y'], b: ['X', 'Y'] });
+    });
+  });
+
   it('getParamNames returns empty array for functions without parentheses', () => {
     const { getParamNames } = require('../src/metadata.ts');
     const fakeFn = () => {};
     fakeFn.toString = () => 'no_parens';
     expect(getParamNames(fakeFn)).toEqual([]);
+  });
+
+  it('getParamNames returns empty when parentheses never close', () => {
+    const { getParamNames } = require('../src/metadata.ts');
+    const fakeFn = () => {};
+    fakeFn.toString = () => 'function open(a, b';
+    expect(getParamNames(fakeFn)).toEqual([]);
+  });
+
+  it('getParamNames walks nested brackets before finding the close paren', () => {
+    const { getParamNames } = require('../src/metadata.ts');
+    const fakeFn = () => {};
+    // Nested `[`/`]`/`{`/`}` must decrement depth without closing the param list.
+    fakeFn.toString = () => 'function fancy(a = [1, 2], b = { x: (1) }) {}';
+    expect(getParamNames(fakeFn)).toEqual(['a', 'b']);
   });
 });

@@ -3,7 +3,7 @@ import { useContainer } from '@di-framework/di-framework/container';
 import { DatabaseService } from '../../services/DatabaseService';
 import { LoggerService } from '../../services/LoggerService';
 import { UserService } from '../../services/UserService';
-import { handleRequest } from './router';
+import { badRequest, handleRequest } from './router';
 import { ConfigService } from './services/ConfigService';
 import { CounterService } from './services/CounterService';
 
@@ -93,6 +93,16 @@ describe('cf-worker router', () => {
     const listReq = new Request('http://localhost/api/users');
     const listRes = await handleRequest(listReq, mockEnv, mockCtx);
     expect(listRes.status).toBe(200);
+  });
+
+  test('badRequest returns a 400 JSON response', async () => {
+    const res = badRequest('Nope');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Nope' });
+
+    const defaults = badRequest();
+    expect(defaults.status).toBe(400);
+    expect(await defaults.json()).toEqual({ error: 'Bad request' });
   });
 
   test('counter routes with mock Durable Object', async () => {

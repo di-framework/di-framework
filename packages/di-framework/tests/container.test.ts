@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { Container, container as globalContainer, useContainer } from '../container';
 import { Component } from '../decorators';
 
@@ -184,12 +184,29 @@ describe('Container - cron expression parsing and schedule edge cases', () => {
       }
     }
 
-    const c = new Container();
-    c.register(ThrowingCronService);
-    c.resolve(ThrowingCronService);
+    const scheduled: Array<() => void> = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: any) => {
+      if (typeof fn === 'function') scheduled.push(fn);
+      return 0 as any;
+    }) as typeof setTimeout;
 
-    // Stop cron jobs
-    c.stopCronJobs();
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    const c = new Container();
+    try {
+      c.register(ThrowingCronService);
+      c.resolve(ThrowingCronService);
+      expect(scheduled.length).toBeGreaterThan(0);
+      // Fire the cron tick: method throws, error is logged, and the next tick is scheduled.
+      scheduled[0]!();
+      expect(thrown).toBe(true);
+      expect(error.mock.calls.some((call) => String(call[0]).includes('[Cron]'))).toBe(true);
+      expect(scheduled.length).toBeGreaterThan(1);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      error.mockRestore();
+      c.stopCronJobs();
+    }
   });
 });
 

@@ -103,6 +103,20 @@ describe('Schema - DateTime scalar edge cases', () => {
     expect(() => DateTimeScalar.parseValue(true)).toThrow(/DateTime cannot parse value/);
   });
 
+  it('DateTime serialize accepts Date, string, and number', async () => {
+    const DateTimeScalar = (await import('../src/schema.ts')).DateTimeScalar;
+    expect(DateTimeScalar.serialize(new Date('2020-01-02T00:00:00.000Z'))).toBe(
+      '2020-01-02T00:00:00.000Z',
+    );
+    expect(DateTimeScalar.serialize('2020-01-02T00:00:00.000Z')).toBe('2020-01-02T00:00:00.000Z');
+    expect(DateTimeScalar.serialize(1577836800000)).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('DateTime serialize throws for invalid input', async () => {
+    const DateTimeScalar = (await import('../src/schema.ts')).DateTimeScalar;
+    expect(() => DateTimeScalar.serialize(true)).toThrow(/DateTime cannot represent value/);
+  });
+
   it('DateTime parseLiteral accepts a string literal', async () => {
     const DateTimeScalar = (await import('../src/schema.ts')).DateTimeScalar;
     const result = DateTimeScalar.parseLiteral(
