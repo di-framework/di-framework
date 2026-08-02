@@ -77,12 +77,6 @@ jobs:
           echo "branch=release/v$NEXT" >> "$GITHUB_OUTPUT"
           echo "Bumping $CURRENT -> $NEXT ($BUMP)"
 
-      - name: Apply version to package.json
-        run: |
-          set -euo pipefail
-          NEXT="${{ steps.version.outputs.next }}"
-          npm version "$NEXT" --no-git-tag-version --allow-same-version
-
       - name: Open release PR
         id: pr
         env:
@@ -96,13 +90,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH"
+          # Always rebuild the release branch from the job's main tip.
+          # A previous failed run may have left origin/release/vX.Y.Z behind
+          # main; plain push then fails non-fast-forward.
+          git fetch origin main
+          git checkout -B "$BRANCH" origin/main
+
+          # Bump after branch reset so origin/main doesn't wipe package.json
+          npm version "$NEXT" --no-git-tag-version --allow-same-version
+
           git add package.json
           git add -u bun.lock package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "::error::nothing to commit for v$NEXT (package.json already at that version?)"
+            exit 1
+          fi
           git commit -m "chore(release): v$NEXT"
-          git push -u origin "$BRANCH"
 
-          # Avoid duplicate open PRs for the same branch
+          # Refresh remote-tracking ref so --force-with-lease can replace a stale branch
+          git fetch origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null || true
+          git push -u origin "HEAD:refs/heads/$BRANCH" --force-with-lease
+
+          # Prefer an open PR; otherwise create (closed prior attempts don't block)
           PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [ -n "$PR" ]; then
             echo "Reusing open PR #$PR"
