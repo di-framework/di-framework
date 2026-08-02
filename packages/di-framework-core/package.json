@@ -1,5 +1,5 @@
 {
-  "name": "@di-framework/di-framework",
+  "name": "@di-framework/core",
   "version": "3.0.1",
   "description": "Lightweight, zero-dependency TypeScript Dependency Injection framework using decorators. Works seamlessly with SWC and TypeScript's native decorator support.",
   "main": "./dist/container.js",
