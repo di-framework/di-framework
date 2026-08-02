@@ -303,6 +303,7 @@ export class Container {
     this.stopCronJobs();
     this.services.clear();
     this.emit('cleared', { count });
+    this.listeners.clear();
   }
 
   /**

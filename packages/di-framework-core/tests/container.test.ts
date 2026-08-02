@@ -111,6 +111,33 @@ describe('Container - observer pattern hooks', () => {
     expect(events.filter((e) => e.type === 'resolved').length).toBe(2);
     expect(events.find((e) => e.type === 'cleared')).toBeTruthy();
   });
+
+  it('clear() removes listeners after emitting cleared', () => {
+    const c = new Container();
+    let clearedCount = 0;
+    let resolveCount = 0;
+
+    c.on('cleared', () => {
+      clearedCount++;
+    });
+    c.on('resolved', () => {
+      resolveCount++;
+    });
+
+    c.register(Foo);
+    c.resolve(Foo);
+    expect(resolveCount).toBe(1);
+
+    c.clear();
+    expect(clearedCount).toBe(1);
+
+    c.register(Foo);
+    c.resolve(Foo);
+    c.clear();
+
+    expect(resolveCount).toBe(1);
+    expect(clearedCount).toBe(1);
+  });
 });
 
 describe('Container - constructor and prototype helpers', () => {

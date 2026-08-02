@@ -1,4 +1,4 @@
-# di-framework
+# @di-framework/core
 
 [![CI](https://github.com/di-framework/di-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/di-framework/di-framework/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/di-framework.svg)](https://www.npmjs.com/package/di-framework)
@@ -22,7 +22,7 @@ The decorators are fully integrated with SWC's native support - no need for `ref
 ### 1. Basic Service
 
 ```typescript
-import { Container } from '@di-framework/di-framework/decorators';
+import { Container } from '@di-framework/core/decorators';
 
 @Container()
 export class DatabaseService {
@@ -35,7 +35,7 @@ export class DatabaseService {
 ### 2. Service with Dependencies
 
 ```typescript
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { Container, Component } from '@di-framework/core/decorators';
 import { DatabaseService } from './services/DatabaseService';
 
 @Container()
@@ -56,7 +56,7 @@ Note: Property injection is used for all dependencies. This works seamlessly wit
 ### 3. Resolve Services
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 import { UserService } from './services/UserService';
 
 const container = useContainer();
@@ -76,7 +76,7 @@ Marks a class as injectable and automatically registers it with the DI container
 
 - `singleton?: boolean` (default: `true`) - Create a new instance each time or reuse the same instance
 - `container?: DIContainer` - Specify a custom container (defaults to global container)
-  - Note: Import as `import { Container as DIContainer } from '@di-framework/di-framework/container'` to avoid name collision with the `@Container` decorator.
+  - Note: Import as `import { Container as DIContainer } from '@di-framework/core/container'` to avoid name collision with the `@Container` decorator.
 
 **Example:**
 
@@ -157,7 +157,7 @@ export class MonitoringService {
 Returns the global DI container instance.
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 
 const container = useContainer();
 ```
@@ -240,8 +240,8 @@ unsubscribe(); // stop listening
 Create a fresh instance without registering it, while still honoring dependency injection. Useful for constructor-pattern scenarios where you need to supply specific primitives/config values.
 
 ```typescript
-import { Component } from '@di-framework/di-framework/decorators';
-import { LoggerService } from '@di-framework/di-framework/services/LoggerService';
+import { Component } from '@di-framework/core/decorators';
+import { LoggerService } from '@di-framework/core/services/LoggerService';
 
 class Greeter {
   constructor(
@@ -477,7 +477,7 @@ class MyService {
 
 ```typescript
 // Create a test container
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 
 const testContainer = new DIContainer();
 
