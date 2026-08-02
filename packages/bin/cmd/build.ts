@@ -1,6 +1,6 @@
 import { $ } from 'bun';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 export const PACKAGES = [
   'packages/di-framework',

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { join, resolve } from 'path';
-import { parseArgs, findTopmostTsconfig } from '../cmd/typecheck';
+import { findTopmostTsconfig, parseArgs } from '../cmd/typecheck';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 

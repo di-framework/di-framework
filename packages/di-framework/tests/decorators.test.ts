@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { useContainer, Container as DIContainer } from '../container';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import { Container as DIContainer, useContainer } from '../container';
 import {
   Bootstrap,
-  Container as Injectable,
   Component,
-  isInjectable,
   getInjectionContainer,
+  Container as Injectable,
+  isInjectable,
 } from '../decorators';
 
 // Reset the global container before each test to avoid cross-test pollution

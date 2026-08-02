@@ -90,8 +90,8 @@ describe('semantic schema', () => {
     }`);
 
     expect(result.errors).toBeUndefined();
-    expect((result.data?.first as any).orders).toHaveLength(2);
-    expect((result.data?.second as any).orders).toHaveLength(1);
+    expect((result.data as any)?.first?.orders).toHaveLength(2);
+    expect((result.data as any)?.second?.orders).toHaveLength(1);
     // One batched load for both users, instead of one per user.
     expect(orders.loads - before).toBe(1);
   });

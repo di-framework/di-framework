@@ -1,6 +1,6 @@
-import registry from './registry.ts';
-import { Container as ContainerDecorator } from '@di-framework/di-framework/decorators';
 import { getOwnMetadata, useContainer } from '@di-framework/di-framework/container';
+import { Container as ContainerDecorator } from '@di-framework/di-framework/decorators';
+import registry from './registry.ts';
 
 const INJECT_METADATA_KEY = 'di:inject';
 export const SCHEMAS = Symbol.for('proseva:component-schemas');
@@ -18,7 +18,7 @@ interface ContainerLike {
 export function Controller(options: { singleton?: boolean; container?: any } = {}) {
   // Compose DI registration with OpenAPI registry marking
   const containerDecorator = ContainerDecorator(options);
-  return function (target: any) {
+  return (target: any) => {
     // Mark for HTTP/OpenAPI purposes
     target.isController = true;
     registry.addTarget(target);
@@ -65,14 +65,14 @@ export function Endpoint(metadata?: {
   requestBody?: any;
   responses?: Record<string, any>;
 }) {
-  return function (target: any, propertyKey?: string) {
+  return (target: any, propertyKey?: string) => {
     if (propertyKey) {
       const property = target[propertyKey];
 
       // For static methods on a class, target is the constructor.
       // If it's a static method, target itself is the constructor.
-      const constructor = typeof target === 'function' ? target : target.constructor;
-      registry.addTarget(constructor);
+      const ctor = typeof target === 'function' ? target : target.constructor;
+      registry.addTarget(ctor);
 
       // We'll let the generator discover the details from the property for now,
       // or we could register it explicitly here if we had path/method info.
@@ -88,9 +88,9 @@ export function Endpoint(metadata?: {
       // Also attach schemas if metadata is provided
       if (metadata) {
         const existing: Set<string> =
-          (constructor as Record<symbol, Set<string>>)[SCHEMAS] ?? new Set<string>();
+          (ctor as Record<symbol, Set<string>>)[SCHEMAS] ?? new Set<string>();
         extractSchemaRefs(metadata, existing);
-        (constructor as Record<symbol, Set<string>>)[SCHEMAS] = existing;
+        (ctor as Record<symbol, Set<string>>)[SCHEMAS] = existing;
       }
     } else {
       target.isEndpoint = true;

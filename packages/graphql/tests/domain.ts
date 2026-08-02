@@ -210,16 +210,16 @@ export class Order {
 @BoundedContext('Orders')
 @Extends(() => User)
 export class UserOrders {
-  constructor(@Component(OrderService) private orders: OrderService) {}
+  constructor(@Component(OrderService) private orderService: OrderService) {}
 
   @Field(() => [Order], { batch: 'ordersForUsers' })
   orders(@Parent() user: UserRow): OrderRow[] {
-    return this.orders.forUser(user.id);
+    return this.orderService.forUser(user.id);
   }
 
   /** Batch counterpart: one call for every user resolved in the same tick. */
   ordersForUsers(users: UserRow[]): OrderRow[][] {
-    return this.orders.forUsers(users.map((user) => user.id));
+    return this.orderService.forUsers(users.map((user) => user.id));
   }
 }
 

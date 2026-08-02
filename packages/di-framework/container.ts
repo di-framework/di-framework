@@ -390,12 +390,12 @@ export class Container {
   /**
    * Apply event publishers and subscribers defined via decorators
    */
-  private applyEvents<T>(instance: T, constructor: Constructor<T>): void {
-    const className = constructor.name;
+  private applyEvents<T>(instance: T, ctor: Constructor<T>): void {
+    const className = ctor.name;
 
     // Handle @Subscriber(event)
     const subscriberMap: Record<string, string[]> =
-      getMetadata(SUBSCRIBER_METADATA_KEY, constructor.prototype) || {};
+      getMetadata(SUBSCRIBER_METADATA_KEY, ctor.prototype) || {};
     Object.entries(subscriberMap).forEach(([event, methods]) => {
       methods.forEach((methodName) => {
         const method = (instance as any)[methodName];
@@ -418,7 +418,7 @@ export class Container {
     const publisherMethods: Record<
       string,
       { event: string; phase?: 'before' | 'after' | 'both'; logging?: boolean }
-    > = getMetadata(PUBLISHER_METADATA_KEY, constructor.prototype) || {};
+    > = getMetadata(PUBLISHER_METADATA_KEY, ctor.prototype) || {};
     Object.entries(publisherMethods).forEach(([methodName, options]) => {
       const originalMethod = (instance as any)[methodName];
       if (typeof originalMethod === 'function') {
@@ -490,9 +490,9 @@ export class Container {
   /**
    * Apply cron schedules defined via @Cron decorator
    */
-  private applyCron<T>(instance: T, constructor: Constructor<T>): void {
+  private applyCron<T>(instance: T, ctor: Constructor<T>): void {
     const cronMethods: Record<string, string | number> =
-      getMetadata(CRON_METADATA_KEY, constructor.prototype) || {};
+      getMetadata(CRON_METADATA_KEY, ctor.prototype) || {};
 
     Object.entries(cronMethods).forEach(([methodName, schedule]) => {
       const method = (instance as any)[methodName];
@@ -504,7 +504,7 @@ export class Container {
           try {
             method.call(instance);
           } catch (err) {
-            console.error(`[Cron] ${constructor.name}.${methodName} threw`, err);
+            console.error(`[Cron] ${ctor.name}.${methodName} threw`, err);
           }
         }, schedule);
         this.cronJobs.push({ stop: () => clearInterval(timer) });
@@ -524,7 +524,7 @@ export class Container {
             try {
               method.call(instance);
             } catch (err) {
-              console.error(`[Cron] ${constructor.name}.${methodName} threw`, err);
+              console.error(`[Cron] ${ctor.name}.${methodName} threw`, err);
             }
             scheduleNext();
           }, delay);
@@ -572,7 +572,7 @@ export class Container {
     const injectMetadata = getOwnMetadata(INJECT_METADATA_KEY, type) || {};
     const paramCount = Math.max(paramTypes.length, paramNames.length);
     for (let i = 0; i < paramCount; i++) {
-      if (Object.prototype.hasOwnProperty.call(overrides, i)) {
+      if (Object.hasOwn(overrides, i)) {
         dependencies.push(overrides[i]);
         continue;
       }
@@ -641,12 +641,12 @@ export class Container {
   /**
    * Apply telemetry tracking and listeners to an instance
    */
-  private applyTelemetry<T>(instance: T, constructor: Constructor<T>): void {
-    const className = constructor.name;
+  private applyTelemetry<T>(instance: T, ctor: Constructor<T>): void {
+    const className = ctor.name;
 
     // Handle @TelemetryListener
     const listenerMethods: string[] =
-      getMetadata(TELEMETRY_LISTENER_METADATA_KEY, constructor.prototype) || [];
+      getMetadata(TELEMETRY_LISTENER_METADATA_KEY, ctor.prototype) || [];
     listenerMethods.forEach((methodName) => {
       const method = (instance as any)[methodName];
       if (typeof method === 'function') {
@@ -662,7 +662,7 @@ export class Container {
 
     // Handle @Telemetry
     const telemetryMethods: Record<string, any> =
-      getMetadata(TELEMETRY_METADATA_KEY, constructor.prototype) || {};
+      getMetadata(TELEMETRY_METADATA_KEY, ctor.prototype) || {};
     Object.entries(telemetryMethods).forEach(([methodName, options]) => {
       const originalMethod = (instance as any)[methodName];
       if (typeof originalMethod === 'function') {
@@ -781,4 +781,4 @@ export function useContainer(): Container {
  * Export metadata functions for use in decorators
  * These provide a simple, reflect-metadata-free way to store and access metadata
  */
-export { defineMetadata, getMetadata, hasMetadata, getOwnMetadata };
+export { defineMetadata, getMetadata, getOwnMetadata, hasMetadata };

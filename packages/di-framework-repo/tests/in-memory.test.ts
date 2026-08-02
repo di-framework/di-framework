@@ -1,4 +1,4 @@
-import { expect, test, describe, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { InMemoryRepository } from '../src/in-memory';
 
 interface User {

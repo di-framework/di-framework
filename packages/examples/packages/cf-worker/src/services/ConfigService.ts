@@ -1,4 +1,4 @@
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/di-framework/decorators';
 
 @Container()
 export class ConfigService {

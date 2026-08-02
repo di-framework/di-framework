@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { Container, useContainer, container as globalContainer } from '../container';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import { Container, container as globalContainer, useContainer } from '../container';
 import { Component } from '../decorators';
 
 class Foo {

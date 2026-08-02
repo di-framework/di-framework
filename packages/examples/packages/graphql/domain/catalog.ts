@@ -269,10 +269,7 @@ export class CatalogPortal {
    * decision, so it is expressed here rather than in transport middleware.
    */
   @Action(() => Book, { description: 'Acquire a new title.' })
-  addBook(
-    @Arg('input', () => BookInput) input: BookInput,
-    @Ctx() ctx: LibraryContext,
-  ): BookRow {
+  addBook(@Arg('input', () => BookInput) input: BookInput, @Ctx() ctx: LibraryContext): BookRow {
     requireLibrarian(ctx);
     return this.repo.add({
       id: input.slug(),

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '../container';
-import { Container as Injectable, Cron } from '../decorators';
+import { Cron, Container as Injectable } from '../decorators';
 
 beforeEach(() => {
   useContainer().clear();

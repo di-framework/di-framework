@@ -2,17 +2,17 @@
 // Run locally: deno run --allow-net --allow-env main.ts
 // Deploy to Deno Deploy: push as-is (Sandbox works natively)
 
+import { Sandbox } from '@deno/sandbox';
 import { Bootstrap, Component, Container, Telemetry } from '@di-framework/di-framework/decorators';
 import {
   Controller,
   Endpoint,
-  Json,
+  type Json,
   json,
   type RequestSpec,
   type ResponseSpec,
   TypedRouter,
 } from '@di-framework/di-framework-http';
-import { Sandbox } from '@deno/sandbox';
 
 // Router setup
 type Env = {};

@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'bun:test';
-import { Controller, Endpoint, SCHEMAS } from './decorators.ts';
-import registry from './registry.ts';
+import { describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/di-framework/container';
 import { Component } from '@di-framework/di-framework/decorators';
+import { Controller, Endpoint, SCHEMAS } from './decorators.ts';
+import registry from './registry.ts';
 
 describe('Decorators', () => {
   it('should register a controller and its endpoints', () => {
@@ -15,11 +15,10 @@ describe('Decorators', () => {
     }
 
     expect(registry.getTargets().has(TestController)).toBe(true);
-    // @ts-ignore
+    // @ts-expect-error
     expect(TestController.isController).toBe(true);
-    // @ts-ignore
     expect(TestController.test.isEndpoint).toBe(true);
-    // @ts-ignore
+    // @ts-expect-error
     expect(TestController.test.metadata.summary).toBe('Test endpoint');
 
     expect(registry.getTargets().size).toBeGreaterThan(initialSize);
@@ -30,9 +29,9 @@ describe('Decorators', () => {
     class ClassEndpoint {}
 
     expect(registry.getTargets().has(ClassEndpoint)).toBe(true);
-    // @ts-ignore
+    // @ts-expect-error
     expect(ClassEndpoint.isEndpoint).toBe(true);
-    // @ts-ignore
+    // @ts-expect-error
     expect(ClassEndpoint.metadata.summary).toBe('Class level');
   });
 
@@ -43,7 +42,7 @@ describe('Decorators', () => {
     }
 
     expect(registry.getTargets().has(InstanceController)).toBe(true);
-    // @ts-ignore
+    // @ts-expect-error
     expect(InstanceController.prototype.method.isEndpoint).toBe(true);
   });
 

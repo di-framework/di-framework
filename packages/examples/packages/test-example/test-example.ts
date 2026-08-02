@@ -5,7 +5,7 @@
  */
 
 import { Container as DIContainer } from '@di-framework/di-framework/container';
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/di-framework/decorators';
 
 // ============================================================================
 // Service Definitions

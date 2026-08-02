@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
-import { generateOpenAPI } from './openapi.ts';
+import { describe, expect, it } from 'bun:test';
 import { SCHEMAS } from './decorators.ts';
+import { generateOpenAPI } from './openapi.ts';
 
 describe('generateOpenAPI', () => {
   it('should generate a default OpenAPI spec with default options', () => {
@@ -34,15 +34,15 @@ describe('generateOpenAPI', () => {
   it('should correctly map a registry with controllers and endpoints', () => {
     // Mocking the structure that decorators create
     const mockController = class TestController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.path = '/test';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.method = 'post';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.metadata = {
       summary: 'Test Summary',
       description: 'Test Description',
@@ -65,13 +65,13 @@ describe('generateOpenAPI', () => {
 
   it('should handle endpoints without metadata', () => {
     const mockController = class SimpleController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.path = '/simple';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.method = 'get';
 
     const registry = { getTargets: () => new Set([mockController]) } as any;
@@ -85,22 +85,22 @@ describe('generateOpenAPI', () => {
 
   it('should handle multiple endpoints on the same path', () => {
     const mockController = class MultiController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.path = '/resource';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.method = 'get';
 
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.path = '/resource';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.post.method = 'post';
 
     const registry = { getTargets: () => new Set([mockController]) } as any;
@@ -112,9 +112,9 @@ describe('generateOpenAPI', () => {
 
   it('should handle unknown path and method defaults', () => {
     const mockController = class WeirdController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.weird = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.weird.isEndpoint = true;
     // Note: missing path and method
 
@@ -127,13 +127,13 @@ describe('generateOpenAPI', () => {
 
   it('should convert :param paths to {param} and inject path parameters', () => {
     const mockController = class ParamController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.getUser = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.getUser.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.getUser.path = '/users/:userId/posts/:postId';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.getUser.method = 'get';
 
     const registry = { getTargets: () => new Set([mockController]) } as any;
@@ -155,15 +155,15 @@ describe('generateOpenAPI', () => {
 
   it('should combine automatic path parameters with decorator parameters', () => {
     const mockController = class MixController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get = () => {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.isEndpoint = true;
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.path = '/items/:id';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.method = 'get';
-    // @ts-ignore
+    // @ts-expect-error
     mockController.get.metadata = {
       parameters: [{ name: 'filter', in: 'query' }],
     };
@@ -182,7 +182,7 @@ describe('generateOpenAPI', () => {
 
   it('should resolve referenced component schemas via the SCHEMAS symbol', () => {
     const mockController = class SchemaController {};
-    // @ts-ignore
+    // @ts-expect-error
     mockController[SCHEMAS] = new Set(['User', 'Post']);
 
     const registry = { getTargets: () => new Set([mockController]) } as any;

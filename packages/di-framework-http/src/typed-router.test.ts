@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import {
-  TypedRouter,
   json,
   type Multipart,
-  type RequestSpec,
-  type ResponseSpec,
   type PathParams,
   type QueryParams,
+  type RequestSpec,
+  type ResponseSpec,
+  TypedRouter,
 } from './typed-router.ts';
 
 describe('TypedRouter', () => {

@@ -9,16 +9,16 @@
  */
 
 import {
-  useContainer,
-  Container as DIContainer,
+  CRON_METADATA_KEY,
+  type Container as DIContainer,
   defineMetadata,
-  getOwnMetadata,
   getMetadata,
-  TELEMETRY_METADATA_KEY,
-  TELEMETRY_LISTENER_METADATA_KEY,
+  getOwnMetadata,
   PUBLISHER_METADATA_KEY,
   SUBSCRIBER_METADATA_KEY,
-  CRON_METADATA_KEY,
+  TELEMETRY_LISTENER_METADATA_KEY,
+  TELEMETRY_METADATA_KEY,
+  useContainer,
 } from './container';
 
 const INJECTABLE_METADATA_KEY = 'di:injectable';
@@ -43,7 +43,7 @@ export interface TelemetryOptions {
  * @param options Configuration options for telemetry
  */
 export function Telemetry(options: TelemetryOptions = {}) {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     const methods = getOwnMetadata(TELEMETRY_METADATA_KEY, target) || {};
     methods[propertyKey as string] = options;
     defineMetadata(TELEMETRY_METADATA_KEY, methods, target);
@@ -55,7 +55,7 @@ export function Telemetry(options: TelemetryOptions = {}) {
  * The method will be automatically registered to the container's 'telemetry' event.
  */
 export function TelemetryListener() {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     const listeners = getOwnMetadata(TELEMETRY_LISTENER_METADATA_KEY, target) || [];
     listeners.push(propertyKey);
     defineMetadata(TELEMETRY_LISTENER_METADATA_KEY, listeners, target);
@@ -86,7 +86,7 @@ export interface PublisherOptions {
  * }
  */
 export function Publisher(optionsOrEvent: string | PublisherOptions) {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     const options: PublisherOptions =
       typeof optionsOrEvent === 'string' ? { event: optionsOrEvent } : optionsOrEvent;
 
@@ -112,7 +112,7 @@ export function Publisher(optionsOrEvent: string | PublisherOptions) {
  * }
  */
 export function Subscriber(event: string) {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     const map = getOwnMetadata(SUBSCRIBER_METADATA_KEY, target) || {};
     if (!map[event]) map[event] = [];
     map[event].push(propertyKey as string);
@@ -133,7 +133,7 @@ export function Subscriber(event: string) {
  * Cron(30000)          // every 30 seconds
  */
 export function Cron(schedule: string | number) {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     const methods = getOwnMetadata(CRON_METADATA_KEY, target) || {};
     methods[propertyKey as string] = schedule;
     defineMetadata(CRON_METADATA_KEY, methods, target);
@@ -158,17 +158,17 @@ export function Cron(schedule: string | number) {
  * }
  */
 export function Container(options: { singleton?: boolean; container?: DIContainer } = {}) {
-  return function <T extends { new (...args: any[]): {} }>(constructor: T) {
+  return <T extends { new (...args: any[]): {} }>(ctor: T) => {
     const container = options.container ?? useContainer();
     const singleton = options.singleton ?? true;
 
     // Mark as injectable using our metadata store
-    defineMetadata(INJECTABLE_METADATA_KEY, true, constructor);
+    defineMetadata(INJECTABLE_METADATA_KEY, true, ctor);
 
     // Register with container
-    container.register(constructor, { singleton });
+    container.register(ctor, { singleton });
 
-    return constructor;
+    return ctor;
   };
 }
 
@@ -179,18 +179,18 @@ export function Container(options: { singleton?: boolean; container?: DIContaine
  * register routes or side effects and should run before handling requests.
  */
 export function Bootstrap(options: { singleton?: boolean; container?: DIContainer } = {}) {
-  return function <T extends { new (...args: any[]): {} }>(constructor: T) {
+  return <T extends { new (...args: any[]): {} }>(ctor: T) => {
     const container = options.container ?? useContainer();
 
     // Allow bootstrap to be used with or without @Container().
-    if (!container.has(constructor)) {
+    if (!container.has(ctor)) {
       const singleton = options.singleton ?? true;
-      defineMetadata(INJECTABLE_METADATA_KEY, true, constructor);
-      container.register(constructor, { singleton });
+      defineMetadata(INJECTABLE_METADATA_KEY, true, ctor);
+      container.register(ctor, { singleton });
     }
 
-    container.resolve(constructor);
-    return constructor;
+    container.resolve(ctor);
+    return ctor;
   };
 }
 
@@ -223,11 +223,7 @@ export function Bootstrap(options: { singleton?: boolean; container?: DIContaine
  * }
  */
 export function Component(target: any) {
-  return function (
-    targetClass: object | any,
-    propertyKey?: string | symbol,
-    parameterIndex?: number,
-  ) {
+  return (targetClass: object | any, propertyKey?: string | symbol, parameterIndex?: number) => {
     // Property injection
     if (propertyKey && parameterIndex === undefined) {
       // Store on both the class and its prototype to ensure it's accessible

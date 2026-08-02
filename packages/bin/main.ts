@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { build } from './cmd/build';
+import { publish } from './cmd/publish';
 import { test } from './cmd/test';
 import { typecheck } from './cmd/typecheck';
-import { publish } from './cmd/publish';
 
 const COMMANDS: Record<string, { description: string; run: () => Promise<void> }> = {
   build: { description: 'Builds all packages and syncs versions', run: build },

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';

@@ -1,14 +1,14 @@
+import { useContainer } from '@di-framework/di-framework/container';
+import { Component } from '@di-framework/di-framework/decorators';
 import {
-  TypedRouter,
+  Controller,
+  Endpoint,
+  type Json,
   json,
   type RequestSpec,
   type ResponseSpec,
-  type Json,
-  Controller,
-  Endpoint,
+  TypedRouter,
 } from '@di-framework/di-framework-http';
-import { Component } from '@di-framework/di-framework/decorators';
-import { useContainer } from '@di-framework/di-framework/container';
 import { LoggerService } from '../services/LoggerService';
 
 const router = TypedRouter();

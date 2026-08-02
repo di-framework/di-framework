@@ -1,5 +1,5 @@
-import registry from './registry.ts';
 import { SCHEMAS } from './decorators.ts';
+import registry from './registry.ts';
 
 export type OpenAPIOptions = {
   title?: string;
@@ -61,9 +61,10 @@ function toOpenAPIPath(path: string): string {
 function extractPathParams(path: string): string[] {
   const names: string[] = [];
   const re = /:([a-zA-Z_]\w*)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(path)) !== null) {
+  let m = re.exec(path);
+  while (m !== null) {
     if (m[1]) names.push(m[1]);
+    m = re.exec(path);
   }
   return names;
 }

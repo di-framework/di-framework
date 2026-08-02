@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'bun:test';
-import { join } from 'path';
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
+import { describe, expect, it } from 'bun:test';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
+import { join } from 'path';
 import { PACKAGES } from '../cmd/build';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');

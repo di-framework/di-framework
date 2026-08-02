@@ -54,7 +54,9 @@ export abstract class BaseRepository<E, ID = EntityId> {
 }
 
 export type Database<T extends Record<string, typeof BaseRepository>> = {
-  [K in keyof T]: T[K] extends new (...args: any[]) => infer R
+  [K in keyof T]: T[K] extends new (
+    ...args: any[]
+  ) => infer R
     ? R
     : T[K] extends { prototype: infer P }
       ? P

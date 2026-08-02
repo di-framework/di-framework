@@ -64,7 +64,10 @@ describe('field declarations', () => {
         }
 
         @Field(() => Int)
-        add(@Arg('left', () => Int) left: number, @Arg('right', () => Int, { defaultValue: 1 }) right: number): number {
+        add(
+          @Arg('left', () => Int) left: number,
+          @Arg('right', () => Int, { defaultValue: 1 }) right: number,
+        ): number {
           return left + right;
         }
       }

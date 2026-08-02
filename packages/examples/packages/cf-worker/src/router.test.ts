@@ -1,9 +1,9 @@
-import { expect, test, describe, beforeAll } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/di-framework/container';
-import { handleRequest } from './router';
-import { LoggerService } from '../../services/LoggerService';
 import { DatabaseService } from '../../services/DatabaseService';
+import { LoggerService } from '../../services/LoggerService';
 import { UserService } from '../../services/UserService';
+import { handleRequest } from './router';
 import { ConfigService } from './services/ConfigService';
 import { CounterService } from './services/CounterService';
 

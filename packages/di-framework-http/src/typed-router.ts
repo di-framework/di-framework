@@ -1,4 +1,4 @@
-import { Router, withContent, json as ittyJson, type IRequest } from 'itty-router';
+import { type IRequest, json as ittyJson, Router, withContent } from 'itty-router';
 
 /** Marker for body "shape + content-type" */
 export type Json<T> = { readonly __kind: 'json'; readonly __type?: T };

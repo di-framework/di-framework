@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from 'bun:test';
+import { beforeEach, describe, expect, it, jest } from 'bun:test';
 import { useContainer } from '../container';
 import { Container as Injectable, Publisher, Subscriber } from '../decorators';
 

@@ -6,8 +6,8 @@
 
 import { Container as DIContainer, useContainer } from '@di-framework/di-framework/container';
 import {
-  Container,
   Component,
+  Container,
   Telemetry,
   TelemetryListener,
 } from '@di-framework/di-framework/decorators';

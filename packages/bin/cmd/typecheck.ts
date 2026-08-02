@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 
-import ts from 'typescript';
 import path from 'node:path';
 import process from 'node:process';
+import ts from 'typescript';
 
 type Args = {
   tsconfigPath?: string;
