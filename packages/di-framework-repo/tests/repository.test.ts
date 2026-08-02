@@ -36,7 +36,7 @@ class UserRepository extends BaseRepository<User, string> {
   }
 
   // Expose protected methods for testing
-  public testNormalizeId(id: string) {
+  public testNormalizeId(id: any) {
     return this.normalizeId(id);
   }
 
@@ -56,13 +56,16 @@ describe('BaseRepository', () => {
 
   test('findById delegates to adapter with normalized id', async () => {
     const user = { id: '1', name: 'Alice' };
-    adapter.findById.mockResolvedValueOnce(user);
+    adapter.findById.mockResolvedValue(user);
 
-    // Pass number to test normalization to string
-    const result = await repo.findById(1 as any);
+    // Pass string to test string branch
+    const res1 = await repo.findById('1');
+    expect(res1).toBe(user);
 
+    // Pass number to test normalization to string branch
+    const res2 = await repo.findById(1 as any);
+    expect(res2).toBe(user);
     expect(adapter.findById).toHaveBeenCalledWith('1');
-    expect(result).toBe(user);
   });
 
   test('findAll delegates to adapter', async () => {

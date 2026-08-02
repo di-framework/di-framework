@@ -12,7 +12,7 @@ describe('build command', () => {
       expect(PACKAGES).toContain('packages/di-framework');
       expect(PACKAGES).toContain('packages/di-framework-repo');
       expect(PACKAGES).toContain('packages/di-framework-http');
-      expect(PACKAGES).toContain('packages/bin');
+      expect(PACKAGES).toContain('packages/cli');
     });
 
     it('every package directory exists', () => {
@@ -62,8 +62,15 @@ describe('build command', () => {
         const pkgJson = JSON.parse(readFileSync(join(fullPath, 'package.json'), 'utf-8'));
         const hasBuildScript = !!pkgJson.scripts?.build;
 
-        expect(hasTsconfigBuild || hasTsconfig || hasBuildScript).toBe(true);
+        expect(hasTsconfigBuild || hasBuildScript).toBe(true);
       }
+    });
+  });
+
+  describe('build execution', () => {
+    it('exports a build function', async () => {
+      const { build } = await import('../cmd/build');
+      expect(typeof build).toBe('function');
     });
   });
 });

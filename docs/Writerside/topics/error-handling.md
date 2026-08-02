@@ -112,7 +112,7 @@ class MyService {
 
 **How to fix:**
 
-Ensure your `tsconfig.json` has:
+Ensure your `../../../tsconfig.json` has:
 
 ```json
 {

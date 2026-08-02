@@ -50,4 +50,4 @@ bun run packages/bin/main.ts <command> [args...]
 
 ## Adding New Commands
 
-To add a new command, simply create a new TypeScript file in the `packages/bin/cmd/` directory. The name of the file (without the `.ts` extension) will become the command name.
+To add a new command, simply create a new TypeScript file in the `/cmd/` directory. The name of the file (without the `.ts` extension) will become the command name.

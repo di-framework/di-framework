@@ -171,8 +171,29 @@ describe('TypedRouter', () => {
       body: formData,
     });
     const res = await router.fetch(req);
-    // Should NOT return 415
-    expect(res.status).toBe(200);
+    const data = (await res.json()) as any;
+    expect(data.ok).toBe(true);
+  });
+
+  it('should handle multipart post requests with malformed body gracefully', async () => {
+    const router = TypedRouter();
+    router.post(
+      '/upload-bad',
+      (req) => {
+        return json({ content: req.content ?? null });
+      },
+      { multipart: true },
+    );
+
+    const req = new Request('http://localhost/upload-bad', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=something' },
+      body: 'bad boundary data',
+    });
+
+    const res = await router.fetch(req);
+    const data = (await res.json()) as any;
+    expect(data.content).toBeNull();
   });
 
   it('should still reject non-JSON on non-multipart POST routes (backward compat)', async () => {

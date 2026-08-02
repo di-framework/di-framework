@@ -56,4 +56,48 @@ describe('typecheck command', () => {
       expect(result).toBe(resolve(REPO_ROOT, 'tsconfig.json'));
     });
   });
+
+  describe('typecheck function execution', () => {
+    it('executes typecheck function against repo root tsconfig', async () => {
+      const { typecheck } = await import('../cmd/typecheck');
+      const originalArgv = process.argv;
+      const originalExit = process.exit;
+      let exitCode: number | undefined;
+
+      try {
+        process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
+        (process as any).exit = (code: number) => {
+          exitCode = code;
+          throw new Error(`EXIT_${code}`);
+        };
+
+        await expect(typecheck()).rejects.toThrow('EXIT_0');
+        expect(exitCode).toBe(0);
+      } finally {
+        process.argv = originalArgv;
+        process.exit = originalExit;
+      }
+    });
+
+    it('exits with error when tsconfig file is missing or invalid', async () => {
+      const { typecheck } = await import('../cmd/typecheck');
+      const originalArgv = process.argv;
+      const originalExit = process.exit;
+      let exitCode: number | undefined;
+
+      try {
+        process.argv = ['bun', 'typecheck.ts', 'nonassigned_missing_tsconfig.json', '--pretty=0'];
+        (process as any).exit = (code: number) => {
+          exitCode = code;
+          throw new Error(`EXIT_${code}`);
+        };
+
+        await expect(typecheck()).rejects.toThrow('EXIT_2');
+        expect(exitCode).toBe(2);
+      } finally {
+        process.argv = originalArgv;
+        process.exit = originalExit;
+      }
+    });
+  });
 });

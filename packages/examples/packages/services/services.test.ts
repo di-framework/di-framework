@@ -17,13 +17,14 @@ describe('services example', () => {
     expect(db.isConnected()).toBe(false);
   });
 
-  test('LoggerService stores logs', () => {
+  test('LoggerService stores logs and handles error logs', () => {
     const logger = useContainer().resolve(LoggerService);
     logger.log('first');
-    logger.log('second');
+    logger.error('something failed');
     const logs = logger.getLogs();
     expect(Array.isArray(logs)).toBe(true);
     expect(logs.some((l) => l.includes('first'))).toBe(true);
+    expect(logs.some((l) => l.includes('ERROR: something failed'))).toBe(true);
   });
 
   test('UserService create/get/list users', () => {
@@ -41,5 +42,24 @@ describe('services example', () => {
 
     const all = users.listUsers();
     expect(all.find((x) => x.id === 'u1')).toBeDefined();
+  });
+
+  test('ApplicationContext manages environment and context', () => {
+    const { ApplicationContext } = require('./ApplicationContext');
+    const appCtx: any = useContainer().resolve(ApplicationContext);
+
+    appCtx.setEnv({ FOO: 'bar' });
+    expect(appCtx.getEnv()).toEqual({ FOO: 'bar' });
+
+    const ctxObj = { waitUntil: () => {} };
+    appCtx.setCtx(ctxObj);
+    expect(appCtx.getCtx()).toBe(ctxObj);
+  });
+
+  test('LoggerService clearLogs clears stored logs', () => {
+    const logger = useContainer().resolve(LoggerService);
+    logger.log('test clear');
+    logger.clearLogs();
+    expect(logger.getLogs().length).toBe(0);
   });
 });

@@ -92,4 +92,21 @@ describe('Decorators', () => {
     expect(schemas.has('MyRequest')).toBe(true);
     expect(schemas.size).toBe(2);
   });
+
+  it('should extract array schema refs from Endpoint metadata', () => {
+    class ArraySchemaEndpoint {
+      @Endpoint({
+        parameters: [
+          {
+            schema: { $ref: '#/components/schemas/ArrayParamModel' },
+          },
+        ],
+      })
+      static myEndpoint() {}
+    }
+
+    const schemas = (ArraySchemaEndpoint as any)[SCHEMAS];
+    expect(schemas).toBeDefined();
+    expect(schemas.has('ArrayParamModel')).toBe(true);
+  });
 });

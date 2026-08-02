@@ -80,7 +80,7 @@ function getMetadata(key: string | symbol, target: any): any {
 }
 
 function hasMetadata(key: string | symbol, target: any): boolean {
-  return metadataStore.has(target) && metadataStore.get(target)!.has(key);
+  return metadataStore.has(target) && Boolean(metadataStore.get(target)!.has(key));
 }
 
 function getOwnMetadata(key: string | symbol, target: any): any {

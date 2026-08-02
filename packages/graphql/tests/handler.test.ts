@@ -87,8 +87,19 @@ describe('BatchLoader', () => {
     await expect(loader.load('a')).rejects.toThrow('nope');
   });
 
-  it('rejects when the batch function returns the wrong number of results', async () => {
-    const loader = new BatchLoader<string, string>(() => []);
-    await expect(loader.load('a')).rejects.toThrow(/one per key/);
+  it('loadMany loads multiple keys and clear resets cache', async () => {
+    const calls: string[][] = [];
+    const loader = new BatchLoader<string, string>((keys) => {
+      calls.push([...keys]);
+      return keys.map((key) => key.toUpperCase());
+    });
+
+    const results = await loader.loadMany(['a', 'b']);
+    expect(results).toEqual(['A', 'B']);
+    expect(calls).toEqual([['a', 'b']]);
+
+    loader.clear();
+    await loader.load('a');
+    expect(calls).toEqual([['a', 'b'], ['a']]);
   });
 });

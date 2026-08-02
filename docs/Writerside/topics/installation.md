@@ -29,7 +29,7 @@ bun add @di-framework/di-framework
 
 ### TypeScript Configuration
 
-Ensure your `tsconfig.json` has the following settings:
+Ensure your `../../../tsconfig.json` has the following settings:
 
 ```json
 {

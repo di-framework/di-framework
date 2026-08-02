@@ -193,7 +193,13 @@ describe('generateOpenAPI', () => {
         type: 'object',
         properties: { id: { type: 'string' }, profile: { $ref: '#/components/schemas/Profile' } },
       },
-      Post: { type: 'object', properties: { title: { type: 'string' } } },
+      Post: {
+        type: 'object',
+        properties: {
+          comments: [{ $ref: '#/components/schemas/Comment' }],
+        },
+      },
+      Comment: { type: 'object', properties: { text: { type: 'string' } } },
       Profile: { type: 'object', properties: { age: { type: 'integer' } } }, // Transitive ref
       Unused: { type: 'object' }, // Should not be included
     };
@@ -204,6 +210,7 @@ describe('generateOpenAPI', () => {
     expect(resolved['User']).toBeDefined();
     expect(resolved['Post']).toBeDefined();
     expect(resolved['Profile']).toBeDefined(); // Transitively resolved!
+    expect(resolved['Comment']).toBeDefined(); // Transitively resolved from array!
     expect(resolved['Unused']).toBeUndefined();
   });
 });

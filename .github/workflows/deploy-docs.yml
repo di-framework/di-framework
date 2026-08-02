@@ -31,7 +31,7 @@ jobs:
         uses: JetBrains/writerside-github-action@v4
         with:
           instance: ${{ env.INSTANCE }}
-          location: packages/docs
+          location: docs
           docker-version: ${{ env.DOCKER_VERSION }}
           artifact: 'webHelpD2-all.zip'
 
