@@ -5,12 +5,7 @@
   "type": "module",
   "private": true,
   "workspaces": [
-    "./packages/bin",
-    "./packages/examples",
-    "./packages/di-framework",
-    "./packages/di-framework-http",
-    "./packages/di-framework-repo",
-    "./packages/graphql"
+    "packages/*"
   ],
   "scripts": {
     "build": "bun run packages/cli/cmd/build.ts",
