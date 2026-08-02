@@ -44,7 +44,6 @@
       "name": "di-worker-example",
       "version": "0.0.0",
       "devDependencies": {
-        "@cloudflare/workers-types": "latest",
         "@di-framework/core": "workspace:*",
         "typescript": "latest",
         "wrangler": "latest",
@@ -59,7 +58,6 @@
         "jose": "^6.0.11",
       },
       "devDependencies": {
-        "@cloudflare/workers-types": "^5.20260801.1",
         "@types/bun": "latest",
         "typescript": "^5",
         "wrangler": "latest",
