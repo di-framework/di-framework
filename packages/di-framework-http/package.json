@@ -45,10 +45,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/core": "workspace:^",
-    "typescript": "^5"
+    "typescript": "^7"
   }
 }
