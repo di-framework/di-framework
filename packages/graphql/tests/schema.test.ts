@@ -141,7 +141,9 @@ describe('semantic schema', () => {
 
     const event = await next;
     expect(event.value.data.orderPlaced).toMatchObject({ state: OrderState.Pending });
-    await iterator.return?.();
+
+    // Test iterator.throw()
+    await expect(iterator.throw?.(new Error('sub err'))).rejects.toThrow('sub err');
   });
 
   it('slices the schema by bounded context', () => {

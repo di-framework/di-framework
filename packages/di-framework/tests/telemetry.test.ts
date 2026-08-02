@@ -126,26 +126,26 @@ describe('Telemetry Decorators', () => {
     logSpy.mockRestore();
   });
 
-  it('should log errors to console when logging option is enabled', () => {
+  it('should log errors to console for async methods when logging option is enabled', async () => {
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
     @Injectable()
-    class LoggingErrorService {
+    class AsyncLoggingErrorService {
       @Telemetry({ logging: true })
-      doLoggedError() {
-        throw new Error('logged fail');
+      async doAsyncLoggedError() {
+        throw new Error('async logged fail');
       }
     }
 
     const container = useContainer();
-    const service = container.resolve(LoggingErrorService);
+    const service = container.resolve(AsyncLoggingErrorService);
 
-    expect(() => service.doLoggedError()).toThrow('logged fail');
+    await expect(service.doAsyncLoggedError()).rejects.toThrow('async logged fail');
 
     expect(logSpy).toHaveBeenCalled();
     const lastCall = logSpy.mock.calls[logSpy.mock.calls.length - 1]![0];
     expect(lastCall).toContain(
-      '[Telemetry] LoggingErrorService.doLoggedError - ERROR: logged fail',
+      '[Telemetry] AsyncLoggingErrorService.doAsyncLoggedError - ERROR: async logged fail',
     );
 
     logSpy.mockRestore();

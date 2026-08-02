@@ -13,11 +13,11 @@
     "./packages/graphql"
   ],
   "scripts": {
-    "build": "bun run packages/bin/cmd/build.ts",
+    "build": "bun run packages/cli/cmd/build.ts",
     "test:all": "bun --filter=* run test",
     "test": "bun test",
-    "publish": "bun run packages/bin/cmd/publish.ts",
-    "link-cli": "(cd packages/bin && bun link >/dev/null 2>&1)",
+    "publish": "bun run packages/cli/cmd/publish.ts",
+    "link-cli": "(cd packages/cli && bun link >/dev/null 2>&1)",
     "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework <command> [args...]'",
     "tsc": "tsc",
     "lint": "biome check .",

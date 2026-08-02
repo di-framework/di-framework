@@ -6,8 +6,7 @@ export const PACKAGES = [
   'packages/di-framework',
   'packages/di-framework-repo',
   'packages/di-framework-http',
-  'packages/graphql',
-  'packages/bin',
+  'packages/cli',
 ];
 
 export async function build() {

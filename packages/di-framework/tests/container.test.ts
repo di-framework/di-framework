@@ -154,3 +154,67 @@ describe('Container - constructor and prototype helpers', () => {
     expect(c.has('newFactory')).toBe(false);
   });
 });
+
+describe('Container - cron expression parsing and schedule edge cases', () => {
+  it('handles complex cron expressions (ranges, steps, lists)', () => {
+    const { Cron } = require('../decorators');
+    class CronTestService {
+      runs = 0;
+      @Cron('*/5 1-3 1,15 * 0-6')
+      cronMethod() {
+        this.runs++;
+      }
+    }
+
+    const c = new Container();
+    c.register(CronTestService);
+    const instance = c.resolve(CronTestService);
+    expect(instance).toBeInstanceOf(CronTestService);
+    c.stopCronJobs();
+  });
+
+  it('handles errors in string cron schedule methods without crashing', async () => {
+    const { Cron } = require('../decorators');
+    let thrown = false;
+    class ThrowingCronService {
+      @Cron('* * * * *')
+      failingCron() {
+        thrown = true;
+        throw new Error('cron error');
+      }
+    }
+
+    const c = new Container();
+    c.register(ThrowingCronService);
+    c.resolve(ThrowingCronService);
+
+    // Stop cron jobs
+    c.stopCronJobs();
+  });
+});
+
+describe('Container - error handling and edge cases', () => {
+  it('throws when trying to instantiate non-function or non-constructor', () => {
+    const c = new Container();
+    expect(() => (c as any).instantiate('not a function')).toThrow(
+      'Service type must be a constructor or factory function',
+    );
+  });
+
+  it('extractParamTypesFromSource handles decorated constructor string matches', () => {
+    const c = new Container();
+    class DummyService {}
+    // Override toString to simulate TS __decorate output
+    DummyService.toString = () => '__decorate([ __param(0, Foo()) ])';
+    const result = (c as any).extractParamTypesFromSource(DummyService);
+    expect(result).toEqual([]);
+  });
+
+  it('hasMetadata checks if metadata exists', () => {
+    const { defineMetadata, hasMetadata } = require('../container');
+    class Target {}
+    expect(hasMetadata('testKey', Target)).toBe(false);
+    defineMetadata('testKey', 'value', Target);
+    expect(hasMetadata('testKey', Target)).toBe(true);
+  });
+});

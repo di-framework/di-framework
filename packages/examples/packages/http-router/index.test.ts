@@ -29,15 +29,15 @@ describe('http-router example', () => {
   });
 
   test('POST /echo echoes message with timestamp', async () => {
-    // Fallback to calling controller method directly to avoid cross-container registration issues in monorepo test env
-    const { EchoController } = await import('./index');
-    const controller = new EchoController() as any;
-    // Inject a logger instance
-    controller.logger = useContainer().resolve(
-      (await import('../services/LoggerService')).LoggerService,
-    );
-    const out = controller.echoMessage('hello');
-    expect(out.echoed).toBe('hello');
-    expect(typeof out.timestamp).toBe('string');
+    const { LoggerService } = await import('../services/LoggerService');
+    const container = useContainer();
+    if (!container.has(LoggerService)) container.register(LoggerService, { singleton: true });
+    if (!container.has(EchoController)) container.register(EchoController, { singleton: true });
+
+    const res = await router.fetch(jsonReq('/echo', 'POST', { message: 'hello' }), {}, {} as any);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.echoed).toBe('hello');
+    expect(typeof body.timestamp).toBe('string');
   });
 });

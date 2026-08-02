@@ -11,7 +11,7 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework');
       expect(PACKAGES).toContain('packages/di-framework-repo');
       expect(PACKAGES).toContain('packages/di-framework-http');
-      expect(PACKAGES).toContain('packages/bin');
+      expect(PACKAGES).toContain('packages/cli');
     });
 
     it('matches the build command PACKAGES list', async () => {

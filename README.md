@@ -9,7 +9,7 @@ npm i @di-framework/di-framework
 - `packages/di-framework` - core container
 - `packages/di-framework-repo` - data access
 - `packages/di-framework-http` - http handling
-- `packages/bin` - `di-framework` cli (build, test, typecheck, publish)
+- `packages/cli` - `di-framework` cli (build, test, typecheck, publish)
 - `packages/examples` - usage examples
 
 ## CLI

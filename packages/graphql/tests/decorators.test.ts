@@ -159,4 +159,29 @@ describe('field declarations', () => {
       expect(result.data?._contexts).toEqual(['Ops']);
     });
   });
+
+  it('supports boolean batch option on @Field', async () => {
+    await withRegistry(async (registry) => {
+      @Portal()
+      class BatchPortal {
+        @Field(() => String, { batch: true })
+        echo(@Arg('msg', () => String) msg: string): string {
+          return msg;
+        }
+      }
+
+      const api = buildSemanticSchema({ registry });
+      const result = await api.execute({
+        query: '{ echo1: echo(msg: "a") echo2: echo(msg: "b") }',
+      });
+      expect(result.data).toEqual({ echo1: 'a', echo2: 'b' });
+    });
+  });
+
+  it('getParamNames returns empty array for functions without parentheses', () => {
+    const { getParamNames } = require('../src/metadata.ts');
+    const fakeFn = () => {};
+    fakeFn.toString = () => 'no_parens';
+    expect(getParamNames(fakeFn)).toEqual([]);
+  });
 });
