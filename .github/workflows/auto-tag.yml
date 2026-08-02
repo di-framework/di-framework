@@ -6,12 +6,9 @@ name: Auto Tag
 # Order matters: the version bump is committed to main FIRST, and the tag
 # is placed on that commit.
 #
-# Requires a RELEASE_TOKEN secret. Tags pushed with the default GITHUB_TOKEN
-# do not trigger `on: push: tags`, so release workflows would never fire.
-#
-# The token needs write access to repository contents.
-#   - Fine-grained PAT: Contents -> Read and write, scoped to this repo
-#   - Classic PAT:      public_repo (or `repo` if private)
+# Pushes use the job GITHUB_TOKEN (contents: write). Tags created with that
+# token do not re-trigger other `on: push: tags` workflows, so Release is
+# started explicitly via workflow_dispatch after the tag is pushed.
 
 on:
   push:
@@ -34,7 +31,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   tag:
@@ -48,17 +46,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
-
-      - name: Fail early if RELEASE_TOKEN is missing
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          if [ -z "$RELEASE_TOKEN" ]; then
-            echo "::error::RELEASE_TOKEN is not set. A tag pushed with the default" \
-                 "GITHUB_TOKEN will not trigger tag-based release workflows."
-            exit 1
-          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -105,6 +92,7 @@ jobs:
           npm version "$NEXT" --no-git-tag-version --allow-same-version
 
       - name: Commit, tag, and push
+        id: push
         run: |
           set -euo pipefail
           NEXT="${{ steps.version.outputs.next }}"
@@ -125,3 +113,14 @@ jobs:
           echo "### Released \`v$NEXT\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Bumped from \`${{ steps.version.outputs.current }}\`." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          set -euo pipefail
+          # GITHUB_TOKEN tag pushes do not fire `on: push: tags`. Always
+          # dispatch Release so npm publish still runs for this version.
+          gh workflow run release.yml --ref "v${NEXT}"
+          echo "Dispatched Release for v${NEXT}" >> "$GITHUB_STEP_SUMMARY"
