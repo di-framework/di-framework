@@ -1,5 +1,5 @@
-import { getOwnMetadata, useContainer } from '@di-framework/di-framework/container';
-import { Container as ContainerDecorator } from '@di-framework/di-framework/decorators';
+import { getOwnMetadata, useContainer } from '@di-framework/core/container';
+import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 import registry from './registry.ts';
 
 const INJECT_METADATA_KEY = 'di:inject';

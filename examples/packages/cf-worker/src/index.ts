@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 import { LoggerService } from '../../services/LoggerService';
 import { handleRequest } from './router';
 

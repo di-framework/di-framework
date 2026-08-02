@@ -6,8 +6,8 @@
  * extend `Book` because it is a *boundary type*; they may not reach past it.
  */
 
-import { useContainer } from '@di-framework/di-framework/container';
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core';
+import { Component, Container } from '@di-framework/core/decorators';
 import {
   Action,
   Arg,

@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import {
   BoundedContext,
   buildTypeGraph,

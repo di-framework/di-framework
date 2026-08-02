@@ -1,4 +1,4 @@
-# @di-framework/di-framework-http
+# @di-framework/http
 
 Lightweight TypeScript decorators and a type-safe router for [itty-router](https://github.com/kwhitley/itty-router). Includes a build-time OpenAPI 3.1 generator. Ported from `itty-decorators`.
 
@@ -16,9 +16,9 @@ Lightweight TypeScript decorators and a type-safe router for [itty-router](https
 
 ```bash
 # Install the HTTP package and the core DI framework (peer dependency)
-bun add @di-framework/di-framework-http @di-framework/di-framework
+bun add @di-framework/http @di-framework/core
 # or
-npm install @di-framework/di-framework-http @di-framework/di-framework
+npm install @di-framework/http @di-framework/core
 ```
 
 ## Quick Start
@@ -36,9 +36,9 @@ import {
   type Json,
   Controller,
   Endpoint,
-} from '@di-framework/di-framework-http';
-import { Component, Container } from '@di-framework/di-framework/decorators';
-import { useContainer } from '@di-framework/di-framework/container';
+} from '@di-framework/http';
+import { Component, Container } from '@di-framework/core/decorators';
+import { useContainer } from '@di-framework/core/container';
 
 const router = TypedRouter();
 
@@ -102,7 +102,7 @@ import {
   type RequestSpec,
   type ResponseSpec,
   type Multipart,
-} from '@di-framework/di-framework-http';
+} from '@di-framework/http';
 
 const router = TypedRouter();
 
@@ -122,7 +122,7 @@ router.post<RequestSpec<Multipart<UploadPayload>>, ResponseSpec<UploadResult>>(
 
 ### OpenAPI Generation
 
-`@di-framework/di-framework-http` provides a built-in CLI and a registry to generate OpenAPI specs from your controllers.
+`@di-framework/http` provides a built-in CLI and a registry to generate OpenAPI specs from your controllers.
 
 #### Using the CLI
 
@@ -143,7 +143,7 @@ bun x di-framework-http generate --controllers ./src/index.ts
 You can also generate the spec programmatically using the `generateOpenAPI` function and the default `registry`:
 
 ```typescript
-import registry, { generateOpenAPI } from '@di-framework/di-framework-http';
+import registry, { generateOpenAPI } from '@di-framework/http';
 import './controllers/MyController'; // Import to trigger registration
 
 const spec = generateOpenAPI(
@@ -160,7 +160,7 @@ console.log(JSON.stringify(spec, null, 2));
 If you need full control, you can iterate the `registry` manually:
 
 ```typescript
-import registry from '@di-framework/di-framework-http';
+import registry from '@di-framework/http';
 
 for (const target of registry.getTargets()) {
   // target is the decorated class
@@ -190,7 +190,7 @@ Body spec markers used with `RequestSpec<>` to declare the expected content type
 Composed decorator that:
 
 - Marks a class for inclusion in the OpenAPI registry; and
-- Registers the class with the core DI container (same instance as `@di-framework/di-framework`).
+- Registers the class with the core DI container (same instance as `@di-framework/core`).
 
 **Options:** `{ singleton?: boolean; container?: DIContainer }`
 

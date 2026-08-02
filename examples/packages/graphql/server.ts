@@ -3,7 +3,7 @@
  *
  * `createGraphQLHandler` is a plain `Request -> Response` function, so the same
  * handler drops into `Bun.serve`, a Cloudflare Worker, or a
- * `@di-framework/di-framework-http` route without changing anything about the
+ * `@di-framework/http` route without changing anything about the
  * domain. Subscriptions need a connection rather than a request, so they get a
  * small `graphql-transport-ws` endpoint on the same path.
  *

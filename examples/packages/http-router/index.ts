@@ -1,5 +1,5 @@
-import { useContainer } from '@di-framework/di-framework/container';
-import { Component } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core';
+import { Component } from '@di-framework/core/decorators';
 import {
   Controller,
   Endpoint,
@@ -8,7 +8,7 @@ import {
   type RequestSpec,
   type ResponseSpec,
   TypedRouter,
-} from '@di-framework/di-framework-http';
+} from '@di-framework/http';
 import { LoggerService } from '../services/LoggerService';
 
 const router = TypedRouter();

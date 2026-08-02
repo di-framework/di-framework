@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import * as advanced from './index';
 
 test('advanced example - NotificationService uses EmailService', () => {

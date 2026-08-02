@@ -10,7 +10,7 @@ function jsonReq(url: string, method: string, body?: any) {
   });
 }
 
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import { EchoController } from './index';
 
 describe('http-router example', () => {

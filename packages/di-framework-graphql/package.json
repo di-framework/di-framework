@@ -23,7 +23,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/di-framework/di-framework",
-    "directory": "packages/graphql"
+    "directory": "packages/di-framework-graphql"
   },
   "bugs": {
     "url": "https://github.com/di-framework/di-framework/issues"
@@ -47,7 +47,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./core.ts --outdir ./dist --target node --external graphql --external @di-framework/di-framework && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./core.ts --outdir ./dist --target node --external graphql --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "npm run build",
     "test": "bun test"
   },
@@ -57,7 +57,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/di-framework": "workspace:^",
+    "@di-framework/core": "workspace:^",
     "graphql": "^16.8.0 || ^17.0.0",
     "typescript": "^5"
   },

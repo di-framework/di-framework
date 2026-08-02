@@ -1,4 +1,4 @@
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 import { DatabaseService } from '../../services/DatabaseService';
 import { LoggerService } from '../../services/LoggerService';
 import { UserService } from '../../services/UserService';

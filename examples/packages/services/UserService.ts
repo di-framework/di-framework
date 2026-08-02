@@ -4,7 +4,7 @@
  * Demonstrates constructor dependency injection
  */
 
-import { Component, Container, Telemetry } from '@di-framework/di-framework/decorators';
+import { Component, Container, Telemetry } from '@di-framework/core/decorators';
 import { DatabaseService } from './DatabaseService';
 import { LoggerService } from './LoggerService';
 

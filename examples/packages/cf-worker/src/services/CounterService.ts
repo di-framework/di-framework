@@ -1,4 +1,4 @@
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/core/decorators';
 import { LoggerService } from '../../../services/LoggerService';
 
 @Container()

@@ -10,7 +10,7 @@
  *    type — and Catalog never learns that reviews exist.
  */
 
-import { Component, Container, Publisher } from '@di-framework/di-framework/decorators';
+import { Component, Container, Publisher } from '@di-framework/core/decorators';
 import {
   Action,
   Arg,

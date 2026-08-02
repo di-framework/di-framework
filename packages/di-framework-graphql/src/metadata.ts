@@ -5,7 +5,7 @@
  * decorators from both packages compose without extra runtime dependencies.
  */
 
-import { defineMetadata, getOwnMetadata } from '@di-framework/di-framework/container';
+import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
 import type { Ctor, FieldDeclaration, ParamDeclaration } from './types.ts';
 
 export const FIELDS_METADATA_KEY = 'graphql:fields';

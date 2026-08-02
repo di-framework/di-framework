@@ -3,10 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 export const PACKAGES = [
-  'packages/di-framework',
+  'packages/di-framework-core',
   'packages/di-framework-repo',
   'packages/di-framework-http',
-  'packages/cli',
+  'packages/di-framework-graphql',
+  'packages/di-framework-cli',
 ];
 
 export async function build() {

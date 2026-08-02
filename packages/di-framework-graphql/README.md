@@ -19,9 +19,9 @@ Your domain classes **are** the schema. There is no SDL document to keep in sync
 ## Installation
 
 ```bash
-bun add @di-framework/graphql @di-framework/di-framework graphql
+bun add @di-framework/graphql @di-framework/core graphql
 # or
-npm install @di-framework/graphql @di-framework/di-framework graphql
+npm install @di-framework/graphql @di-framework/core graphql
 ```
 
 `graphql` is an optional peer dependency: you only need it to execute queries. Importing from `@di-framework/graphql/core` — decorators, the registry, the type graph and the SDL printer — works without it, which keeps schema emission and architecture tests cheap.
@@ -41,7 +41,7 @@ Decorators need TypeScript 5 and:
 ## Quick start
 
 ```typescript
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/core/decorators';
 import {
   Arg,
   Field,
@@ -393,7 +393,7 @@ The same call is a useful architecture test — `buildTypeGraph()` throws if any
 
 ## Example
 
-A three-context worked example — batching, boundaries, entity actions, subscriptions over a WebSocket, a context-filtered public schema and GraphiQL — lives in [`packages/examples/packages/graphql`](../examples/packages/graphql).
+A three-context worked example — batching, boundaries, entity actions, subscriptions over a WebSocket, a context-filtered public schema and GraphiQL — lives in [`../../examples/packages/graphql`](../../examples/packages/graphql).
 
 ## License
 

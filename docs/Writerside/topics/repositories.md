@@ -1,6 +1,6 @@
 # Repositories (df-repo)
 
-`@di-framework/di-framework-repo` provides a coherent abstraction of repositories and storage adapters, allowing you to decouple your business logic from the underlying storage technology. It integrates seamlessly with `@di-framework/di-framework`.
+`@di-framework/repo` provides a coherent abstraction of repositories and storage adapters, allowing you to decouple your business logic from the underlying storage technology. It integrates seamlessly with `@di-framework/core`.
 
 ## Key Concepts
 
@@ -30,18 +30,18 @@ The `Repository` layer uses a `StorageAdapter` to perform data operations. It ca
 ## Installation
 
 ```bash
-bun add @di-framework/di-framework-repo
+bun add @di-framework/repo
 ```
 
 ## Important: Scoped imports
 
-Always import from the scoped package `@di-framework/di-framework/*` to ensure a single global container instance. Mixing different import IDs (e.g., `di-framework/*` or relative paths to sources) can load a second copy of the library and create a second global container instance.
+Always import from the scoped package `@di-framework/core/*` to ensure a single global container instance. Mixing different import IDs (e.g., `di-framework/*` or relative paths to sources) can load a second copy of the library and create a second global container instance.
 
 Correct:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core/container';
+import { Container, Component } from '@di-framework/core/decorators';
 ```
 
 Avoid:
@@ -51,7 +51,7 @@ import { useContainer } from 'di-framework/container'; // Wrong: unscoped id
 import { Container } from '../../di-framework/decorators'; // Wrong: relative id
 ```
 
-## Usage with @di-framework/di-framework
+## Usage with @di-framework/core
 
 Define a model with Spring/JPA-style `@Model`, `@Id`, and optional `@GeneratedValue` (the class is the type), then register a repository with `@Repository`.
 
@@ -64,7 +64,7 @@ import {
   Model,
   Repository,
   InMemoryRepository,
-} from '@di-framework/di-framework-repo';
+} from '@di-framework/repo';
 
 @Model()
 class User {
@@ -92,7 +92,7 @@ Plain interfaces still work if you do not need model metadata. Read metadata wit
 Once registered, you can inject your repository into any other container-managed class:
 
 ```typescript
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { Container, Component } from '@di-framework/core/decorators';
 
 @Container()
 class UserService {
@@ -119,7 +119,7 @@ const items = await repo.findPaginated({ page: 1, size: 10 });
 You can implement your own adapter to connect to any data source:
 
 ```typescript
-import { StorageAdapter, EntityRepository } from '@di-framework/di-framework-repo';
+import { StorageAdapter, EntityRepository } from '@di-framework/repo';
 
 class PostgresAdapter<E, ID> implements StorageAdapter<E, ID> {
   // Implementation details...

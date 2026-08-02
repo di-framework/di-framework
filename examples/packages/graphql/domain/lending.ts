@@ -9,8 +9,8 @@
  * method runs.
  */
 
-import { useContainer } from '@di-framework/di-framework/container';
-import { Component, Container, Publisher } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core';
+import { Component, Container, Publisher } from '@di-framework/core/decorators';
 import {
   Action,
   Arg,

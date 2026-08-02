@@ -1,12 +1,13 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@di-framework/di-framework/container": ["../di-framework/container.ts"],
-      "@di-framework/di-framework/decorators": ["../di-framework/decorators.ts"],
-      "@di-framework/di-framework-http": ["../di-framework-http/index.ts"],
-      "@di-framework/graphql": ["../graphql/index.ts"],
-      "@di-framework/graphql/core": ["../graphql/core.ts"]
+      "@di-framework/core": ["../packages/di-framework/container.ts"],
+      "@di-framework/core/*": ["../packages/di-framework-core/*"],
+      "@di-framework/http": ["../packages/di-framework-http/index.ts"],
+      "@di-framework/http/*": ["../packages/di-framework-http/*"],
+      "@di-framework/graphql": ["../packages/di-framework-graphql/index.ts"],
+      "@di-framework/graphql/*": ["../packages/di-framework-graphql/*"]
     }
   },
   "include": [
@@ -15,7 +16,8 @@
     "packages/graphql/**/*.ts",
     "packages/http-router/**/*.ts",
     "packages/services/**/*.ts",
-    "packages/test-example/**/*.ts"
+    "packages/test-example/**/*.ts",
+    "packages/cf-worker/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "packages/deno-http/**/*", "packages/deno-sandboxes/**/*"]
 }

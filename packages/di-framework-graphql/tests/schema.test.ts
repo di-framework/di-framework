@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 import { buildSemanticSchema } from '../src/schema.ts';
 import { printSDL } from '../src/sdl.ts';
 import { buildTypeGraph } from '../src/type-graph.ts';

@@ -3,7 +3,7 @@
 // Deploy to Deno Deploy: push as-is (Sandbox works natively)
 
 import { Sandbox } from '@deno/sandbox';
-import { Bootstrap, Component, Container, Telemetry } from '@di-framework/di-framework/decorators';
+import { Bootstrap, Component, Container, Telemetry } from '@di-framework/core/decorators';
 import {
   Controller,
   Endpoint,
@@ -12,7 +12,7 @@ import {
   type RequestSpec,
   type ResponseSpec,
   TypedRouter,
-} from '@di-framework/di-framework-http';
+} from '@di-framework/http';
 
 // Router setup
 type Env = {};

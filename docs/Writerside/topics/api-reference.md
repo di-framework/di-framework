@@ -13,12 +13,12 @@ Marks a class as injectable and automatically registers it with the DI container
 - `singleton?: boolean` (default: `true`) - Create a new instance each time or reuse the same instance
 - `container?: DIContainer` - Specify a custom container (defaults to global container)
 
-> **Note:** Import as `import { Container as DIContainer } from '@di-framework/di-framework/container'` to avoid name collision with the `@Container` decorator.
+> **Note:** Import as `import { Container as DIContainer } from '@di-framework/core/container'` to avoid name collision with the `@Container` decorator.
 
 **Example:**
 
 ```typescript
-import { Container } from '@di-framework/di-framework/decorators';
+import { Container } from '@di-framework/core/decorators';
 
 // Singleton service (default)
 @Container()
@@ -35,7 +35,7 @@ export class RequestScopedService {
 }
 
 // Custom container
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 const customContainer = new DIContainer();
 
 @Container({ container: customContainer })
@@ -173,14 +173,14 @@ To interact with the container, you can either obtain the shared global instance
 Option A — using a function:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 ```
 
 Option B — using a named import:
 
 ```typescript
-import { container } from '@di-framework/di-framework/container';
+import { container } from '@di-framework/core/container';
 ```
 
 Note: Prefer Option A when you want to make the acquisition explicit in your code examples; both options reference the same singleton instance by default.
@@ -194,7 +194,7 @@ Returns the global DI container instance.
 **Example:**
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 
 const container = useContainer();
 ```
@@ -327,8 +327,8 @@ Create a fresh instance without registering it, while still resolving dependenci
 **Example:**
 
 ```typescript
-import { Component } from '@di-framework/di-framework/decorators';
-import { container } from '@di-framework/di-framework/container';
+import { Component } from '@di-framework/core/decorators';
+import { container } from '@di-framework/core/container';
 import { LoggerService } from '../../packages/examples/services/LoggerService';
 
 class Greeter {

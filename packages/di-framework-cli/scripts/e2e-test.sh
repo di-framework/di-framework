@@ -62,11 +62,11 @@ echo ""
 
 # 3. TypeScript type checking (per-package)
 print_test "Running TypeScript type checks..."
-if npx tsc --noEmit -p packages/di-framework/tsconfig.json 2>/dev/null; then
+if npx tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>/dev/null; then
   print_success "di-framework type checks passed"
 else
   print_error "di-framework type checks failed"
-  npx tsc --noEmit -p packages/di-framework/tsconfig.json 2>&1 | head -20
+  npx tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>&1 | head -20
   exit 1
 fi
 
@@ -85,7 +85,7 @@ echo ""
 
 # 5. Validate examples compile
 print_test "Validating example code..."
-if npx tsc --noEmit -p packages/examples/tsconfig.json 2>/dev/null; then
+if npx tsc --noEmit -p examples/tsconfig.json 2>/dev/null; then
   print_success "Advanced example validated"
 else
   print_error "Advanced example has type errors"
@@ -95,7 +95,7 @@ echo ""
 
 # 6. Check if examples package is properly structured
 print_test "Checking examples package structure..."
-if [ -f "packages/examples/package.json" ]; then
+if [ -f "examples/package.json" ]; then
   print_success "Examples package.json found"
 else
   print_error "Examples package.json not found"

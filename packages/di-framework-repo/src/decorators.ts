@@ -2,8 +2,8 @@ import {
   type Container as DIContainer,
   defineMetadata,
   getOwnMetadata,
-} from '@di-framework/di-framework/container';
-import { Container as ContainerDecorator } from '@di-framework/di-framework/decorators';
+} from '@di-framework/core/container';
+import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 
 export const MODEL_METADATA_KEY = 'repo:model';
 /** Prototype map: propertyKey → partial identity field metadata (merged by decorators). */
@@ -301,10 +301,10 @@ function collectIdentities(target: ModelClass): IdentityFieldMetadata[] {
 /**
  * Repository decorator.
  *
- * This package requires `@di-framework/di-framework` as a peer dependency and
+ * This package requires `@di-framework/core` as a peer dependency and
  * delegates to its `@Container` decorator to register repositories with the
  * same singleton/global container instance. Ensure you always import the DI
- * framework using the scoped package name (`@di-framework/di-framework/*`) to
+ * framework using the scoped package name (`@di-framework/core/*`) to
  * avoid loading multiple copies and accidentally creating multiple containers.
  */
 export function Repository(options: { singleton?: boolean; container?: DIContainer } = {}) {

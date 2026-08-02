@@ -1,18 +1,20 @@
 {
   "name": "di-framework",
-  "version": "3.0.4",
+  "version": "4.0.0",
   "module": "build.ts",
   "type": "module",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples",
+    "examples/packages/*"
   ],
   "scripts": {
-    "build": "bun run packages/cli/cmd/build.ts",
+    "build": "bun run packages/di-framework-cli/cmd/build.ts",
     "test:all": "bun --filter=* run test",
     "test": "bun test",
-    "publish": "bun run packages/cli/cmd/publish.ts",
-    "link-cli": "(cd packages/cli && bun link >/dev/null 2>&1)",
+    "publish": "bun run packages/di-framework-cli/cmd/publish.ts",
+    "link-cli": "(cd packages/di-framework-cli && bun link >/dev/null 2>&1)",
     "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework <command> [args...]'",
     "tsc": "tsc",
     "lint": "biome check .",

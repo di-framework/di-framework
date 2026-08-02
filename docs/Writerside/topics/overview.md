@@ -1,4 +1,4 @@
-# @di-framework/di-framework
+# @di-framework/core
 
 A lightweight, type-safe Dependency Injection framework for TypeScript using decorators. This framework automatically manages service instantiation, dependency resolution, and lifecycle management.
 
@@ -13,8 +13,8 @@ A lightweight, type-safe Dependency Injection framework for TypeScript using dec
 - **Telemetry**: Built-in support for method tracking and monitoring with `@Telemetry` and `@TelemetryListener`.
 - **Error Detection**: Detects circular dependencies and unregistered services at runtime.
 - **Testing Support**: Easy to test with mock service registration.
-- **Repository Abstraction**: Includes `@di-framework/di-framework-repo` for standardized data access and storage-agnostic repositories.
-- **HTTP Routing & OpenAPI**: Type-safe HTTP routing and build-time OpenAPI 3.1 generation with `@di-framework/di-framework-http`.
+- **Repository Abstraction**: Includes `@di-framework/repo` for standardized data access and storage-agnostic repositories.
+- **HTTP Routing & OpenAPI**: Type-safe HTTP routing and build-time OpenAPI 3.1 generation with `@di-framework/http`.
 - **GraphQL**: Object-oriented, decorator-driven GraphQL with `@di-framework/graphql` — domain classes become the schema.
 
 ## Why Use This Framework?
@@ -73,8 +73,8 @@ const appContext = container.resolve(ApplicationContext);
 ## Quick Example
 
 ```typescript
-import { Container, Component } from '@di-framework/di-framework/decorators';
-import { useContainer } from '@di-framework/di-framework/container';
+import { Container, Component } from '@di-framework/core/decorators';
+import { useContainer } from '@di-framework/core/container';
 
 // Define a service
 @Container()
@@ -107,6 +107,6 @@ userService.getUser('123');
 - [Quick Start](quick-start.md) - Learn the basics with simple examples
 - [HTTP Router](http-router.md) - Type-safe routes and OpenAPI generation
 - [GraphQL](graphql.md) - Domain classes as a GraphQL schema
-- [Repositories](repositories.md) - Standardized data access with `@di-framework/di-framework-repo`
+- [Repositories](repositories.md) - Standardized data access with `@di-framework/repo`
 - [API Reference](api-reference.md) - Complete API documentation
 - [Advanced Usage](advanced-usage.md) - Learn advanced patterns and techniques

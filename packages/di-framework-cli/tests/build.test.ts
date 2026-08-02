@@ -70,10 +70,11 @@ describe('build command', () => {
 
   describe('PACKAGES', () => {
     it('includes all expected packages', () => {
-      expect(PACKAGES).toContain('packages/di-framework');
+      expect(PACKAGES).toContain('packages/di-framework-core');
       expect(PACKAGES).toContain('packages/di-framework-repo');
       expect(PACKAGES).toContain('packages/di-framework-http');
-      expect(PACKAGES).toContain('packages/cli');
+      expect(PACKAGES).toContain('packages/di-framework-graphql');
+      expect(PACKAGES).toContain('packages/di-framework-cli');
     });
 
     it('every package directory exists', async () => {

@@ -7,7 +7,7 @@
  * mapping onto a separately maintained SDL document.
  */
 
-import { Container as ContainerDecorator } from '@di-framework/di-framework/decorators';
+import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 import { SemanticSchemaError } from './errors.ts';
 import {
   defineBoundedContext,

@@ -4,7 +4,7 @@
  * Every section below is also asserted in `index.test.ts`.
  */
 
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import type { ExecutionResult } from 'graphql';
 import type { LibraryContext } from './domain/context.ts';
 import { ReviewRepository } from './domain/reviews.ts';

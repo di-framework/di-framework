@@ -1,16 +1,16 @@
-# @di-framework/di-framework
+# @di-framework/core
 
 [Documentation](https://di-framework.github.io/di-framework)
 
 ```
-npm i @di-framework/di-framework
+npm i @di-framework/core
 ```
 
-- `packages/di-framework` - core container
+- `packages/di-framework-core` - core container
 - `packages/di-framework-repo` - data access
 - `packages/di-framework-http` - http handling
-- `packages/cli` - `di-framework` cli (build, test, typecheck, publish)
-- `packages/examples` - usage examples
+- `packages/di-framework-cli` - `di-framework-core` cli (build, test, typecheck, publish)
+- `examples` - usage examples
 
 ## CLI
 
@@ -30,7 +30,7 @@ di-framework <command>
 ## Simple Example
 
 ```ts
-import { Container, Publisher, Subscriber } from '@di-framework/di-framework';
+import { Container, Publisher, Subscriber } from '@di-framework/core';
 
 @Container()
 class UserService {

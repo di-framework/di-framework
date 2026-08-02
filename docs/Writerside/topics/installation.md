@@ -10,19 +10,19 @@ No external dependencies required! The framework works with SWC and TypeScript's
 ## Install the Package
 
 ```bash
-npm install @di-framework/di-framework
+npm install @di-framework/core
 ```
 
 or with yarn:
 
 ```bash
-yarn add @di-framework/di-framework
+yarn add @di-framework/core
 ```
 
 or with bun:
 
 ```bash
-bun add @di-framework/di-framework
+bun add @di-framework/core
 ```
 
 ## Configuration
@@ -68,13 +68,13 @@ The decorators are fully integrated with SWC's native support - **no need for `r
 
 ## Import paths and container singleton
 
-Always import from the scoped package `@di-framework/di-framework/*` to ensure a single global container instance. Mixing different import IDs (e.g., `di-framework/*` or relative paths to sources) can load a second copy of the library and create a second global container instance.
+Always import from the scoped package `@di-framework/core/*` to ensure a single global container instance. Mixing different import IDs (e.g., `di-framework/*` or relative paths to sources) can load a second copy of the library and create a second global container instance.
 
 Correct:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core/container';
+import { Container, Component } from '@di-framework/core/decorators';
 ```
 
 Avoid:
@@ -89,8 +89,8 @@ import { Container } from '../../di-framework/decorators'; // Wrong: relative id
 Create a simple test file to verify the installation:
 
 ```typescript
-import { Container } from '@di-framework/di-framework/decorators';
-import { useContainer } from '@di-framework/di-framework/container';
+import { Container } from '@di-framework/core/decorators';
+import { useContainer } from '@di-framework/core/container';
 
 @Container()
 class TestService {
@@ -117,8 +117,8 @@ The core package stands alone. Companion packages add data access, HTTP, and Gra
 
 | Package | Docs |
 | --- | --- |
-| `@di-framework/di-framework-repo` | [Repositories](repositories.md) |
-| `@di-framework/di-framework-http` | [HTTP Router](http-router.md) |
+| `@di-framework/repo` | [Repositories](repositories.md) |
+| `@di-framework/http` | [HTTP Router](http-router.md) |
 | `@di-framework/graphql` | [GraphQL](graphql.md) |
 
 ## Next Steps

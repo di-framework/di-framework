@@ -1,6 +1,6 @@
 {
-  "name": "@di-framework/di-framework-http",
-  "version": "3.0.1",
+  "name": "@di-framework/http",
+  "version": "4.0.0",
   "description": "Extends di-framework with HTTP features",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -37,7 +37,7 @@
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./src/cli.ts --outdir ./dist --target node --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "npm run build",
-    "dev": "bun ../examples/http-router/index.ts",
+    "dev": "bun ../../examples/http-router/index.ts",
     "test": "bun test"
   },
   "dependencies": {
@@ -48,7 +48,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/di-framework": "workspace:^",
+    "@di-framework/core": "workspace:^",
     "typescript": "^5"
   }
 }
