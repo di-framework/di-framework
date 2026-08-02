@@ -22,7 +22,8 @@
     "tsc": "tsc",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "release:patch": "gh workflow run auto-tag.yml -f bump=patch"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
