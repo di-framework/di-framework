@@ -3,6 +3,9 @@
   "version": "4.0.0",
   "module": "build.ts",
   "type": "module",
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": "https://github.com/di-framework/di-framework",
   "private": true,
   "workspaces": [
     "packages/*",

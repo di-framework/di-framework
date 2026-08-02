@@ -357,4 +357,4 @@ Fields and list items are non-null by default. A bare `@Field()` is assumed to b
 
 ## Example
 
-A three-context worked example — batching, boundaries, entity actions, subscriptions, and GraphiQL — lives in the [graphql example package](https://github.com/di-framework/di-framework/tree/main/packages/examples/packages/graphql).
+A three-context worked example — batching, boundaries, entity actions, subscriptions, and GraphiQL — lives in the [graphql example package](https://github.com/di-framework/di-framework/tree/main/examples/packages/graphql).

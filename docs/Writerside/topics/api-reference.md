@@ -329,7 +329,12 @@ Create a fresh instance without registering it, while still resolving dependenci
 ```typescript
 import { Component } from '@di-framework/core/decorators';
 import { container } from '@di-framework/core/container';
-import { LoggerService } from '../../packages/examples/services/LoggerService';
+
+class LoggerService {
+  log(message: string) {
+    console.log(message);
+  }
+}
 
 class Greeter {
   constructor(

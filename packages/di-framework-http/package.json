@@ -13,7 +13,7 @@
       "default": "./dist/index.js"
     }
   },
-  "author": "github.com/di-framework",
+  "author": "@di-framework Contributors",
   "license": "MIT",
   "repository": {
     "type": "git",

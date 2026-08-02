@@ -1,7 +1,7 @@
 # @di-framework/core
 
 [![CI](https://github.com/di-framework/di-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/di-framework/di-framework/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/di-framework.svg)](https://www.npmjs.com/package/di-framework)
+[![npm version](https://img.shields.io/npm/v/@di-framework/core.svg)](https://www.npmjs.com/package/@di-framework/core)
 [![license](https://img.shields.io/github/license/di-framework/di-framework.svg)](LICENSE)
 
 A lightweight, type-safe Dependency Injection framework for TypeScript using decorators. This framework automatically manages service instantiation, dependency resolution, and lifecycle management.
@@ -241,7 +241,13 @@ Create a fresh instance without registering it, while still honoring dependency 
 
 ```typescript
 import { Component } from '@di-framework/core/decorators';
-import { LoggerService } from '@di-framework/core/services/LoggerService';
+import { container } from '@di-framework/core/container';
+
+class LoggerService {
+  log(message: string) {
+    console.log(message);
+  }
+}
 
 class Greeter {
   constructor(

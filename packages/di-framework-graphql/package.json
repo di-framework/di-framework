@@ -18,7 +18,7 @@
       "default": "./dist/core.js"
     }
   },
-  "author": "github.com/di-framework",
+  "author": "@di-framework Contributors",
   "license": "MIT",
   "repository": {
     "type": "git",

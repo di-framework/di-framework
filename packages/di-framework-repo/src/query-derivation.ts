@@ -270,22 +270,49 @@ function splitOrderBy(afterBy: string): { predicateText: string; orderBy: OrderS
   return { predicateText, orderBy: parseOrderBy(orderText) };
 }
 
+/**
+ * Parse `PropertyAscOtherDesc…` segments without backtracking regexes.
+ * Direction keywords must sit at a camelCase boundary: end of string, or
+ * followed by an uppercase letter / `_` (start of the next property).
+ */
 function parseOrderBy(text: string): OrderSpec[] {
   if (!text) return [];
-  // Split into PropertyAsc / PropertyDesc segments (greedy properties).
   const specs: OrderSpec[] = [];
-  const re = /(.+?)(Asc|Desc)(?=[A-Z_]|$)/g;
-  let m = re.exec(text);
-  let matched = false;
-  while (m !== null) {
-    matched = true;
-    specs.push({
-      property: toPropertyPath(m[1]!),
-      direction: m[2] === 'Desc' ? 'desc' : 'asc',
-    });
-    m = re.exec(text);
+  let start = 0;
+  let i = 0;
+
+  while (i < text.length) {
+    const rest = text.slice(i);
+    let direction: 'asc' | 'desc' | null = null;
+    let keywordLen = 0;
+
+    if (rest.startsWith('Desc')) {
+      const after = rest[4];
+      if (after === undefined || after === '_' || (after >= 'A' && after <= 'Z')) {
+        direction = 'desc';
+        keywordLen = 4;
+      }
+    } else if (rest.startsWith('Asc')) {
+      const after = rest[3];
+      if (after === undefined || after === '_' || (after >= 'A' && after <= 'Z')) {
+        direction = 'asc';
+        keywordLen = 3;
+      }
+    }
+
+    if (direction !== null && i > start) {
+      specs.push({
+        property: toPropertyPath(text.slice(start, i)),
+        direction,
+      });
+      i += keywordLen;
+      start = i;
+      continue;
+    }
+    i += 1;
   }
-  if (!matched && text) {
+
+  if (specs.length === 0 && text) {
     // Bare property → ascending
     specs.push({ property: toPropertyPath(text), direction: 'asc' });
   }
