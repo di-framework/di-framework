@@ -72,7 +72,7 @@ export class UserService {
 - Conditionally create different implementations
 - Integrate third-party libraries
 
-## Repository Pattern (df-repo)
+## Repository Pattern (`@di-framework/di-framework-repo`)
 
 For larger applications, using the Repository pattern with `@di-framework/di-framework-repo` helps maintain a clean separation between business logic and data access.
 

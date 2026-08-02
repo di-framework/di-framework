@@ -111,6 +111,16 @@ bun run test.ts
 # Output: DI Framework is working!
 ```
 
+## Optional Packages
+
+The core package stands alone. Companion packages add data access, HTTP, and GraphQL:
+
+| Package | Docs |
+| --- | --- |
+| `@di-framework/di-framework-repo` | [Repositories](repositories.md) |
+| `@di-framework/di-framework-http` | [HTTP Router](http-router.md) |
+| `@di-framework/graphql` | [GraphQL](graphql.md) |
+
 ## Next Steps
 
 Now that you have the framework installed, learn how to use it:
