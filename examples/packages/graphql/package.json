@@ -9,8 +9,8 @@
     "sdl": "bun run emit-sdl.ts"
   },
   "devDependencies": {
-    "@di-framework/di-framework": "file:../../../di-framework",
-    "@di-framework/graphql": "file:../../../graphql",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/graphql": "workspace:*",
     "graphql": "^17.0.2"
   }
 }

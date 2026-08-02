@@ -1,6 +1,6 @@
 {
-  "name": "@di-framework/di-framework-repo",
-  "version": "3.0.1",
+  "name": "@di-framework/repo",
+  "version": "4.0.0",
   "description": "A coherent abstraction of repositories and storage adapters for di-framework.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,7 +27,7 @@
     }
   },
   "peerDependencies": {
-    "@di-framework/di-framework": "workspace:^",
+    "@di-framework/core": "workspace:^",
     "typescript": "^5"
   },
   "files": [

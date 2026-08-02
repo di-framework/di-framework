@@ -5,7 +5,7 @@
  * Similar to the SAMPLE.ts ApplicationContext but using DI framework
  */
 
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/core/decorators';
 import { DatabaseService } from './DatabaseService';
 import { LoggerService } from './LoggerService';
 import { UserService } from './UserService';

@@ -76,7 +76,7 @@ This framework uses a lightweight metadata store - you don't need reflect-metada
 
 ```typescript
 // Good - No reflect-metadata import needed
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { Container, Component } from '@di-framework/core/decorators';
 
 @Container()
 export class MyService {
@@ -339,7 +339,7 @@ Use separate containers for testing:
 
 ```typescript
 // Good - Test isolation
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 
 describe('UserService', () => {
   let testContainer: DIContainer;

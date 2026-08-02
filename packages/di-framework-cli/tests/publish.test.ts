@@ -31,9 +31,12 @@ async function makePublishWorkspace(): Promise<string> {
     );
   }
 
-  // publish.ts still references the old packages/bin path — stub it as a no-op.
-  mkdirSync(join(root, 'packages/bin/cmd'), { recursive: true });
-  await Bun.write(join(root, 'packages/bin/cmd/build.ts'), 'console.log("fake build");\n');
+  // Stub the build entrypoint invoked by publish().
+  mkdirSync(join(root, 'packages/di-framework-cli/cmd'), { recursive: true });
+  await Bun.write(
+    join(root, 'packages/di-framework-cli/cmd/build.ts'),
+    'console.log("fake build");\n',
+  );
 
   return root;
 }
@@ -107,10 +110,11 @@ describe('publish command', () => {
 
   describe('PACKAGES', () => {
     it('includes all expected packages', () => {
-      expect(PACKAGES).toContain('packages/di-framework');
+      expect(PACKAGES).toContain('packages/di-framework-core');
       expect(PACKAGES).toContain('packages/di-framework-repo');
       expect(PACKAGES).toContain('packages/di-framework-http');
-      expect(PACKAGES).toContain('packages/cli');
+      expect(PACKAGES).toContain('packages/di-framework-graphql');
+      expect(PACKAGES).toContain('packages/di-framework-cli');
     });
 
     it('matches the build command PACKAGES list', async () => {
@@ -144,7 +148,7 @@ describe('publish command', () => {
     it('runs tests before build in the source', async () => {
       const source = await Bun.file(join(import.meta.dir, '..', 'cmd', 'publish.ts')).text();
       const testIndex = source.indexOf('bun test');
-      const buildIndex = source.indexOf('bun run packages/bin/cmd/build.ts');
+      const buildIndex = source.indexOf('bun run packages/di-framework-cli/cmd/build.ts');
       const publishIndex = source.indexOf('bun publish');
 
       expect(testIndex).toBeGreaterThan(-1);

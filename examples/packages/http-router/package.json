@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "devDependencies": {
-    "@di-framework/di-framework": "file:../../../di-framework",
-    "@di-framework/di-framework-http": "file:../../../di-framework-http"
+    "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*"
   }
 }

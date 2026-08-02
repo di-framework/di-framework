@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/core",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Lightweight, zero-dependency TypeScript Dependency Injection framework using decorators. Works seamlessly with SWC and TypeScript's native decorator support.",
   "main": "./dist/container.js",
   "types": "./dist/container.d.ts",
@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/di-framework/di-framework",
-    "directory": "packages/di-framework"
+    "directory": "packages/di-framework-core"
   },
   "bugs": {
     "url": "https://github.com/di-framework/di-framework/issues"

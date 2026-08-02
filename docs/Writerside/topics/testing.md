@@ -7,7 +7,7 @@ Learn how to test services effectively with the DI framework.
 Create isolated test containers to avoid polluting the global container:
 
 ```typescript
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 import { describe, it, expect, beforeEach } from 'bun:test';
 
 describe('UserService', () => {
@@ -151,7 +151,7 @@ describe('Service lifecycle', () => {
 Share a seeded container across tests while keeping isolation:
 
 ```typescript
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 
 const base = new DIContainer();
 base.register(DatabaseService);
@@ -427,7 +427,7 @@ const testUser = { id: '1', n: 'TU', e: 't@e.c' };
 Here's a complete testing example:
 
 ```typescript
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 import { describe, it, expect, beforeEach } from 'bun:test';
 
 // Mock services

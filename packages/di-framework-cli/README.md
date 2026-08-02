@@ -8,7 +8,7 @@ The CLI acts as a proxy to run various commands defined in the `cmd` directory.
 
 ### Global Installation (Recommended)
 
-You can make the CLI available globally on your system as the `di-framework` command by linking it:
+You can make the CLI available globally on your system as the `di-framework-core` command by linking it:
 
 ```bash
 cd packages/bin
@@ -31,7 +31,7 @@ bun run packages/bin/main.ts <command> [args...]
 
 ### Available Commands
 
-- **`build`**: Builds the packages in the monorepo (`di-framework`, `di-framework-repo`, `di-framework-http`). It cleans the `dist` directories and runs `tsc`.
+- **`build`**: Builds the packages in the monorepo (`di-framework-core`, `di-framework-repo`, `di-framework-http`). It cleans the `dist` directories and runs `tsc`.
 
   ```bash
   bun run packages/bin/main.ts build

@@ -12,7 +12,7 @@
  *   `@Publisher` writes to.
  */
 
-import { type Container, useContainer } from '@di-framework/di-framework/container';
+import { type Container, useContainer } from '@di-framework/core/container';
 import { BatchLoader } from './loader.ts';
 import type {
   Ctor,

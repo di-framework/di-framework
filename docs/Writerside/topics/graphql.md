@@ -1,6 +1,6 @@
 # GraphQL
 
-Object-oriented, decorator-driven GraphQL for `@di-framework/di-framework`. Your domain classes **are** the schema — there is no SDL document to keep in sync, no resolver map, and no field-by-field mapping layer. Decorators declare semantic exposure (`@Field`, `@Action`), ownership (`@BoundedContext`), and boundaries (`@SemanticType({ boundary: true })`), and the schema falls out of that.
+Object-oriented, decorator-driven GraphQL for `@di-framework/core`. Your domain classes **are** the schema — there is no SDL document to keep in sync, no resolver map, and no field-by-field mapping layer. Decorators declare semantic exposure (`@Field`, `@Action`), ownership (`@BoundedContext`), and boundaries (`@SemanticType({ boundary: true })`), and the schema falls out of that.
 
 ## Features
 
@@ -16,9 +16,9 @@ Object-oriented, decorator-driven GraphQL for `@di-framework/di-framework`. Your
 ## Installation
 
 ```bash
-bun add @di-framework/graphql @di-framework/di-framework graphql
+bun add @di-framework/graphql @di-framework/core graphql
 # or
-npm install @di-framework/graphql @di-framework/di-framework graphql
+npm install @di-framework/graphql @di-framework/core graphql
 ```
 
 `graphql` is an optional peer dependency: you only need it to execute queries. Importing from `@di-framework/graphql/core` (decorators, registry, type graph, SDL printer) works without it.
@@ -28,7 +28,7 @@ Decorators need TypeScript 5 and `experimentalDecorators`. `emitDecoratorMetadat
 ## Quick Start
 
 ```typescript
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { Component, Container } from '@di-framework/core/decorators';
 import {
   Arg,
   Field,

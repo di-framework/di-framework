@@ -32,9 +32,9 @@ describe('test command', () => {
 
     it('repo root contains package.json and packages/', async () => {
       expect(await Bun.file(join(REPO_ROOT, 'package.json')).exists()).toBe(true);
-      expect(await Bun.file(join(REPO_ROOT, 'packages', 'cli', 'package.json')).exists()).toBe(
-        true,
-      );
+      expect(
+        await Bun.file(join(REPO_ROOT, 'packages', 'di-framework-cli', 'package.json')).exists(),
+      ).toBe(true);
     });
   });
 

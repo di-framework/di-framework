@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import { DatabaseService } from './DatabaseService';
 import { LoggerService } from './LoggerService';
 import { UserService } from './UserService';

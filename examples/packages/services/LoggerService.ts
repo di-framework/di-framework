@@ -4,7 +4,7 @@
  * Demonstrates a simple injectable service with lifecycle methods
  */
 
-import { Container, TelemetryListener } from '@di-framework/di-framework/decorators';
+import { Container, TelemetryListener } from '@di-framework/core/decorators';
 
 @Container()
 export class LoggerService {

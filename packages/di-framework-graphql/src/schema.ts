@@ -6,7 +6,7 @@
  * `graphql-js` types and attaches the resolvers.
  */
 
-import type { Container } from '@di-framework/di-framework/container';
+import type { Container } from '@di-framework/core/container';
 import {
   type ASTNode,
   type ExecutionResult,
@@ -369,7 +369,7 @@ export interface HandlerOptions {
 
 /**
  * A `Request -> Response` GraphQL endpoint, ready to drop into `Bun.serve`,
- * a Cloudflare Worker, or `@di-framework/di-framework-http`.
+ * a Cloudflare Worker, or `@di-framework/http`.
  */
 export function createGraphQLHandler(
   api: SemanticSchema,

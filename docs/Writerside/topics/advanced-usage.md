@@ -7,7 +7,7 @@ Learn advanced patterns and techniques for using the DI framework effectively.
 By default, all services are singletons - the same instance is reused. For services that need a new instance each time, use `singleton: false`:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 @Container({ singleton: false })
@@ -37,7 +37,7 @@ console.log(ctx1.id !== ctx2.id); // true
 Register services using factory functions for complex initialization logic:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 container.registerFactory(
@@ -72,14 +72,14 @@ export class UserService {
 - Conditionally create different implementations
 - Integrate third-party libraries
 
-## Repository Pattern (`@di-framework/di-framework-repo`)
+## Repository Pattern (`@di-framework/repo`)
 
-For larger applications, using the Repository pattern with `@di-framework/di-framework-repo` helps maintain a clean separation between business logic and data access.
+For larger applications, using the Repository pattern with `@di-framework/repo` helps maintain a clean separation between business logic and data access.
 
 ### Standard Repository
 
 ```typescript
-import { Repository, InMemoryRepository } from '@di-framework/di-framework-repo';
+import { Repository, InMemoryRepository } from '@di-framework/repo';
 
 @Repository()
 export class UserRepository extends InMemoryRepository<User, number> {
@@ -93,7 +93,7 @@ export class UserRepository extends InMemoryRepository<User, number> {
 ### Soft Delete Support
 
 ```typescript
-import { SoftDeleteRepository, SoftDeletable } from '@di-framework/di-framework-repo';
+import { SoftDeleteRepository, SoftDeletable } from '@di-framework/repo';
 
 interface Product extends SoftDeletable {
   id: string;
@@ -113,7 +113,7 @@ See the [Repositories documentation](repositories.md) for more details.
 Services can implement lifecycle methods for initialization and context management:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 @Container()
@@ -257,7 +257,7 @@ export class MonitoringService {
 Create isolated containers for different parts of your application:
 
 ```typescript
-import { Container as DIContainer } from '@di-framework/di-framework/container';
+import { Container as DIContainer } from '@di-framework/core/container';
 
 // Create custom containers
 const apiContainer = new DIContainer();
@@ -291,7 +291,7 @@ const workerService = workerContainer.resolve(WorkerService);
 Clone an existing container and optionally carry over singleton instances:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 // Seed the base container
@@ -314,7 +314,7 @@ const tenantCtx = tenantContainer.resolve(ApplicationContext);
 Use the observer hooks to add diagnostics or metrics around registration and resolution:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 const stop = container.on('resolved', ({ key, singleton, fromCache }) => {
@@ -337,8 +337,8 @@ stop();
 Create fresh instances without registering them, and override constructor arguments for primitives or config:
 
 ```typescript
-import { Component } from '@di-framework/di-framework/decorators';
-import { container } from '@di-framework/di-framework/container';
+import { Component } from '@di-framework/core/decorators';
+import { container } from '@di-framework/core/container';
 
 class EmailService {
   constructor(
@@ -359,7 +359,7 @@ const emailer = container.construct(EmailService, {
 Create configuration services using factory functions:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 // Register configuration
@@ -397,7 +397,7 @@ export class DatabaseService {
 Register different implementations based on environment:
 
 ```typescript
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core/container';
 const container = useContainer();
 
 // Register different implementations

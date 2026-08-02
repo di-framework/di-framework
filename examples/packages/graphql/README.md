@@ -12,8 +12,8 @@ bun run sdl     # emit schema.graphql / schema.public.graphql
 bun test        # the same tour, asserted
 ```
 
-> Run these from this directory (or from `packages/examples`). Bun reads
-> `tsconfig.json` relative to the working directory, and decorators need
+> Run these from this directory (or from `../..`). Bun reads
+> `../../../tsconfig.json` relative to the working directory, and decorators need
 > `experimentalDecorators`.
 
 `bun run serve` opens GraphiQL with a tab per idea — the three-context join, the

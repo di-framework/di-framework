@@ -1,6 +1,6 @@
-# @di-framework/di-framework-repo
+# @di-framework/repo
 
-A coherent abstraction of repositories and storage adapters for TypeScript, with optional integration for `di-framework`.
+A coherent abstraction of repositories and storage adapters for TypeScript, with optional integration for `di-framework-core`.
 
 ## Features
 
@@ -8,30 +8,30 @@ A coherent abstraction of repositories and storage adapters for TypeScript, with
 - **Standardized Patterns**: Provides `BaseRepository`, `EntityRepository`, and `SoftDeleteRepository` to handle common data access patterns.
 - **Built-in Pagination**: Standardized `Page` and `PaginatedResult` types with built-in support in adapters and repositories.
 - **In-Memory Implementation**: Includes a fully functional `InMemoryRepository` for prototyping and testing.
-- **DI Integration**: Seamlessly integrates with `di-framework` via the `@Repository` decorator.
+- **DI Integration**: Seamlessly integrates with `di-framework-core` via the `@Repository` decorator.
 - **Models**: Optional Spring/JPA-style `@Model`, `@Id`, and `@GeneratedValue` for multi-context identity metadata.
 
 ## Installation
 
 ```bash
-bun add @di-framework/di-framework-repo
+bun add @di-framework/repo
 ```
 
 Required for DI integration: If you want to use the `@Repository` decorator for dependency injection, install the DI framework peer dependency.
 
 ```bash
-bun add @di-framework/di-framework
+bun add @di-framework/core
 ```
 
-Important: Always import from the scoped package name `@di-framework/di-framework/*`.
+Important: Always import from the scoped package name `@di-framework/core/*`.
 
 Mixing different import IDs (e.g., `di-framework/*` or relative paths to sources) can load a second copy of the library and create a second global container instance.
 
 Correct:
 
 ```ts
-import { useContainer } from '@di-framework/di-framework/container';
-import { Container, Component } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core/container';
+import { Container, Component } from '@di-framework/core/decorators';
 ```
 
 Avoid:
@@ -54,7 +54,7 @@ import {
   Id,
   IdKind,
   Model,
-} from '@di-framework/di-framework-repo';
+} from '@di-framework/repo';
 
 @Model()
 class User {
@@ -111,7 +111,7 @@ interface User {
 You can extend `InMemoryRepository` for quick prototyping:
 
 ```typescript
-import { InMemoryRepository } from '@di-framework/di-framework-repo';
+import { InMemoryRepository } from '@di-framework/repo';
 
 class UserRepository extends InMemoryRepository<User, number> {
   async findByEmail(email: string): Promise<User | null> {
@@ -123,7 +123,7 @@ class UserRepository extends InMemoryRepository<User, number> {
 
 ### 3. Use with di-framework
 
-Use the `@Repository` decorator to automatically register your repository with the `di-framework` container.
+Use the `@Repository` decorator to automatically register your repository with the `di-framework-core` container.
 
 ```typescript
 import {
@@ -133,7 +133,7 @@ import {
   Model,
   Repository,
   InMemoryRepository,
-} from '@di-framework/di-framework-repo';
+} from '@di-framework/repo';
 
 @Model()
 class User {
@@ -165,7 +165,7 @@ class UserService {
 The `StorageAdapter` interface allows you to implement custom backends.
 
 ```typescript
-import { StorageAdapter, BaseRepository } from '@di-framework/di-framework-repo';
+import { StorageAdapter, BaseRepository } from '@di-framework/repo';
 
 class MyCustomAdapter<E, ID> implements StorageAdapter<E, ID> {
   // Implement findById, save, delete, findPaginated, etc.
@@ -192,7 +192,7 @@ class MyRepository extends BaseRepository<User, number> {
 - `@Model()`: Marks a class as a domain data model.
 - `@Id(options?)`: Marks an identity field (`kind?: IdKind`, default `Primary`).
 - `@GeneratedValue(options?)`: Stacked with `@Id`; `strategy?: GenerationType` (default `Auto`). UUID ⇒ UUIDv7.
-- `@Repository(options)`: Registers the class as a singleton in `di-framework`.
+- `@Repository(options)`: Registers the class as a singleton in `di-framework-core`.
 
 ### Identity helpers
 

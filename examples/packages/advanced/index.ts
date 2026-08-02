@@ -4,13 +4,8 @@
  * This file demonstrates advanced usage patterns of the DI framework
  */
 
-import { Container as DIContainer, useContainer } from '@di-framework/di-framework/container';
-import {
-  Component,
-  Container,
-  Telemetry,
-  TelemetryListener,
-} from '@di-framework/di-framework/decorators';
+import { Container as DIContainer, useContainer } from '@di-framework/core';
+import { Component, Container, Telemetry, TelemetryListener } from '@di-framework/core/decorators';
 
 // ============================================================================
 // Example 1: Multi-Level Dependency Chains

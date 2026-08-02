@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { useContainer } from '@di-framework/di-framework/container';
-import { Component } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core/container';
+import { Component } from '@di-framework/core/decorators';
 import { Controller, Endpoint, SCHEMAS } from './decorators.ts';
 import registry from './registry.ts';
 

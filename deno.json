@@ -4,12 +4,9 @@
     "useDefineForClassFields": false
   },
   "nodeModulesDir": "auto",
-  "workspace": [
-    "packages/examples/packages/deno-http",
-    "packages/examples/packages/deno-sandboxes"
-  ],
+  "workspace": ["examples/packages/deno-http", "examples/packages/deno-sandboxes"],
   "tasks": {
-    "http:example": "deno run --allow-net --sloppy-imports packages/examples/packages/deno-http/src/main.ts",
-    "sandboxes:example": "deno run --allow-net --allow-env --env-file=packages/examples/packages/deno-sandboxes/.env --sloppy-imports packages/examples/packages/deno-sandboxes/src/main.ts"
+    "http:example": "deno run --allow-net --sloppy-imports examples/packages/deno-http/src/main.ts",
+    "sandboxes:example": "deno run --allow-net --allow-env --env-file=examples/packages/deno-sandboxes/.env --sloppy-imports examples/packages/deno-sandboxes/src/main.ts"
   }
 }

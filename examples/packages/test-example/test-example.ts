@@ -4,8 +4,8 @@
  * Shows how to write tests with mocked dependencies
  */
 
-import { Container as DIContainer } from '@di-framework/di-framework/container';
-import { Component, Container } from '@di-framework/di-framework/decorators';
+import { Container as DIContainer } from '@di-framework/core';
+import { Component, Container } from '@di-framework/core/decorators';
 
 // ============================================================================
 // Service Definitions

@@ -3,8 +3,8 @@
  * owns purchases and reaches into `Users` only through its boundary type.
  */
 
-import { useContainer } from '@di-framework/di-framework/container';
-import { Component, Container, Publisher } from '@di-framework/di-framework/decorators';
+import { useContainer } from '@di-framework/core/container';
+import { Component, Container, Publisher } from '@di-framework/core/decorators';
 import {
   Action,
   Arg,

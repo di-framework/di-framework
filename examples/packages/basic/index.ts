@@ -5,7 +5,7 @@
  * compared to the manual approach shown in SAMPLE.ts
  */
 
-import { useContainer } from '@di-framework/di-framework/container';
+import { useContainer } from '@di-framework/core';
 import { ApplicationContext } from '../services/ApplicationContext';
 
 console.log('='.repeat(60));
