@@ -15,17 +15,24 @@
   },
   "homepage": "https://github.com/di-framework/di-framework#readme",
   "bin": {
-    "di-framework": "dist/di-framework"
+    "di-framework": "./main.ts"
   },
   "files": [
-    "dist"
+    "main.ts",
+    "cmd",
+    "scripts"
   ],
   "scripts": {
-    "build": "bun build --compile main.ts --outfile=./dist/di-framework",
-    "postinstall": "bun run build"
+    "build": "bun -e \"console.log('@di-framework/cli: source bin, no compile step')\""
+  },
+  "dependencies": {
+    "bun": "^1.3.14"
   },
   "devDependencies": {
     "@types/bun": "latest"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"

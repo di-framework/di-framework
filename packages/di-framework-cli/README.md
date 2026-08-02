@@ -1,53 +1,35 @@
 # @di-framework/cli
 
-This package contains the CLI tools and scripts used for managing the `@di-framework` monorepo.
+Monorepo tooling for `@di-framework` (`build`, `test`, `typecheck`, `publish`).
+
+Requires [Bun](https://bun.sh). The package ships TypeScript source as the `bin` entry — no platform-specific compiled binary.
 
 ## Usage
 
-The CLI acts as a proxy to run various commands defined in the `cmd` directory.
-
-### Global Installation (Recommended)
-
-You can make the CLI available globally on your system as the `di-framework-core` command by linking it:
+### Link (from the monorepo)
 
 ```bash
-cd packages/bin
+cd packages/di-framework-cli
 bun link
 ```
-
-Then you can run commands from anywhere:
 
 ```bash
 di-framework <command> [args...]
 ```
 
-### Running Directly
-
-Alternatively, you can run it directly using Bun from the root of the repository:
+### Run without linking
 
 ```bash
-bun run packages/bin/main.ts <command> [args...]
+bun run packages/di-framework-cli/main.ts <command> [args...]
 ```
 
-### Available Commands
+### Available commands
 
-- **`build`**: Builds the packages in the monorepo (`di-framework-core`, `di-framework-repo`, `di-framework-http`). It cleans the `dist` directories and runs `tsc`.
+- **`build`** — build packages and sync versions
+- **`test`** — E2E test suite
+- **`typecheck`** — TypeScript project checks
+- **`publish`** — publish packages to npm
 
-  ```bash
-  bun run packages/bin/main.ts build
-  ```
+## Adding commands
 
-- **`typecheck`**: Runs TypeScript type checking across the packages to ensure type safety without emitting compiled files.
-
-  ```bash
-  bun run packages/bin/main.ts typecheck
-  ```
-
-- **`publish`**: Publishes the built packages to the npm registry.
-  ```bash
-  bun run packages/bin/main.ts publish
-  ```
-
-## Adding New Commands
-
-To add a new command, simply create a new TypeScript file in the `/cmd/` directory. The name of the file (without the `.ts` extension) will become the command name.
+Add a module under `cmd/` and register it in `main.ts`.
