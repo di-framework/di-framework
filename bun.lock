@@ -33,6 +33,15 @@
         "@di-framework/core": "workspace:*",
       },
     },
+    "examples/packages/auth": {
+      "name": "di-auth-example",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@di-framework/auth": "workspace:*",
+        "@di-framework/core": "workspace:*",
+        "@di-framework/http": "workspace:*",
+      },
+    },
     "examples/packages/basic": {
       "name": "di-basic-example",
       "version": "0.0.0",
@@ -110,6 +119,32 @@
       "devDependencies": {
         "@di-framework/core": "workspace:*",
       },
+    },
+    "packages/di-framework-auth": {
+      "name": "@di-framework/auth",
+      "version": "4.0.2",
+      "devDependencies": {
+        "@di-framework/graphql": "workspace:*",
+        "@di-framework/http": "workspace:*",
+        "@di-framework/repo": "workspace:*",
+        "@types/bun": "latest",
+        "graphql": "^17.0.2",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/core": "workspace:^",
+        "@di-framework/graphql": "workspace:^",
+        "@di-framework/http": "workspace:^",
+        "@di-framework/repo": "workspace:^",
+        "graphql": "^16.8.0 || ^17.0.0",
+        "typescript": "^5",
+      },
+      "optionalPeers": [
+        "@di-framework/graphql",
+        "@di-framework/http",
+        "@di-framework/repo",
+        "graphql",
+      ],
     },
     "packages/di-framework-cli": {
       "name": "@di-framework/cli",
@@ -254,6 +289,8 @@
     "@cloudflare/workers-types": ["@cloudflare/workers-types@5.20260801.1", "", {}, "sha512-XCv5xWi47WQOK0LpLa6997Mrpz8Ct+nZmp/M5Xp8Z4BFsarf7nYjkznGOcOoYK5m1GfbMFEEuQ2OIZnbIWoe9A=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
+
+    "@di-framework/auth": ["@di-framework/auth@workspace:packages/di-framework-auth"],
 
     "@di-framework/cli": ["@di-framework/cli@workspace:packages/di-framework-cli"],
 
@@ -490,6 +527,8 @@
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
     "di-advanced-example": ["di-advanced-example@workspace:examples/packages/advanced"],
+
+    "di-auth-example": ["di-auth-example@workspace:examples/packages/auth"],
 
     "di-basic-example": ["di-basic-example@workspace:examples/packages/basic"],
 

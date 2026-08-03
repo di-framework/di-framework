@@ -7,6 +7,10 @@ export type OpenAPIOptions = {
   description?: string;
   outputPath?: string;
   schemas?: Record<string, unknown>;
+  /** `components.securitySchemes`, passed through verbatim. */
+  securitySchemes?: Record<string, unknown>;
+  /** Document-level default `security` requirement. */
+  security?: Array<Record<string, string[]>>;
 };
 
 /** Recursively extract `$ref` schema names from a value. */
@@ -80,7 +84,9 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
     paths: {},
     components: {
       schemas: {},
+      ...(options.securitySchemes ? { securitySchemes: options.securitySchemes } : {}),
     },
+    ...(options.security ? { security: options.security } : {}),
   };
 
   const targets = registryToUse.getTargets();
@@ -113,6 +119,12 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
               description: 'OK',
             },
           },
+          // Tested against `undefined`, not truthiness: an empty array is
+          // meaningful in OpenAPI — it opts an operation out of the
+          // document-level `security` default.
+          ...(property.metadata?.security !== undefined
+            ? { security: property.metadata.security }
+            : {}),
         };
       }
     }

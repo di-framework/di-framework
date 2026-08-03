@@ -12,6 +12,7 @@ npm i @di-framework/core
 - `packages/di-framework-graphql` - GraphQL schema from domain objects
 - `packages/di-framework-events` - bridge container events to Kafka / NATS / memory
 - `packages/di-framework-config` - typed config from env/files, validated and injected via DI
+- `packages/di-framework-auth` - authentication: sessions, JWT, OAuth2/OIDC, WebAuthn (WebCrypto, zero deps)
 - `packages/di-framework-cli` - `di-framework-core` cli (build, test, typecheck, publish)
 - `examples` - usage examples
 

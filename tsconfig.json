@@ -43,7 +43,9 @@
       "@di-framework/events": ["packages/di-framework-events/index.ts"],
       "@di-framework/events/*": ["packages/di-framework-events/*"],
       "@di-framework/config": ["packages/di-framework-config/index.ts"],
-      "@di-framework/config/*": ["packages/di-framework-config/*"]
+      "@di-framework/config/*": ["packages/di-framework-config/*"],
+      "@di-framework/auth": ["packages/di-framework-auth/index.ts"],
+      "@di-framework/auth/*": ["packages/di-framework-auth/*"]
     }
   },
   "exclude": [
