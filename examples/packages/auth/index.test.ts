@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'bun:test';
+import { auth, router } from './index.ts';
+
+describe('auth example', () => {
+  it('refuses an unauthenticated request', async () => {
+    const response = await router.fetch(new Request('https://api.example.com/notes'));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ code: 'no_credential' });
+  });
+
+  it('leaves the health route and the opted-out route public', async () => {
+    expect((await router.fetch(new Request('https://api.example.com/health'))).status).toBe(200);
+    expect((await router.fetch(new Request('https://api.example.com/whoami'))).status).toBe(200);
+  });
+
+  it('serves a request carrying a session cookie', async () => {
+    const user = await auth.passwords.createUser({
+      identifier: `cookie-${crypto.randomUUID()}@example.com`,
+      password: 'correct horse battery staple',
+    });
+    const session = await auth.sessions.create({ subject: user.id });
+
+    const response = await router.fetch(
+      new Request('https://api.example.com/notes', {
+        headers: { cookie: `__Host-sid=${session.token}` },
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('serves a request carrying a bearer token', async () => {
+    const { token } = await auth.tokens!.issueAccessToken({ subject: 'machine-client' });
+    const response = await router.fetch(
+      new Request('https://api.example.com/notes', {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  // The three-state result at work: a bad bearer token halts the chain rather
+  // than falling through the api-key strategy and ending up anonymous.
+  it('rejects a forged token instead of downgrading to anonymous', async () => {
+    const response = await router.fetch(
+      new Request('https://api.example.com/notes', {
+        headers: { authorization: 'Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiJ9.' },
+      }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('requires a CSRF token for a cookie-authenticated mutation', async () => {
+    const user = await auth.passwords.createUser({
+      identifier: `csrf-${crypto.randomUUID()}@example.com`,
+      password: 'correct horse battery staple',
+    });
+    const session = await auth.sessions.create({ subject: user.id });
+    const cookie = `__Host-sid=${session.token}`;
+    const headers = { cookie, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' };
+    const body = JSON.stringify({ text: 'note' });
+
+    const without = await router.fetch(
+      new Request('https://api.example.com/notes', { method: 'POST', headers, body }),
+    );
+    expect(without.status).toBe(403);
+
+    const withToken = await router.fetch(
+      new Request('https://api.example.com/notes', {
+        method: 'POST',
+        headers: { ...headers, 'x-csrf-token': await auth.csrf!.issue(session.record.id) },
+        body,
+      }),
+    );
+    expect(withToken.status).toBe(200);
+  });
+
+  // Bearer requests carry no ambient credential, so forcing a CSRF token on them
+  // would be pure friction.
+  it('does not require a CSRF token for a bearer mutation', async () => {
+    const { token } = await auth.tokens!.issueAccessToken({ subject: 'machine-client' });
+    const response = await router.fetch(
+      new Request('https://api.example.com/notes', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'from a script' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+});

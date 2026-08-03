@@ -24,6 +24,15 @@ async function withExitCapture(fn: () => Promise<void>): Promise<number> {
   }
 }
 
+/**
+ * Typechecking the whole workspace is the slowest thing in the suite and gets
+ * slower with every package added, so the two tests that do it get an explicit
+ * budget rather than bun's 5s default — a cold `tsc` program over the monorepo
+ * runs several times longer on a CI runner than on a developer machine, and a
+ * timeout there reads as a type error that nobody can reproduce locally.
+ */
+const FULL_TYPECHECK_TIMEOUT_MS = 120_000;
+
 describe('typecheck command', () => {
   const temps: string[] = [];
   afterEach(() => {
@@ -110,8 +119,7 @@ describe('typecheck command', () => {
           err.mockRestore();
         }
       },
-      // Full-repo program create is slow in CI once packages like @di-framework/ai are included.
-      { timeout: 60_000 },
+      FULL_TYPECHECK_TIMEOUT_MS,
     );
 
     it('exits 2 when the tsconfig path cannot be read', async () => {
@@ -299,7 +307,7 @@ describe('typecheck command', () => {
           err.mockRestore();
         }
       },
-      { timeout: 60_000 },
+      FULL_TYPECHECK_TIMEOUT_MS,
     );
   });
 

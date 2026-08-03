@@ -14,6 +14,7 @@
     <toc-element topic="graphql.md"/>
     <toc-element topic="events.md"/>
     <toc-element topic="config.md"/>
+    <toc-element topic="auth.md"/>
     <toc-element topic="api-reference.md"/>
     <toc-element topic="advanced-usage.md"/>
     <toc-element topic="error-handling.md"/>

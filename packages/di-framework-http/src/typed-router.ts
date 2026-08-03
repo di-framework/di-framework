@@ -1,4 +1,10 @@
-import { type IRequest, json as ittyJson, Router, withContent } from 'itty-router';
+import {
+  type IRequest,
+  json as ittyJson,
+  type RequestHandler,
+  Router,
+  withContent,
+} from 'itty-router';
 
 /** Marker for body "shape + content-type" */
 export type Json<T> = { readonly __kind: 'json'; readonly __type?: T };
@@ -45,7 +51,23 @@ export function json<T>(data: T, init?: ResponseInit): TypedResponse<ResponseSpe
   return ittyJson(data as any, init) as any;
 }
 
-export type RouteOptions = { multipart?: boolean };
+export type RouteOptions = {
+  multipart?: boolean;
+  /**
+   * Extra itty handlers run before the body parser and the controller, in order.
+   *
+   * itty supports any number of handlers per route; this exposes that without
+   * the router needing to know what any of them mean. A handler that returns
+   * anything other than `undefined` or `null` short-circuits the route, which is
+   * how a guard rejects.
+   *
+   * These run *before* the body is parsed, so an unauthenticated POST does not
+   * cause a large body to be buffered and deserialised. The visible consequence
+   * is that a rejected request returns the guard's status rather than a 415
+   * content-type error — authenticate first, then validate.
+   */
+  use?: ReadonlyArray<RequestHandler<IRequest, any[]>>;
+};
 
 export type TypedRoute<Args extends any[] = any[]> = <
   ReqSpec = RequestSpec<unknown>,
@@ -117,8 +139,8 @@ export function TypedRouter<Args extends any[] = any[]>(
             return controller(req as any, ...extraArgs);
           };
 
-          const middleware = options?.multipart ? withFormData : withContent;
-          target[prop](path, middleware, handler);
+          const parse = options?.multipart ? withFormData : withContent;
+          target[prop](path, ...(options?.use ?? []), parse, handler);
 
           const routeInfo = {
             path,

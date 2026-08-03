@@ -1,0 +1,14 @@
+{
+  "name": "di-auth-example",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@di-framework/auth": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*"
+  }
+}
