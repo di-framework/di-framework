@@ -39,7 +39,9 @@
       "@di-framework/repo": ["packages/di-framework-repo/src/index.ts"],
       "@di-framework/repo/*": ["packages/di-framework-repo/src/*"],
       "@di-framework/graphql": ["packages/di-framework-graphql/index.ts"],
-      "@di-framework/graphql/*": ["packages/di-framework-graphql/*"]
+      "@di-framework/graphql/*": ["packages/di-framework-graphql/*"],
+      "@di-framework/events": ["packages/di-framework-events/index.ts"],
+      "@di-framework/events/*": ["packages/di-framework-events/*"]
     }
   },
   "exclude": [

@@ -75,6 +75,7 @@ describe('build command', () => {
       expect(PACKAGES).toContain('packages/di-framework-repo');
       expect(PACKAGES).toContain('packages/di-framework-http');
       expect(PACKAGES).toContain('packages/di-framework-graphql');
+      expect(PACKAGES).toContain('packages/di-framework-events');
       expect(PACKAGES).toContain('packages/di-framework-cli');
     });
 

@@ -7,6 +7,7 @@ export const PACKAGES = [
   'packages/di-framework-repo',
   'packages/di-framework-http',
   'packages/di-framework-graphql',
+  'packages/di-framework-events',
   'packages/di-framework-cli',
 ];
 
