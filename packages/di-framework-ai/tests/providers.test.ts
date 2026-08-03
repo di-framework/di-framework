@@ -7,6 +7,7 @@ import {
   functionToolCallback,
   hasToolCalls,
   isAiError,
+  joinUrl,
   OpenAiChatModel,
   Prompt,
   ScriptedChatModel,
@@ -18,6 +19,15 @@ import {
   toolResponseMessage,
   userMessage,
 } from '../src/index.ts';
+
+describe('joinUrl', () => {
+  test('removes trailing slashes without changing internal slash runs', () => {
+    expect(joinUrl('https://example.test///', '/v1/chat')).toBe('https://example.test/v1/chat');
+
+    const slashHeavyBase = `https://example.test/${'/'.repeat(10_000)}segment`;
+    expect(joinUrl(slashHeavyBase, 'v1/chat')).toBe(`${slashHeavyBase}/v1/chat`);
+  });
+});
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

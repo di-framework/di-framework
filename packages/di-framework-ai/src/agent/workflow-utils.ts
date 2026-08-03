@@ -127,9 +127,19 @@ export function extractJsonObject(text: string): unknown {
   } catch {
     // try fenced
   }
-  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence?.[1]) {
-    return JSON.parse(fence[1].trim());
+  const fenceStart = cleaned.indexOf('```');
+  if (fenceStart >= 0) {
+    let contentStart = fenceStart + 3;
+    if (cleaned.slice(contentStart, contentStart + 4).toLowerCase() === 'json') {
+      contentStart += 4;
+    }
+    while (contentStart < cleaned.length && cleaned.charAt(contentStart).trim() === '') {
+      contentStart++;
+    }
+    const fenceEnd = cleaned.indexOf('```', contentStart);
+    if (fenceEnd > contentStart) {
+      return JSON.parse(cleaned.slice(contentStart, fenceEnd).trim());
+    }
   }
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');

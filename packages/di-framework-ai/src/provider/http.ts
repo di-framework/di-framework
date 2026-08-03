@@ -215,7 +215,11 @@ function isAbortError(cause: unknown): boolean {
 }
 
 export function joinUrl(baseUrl: string, path: string): string {
-  const base = baseUrl.replace(/\/+$/, '');
+  let baseEnd = baseUrl.length;
+  while (baseEnd > 0 && baseUrl.charCodeAt(baseEnd - 1) === 47) {
+    baseEnd--;
+  }
+  const base = baseUrl.slice(0, baseEnd);
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
 }

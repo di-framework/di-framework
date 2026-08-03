@@ -4,6 +4,7 @@ import {
   ChatAgent,
   ChatClient,
   EvaluatorOptimizerWorkflow,
+  extractJsonObject,
   functionToolCallback,
   MessageWindowChatMemory,
   OrchestratorWorkersWorkflow,
@@ -14,6 +15,15 @@ import {
   toolCall,
   toolCallResponse,
 } from '../src/index.ts';
+
+describe('extractJsonObject', () => {
+  test('extracts fenced JSON and rejects an unterminated whitespace-heavy fence', () => {
+    expect(extractJsonObject('Result:\n```JSON\n{"ok":true}\n```')).toEqual({ ok: true });
+    expect(() => extractJsonObject(`\`\`\`json${' '.repeat(10_000)}`)).toThrow(
+      'Could not parse JSON from workflow response',
+    );
+  });
+});
 
 describe('ChainWorkflow', () => {
   test('feeds each step output into the next', async () => {
