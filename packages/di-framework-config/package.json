@@ -1,0 +1,69 @@
+{
+  "name": "@di-framework/config",
+  "version": "4.0.1",
+  "description": "Typed, validated configuration for di-framework — load from env/files, validate, and inject via DI.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./zod": {
+      "bun": "./zod.ts",
+      "import": "./dist/zod.js",
+      "default": "./dist/zod.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-config"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "config",
+    "configuration",
+    "environment",
+    "dependency-injection",
+    "decorators",
+    "typescript",
+    "zod"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "zod.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./zod.ts --outdir ./dist --target node --external @di-framework/core --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5",
+    "zod": "^3.24.0"
+  },
+  "peerDependencies": {
+    "@di-framework/core": "workspace:^",
+    "typescript": "^5",
+    "zod": "^3.22.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  }
+}
