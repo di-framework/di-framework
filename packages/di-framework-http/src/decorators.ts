@@ -64,6 +64,11 @@ export function Endpoint(metadata?: {
   parameters?: unknown[];
   requestBody?: any;
   responses?: Record<string, any>;
+  /**
+   * OpenAPI operation-level `security`. An empty array explicitly opts this
+   * operation out of the document-level default.
+   */
+  security?: Array<Record<string, string[]>>;
 }) {
   return (target: any, propertyKey?: string) => {
     if (propertyKey) {

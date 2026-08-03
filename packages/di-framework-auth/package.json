@@ -1,0 +1,114 @@
+{
+  "name": "@di-framework/auth",
+  "version": "4.0.2",
+  "description": "Authentication for di-framework — sessions, JWT/JWS bearer, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with zero runtime dependencies",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./webauthn": {
+      "bun": "./webauthn.ts",
+      "import": "./dist/webauthn.js",
+      "default": "./dist/webauthn.js"
+    },
+    "./oauth": {
+      "bun": "./oauth.ts",
+      "import": "./dist/oauth.js",
+      "default": "./dist/oauth.js"
+    },
+    "./http": {
+      "bun": "./http.ts",
+      "import": "./dist/http.js",
+      "default": "./dist/http.js"
+    },
+    "./graphql": {
+      "bun": "./graphql.ts",
+      "import": "./dist/graphql.js",
+      "default": "./dist/graphql.js"
+    },
+    "./repo": {
+      "bun": "./repo.ts",
+      "import": "./dist/repo.js",
+      "default": "./dist/repo.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-auth"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "authentication",
+    "auth",
+    "webauthn",
+    "passkeys",
+    "oauth2",
+    "oidc",
+    "jwt",
+    "jws",
+    "session",
+    "webcrypto",
+    "dependency-injection",
+    "decorators",
+    "typescript"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "webauthn.ts",
+    "oauth.ts",
+    "http.ts",
+    "graphql.ts",
+    "repo.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./webauthn.ts ./oauth.ts ./http.ts ./graphql.ts ./repo.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/http --external @di-framework/graphql --external @di-framework/repo --external graphql --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@di-framework/graphql": "workspace:*",
+    "@di-framework/http": "workspace:*",
+    "@di-framework/repo": "workspace:*",
+    "@types/bun": "latest",
+    "graphql": "^17.0.2",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@di-framework/core": "workspace:^",
+    "@di-framework/graphql": "workspace:^",
+    "@di-framework/http": "workspace:^",
+    "@di-framework/repo": "workspace:^",
+    "graphql": "^16.8.0 || ^17.0.0",
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@di-framework/graphql": {
+      "optional": true
+    },
+    "@di-framework/http": {
+      "optional": true
+    },
+    "@di-framework/repo": {
+      "optional": true
+    },
+    "graphql": {
+      "optional": true
+    }
+  }
+}
