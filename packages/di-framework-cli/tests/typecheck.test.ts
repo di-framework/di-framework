@@ -93,21 +93,26 @@ describe('typecheck command', () => {
   });
 
   describe('typecheck()', () => {
-    it('exits 0 against the repo root tsconfig', async () => {
-      const { typecheck } = await import('../cmd/typecheck');
-      const originalArgv = process.argv;
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        process.chdir(REPO_ROOT);
-        process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(0);
-      } finally {
-        process.argv = originalArgv;
-        log.mockRestore();
-        err.mockRestore();
-      }
-    });
+    it(
+      'exits 0 against the repo root tsconfig',
+      async () => {
+        const { typecheck } = await import('../cmd/typecheck');
+        const originalArgv = process.argv;
+        const log = spyOn(console, 'log').mockImplementation(() => {});
+        const err = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          process.chdir(REPO_ROOT);
+          process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
+          expect(await withExitCapture(() => typecheck())).toBe(0);
+        } finally {
+          process.argv = originalArgv;
+          log.mockRestore();
+          err.mockRestore();
+        }
+      },
+      // Full-repo program create is slow in CI once packages like @di-framework/ai are included.
+      { timeout: 60_000 },
+    );
 
     it('exits 2 when the tsconfig path cannot be read', async () => {
       const { typecheck } = await import('../cmd/typecheck');
@@ -271,27 +276,31 @@ describe('typecheck command', () => {
       }
     });
 
-    it('respects --from=script when locating tsconfig', async () => {
-      const { typecheck } = await import('../cmd/typecheck');
-      const originalArgv = process.argv;
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        process.chdir(REPO_ROOT);
-        // argv[1] is the script path; --from=script walks from its directory.
-        process.argv = [
-          'bun',
-          join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
-          '--from=script',
-          '--pretty=0',
-        ];
-        expect(await withExitCapture(() => typecheck())).toBe(0);
-      } finally {
-        process.argv = originalArgv;
-        log.mockRestore();
-        err.mockRestore();
-      }
-    });
+    it(
+      'respects --from=script when locating tsconfig',
+      async () => {
+        const { typecheck } = await import('../cmd/typecheck');
+        const originalArgv = process.argv;
+        const log = spyOn(console, 'log').mockImplementation(() => {});
+        const err = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          process.chdir(REPO_ROOT);
+          // argv[1] is the script path; --from=script walks from its directory.
+          process.argv = [
+            'bun',
+            join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
+            '--from=script',
+            '--pretty=0',
+          ];
+          expect(await withExitCapture(() => typecheck())).toBe(0);
+        } finally {
+          process.argv = originalArgv;
+          log.mockRestore();
+          err.mockRestore();
+        }
+      },
+      { timeout: 60_000 },
+    );
   });
 
   describe('CLI entrypoint', () => {
