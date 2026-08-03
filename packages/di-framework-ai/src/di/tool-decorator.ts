@@ -1,20 +1,17 @@
+import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
 import {
-  defineMetadata,
-  getOwnMetadata,
-} from "@di-framework/core/container";
-import {
-  functionToolCallback,
   type FunctionToolCallbackOptions,
-} from "../tool/function-tool-callback.ts";
-import type { ToolCallback } from "../tool/tool-callback.ts";
+  functionToolCallback,
+} from '../tool/function-tool-callback.ts';
+import type { ToolCallback } from '../tool/tool-callback.ts';
 import {
   staticToolCallbackProvider,
   type ToolCallbackProvider,
-} from "../tool/tool-callback-provider.ts";
-import type { ToolContext } from "../tool/tool-context.ts";
+} from '../tool/tool-callback-provider.ts';
+import type { ToolContext } from '../tool/tool-context.ts';
 
 /** Metadata key for `@Tool` method descriptors (di-framework metadata store). */
-export const AI_TOOL_METADATA_KEY = "ai:tools";
+export const AI_TOOL_METADATA_KEY = 'ai:tools';
 
 export interface ToolMethodMetadata {
   readonly methodName: string;
@@ -56,18 +53,14 @@ export interface ToolDecoratorOptions {
  * }
  * ```
  */
-export function Tool(
-  options: ToolDecoratorOptions | string = {},
-): MethodDecorator {
+export function Tool(options: ToolDecoratorOptions | string = {}): MethodDecorator {
   const opts: ToolDecoratorOptions =
-    typeof options === "string" ? { description: options } : options;
+    typeof options === 'string' ? { description: options } : options;
 
   return (target, propertyKey, _descriptor) => {
     const methodName = String(propertyKey);
     const ctor =
-      typeof target === "function"
-        ? target
-        : (target as { constructor: object }).constructor;
+      typeof target === 'function' ? target : (target as { constructor: object }).constructor;
 
     const list: ToolMethodMetadata[] =
       getOwnMetadata(AI_TOOL_METADATA_KEY, ctor) ??
@@ -82,10 +75,7 @@ export function Tool(
       returnDirect: opts.returnDirect,
     };
 
-    const next = [
-      ...list.filter((m) => m.methodName !== methodName),
-      entry,
-    ];
+    const next = [...list.filter((m) => m.methodName !== methodName), entry];
 
     // Store on constructor (class) and prototype for robust lookup.
     defineMetadata(AI_TOOL_METADATA_KEY, next, ctor);
@@ -102,12 +92,10 @@ export function getToolMethodMetadata(
   target: object | (new (...args: never[]) => object),
 ): readonly ToolMethodMetadata[] {
   const ctor =
-    typeof target === "function"
-      ? target
-      : (target as { constructor: object }).constructor;
+    typeof target === 'function' ? target : (target as { constructor: object }).constructor;
   return (
     getOwnMetadata(AI_TOOL_METADATA_KEY, ctor) ??
-    getOwnMetadata(AI_TOOL_METADATA_KEY, (target as object)) ??
+    getOwnMetadata(AI_TOOL_METADATA_KEY, target as object) ??
     []
   );
 }
@@ -116,23 +104,20 @@ export function getToolMethodMetadata(
  * Build {@link ToolCallback}s bound to a bean instance for all `@Tool` methods.
  */
 export function toolCallbacksFromBean(instance: object): ToolCallback[] {
-  if (instance == null || typeof instance !== "object") {
-    throw new Error("toolCallbacksFromBean requires a bean instance");
+  if (instance == null || typeof instance !== 'object') {
+    throw new Error('toolCallbacksFromBean requires a bean instance');
   }
   const meta = getToolMethodMetadata(instance);
   const callbacks: ToolCallback[] = [];
 
   for (const m of meta) {
     const method = (instance as Record<string, unknown>)[m.methodName];
-    if (typeof method !== "function") {
+    if (typeof method !== 'function') {
       throw new Error(
-        `@Tool method '${m.methodName}' is missing on ${instance.constructor?.name ?? "bean"}`,
+        `@Tool method '${m.methodName}' is missing on ${instance.constructor?.name ?? 'bean'}`,
       );
     }
-    const bound = method.bind(instance) as (
-      input: unknown,
-      context?: ToolContext,
-    ) => unknown;
+    const bound = method.bind(instance) as (input: unknown, context?: ToolContext) => unknown;
 
     const options: FunctionToolCallbackOptions = {
       name: m.name,
@@ -150,9 +135,7 @@ export function toolCallbacksFromBean(instance: object): ToolCallback[] {
 /**
  * Flatten tools from multiple bean instances.
  */
-export function toolCallbacksFromBeans(
-  ...instances: readonly object[]
-): ToolCallback[] {
+export function toolCallbacksFromBeans(...instances: readonly object[]): ToolCallback[] {
   return instances.flatMap((bean) => toolCallbacksFromBean(bean));
 }
 
@@ -168,8 +151,6 @@ export function toolCallbackProviderFromBeans(
 /**
  * True when the target has at least one `@Tool` method.
  */
-export function hasToolMethods(
-  target: object | (new (...args: never[]) => object),
-): boolean {
+export function hasToolMethods(target: object | (new (...args: never[]) => object)): boolean {
   return getToolMethodMetadata(target).length > 0;
 }

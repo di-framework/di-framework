@@ -1,28 +1,24 @@
-import type { ChatClient } from "../chat/client/default-chat-client.ts";
-import { ChatClient as ChatClientFactory } from "../chat/client/default-chat-client.ts";
-import { MessageChatMemoryAdvisor } from "../chat/client/advisor/message-chat-memory-advisor.ts";
-import type { ChatMemory } from "../chat/memory/chat-memory.ts";
-import type { ChatModel } from "../chat/model/chat-model.ts";
-import type { Advisor } from "../chat/client/advisor/advisor.ts";
-import type { ToolCallback } from "../tool/tool-callback.ts";
+import type { Advisor } from '../chat/client/advisor/advisor.ts';
+import { MessageChatMemoryAdvisor } from '../chat/client/advisor/message-chat-memory-advisor.ts';
+import type { ChatClient } from '../chat/client/default-chat-client.ts';
+import { ChatClient as ChatClientFactory } from '../chat/client/default-chat-client.ts';
+import type { ChatMemory } from '../chat/memory/chat-memory.ts';
+import type { ChatModel } from '../chat/model/chat-model.ts';
+import type { ToolCallback } from '../tool/tool-callback.ts';
 import {
   resolveToolCallbacks,
   staticToolCallbackProvider,
-} from "../tool/tool-callback-provider.ts";
-import {
-  asAiContainer,
-  asFactory,
-  registerFactoryAliases,
-} from "./container-utils.ts";
-import { observationAdvisor } from "./observation.ts";
-import { AiTokens } from "./tokens.ts";
-import { toolCallbacksFromBean } from "./tool-decorator.ts";
+} from '../tool/tool-callback-provider.ts';
+import { asAiContainer, asFactory, registerFactoryAliases } from './container-utils.ts';
+import { observationAdvisor } from './observation.ts';
+import { AiTokens } from './tokens.ts';
+import { toolCallbacksFromBean } from './tool-decorator.ts';
 import type {
   ConfigureAiOptions,
   ConfigureAiResult,
   ContainerLike,
   RegisterOptions,
-} from "./types.ts";
+} from './types.ts';
 
 /**
  * Register a {@link ChatModel} under a string token (default {@link AiTokens.CHAT_MODEL}).
@@ -43,12 +39,7 @@ export function registerChatModel(
   const token = options.token ?? AiTokens.CHAT_MODEL;
   const factory = asFactory(model);
   const aliases = options.aliases ?? [];
-  registerFactoryAliases(
-    container,
-    factory,
-    [token, ...aliases],
-    options.singleton ?? true,
-  );
+  registerFactoryAliases(container, factory, [token, ...aliases], options.singleton ?? true);
   return model;
 }
 
@@ -201,10 +192,11 @@ export function configureAi(options: ConfigureAiOptions): ConfigureAiResult {
   // --- ChatClient factory ---
   const registerClient = options.registerChatClient !== false;
   if (registerClient) {
-    registerChatClient(
-      () => buildChatClient(container, chatModelToken, options, toolCallbacks),
-      { container, token: chatClientToken, singleton },
-    );
+    registerChatClient(() => buildChatClient(container, chatModelToken, options, toolCallbacks), {
+      container,
+      token: chatClientToken,
+      singleton,
+    });
   }
 
   return {
@@ -218,14 +210,12 @@ function collectTools(
   container: ReturnType<typeof asAiContainer>,
   options: ConfigureAiOptions,
 ): ToolCallback[] {
-  const fromSources = options.tools
-    ? resolveToolCallbacks(...options.tools)
-    : [];
+  const fromSources = options.tools ? resolveToolCallbacks(...options.tools) : [];
 
   const fromBeans: ToolCallback[] = [];
   for (const bean of options.toolBeans ?? []) {
     const instance =
-      typeof bean === "function"
+      typeof bean === 'function'
         ? container.resolve<object>(bean as new (...args: never[]) => object)
         : bean;
     fromBeans.push(...toolCallbacksFromBean(instance));
@@ -245,9 +235,8 @@ function buildChatClient(
   const advisors: Advisor[] = [...(options.advisors ?? [])];
 
   // Observation is opt-in (redacted by default when enabled).
-  if (options.observation === true || typeof options.observation === "object") {
-    const obsOpts =
-      typeof options.observation === "object" ? options.observation : {};
+  if (options.observation === true || typeof options.observation === 'object') {
+    const obsOpts = typeof options.observation === 'object' ? options.observation : {};
     if (obsOpts.enabled !== false) {
       advisors.push(
         observationAdvisor({
@@ -261,9 +250,7 @@ function buildChatClient(
 
   if (options.memory || options.memoryToken) {
     try {
-      const memory = container.resolve<ChatMemory>(
-        options.memoryToken ?? AiTokens.CHAT_MEMORY,
-      );
+      const memory = container.resolve<ChatMemory>(options.memoryToken ?? AiTokens.CHAT_MEMORY);
       advisors.push(new MessageChatMemoryAdvisor({ chatMemory: memory }));
     } catch {
       // memory not registered — skip
@@ -281,9 +268,7 @@ function buildChatClient(
     builder = builder.defaultAdvisors(...advisors);
   }
   if (toolCallbacks.length) {
-    builder = builder.defaultTools(
-      staticToolCallbackProvider(toolCallbacks),
-    );
+    builder = builder.defaultTools(staticToolCallbackProvider(toolCallbacks));
   }
   return builder.build();
 }

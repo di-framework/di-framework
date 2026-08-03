@@ -1,24 +1,24 @@
-import type { Container as DIContainer } from "@di-framework/core/container";
-import { useContainer } from "@di-framework/core/container";
+import type { Container as DIContainer } from '@di-framework/core/container';
+import { useContainer } from '@di-framework/core/container';
 import type {
   CallAdvisor,
   CallAdvisorChain,
   StreamAdvisor,
   StreamAdvisorChain,
-} from "../chat/client/advisor/advisor.ts";
-import type { ChatClientRequest } from "../chat/client/chat-client-request.ts";
-import type { ChatClientResponse } from "../chat/client/chat-client-response.ts";
-import { HIGHEST_PRECEDENCE } from "../chat/client/advisor/ordered.ts";
-import type { ContainerLike } from "./types.ts";
+} from '../chat/client/advisor/advisor.ts';
+import { HIGHEST_PRECEDENCE } from '../chat/client/advisor/ordered.ts';
+import type { ChatClientRequest } from '../chat/client/chat-client-request.ts';
+import type { ChatClientResponse } from '../chat/client/chat-client-response.ts';
+import type { ContainerLike } from './types.ts';
 
 /**
  * Container event names for AI observation.
  * Subscribe with `@Subscriber(AiEvents.CHAT_RESPONSE)` on a `@Container()` bean.
  */
 export const AiEvents = {
-  CHAT_REQUEST: "ai.chat.request",
-  CHAT_RESPONSE: "ai.chat.response",
-  CHAT_ERROR: "ai.chat.error",
+  CHAT_REQUEST: 'ai.chat.request',
+  CHAT_RESPONSE: 'ai.chat.response',
+  CHAT_ERROR: 'ai.chat.error',
 } as const;
 
 export type AiEventName = (typeof AiEvents)[keyof typeof AiEvents];
@@ -97,7 +97,7 @@ export class ObservationAdvisor implements CallAdvisor, StreamAdvisor {
 
   constructor(options: ObservationAdvisorOptions = {}) {
     this.container = (options.container ?? useContainer()) as ContainerLike;
-    this.name = options.name ?? "AI Observation Advisor";
+    this.name = options.name ?? 'AI Observation Advisor';
     this.order = options.order ?? HIGHEST_PRECEDENCE + 50;
     this.includePromptText = options.includePromptText ?? false;
     this.includeResponseText = options.includeResponseText ?? false;
@@ -142,7 +142,7 @@ export class ObservationAdvisor implements CallAdvisor, StreamAdvisor {
   }
 
   private emit(event: string, payload: unknown): void {
-    if (typeof this.container.emit === "function") {
+    if (typeof this.container.emit === 'function') {
       this.container.emit(event, payload);
     }
   }
@@ -161,7 +161,7 @@ export class ObservationAdvisor implements CallAdvisor, StreamAdvisor {
     };
     if (this.includePromptText) {
       (payload as { promptText?: string }).promptText = truncate(
-        messages.map((m) => m.text ?? "").join("\n"),
+        messages.map((m) => m.text ?? '').join('\n'),
         this.maxTextLength,
       );
     }
@@ -194,18 +194,14 @@ export class ObservationAdvisor implements CallAdvisor, StreamAdvisor {
     };
     if (this.includeResponseText) {
       (payload as { responseText?: string }).responseText = truncate(
-        chat?.content ?? "",
+        chat?.content ?? '',
         this.maxTextLength,
       );
     }
     this.emit(AiEvents.CHAT_RESPONSE, payload);
   }
 
-  private emitError(
-    request: ChatClientRequest,
-    error: unknown,
-    startedAt: number,
-  ): void {
+  private emitError(request: ChatClientRequest, error: unknown, startedAt: number): void {
     const endedAt = Date.now();
     const err = error instanceof Error ? error : new Error(String(error));
     const payload: AiChatErrorEvent = {
@@ -227,8 +223,6 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, max)}…`;
 }
 
-export function observationAdvisor(
-  options?: ObservationAdvisorOptions,
-): ObservationAdvisor {
+export function observationAdvisor(options?: ObservationAdvisorOptions): ObservationAdvisor {
   return new ObservationAdvisor(options);
 }

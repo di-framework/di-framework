@@ -6,22 +6,22 @@
  */
 export const AiTokens = {
   /** Primary / default chat model. */
-  CHAT_MODEL: "chatModel",
+  CHAT_MODEL: 'chatModel',
   /** Named default model alias (Spring-style `chat.default`). */
-  CHAT_MODEL_DEFAULT: "chat.default",
+  CHAT_MODEL_DEFAULT: 'chat.default',
   /** Primary ChatClient built around the default model. */
-  CHAT_CLIENT: "chatClient",
+  CHAT_CLIENT: 'chatClient',
   /** Default chat memory bean. */
-  CHAT_MEMORY: "chatMemory",
+  CHAT_MEMORY: 'chatMemory',
   /** Default embedding model. */
-  EMBEDDING_MODEL: "embeddingModel",
+  EMBEDDING_MODEL: 'embeddingModel',
   /** Default vector store. */
-  VECTOR_STORE: "vectorStore",
+  VECTOR_STORE: 'vectorStore',
   /**
    * Aggregated {@link import("../tool/tool-callback.ts").ToolCallback}[]
    * (or ToolCallbackProvider) discovered from `@Tool` beans / configureAi.
    */
-  TOOL_CALLBACKS: "ai.tools",
+  TOOL_CALLBACKS: 'ai.tools',
 } as const;
 
 export type AiToken = (typeof AiTokens)[keyof typeof AiTokens];

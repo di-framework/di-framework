@@ -1,5 +1,5 @@
-import { useContainer } from "@di-framework/core/container";
-import type { AiContainer, ContainerLike } from "./types.ts";
+import { useContainer } from '@di-framework/core/container';
+import type { AiContainer, ContainerLike } from './types.ts';
 
 export function asAiContainer(value?: ContainerLike | null): AiContainer {
   return (value ?? useContainer()) as AiContainer;
@@ -11,8 +11,8 @@ export function registerOnContainer<T>(
   factory: () => T,
   options: { singleton?: boolean } = { singleton: true },
 ): void {
-  if (typeof container.registerFactory !== "function") {
-    throw new Error("Container does not support registerFactory");
+  if (typeof container.registerFactory !== 'function') {
+    throw new Error('Container does not support registerFactory');
   }
   container.registerFactory(name, factory, options);
 }
@@ -23,7 +23,7 @@ export function registerOnContainer<T>(
  * plain functions are treated as factories.
  */
 export function asFactory<T>(value: T | (() => T)): () => T {
-  if (typeof value === "function" && !isModelLike(value)) {
+  if (typeof value === 'function' && !isModelLike(value)) {
     return value as () => T;
   }
   return () => value as T;
@@ -31,9 +31,9 @@ export function asFactory<T>(value: T | (() => T)): () => T {
 
 export function isModelLike(value: unknown): boolean {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value != null &&
-    typeof (value as { call?: unknown }).call === "function"
+    typeof (value as { call?: unknown }).call === 'function'
   );
 }
 

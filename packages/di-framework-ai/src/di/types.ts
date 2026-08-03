@@ -1,19 +1,15 @@
-import type { Container as DIContainer } from "@di-framework/core/container";
-import type { Advisor } from "../chat/client/advisor/advisor.ts";
-import type { ChatMemory } from "../chat/memory/chat-memory.ts";
-import type { ChatModel } from "../chat/model/chat-model.ts";
-import type { ChatOptions } from "../chat/prompt/chat-options.ts";
-import type { ToolSource } from "../chat/client/default-chat-client.ts";
-import type { EmbeddingModel } from "../embedding/embedding-model.ts";
-import type { VectorStore } from "../vectorstore/vector-store.ts";
+import type { Container as DIContainer } from '@di-framework/core/container';
+import type { Advisor } from '../chat/client/advisor/advisor.ts';
+import type { ToolSource } from '../chat/client/default-chat-client.ts';
+import type { ChatMemory } from '../chat/memory/chat-memory.ts';
+import type { ChatModel } from '../chat/model/chat-model.ts';
+import type { ChatOptions } from '../chat/prompt/chat-options.ts';
+import type { EmbeddingModel } from '../embedding/embedding-model.ts';
+import type { VectorStore } from '../vectorstore/vector-store.ts';
 
 /** Structural container surface used by AI DI helpers (avoids tight coupling). */
 export interface AiContainer {
-  registerFactory?<T>(
-    name: string,
-    factory: () => T,
-    options?: { singleton?: boolean },
-  ): unknown;
+  registerFactory?<T>(name: string, factory: () => T, options?: { singleton?: boolean }): unknown;
   resolve<T>(key: string | (new (...args: never[]) => T)): T;
   emit?(event: string, payload: unknown): unknown;
   clear?(): unknown;
