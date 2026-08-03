@@ -19,7 +19,6 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 - **Events**: Bridge `@Publisher` / `@Subscriber` to Kafka, NATS, or in-memory transports with `@di-framework/events`.
 - **Configuration**: Typed, validated config from env/files injected via DI with `@di-framework/config`.
 - **Authentication**: Sessions, JWT, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with `@di-framework/auth` — zero runtime dependencies.
-- **AI**: Provider-neutral chat clients, tools, structured output, memory, RAG, MCP, and agent workflows with `@di-framework/ai`.
 
 ## Why Use This Framework?
 
@@ -114,7 +113,6 @@ userService.getUser('123');
 - [Events](events.md) - Bridge container events to Kafka / NATS / memory
 - [Configuration](config.md) - Typed config from env/files via DI
 - [Authentication](auth.md) - Sessions, JWT, OAuth2/OIDC, and passkeys
-- [AI](ai.md) - Chat clients, tools, RAG, MCP, and agent workflows
 - [Repositories](repositories.md) - Standardized data access with `@di-framework/repo`
 - [API Reference](api-reference.md) - Complete API documentation
 - [Advanced Usage](advanced-usage.md) - Learn advanced patterns and techniques
