@@ -4,5 +4,5 @@
     "rootDir": ".",
     "baseUrl": "."
   },
-  "include": ["container.ts", "decorators.ts", "types.ts", "tests/**/*.ts"]
+  "include": ["container.ts", "decorators/**/*.ts", "types.ts", "tests/**/*.ts"]
 }
