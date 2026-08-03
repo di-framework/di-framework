@@ -1,0 +1,13 @@
+{
+  "name": "di-events-example",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/events": "workspace:*"
+  }
+}

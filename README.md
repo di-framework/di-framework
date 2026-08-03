@@ -9,6 +9,8 @@ npm i @di-framework/core
 - `packages/di-framework-core` - core container
 - `packages/di-framework-repo` - data access
 - `packages/di-framework-http` - http handling
+- `packages/di-framework-graphql` - GraphQL schema from domain objects
+- `packages/di-framework-events` - bridge container events to Kafka / NATS / memory
 - `packages/di-framework-cli` - `di-framework-core` cli (build, test, typecheck, publish)
 - `examples` - usage examples
 

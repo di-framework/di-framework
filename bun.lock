@@ -64,6 +64,14 @@
         "wrangler": "latest",
       },
     },
+    "examples/packages/events": {
+      "name": "di-events-example",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/events": "workspace:*",
+      },
+    },
     "examples/packages/graphql": {
       "name": "@di-framework/graphql-example",
       "version": "0.0.0",
@@ -97,7 +105,7 @@
     },
     "packages/di-framework-cli": {
       "name": "@di-framework/cli",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "bin": {
         "di-framework": "./main.ts",
       },
@@ -113,7 +121,7 @@
     },
     "packages/di-framework-core": {
       "name": "@di-framework/core",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "devDependencies": {
         "typescript": "^5",
       },
@@ -121,9 +129,29 @@
         "typescript": "^5",
       },
     },
+    "packages/di-framework-events": {
+      "name": "@di-framework/events",
+      "version": "4.0.1",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "kafkajs": "^2.2.4",
+        "nats": "^2.29.3",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/core": "workspace:^",
+        "kafkajs": "^2.2.0",
+        "nats": "^2.28.0",
+        "typescript": "^5",
+      },
+      "optionalPeers": [
+        "kafkajs",
+        "nats",
+      ],
+    },
     "packages/di-framework-graphql": {
       "name": "@di-framework/graphql",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "devDependencies": {
         "@types/bun": "latest",
         "graphql": "^17.0.2",
@@ -140,7 +168,7 @@
     },
     "packages/di-framework-http": {
       "name": "@di-framework/http",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "bin": {
         "di-framework-http": "./dist/src/cli.js",
       },
@@ -158,7 +186,7 @@
     },
     "packages/di-framework-repo": {
       "name": "@di-framework/repo",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "peerDependencies": {
         "@di-framework/core": "workspace:^",
         "typescript": "^5",
@@ -207,6 +235,8 @@
     "@di-framework/core": ["@di-framework/core@workspace:packages/di-framework-core"],
 
     "@di-framework/docs-search-example": ["@di-framework/docs-search-example@workspace:examples/packages/docs-search"],
+
+    "@di-framework/events": ["@di-framework/events@workspace:packages/di-framework-events"],
 
     "@di-framework/graphql": ["@di-framework/graphql@workspace:packages/di-framework-graphql"],
 
@@ -436,6 +466,8 @@
 
     "di-basic-example": ["di-basic-example@workspace:examples/packages/basic"],
 
+    "di-events-example": ["di-events-example@workspace:examples/packages/events"],
+
     "di-http-router-example": ["di-http-router-example@workspace:examples/packages/http-router"],
 
     "di-services-example": ["di-services-example@workspace:examples/packages/services"],
@@ -462,9 +494,15 @@
 
     "jose": ["jose@6.2.7", "", {}, "sha512-hq1OB1bALKfydZNoViyg6hPVGV4i93ny9Op+n4zP5RSf7SCZEXa/TsG2O3IEr7+WlHRTPnpqDmHfMH6qXAD60w=="],
 
+    "kafkajs": ["kafkajs@2.2.4", "", {}, "sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA=="],
+
     "kleur": ["kleur@4.1.5", "", {}, "sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ=="],
 
     "miniflare": ["miniflare@5.20260730.0-alpha", "", { "dependencies": { "@cspotcode/source-map-support": "0.8.1", "sharp": "0.35.2", "undici": "7.28.0", "workerd": "1.20260730.1", "ws": "8.21.0", "youch": "4.1.0-beta.10" } }, "sha512-8/dspSXDshP6nSkCpjKO7BYc2qZoYSXm7iM+QxY7qJyJpAB3onnQSaiu0cvKJlfuMGwULl55hG69FJCcCMXU1Q=="],
+
+    "nats": ["nats@2.29.3", "", { "dependencies": { "nkeys.js": "1.1.0" } }, "sha512-tOQCRCwC74DgBTk4pWZ9V45sk4d7peoE2njVprMRCBXrhJ5q5cYM7i6W+Uvw2qUrcfOSnuisrX7bEx3b3Wx4QA=="],
+
+    "nkeys.js": ["nkeys.js@1.1.0", "", { "dependencies": { "tweetnacl": "1.0.3" } }, "sha512-tB/a0shZL5UZWSwsoeyqfTszONTt4k2YS0tuQioMOD180+MbombYVgzDUYHlx+gejYK6rgf08n/2Df99WY0Sxg=="],
 
     "path-to-regexp": ["path-to-regexp@6.3.0", "", {}, "sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ=="],
 
@@ -477,6 +515,8 @@
     "supports-color": ["supports-color@10.2.2", "", {}, "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "tweetnacl": ["tweetnacl@1.0.3", "", {}, "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
