@@ -44,7 +44,7 @@ async function makeFakeWorkspace(): Promise<string> {
   );
   await Bun.write(join(first, 'src', 'index.ts'), 'export const x = 1;\n');
   // Drop the build script so only the tsc path is used for this package.
-  //@ts-expect-error - Property 'json' does not exist on type 'BunFile'.
+  // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
   const pkgJson = await Bun.file(join(first, 'package.json')).json();
   delete pkgJson.scripts;
   await Bun.write(join(first, 'package.json'), JSON.stringify(pkgJson, null, 2) + '\n');
@@ -103,7 +103,7 @@ describe('build command', () => {
         await build();
 
         for (const pkgDir of PACKAGES) {
-          //@ts-expect-error - Property 'json' does not exist on type 'BunFile'.
+          // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
           const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
           expect(pkgJson.version).toBe('9.9.9');
         }
