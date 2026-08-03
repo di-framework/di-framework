@@ -196,35 +196,33 @@ await app.initialize();
 
 **Why:** Catches configuration errors early instead of at runtime when a service is first needed.
 
-## 9. Use Factory Functions for Configuration
+## 9. Use `@di-framework/config` for Configuration
 
-Register configuration as factory services:
+Prefer typed config over ad-hoc `process.env` parsing. `@Configuration` / `@Value` load, validate, and inject settings the same way other DI services work:
 
 ```typescript
-// Good - Configuration as factory
-container.registerFactory(
-  'config',
-  () => ({
-    database: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-    },
-    api: {
-      key: process.env.API_KEY,
-    },
-  }),
-  { singleton: true },
-);
+import { Configuration, Value, envSource } from '@di-framework/config';
+import { Container } from '@di-framework/core/decorators';
+
+@Configuration({
+  sources: [envSource({ prefix: 'APP_' })],
+})
+class AppConfig {
+  database = { host: 'localhost', port: 5432 };
+  api = { key: '' };
+}
 
 @Container()
 export class DatabaseService {
-  constructor(@Component('config') private config: any) {
-    console.log('Connecting to:', this.config.database.host);
+  constructor(@Value('database.host') private host: string) {
+    console.log('Connecting to:', this.host);
   }
 }
 ```
 
-**Why:** Centralizes configuration and makes it easy to inject environment-specific settings.
+For scripts and tests, use `loadAndRegisterConfig` / `registerConfig`. See [Configuration](config.md).
+
+**Why:** Centralizes configuration, fails fast on invalid settings, and makes environment-specific values easy to inject.
 
 ## 10. Organize Services by Feature
 
@@ -385,7 +383,7 @@ stop();
 - ✅ Default to singletons for stateless services
 - ✅ Use transient for stateful services
 - ✅ Validate services at startup
-- ✅ Use factory functions for configuration
+- ✅ Use `@di-framework/config` (or factories) for configuration
 - ✅ Organize by feature
 - ✅ Keep services focused
 - ✅ Document dependencies
