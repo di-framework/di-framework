@@ -1,3 +1,4 @@
+import { strictDecoder } from '../crypto/webcrypto.ts';
 import { AuthError } from '../errors.ts';
 import { isSignatureAlgorithm, type SignatureAlgorithm } from './algorithms.ts';
 import { importJwk, type Jwk, type JwkSet } from './jwk.ts';
@@ -62,6 +63,63 @@ function assertJwkSet(value: unknown): asserts value is JwkSet {
   }
 }
 
+function tooLarge(url: string, bytes: number | string, cap: number): AuthError {
+  return new AuthError(`GET ${url} returned ${bytes} bytes, over the ${cap} cap`, {
+    code: 'discovery_failed',
+    status: 502,
+  });
+}
+
+/**
+ * Read the body as UTF-8 text, refusing to hold more than `maxBytes` of it.
+ *
+ * The cap has to be enforced *while* reading. `await response.text()` buffers
+ * the whole body first, so checking afterwards bounds nothing — a hostile or
+ * broken endpoint could stream gigabytes before the check ever runs. The count
+ * is in bytes, not characters: a multi-byte UTF-8 document has fewer characters
+ * than bytes, so a character comparison silently raises the real cap.
+ */
+async function readCapped(response: Response, maxBytes: number, url: string): Promise<string> {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw tooLarge(url, declared, maxBytes);
+  }
+
+  const body = response.body;
+  // Not every Response has a readable stream — notably ones synthesised in
+  // tests — so fall back to buffering, where the byte length is still exact.
+  if (!body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) throw tooLarge(url, bytes.byteLength, maxBytes);
+    return strictDecoder().decode(bytes);
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw tooLarge(url, `more than ${maxBytes}`, maxBytes);
+      chunks.push(value);
+    }
+  } finally {
+    // Releasing before cancel would make cancel() throw; cancelling is what
+    // actually stops an oversized transfer at the socket.
+    await reader.cancel().catch(() => {});
+  }
+
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return strictDecoder().decode(joined);
+}
+
 export async function fetchJson(
   url: string,
   options: { timeoutMs: number; maxBytes: number; fetch?: typeof fetch },
@@ -83,16 +141,7 @@ export async function fetchJson(
       });
     }
 
-    const text = await response.text();
-    if (text.length > options.maxBytes) {
-      throw new AuthError(
-        `GET ${url} returned ${text.length} bytes, over the ${options.maxBytes} cap`,
-        {
-          code: 'discovery_failed',
-          status: 502,
-        },
-      );
-    }
+    const text = await readCapped(response, options.maxBytes, url);
     try {
       return JSON.parse(text);
     } catch (cause) {

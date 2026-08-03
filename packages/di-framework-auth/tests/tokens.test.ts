@@ -9,8 +9,9 @@ import {
   jwkThumbprint,
   toPublicJwk,
 } from '../src/tokens/jwk.ts';
+import { fetchJson } from '../src/tokens/jwks.ts';
 import { derToP1363, p1363ToDer, signJws, verifyJws } from '../src/tokens/jws.ts';
-import { signJwt, verifyJwt } from '../src/tokens/jwt.ts';
+import { decodeJwtUnsafe, signJwt, verifyJwt } from '../src/tokens/jwt.ts';
 import { keyService } from '../src/tokens/keystore.ts';
 import { refreshService } from '../src/tokens/refresh.ts';
 
@@ -263,6 +264,76 @@ describe('JWT claim validation', () => {
     await expect(
       verifyJwt(token, { ...verifyWith(), clockToleranceSeconds: 3_600 }),
     ).rejects.toThrow(/must be between 0 and 300/);
+  });
+});
+
+describe('decodeJwtUnsafe', () => {
+  const encodeSegment = (value: unknown) =>
+    base64UrlEncode(new TextEncoder().encode(JSON.stringify(value)));
+
+  it('reads non-ASCII claims as the text that was signed', () => {
+    // `atob` yields one character per byte, so a UTF-8 claim decoded that way
+    // comes back mojibake — silently wrong rather than loudly broken.
+    const claims = { sub: 'u1', name: 'Ada Lovelacé', iss: 'https://ünicode.example' };
+    const token = `${encodeSegment({ alg: 'ES256' })}.${encodeSegment(claims)}.sig`;
+    expect(decodeJwtUnsafe(token)).toEqual(claims);
+  });
+
+  it('rejects a payload that is not canonical base64url', () => {
+    // Standard base64 decodes under `atob` but not under `verifyJws`. Accepting
+    // it here would mean inspecting a token that could never be verified.
+    const payload = encodeSegment({ sub: 'u1' });
+    const standard = `${payload.replace(/-/g, '+').replace(/_/g, '/')}==`;
+    if (standard !== `${payload}==`) {
+      expect(() => decodeJwtUnsafe(`h.${standard}.sig`)).toThrow(/Malformed JWT payload/);
+    }
+    expect(() => decodeJwtUnsafe(`h.${payload}=.sig`)).toThrow(/Malformed JWT payload/);
+    expect(() => decodeJwtUnsafe('only.two')).toThrow(/Malformed JWT/);
+  });
+});
+
+describe('fetchJson body cap', () => {
+  const call = (response: Response, maxBytes: number) =>
+    fetchJson('https://idp.example/jwks', {
+      timeoutMs: 1_000,
+      maxBytes,
+      fetch: (async () => response) as unknown as typeof fetch,
+    });
+
+  it('reads a document that fits', async () => {
+    await expect(call(Response.json({ keys: [] }), 1_024)).resolves.toEqual({ keys: [] });
+  });
+
+  it('stops a stream once it exceeds the cap', async () => {
+    // The cap must bite while reading. Buffering first and measuring afterwards
+    // bounds nothing: the memory is already spent by the time it is checked.
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(64));
+      },
+    });
+    await expect(call(new Response(body), 128)).rejects.toThrow(
+      /returned more than 128 bytes, over the 128 cap/,
+    );
+    // A few chunks of read-ahead are fine; an unbounded producer is not.
+    expect(pulled).toBeLessThan(32);
+  });
+
+  it('refuses on a declared Content-Length before streaming', async () => {
+    // The declared size is the cheapest signal available; reporting it rather
+    // than a streamed count is how you can tell the short-circuit fired.
+    const response = new Response('{}', { headers: { 'content-length': '9999' } });
+    await expect(call(response, 128)).rejects.toThrow(/returned 9999 bytes, over the 128 cap/);
+  });
+
+  it('counts bytes, not characters', async () => {
+    // Every '€' is three UTF-8 bytes, so a character count would put this
+    // comfortably under a cap it actually blows through.
+    const payload = JSON.stringify({ keys: [], pad: '€'.repeat(200) });
+    expect(payload.length).toBeLessThan(300);
+    await expect(call(new Response(payload), 300)).rejects.toThrow(/over the 300 cap/);
   });
 });
 

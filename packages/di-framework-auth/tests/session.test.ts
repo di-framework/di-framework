@@ -136,6 +136,35 @@ describe('CSRF', () => {
       expect(checkRequestOrigin(build({ 'sec-fetch-site': 'same-site' }))).toBe(false);
     });
 
+    it('lets an explicit allowlist admit a same-site origin', () => {
+      // Cross-subdomain SSO is a real deployment, so `allowedOrigins` has to
+      // mean something for same-site requests — but only for the origins named.
+      const allowedOrigins = ['https://sso.example.com'];
+      expect(
+        checkRequestOrigin(
+          build({ 'sec-fetch-site': 'same-site', origin: 'https://sso.example.com' }),
+          { allowedOrigins },
+        ),
+      ).toBe(true);
+      expect(
+        checkRequestOrigin(
+          build({ 'sec-fetch-site': 'same-site', origin: 'https://other.example.com' }),
+          { allowedOrigins },
+        ),
+      ).toBe(false);
+      // An allowlist never rescues a cross-site request, nor a same-site one
+      // that declines to say where it came from.
+      expect(
+        checkRequestOrigin(
+          build({ 'sec-fetch-site': 'cross-site', origin: 'https://sso.example.com' }),
+          { allowedOrigins },
+        ),
+      ).toBe(false);
+      expect(checkRequestOrigin(build({ 'sec-fetch-site': 'same-site' }), { allowedOrigins })).toBe(
+        false,
+      );
+    });
+
     it('falls back to Origin', () => {
       expect(checkRequestOrigin(build({ origin: 'https://app.example.com' }))).toBe(true);
       expect(checkRequestOrigin(build({ origin: 'https://evil.example.com' }))).toBe(false);

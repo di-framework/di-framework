@@ -1,3 +1,4 @@
+import { base64UrlDecodeString } from '../crypto/base64url.ts';
 import { strictDecoder } from '../crypto/webcrypto.ts';
 import { AuthError } from '../errors.ts';
 import type { SignatureAlgorithm } from './algorithms.ts';
@@ -185,7 +186,13 @@ export function decodeJwtUnsafe(token: string): JwtClaims {
     throw new AuthError('Malformed JWT', { code: 'invalid_token' });
   }
   try {
-    const json = atob(segments[1]!.replace(/-/g, '+').replace(/_/g, '/'));
+    // The same strict base64url decoder the verifying path uses. `atob` returns
+    // one character per *byte*, so any non-ASCII claim — a display name, an
+    // issuer with an IDN — comes back as mojibake rather than the string that
+    // was signed. It is also lenient about `+`/`/` and padding, which would let
+    // a token decode here that `verifyJws` would reject, so what you inspect
+    // would not be what gets verified.
+    const json = base64UrlDecodeString(segments[1]!);
     return JSON.parse(json) as JwtClaims;
   } catch (cause) {
     throw new AuthError('Malformed JWT payload', { code: 'invalid_token', cause });
