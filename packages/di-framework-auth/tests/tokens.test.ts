@@ -204,6 +204,37 @@ describe('JWT claim validation', () => {
     expect(claims.jti).toBeDefined();
   });
 
+  it('does not let custom claims override option-controlled claims', async () => {
+    const token = await signJwt(
+      {
+        iss: 'https://attacker.example',
+        aud: 'other-api',
+        sub: 'other-user',
+        exp: 99_999,
+        nbf: 99_999,
+        iat: 99_999,
+      },
+      {
+        ...signWith(),
+        issuer: 'https://issuer.example',
+        audience: 'api',
+        subject: 'u1',
+        expiresInSeconds: 60,
+        notBeforeSeconds: 10,
+        now: () => 1_000,
+      },
+    );
+
+    expect(decodeJwtUnsafe(token)).toMatchObject({
+      iss: 'https://issuer.example',
+      aud: 'api',
+      sub: 'u1',
+      exp: 1_060,
+      nbf: 1_010,
+      iat: 1_000,
+    });
+  });
+
   it('rejects an expired token', async () => {
     const token = await signJwt({}, { ...signWith(), expiresInSeconds: 60, now: () => 1_000 });
     await expect(verifyJwt(token, { ...verifyWith(), now: () => 100_000 })).rejects.toThrow(

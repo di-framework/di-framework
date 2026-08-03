@@ -270,6 +270,23 @@ describe('sessionManager', () => {
     expect(second!.record.authTime).toBe(first.record.authTime);
   });
 
+  it('does not regenerate expired or inactive sessions', async () => {
+    for (const policy of [
+      { absoluteTimeoutSeconds: 60, inactivityTimeoutSeconds: 0 },
+      { absoluteTimeoutSeconds: 86_400, inactivityTimeoutSeconds: 60 },
+    ]) {
+      let clock = 1_000;
+      const store = memorySessionStore({ now: () => clock });
+      const sessions = sessionManager({ store, policy, now: () => clock });
+      const issued = await sessions.create({ subject: 'u1' });
+      const id = await sessions.keyOf(issued.token);
+
+      clock += 61;
+      expect(await sessions.regenerate(issued.token)).toBeNull();
+      expect(await store.get(id)).toBeNull();
+    }
+  });
+
   it('revokes one session and all sessions for a subject', async () => {
     const sessions = build();
     const a = await sessions.create({ subject: 'u1' });
