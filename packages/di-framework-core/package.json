@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/core",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Lightweight, zero-dependency TypeScript Dependency Injection framework using decorators. Works seamlessly with SWC and TypeScript's native decorator support.",
   "main": "./dist/container.js",
   "types": "./dist/container.d.ts",
@@ -36,9 +36,14 @@
       "types": "./dist/container.d.ts"
     },
     "./decorators": {
-      "bun": "./decorators.ts",
-      "import": "./dist/decorators.js",
-      "types": "./dist/decorators.d.ts"
+      "bun": "./decorators/index.ts",
+      "import": "./dist/decorators/index.js",
+      "types": "./dist/decorators/index.d.ts"
+    },
+    "./decorators/*": {
+      "bun": "./decorators/*.ts",
+      "import": "./dist/decorators/*.js",
+      "types": "./dist/decorators/*.d.ts"
     },
     "./types": {
       "bun": "./types.ts",
@@ -65,6 +70,7 @@
     "dist",
     "README.md",
     "MIGRATION_GUIDE.md",
-    "*.ts"
+    "*.ts",
+    "decorators/*.ts"
   ]
 }
