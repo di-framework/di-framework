@@ -24,6 +24,15 @@ async function withExitCapture(fn: () => Promise<void>): Promise<number> {
   }
 }
 
+/**
+ * Typechecking the whole workspace is the slowest thing in the suite and gets
+ * slower with every package added, so the two tests that do it get an explicit
+ * budget rather than bun's 5s default — a cold `tsc` program over the monorepo
+ * runs several times longer on a CI runner than on a developer machine, and a
+ * timeout there reads as a type error that nobody can reproduce locally.
+ */
+const FULL_TYPECHECK_TIMEOUT_MS = 120_000;
+
 describe('typecheck command', () => {
   const temps: string[] = [];
   afterEach(() => {
@@ -93,21 +102,25 @@ describe('typecheck command', () => {
   });
 
   describe('typecheck()', () => {
-    it('exits 0 against the repo root tsconfig', async () => {
-      const { typecheck } = await import('../cmd/typecheck');
-      const originalArgv = process.argv;
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        process.chdir(REPO_ROOT);
-        process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(0);
-      } finally {
-        process.argv = originalArgv;
-        log.mockRestore();
-        err.mockRestore();
-      }
-    });
+    it(
+      'exits 0 against the repo root tsconfig',
+      async () => {
+        const { typecheck } = await import('../cmd/typecheck');
+        const originalArgv = process.argv;
+        const log = spyOn(console, 'log').mockImplementation(() => {});
+        const err = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          process.chdir(REPO_ROOT);
+          process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
+          expect(await withExitCapture(() => typecheck())).toBe(0);
+        } finally {
+          process.argv = originalArgv;
+          log.mockRestore();
+          err.mockRestore();
+        }
+      },
+      FULL_TYPECHECK_TIMEOUT_MS,
+    );
 
     it('exits 2 when the tsconfig path cannot be read', async () => {
       const { typecheck } = await import('../cmd/typecheck');
@@ -271,27 +284,31 @@ describe('typecheck command', () => {
       }
     });
 
-    it('respects --from=script when locating tsconfig', async () => {
-      const { typecheck } = await import('../cmd/typecheck');
-      const originalArgv = process.argv;
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        process.chdir(REPO_ROOT);
-        // argv[1] is the script path; --from=script walks from its directory.
-        process.argv = [
-          'bun',
-          join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
-          '--from=script',
-          '--pretty=0',
-        ];
-        expect(await withExitCapture(() => typecheck())).toBe(0);
-      } finally {
-        process.argv = originalArgv;
-        log.mockRestore();
-        err.mockRestore();
-      }
-    });
+    it(
+      'respects --from=script when locating tsconfig',
+      async () => {
+        const { typecheck } = await import('../cmd/typecheck');
+        const originalArgv = process.argv;
+        const log = spyOn(console, 'log').mockImplementation(() => {});
+        const err = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          process.chdir(REPO_ROOT);
+          // argv[1] is the script path; --from=script walks from its directory.
+          process.argv = [
+            'bun',
+            join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
+            '--from=script',
+            '--pretty=0',
+          ];
+          expect(await withExitCapture(() => typecheck())).toBe(0);
+        } finally {
+          process.argv = originalArgv;
+          log.mockRestore();
+          err.mockRestore();
+        }
+      },
+      FULL_TYPECHECK_TIMEOUT_MS,
+    );
   });
 
   describe('CLI entrypoint', () => {

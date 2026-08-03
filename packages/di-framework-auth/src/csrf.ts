@@ -41,6 +41,12 @@ export interface CsrfOptions {
   /**
    * Origins permitted to make state-changing requests. When set, the `Origin`
    * header must be one of them — exact string match after normalisation.
+   *
+   * This is also the only way a `Sec-Fetch-Site: same-site` request can pass:
+   * name the sibling subdomains you actually trust (cross-subdomain SSO) and
+   * they are allowed; leave it unset and every same-site request is rejected.
+   * Include your own origin here if you support browsers that send `Origin` but
+   * no fetch metadata, since the allowlist replaces the same-origin comparison.
    */
   allowedOrigins?: readonly string[];
   /**
@@ -71,6 +77,12 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
+function isAllowedOrigin(origin: string, allowed: readonly string[]): boolean {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  return allowed.some((candidate) => normalizeOrigin(candidate) === normalized);
+}
+
 /**
  * Cross-site check.
  *
@@ -82,24 +94,26 @@ export function checkRequestOrigin(
   request: Request,
   options: Pick<CsrfOptions, 'allowedOrigins' | 'requireOriginHeader'> = {},
 ): boolean {
+  const allowlist = options.allowedOrigins?.length ? options.allowedOrigins : undefined;
+  const origin = request.headers.get('origin');
   const fetchSite = request.headers.get('sec-fetch-site');
+
   if (fetchSite) {
     if (fetchSite === 'same-origin' || fetchSite === 'none') return true;
     // `same-site` still permits a sibling subdomain, which is exactly the
-    // attacker position the session-bound token defends against — so reject
-    // here and let the token be the only thing that could save it.
-    return false;
+    // attacker position the session-bound token defends against. Reject it by
+    // default; allow it only for an origin the operator has explicitly named,
+    // which is what makes cross-subdomain SSO workable without opening the
+    // check up to every sibling. `cross-site` is never allowed here.
+    if (fetchSite !== 'same-site' || !allowlist || !origin) return false;
+    return isAllowedOrigin(origin, allowlist);
   }
 
-  const origin = request.headers.get('origin');
   if (!origin) return options.requireOriginHeader !== true;
+  if (allowlist) return isAllowedOrigin(origin, allowlist);
 
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;
-
-  if (options.allowedOrigins?.length) {
-    return options.allowedOrigins.some((allowed) => normalizeOrigin(allowed) === normalized);
-  }
   return normalized === normalizeOrigin(request.url);
 }
 
