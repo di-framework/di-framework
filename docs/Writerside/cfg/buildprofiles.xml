@@ -10,10 +10,12 @@
             <custom-css>footer.css</custom-css>
             <!--
               Docs: https://docs.di-framework.dev (GitHub Pages + custom domain)
-              Search: https://di-framework.dev/api/docs/search (Cloudflare Worker)
+              Search Worker (workers.dev is the stable public URL; apex route also
+              exists at di-framework.dev/api/docs/search* when apex DNS is healthy):
+                https://di-framework-docs-search.seemueller.workers.dev/api/docs/search
               CI reindexes via GitHub OIDC (no CF API tokens in GitHub).
             -->
-            <search-endpoint>https://di-framework.dev/api/docs/search</search-endpoint>
+            <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
         </variables>
     </build-profile>
 
