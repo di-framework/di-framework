@@ -19,6 +19,7 @@ A lightweight, type-safe Dependency Injection framework for TypeScript using dec
 - **Events**: Bridge `@Publisher` / `@Subscriber` to Kafka, NATS, or in-memory transports with `@di-framework/events`.
 - **Configuration**: Typed, validated config from env/files injected via DI with `@di-framework/config`.
 - **Authentication**: Sessions, JWT, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with `@di-framework/auth` — zero runtime dependencies.
+- **AI**: Spring AI–aligned chat, tools, RAG, MCP, and agents with `@di-framework/ai`.
 
 ## Why Use This Framework?
 
