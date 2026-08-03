@@ -10,6 +10,7 @@
  * Phase 7: providers (OpenAI-compatible, Anthropic).
  * Phase 8: MCP (ToolCallback adapters for Model Context Protocol).
  * Phase 9: workflows / agents (Anthropic effective-agent patterns).
+ * Phase 10: DI integration (tokens, configureAi, @Tool, observation).
  */
 
 export type {
@@ -426,3 +427,46 @@ export {
   searchRequestBuilder,
   similaritySearchQuery,
 } from './vectorstore/index.ts';
+
+// DI integration (di-framework-core)
+export type {
+  AiToken,
+  AiContainer,
+  ContainerLike,
+  RegisterOptions,
+  ObservationRegistrationOptions,
+  ConfigureAiOptions,
+  ConfigureAiResult,
+  ToolMethodMetadata,
+  ToolDecoratorOptions,
+  AiEventName,
+  AiChatRequestEvent,
+  AiChatResponseEvent,
+  AiChatErrorEvent,
+  ObservationAdvisorOptions,
+} from './di/index.ts';
+export {
+  AiTokens,
+  asAiContainer,
+  asFactory,
+  isModelLike,
+  registerFactoryAliases,
+  registerOnContainer,
+  registerChatModel,
+  registerChatClient,
+  registerChatMemory,
+  registerToolCallbacks,
+  resolveChatModel,
+  resolveChatClient,
+  configureAi,
+  AI_TOOL_METADATA_KEY,
+  Tool,
+  getToolMethodMetadata,
+  toolCallbacksFromBean,
+  toolCallbacksFromBeans,
+  toolCallbackProviderFromBeans,
+  hasToolMethods,
+  AiEvents,
+  ObservationAdvisor,
+  observationAdvisor,
+} from './di/index.ts';

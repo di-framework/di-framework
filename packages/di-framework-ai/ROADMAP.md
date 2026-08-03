@@ -1,12 +1,12 @@
 # `@di-framework/ai` — status and roadmap
 
-## Phases 1–9: complete
+## Phases 1–10: complete
 
-The planned Spring AI–aligned vertical is finished:
+The planned Spring AI–aligned vertical **and** di-framework wiring are finished:
 
 ```text
 model → ChatClient → tools → structured output → memory → RAG
-  → providers → MCP → workflows / agents
+  → providers → MCP → workflows / agents → DI
 ```
 
 | Phase | Scope | Status |
@@ -20,39 +20,26 @@ model → ChatClient → tools → structured output → memory → RAG
 | 7 | Providers (`OpenAiChatModel`, `AnthropicChatModel`) | ✅ |
 | 8 | MCP (`McpToolCallback`, `adaptSdkClient`) | ✅ |
 | 9 | Workflows / agents (effective-agent patterns + `ChatAgent`) | ✅ |
+| 10 | DI integration (tokens, `configureAi`, `@Tool`, observation) | ✅ |
 
-Nothing remains on that numbered sequence. The portable AI primitives stack is done.
-
----
-
-## What’s still open (deferred / “later”)
-
-These items were never part of Phases 1–9, but design notes and the README still call them out.
-
-### 1. DI integration with `di-framework-core` (main gap)
-
-README still marks **DI integration** as later work. Roughly:
+### Phase 10 detail (DI) ✅
 
 | Item | Status |
 | --- | --- |
-| Register / inject `ChatModel`, `ChatClient` via string tokens | Not wired |
-| `@Tool` method decorator on `@Container` beans | Explicitly deferred |
-| Observation via `container.emit` / `@Subscriber` (redacted payloads) | Hooks only, not DI-native |
-| Auto-config style factories (Spring “starters” analog) | Not done |
+| Register / inject `ChatModel`, `ChatClient` via string tokens | ✅ `AiTokens`, `registerChatModel` / `registerChatClient`, `resolveChat*` |
+| `@Tool` method decorator on `@Container` beans | ✅ `@Tool` + `toolBeans` / `toolCallbacksFromBean` |
+| Observation via `container.emit` / `@Subscriber` (redacted) | ✅ `ObservationAdvisor`, `AiEvents`, opt-in via `configureAi({ observation: true })` |
+| Auto-config style factories (Spring “starters” analog) | ✅ `configureAi({ chatModel, tools, memory, … })` |
 
-Illustrative target (not implemented):
+See package `README.md` for usage examples and `src/di/` for implementation.
 
-```ts
-container.registerFactory("chatModel", () => myChatModel);
-// ChatClient.create(container.resolve("chatModel"))
-// Named models: string tokens such as "chat.default"
-```
+---
 
-This is the natural **next product phase** if the goal is “native di-framework,” not only portable AI primitives.
+## What’s still open (optional depth)
 
-### 2. Package split / starters (optional packaging)
+### 1. Package split / starters (optional packaging)
 
-The library is still a single package (`@di-framework/ai`). A future split was only sketched:
+Still one package (`@di-framework/ai`). Future split (optional):
 
 ```text
 @di-framework/ai-openai
@@ -62,9 +49,7 @@ The library is still a single package (`@di-framework/ai`). A future split was o
 @di-framework/ai-vector-*
 ```
 
-Providers and MCP currently live under `src/provider/` and `src/mcp/` inside the core package (fetch-only providers; official MCP SDK for the adapter).
-
-### 3. Depth gaps (not blocking, nice-to-have)
+### 2. Depth gaps (nice-to-have)
 
 | Area | Gap |
 | --- | --- |
@@ -79,7 +64,7 @@ Providers and MCP currently live under `src/provider/` and `src/mcp/` inside the
 | **MCP server side** | Client → tools is solid; hosting tools as a full MCP server is thin (`toolCallbackAsMcpTool` only) |
 | **Advanced agents** | No graph / planner / A2A (Koog-style); only Anthropic effective-agent patterns |
 
-### 4. Repo / product hygiene
+### 3. Repo / product hygiene
 
 - Package version is still early (`0.0.1`); publish pipeline may be incomplete
 - Example app using `@di-framework/ai` under `examples/` may be missing or thin
@@ -87,14 +72,11 @@ Providers and MCP currently live under `src/provider/` and `src/mcp/` inside the
 
 ---
 
-## Practical priority
+## Practical priority (post–Phase 10)
 
-Suggested order by leverage:
-
-1. **DI phase** — registration, `@Tool`, inject `ChatClient`
-2. **One real embedding provider + one durable vector store** — so RAG is production-usable
-3. **Example app + optional live smoke tests**
-4. **Split provider packages** when the public surface feels crowded
+1. **One real embedding provider + one durable vector store** — production RAG  
+2. **Example app + optional live smoke tests**  
+3. **Split provider packages** when the public surface feels crowded  
 
 ---
 
@@ -103,11 +85,9 @@ Suggested order by leverage:
 | Layer | State |
 | --- | --- |
 | Planned AI stack (Phases 1–9) | **Complete** |
-| Framework integration (DI) | **Open** |
+| Framework integration (DI, Phase 10) | **Complete** |
 | Production adapters (embeddings, durable stores) | **Open** |
 | Polish / examples / package split | **Open** |
-
-What’s left is **framework integration (DI)**, **production adapters**, and **polish**—not another numbered core AI phase.
 
 ---
 
@@ -115,5 +95,5 @@ What’s left is **framework integration (DI)**, **production adapters**, and **
 
 - Package README: [`README.md`](./README.md)
 - Design notes: [`DESIGN.md`](./DESIGN.md)
-- Spring AI (primary API reference): local checkout `references/spring-ai/`
-- Anthropic effective agents (Phase 9 patterns): [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
+- Spring AI: local checkout `references/spring-ai/`
+- Anthropic effective agents: [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)

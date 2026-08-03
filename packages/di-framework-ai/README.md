@@ -22,7 +22,7 @@ This package tracks **Spring AI** as the primary API reference—not a class-by-
 | MCP `SyncMcpToolCallback` | `McpToolCallback`, `McpToolCallbackProvider`, `adaptSdkClient` |
 | Effective-agent workflows | `ChainWorkflow`, routing, parallel, orchestrator-workers, evaluator-optimizer |
 | Tool-calling agent | `ChatAgent` (ChatClient + tools + optional memory) |
-| Boot auto-config / starters | DI registration + optional packages |
+| Boot auto-config / starters | `configureAi`, `AiTokens`, `@Tool`, observation |
 
 
 ## Package layout (target)
@@ -48,6 +48,7 @@ src/
 ├── provider/          # OpenAI-compatible + Anthropic ChatModel adapters
 ├── mcp/               # MCP → ToolCallback (official SDK adapter)
 ├── agent/             # Workflows + ChatAgent (effective-agent patterns)
+├── di/                # AiTokens, configureAi, @Tool, ObservationAdvisor
 ├── model/             # shared Model/errors
 └── testing/           # FakeChatModel, ScriptedChatModel
 ```
@@ -454,22 +455,88 @@ await model.call(
 7. **Providers** ✅ — OpenAI-compatible + Anthropic; shared contract tests  
 8. **MCP** ✅ — official TypeScript MCP SDK behind an adapter  
 9. **Workflows / agents** ✅ — Anthropic effective-agent patterns + `ChatAgent`  
+10. **DI integration** ✅ — tokens, `configureAi`, `@Tool`, observation  
 
 ## Implementation sequence complete
 
-Phases 1–9 deliver a Spring AI–aligned portable stack: model → ChatClient → tools → structured output → memory → RAG → providers → MCP → workflows/agents.
+Phases 1–10 deliver a Spring AI–aligned stack with di-framework wiring: model → ChatClient → tools → structured output → memory → RAG → providers → MCP → workflows/agents → **DI**.
 
-## DI integration (later)
+## DI integration ✅
 
-Registration will follow existing di-framework patterns (`registerFactory` string tokens, `@Container`, sibling packages like `@Portal` / `@Configuration`):
+### Tokens
+
+| Token | Constant |
+| --- | --- |
+| `chatModel` | `AiTokens.CHAT_MODEL` |
+| `chat.default` | `AiTokens.CHAT_MODEL_DEFAULT` |
+| `chatClient` | `AiTokens.CHAT_CLIENT` |
+| `chatMemory` | `AiTokens.CHAT_MEMORY` |
+| `ai.tools` | `AiTokens.TOOL_CALLBACKS` |
+| `embeddingModel` / `vectorStore` | `AiTokens.EMBEDDING_MODEL` / `VECTOR_STORE` |
+
+### Auto-config (starter-style)
 
 ```ts
-// Illustrative — not fully implemented yet
-container.registerFactory("chatModel", () => myChatModel);
-// ChatClient.create(container.resolve("chatModel"))
+import {
+  AiEvents,
+  AiTokens,
+  Tool,
+  configureAi,
+  resolveChatClient,
+} from "@di-framework/ai";
+import { Container, Component, Subscriber } from "@di-framework/core/decorators";
+import { useContainer } from "@di-framework/core/container";
+
+@Container()
+class WeatherTools {
+  @Tool({
+    description: "Get weather for a city",
+    inputSchema: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"],
+    },
+  })
+  getWeather({ city }: { city: string }) {
+    return { temp: 68, city };
+  }
+}
+
+@Container()
+class AiAudit {
+  @Subscriber(AiEvents.CHAT_RESPONSE)
+  onChat(payload: { durationMs: number; model?: string }) {
+    console.log("chat done", payload.durationMs, payload.model);
+  }
+}
+
+useContainer().resolve(AiAudit);
+
+configureAi({
+  chatModel: new OpenAiChatModel({ apiKey: process.env.OPENAI_API_KEY }),
+  defaultSystem: "You are helpful.",
+  toolBeans: [WeatherTools],
+  observation: true, // redacted ai.chat.* events on the container
+});
+
+const client = resolveChatClient();
+// or: useContainer().resolve(AiTokens.CHAT_CLIENT)
+
+@Container()
+class Assistant {
+  @Component(AiTokens.CHAT_CLIENT)
+  client!: ChatClient;
+}
 ```
 
-Named models use string tokens (`"chat.default"`), not a separate qualifier system.
+Manual registration:
+
+```ts
+registerChatModel(model, { aliases: [AiTokens.CHAT_MODEL_DEFAULT] });
+registerChatClient(ChatClient.create(model));
+```
+
+Observation payloads are **redacted by default** (counts, model, usage, finish reason — not full prompts). Opt into text with `observation: { includePromptText: true }`.
 
 ## Develop
 
