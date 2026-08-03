@@ -1,0 +1,59 @@
+{
+  "name": "@di-framework/ai",
+  "version": "0.0.1",
+  "description": "Declarative library for building AI applications",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "private": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-ai"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "ai",
+    "llm",
+    "chat",
+    "spring-ai",
+    "dependency-injection",
+    "typescript",
+    "tools",
+    "rag",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@di-framework/core": "workspace:^",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
