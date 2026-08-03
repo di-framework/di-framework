@@ -5,16 +5,16 @@
 | Piece | Role |
 | --- | --- |
 | `@di-framework/core` | Container, `@Container` / `@Component` |
+| `@di-framework/http` | `@Controller` / `@Endpoint`, `TypedRouter` (HTTP API) |
 | `@di-framework/repo` | `@Model` / `@Id`, `InMemoryRepository` for **document metadata** |
 | **Workers AI** | Embed queries + pages (`@cf/google/embeddinggemma-300m`, 768-d) |
 | **Vectorize** | Cosine ANN index of those vectors |
 
 ```
-query
-  → AI.embed(query)
-  → VECTORIZE.query(vector, topK)
-  → DocumentRepository.findById(id)   // titles, urls, snippets
-  → Writerside JSON hits
+HTTP (Controller)
+  → Service (search / auth / embeddings / vectors)
+  → DocumentRepository (metadata)
+  → Workers AI + Vectorize
 ```
 
 Vectors are **not** stored on entities — metadata in repo, vectors in Vectorize (same `id`).
@@ -133,12 +133,16 @@ Writerside calls `{search-endpoint}/preview-search/{project}/{instance}`.
 
 ## Architecture
 
-| Concern | Where |
+Controller → Service → Repo:
+
+| Layer | Where |
 | --- | --- |
-| Topic text, URL, title | `DocPage` + `DocumentRepository` |
-| Embedding model | `EmbeddingService` → `env.AI` |
-| Vector storage / ANN | `VectorIndexService` → `env.VECTORIZE` |
-| Hybrid rank + Writerside DTO | `SearchService` |
+| HTTP | `HealthController`, `AuthController`, `SearchController`, `ReindexController` (`@di-framework/http`) |
+| Auth | `AuthService` → `auth.ts` (OIDC / reindex JWT) |
+| Search | `SearchService` (hybrid rank + Writerside DTO) |
+| Embeddings | `EmbeddingService` → `env.AI` |
+| Vectors | `VectorIndexService` → `env.VECTORIZE` |
+| Metadata | `DocPage` + `DocumentRepository` |
 
 ## Incremental index sync
 
@@ -186,4 +190,4 @@ curl -X POST …/reindex  # only embeds what changed
 - **AI + Vectorize** is the Cloudflare-native semantic search stack.
 - **Repo** keeps metadata typed, injectable, and swappable (KV/D1 adapter later) without stuffing 768 floats onto every entity.
 - **Incremental sync** keeps AI cost proportional to docs that actually changed.
-- **Showcase**: core, repo, AI, Vectorize, and KV end-to-end.
+- **Showcase**: core, http, repo, AI, Vectorize, and KV end-to-end with a clear Controller → Service → Repo split.

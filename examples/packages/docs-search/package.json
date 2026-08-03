@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Writerside docs search on Cloudflare Workers — showcase of @di-framework/core + repo + Workers AI",
+  "description": "Writerside docs search on Cloudflare Workers — showcase of @di-framework/core + repo + http + Workers AI",
   "scripts": {
     "corpus": "bun run scripts/build-corpus.ts",
     "dev": "wrangler dev",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*",
     "@di-framework/repo": "workspace:*",
     "jose": "^6.0.11"
   },

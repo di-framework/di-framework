@@ -1,6 +1,18 @@
-import { expect, test } from 'bun:test';
+import { beforeEach, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core';
 import { ApplicationContext } from '../services/ApplicationContext';
+import { DatabaseService } from '../services/DatabaseService';
+import { LoggerService } from '../services/LoggerService';
+import { UserService } from '../services/UserService';
+
+beforeEach(() => {
+  const container = useContainer();
+  if (!container.has(DatabaseService)) container.register(DatabaseService, { singleton: true });
+  if (!container.has(LoggerService)) container.register(LoggerService, { singleton: true });
+  if (!container.has(UserService)) container.register(UserService, { singleton: true });
+  if (!container.has(ApplicationContext))
+    container.register(ApplicationContext, { singleton: true });
+});
 
 test('basic example resolves ApplicationContext', () => {
   const container = useContainer();
