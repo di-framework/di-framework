@@ -16,6 +16,8 @@ A lightweight, type-safe Dependency Injection framework for TypeScript using dec
 - **Repository Abstraction**: Includes `@di-framework/repo` for standardized data access and storage-agnostic repositories.
 - **HTTP Routing & OpenAPI**: Type-safe HTTP routing and build-time OpenAPI 3.1 generation with `@di-framework/http`.
 - **GraphQL**: Object-oriented, decorator-driven GraphQL with `@di-framework/graphql` — domain classes become the schema.
+- **Events**: Bridge `@Publisher` / `@Subscriber` to Kafka, NATS, or in-memory transports with `@di-framework/events`.
+- **Configuration**: Typed, validated config from env/files injected via DI with `@di-framework/config`.
 
 ## Why Use This Framework?
 
@@ -107,6 +109,8 @@ userService.getUser('123');
 - [Quick Start](quick-start.md) - Learn the basics with simple examples
 - [HTTP Router](http-router.md) - Type-safe routes and OpenAPI generation
 - [GraphQL](graphql.md) - Domain classes as a GraphQL schema
+- [Events](events.md) - Bridge container events to Kafka / NATS / memory
+- [Configuration](config.md) - Typed config from env/files via DI
 - [Repositories](repositories.md) - Standardized data access with `@di-framework/repo`
 - [API Reference](api-reference.md) - Complete API documentation
 - [Advanced Usage](advanced-usage.md) - Learn advanced patterns and techniques

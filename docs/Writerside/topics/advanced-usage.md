@@ -204,6 +204,8 @@ export class NotificationService {
 }
 ```
 
+To publish those same events to Kafka or NATS (or consume remote topics back onto the bus), use [`@di-framework/events`](events.md).
+
 ## Telemetry and Monitoring
 
 The framework provides built-in support for tracking method execution using the `@Telemetry` and `@TelemetryListener` decorators.
@@ -356,41 +358,28 @@ const emailer = container.construct(EmailService, {
 
 ## Configuration Services
 
-Create configuration services using factory functions:
+For typed, validated configuration from env and files, use [`@di-framework/config`](config.md). A minimal imperative example:
 
 ```typescript
-import { useContainer } from '@di-framework/core/container';
-const container = useContainer();
+import { loadAndRegisterConfig, envSource } from '@di-framework/config';
+import { Container, Component } from '@di-framework/core/decorators';
 
-// Register configuration
-container.registerFactory(
-  'config',
-  () => ({
-    database: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      name: process.env.DB_NAME || 'myapp',
-    },
-    api: {
-      key: process.env.API_KEY,
-      secret: process.env.API_SECRET,
-    },
-    features: {
-      enableNewUI: process.env.ENABLE_NEW_UI === 'true',
-      maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE || '10485760'),
-    },
-  }),
-  { singleton: true },
-);
+await loadAndRegisterConfig({
+  defaults: {
+    database: { host: 'localhost', port: 5432 },
+  },
+  sources: [envSource({ prefix: 'APP_' })],
+});
 
-// Use in services
 @Container()
 export class DatabaseService {
-  constructor(@Component('config') private config: any) {
+  constructor(@Component('config') private config: { database: { host: string } }) {
     console.log('DB Config:', this.config.database);
   }
 }
 ```
+
+You can still register a plain factory with `registerFactory('config', …)` when you do not need sources or validation.
 
 ## Conditional Service Registration
 
