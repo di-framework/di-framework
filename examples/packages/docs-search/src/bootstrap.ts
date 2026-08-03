@@ -1,11 +1,21 @@
 import { useContainer } from '@di-framework/core/container';
 import corpus from '../data/corpus.json';
+import { AuthController } from './controllers/AuthController';
+import { HealthController } from './controllers/HealthController';
+import { ReindexController } from './controllers/ReindexController';
+import { SearchController } from './controllers/SearchController';
 import type { Env } from './env';
-import { DocPage } from './models/DocPage';
-import { DocumentRepository } from './repositories/DocumentRepository';
+import {
+  type CorpusDoc,
+  corpusDocToPage,
+  DocumentRepository,
+} from './repositories/DocumentRepository';
+import { AuthService } from './services/AuthService';
 import { EmbeddingService } from './services/EmbeddingService';
 import { SearchService } from './services/SearchService';
 import { VectorIndexService } from './services/VectorIndexService';
+
+export type { CorpusDoc };
 
 /** Per-isolate env holder so DI can inject a stable `Env` factory. */
 let currentEnv: Env | null = null;
@@ -21,22 +31,21 @@ export function getEnv(): Env {
   return currentEnv;
 }
 
-export type CorpusDoc = {
-  objectID: string;
-  url: string;
-  pageTitle: string;
-  mainTitle: string;
-  breadcrumbs: string;
-  content: string;
-  product: string;
-  version: string;
-};
-
-let seeded = false;
+const DI_CLASSES = [
+  DocumentRepository,
+  EmbeddingService,
+  VectorIndexService,
+  SearchService,
+  AuthService,
+  HealthController,
+  AuthController,
+  SearchController,
+  ReindexController,
+] as const;
 
 /**
- * Register services and load bundled Writerside corpus if the repo is empty.
- * CI replaces the corpus on each reindex via {@link replaceCorpus}.
+ * Register services/controllers and load bundled Writerside corpus if the repo is empty.
+ * CI replaces the corpus on each reindex via {@link DocumentRepository.replaceCorpus}.
  */
 export async function bootstrap(): Promise<void> {
   const container = useContainer();
@@ -45,52 +54,14 @@ export async function bootstrap(): Promise<void> {
     container.registerFactory('Env', () => getEnv, { singleton: true });
   }
 
-  void EmbeddingService;
-  void VectorIndexService;
-  void SearchService;
-  void DocumentRepository;
-
-  if (!seeded) {
-    const repo = container.resolve(DocumentRepository);
-    if ((await repo.count()) === 0) {
-      await seedFromDocs((corpus as { docs: CorpusDoc[] }).docs);
+  for (const ctor of DI_CLASSES) {
+    if (!container.has(ctor)) {
+      container.register(ctor as new (...args: never[]) => unknown);
     }
-    seeded = true;
   }
-}
 
-function toPage(d: CorpusDoc): DocPage {
-  const page = new DocPage();
-  page.id = d.objectID;
-  page.url = d.url;
-  page.pageTitle = d.pageTitle;
-  page.mainTitle = d.mainTitle;
-  page.breadcrumbs = d.breadcrumbs;
-  page.content = d.content;
-  page.product = d.product;
-  page.version = d.version;
-  return page;
-}
-
-async function seedFromDocs(docs: CorpusDoc[]): Promise<number> {
-  const repo = useContainer().resolve(DocumentRepository);
-  return repo.seed(docs.map(toPage));
-}
-
-/** Replace metadata corpus (e.g. body from CI) then reindex can sync vectors. */
-export async function replaceCorpus(docs: CorpusDoc[]): Promise<number> {
-  const repo = useContainer().resolve(DocumentRepository);
-  const existing = await repo.findAll();
-  for (const page of existing) {
-    await repo.delete(page.id);
+  const repo = container.resolve(DocumentRepository);
+  if ((await repo.count()) === 0) {
+    await repo.seed((corpus as { docs: CorpusDoc[] }).docs.map(corpusDocToPage));
   }
-  return seedFromDocs(docs);
-}
-
-export function resolveSearch(): SearchService {
-  return useContainer().resolve(SearchService);
-}
-
-export function resolveDocuments(): DocumentRepository {
-  return useContainer().resolve(DocumentRepository);
 }
