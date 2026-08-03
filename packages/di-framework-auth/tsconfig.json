@@ -6,6 +6,7 @@
     "moduleDetection": "force",
     "allowJs": true,
     "moduleResolution": "bundler",
+    "customConditions": ["bun"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": false,

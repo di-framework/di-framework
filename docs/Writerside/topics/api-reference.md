@@ -1,6 +1,6 @@
 # API Reference
 
-Complete reference for all APIs provided by the DI framework.
+Reference for the container and decorators provided by `@di-framework/core`. For package-specific APIs, see [Repositories](repositories.md), [HTTP Router](http-router.md), [GraphQL](graphql.md), [Events](events.md), [Configuration](config.md), [Authentication](auth.md), and [AI](ai.md).
 
 ## Decorators
 

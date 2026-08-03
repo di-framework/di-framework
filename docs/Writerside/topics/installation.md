@@ -1,6 +1,6 @@
 # Installation
 
-No external dependencies required! The framework works with SWC and TypeScript's native decorator support.
+The core package has no runtime dependencies and works with SWC and TypeScript's decorator support.
 
 ## Requirements
 
@@ -29,13 +29,13 @@ bun add @di-framework/core
 
 ### TypeScript Configuration
 
-Ensure your `../../../tsconfig.json` has the following settings:
+Ensure your `tsconfig.json` has the following settings:
 
 ```json
 {
   "compilerOptions": {
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
+    "emitDecoratorMetadata": false,
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler"
@@ -56,7 +56,7 @@ If you're using SWC, ensure your `.swcrc` has decorator support enabled:
     },
     "transform": {
       "legacyDecorator": true,
-      "decoratorMetadata": true
+      "decoratorMetadata": false
     }
   }
 }
@@ -113,7 +113,7 @@ bun run test.ts
 
 ## Optional Packages
 
-The core package stands alone. Companion packages add data access, HTTP, GraphQL, events, configuration, and authentication:
+The core package stands alone. Companion packages add data access, HTTP, GraphQL, events, configuration, authentication, and AI application support:
 
 | Package | Docs |
 | --- | --- |
@@ -123,6 +123,7 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 | `@di-framework/events` | [Events](events.md) |
 | `@di-framework/config` | [Configuration](config.md) |
 | `@di-framework/auth` | [Authentication](auth.md) |
+| `@di-framework/ai` | [AI](ai.md) |
 
 ## Next Steps
 
