@@ -1,0 +1,86 @@
+{
+  "name": "@di-framework/events",
+  "version": "4.0.1",
+  "description": "Bridge di-framework container events to external brokers (Kafka, NATS) via pluggable transports.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./memory": {
+      "bun": "./memory.ts",
+      "import": "./dist/memory.js",
+      "default": "./dist/memory.js"
+    },
+    "./kafka": {
+      "bun": "./kafka.ts",
+      "import": "./dist/kafka.js",
+      "default": "./dist/kafka.js"
+    },
+    "./nats": {
+      "bun": "./nats.ts",
+      "import": "./dist/nats.js",
+      "default": "./dist/nats.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-events"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "events",
+    "kafka",
+    "nats",
+    "messaging",
+    "dependency-injection",
+    "decorators",
+    "typescript"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "memory.ts",
+    "kafka.ts",
+    "nats.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./memory.ts ./kafka.ts ./nats.ts --outdir ./dist --target node --external @di-framework/core --external kafkajs --external nats && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "kafkajs": "^2.2.4",
+    "nats": "^2.29.3",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@di-framework/core": "workspace:^",
+    "kafkajs": "^2.2.0",
+    "nats": "^2.28.0",
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "kafkajs": {
+      "optional": true
+    },
+    "nats": {
+      "optional": true
+    }
+  }
+}

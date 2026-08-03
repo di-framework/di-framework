@@ -1,8 +1,19 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core';
+import { ApplicationContext } from './ApplicationContext';
 import { DatabaseService } from './DatabaseService';
 import { LoggerService } from './LoggerService';
 import { UserService } from './UserService';
+
+beforeEach(() => {
+  const container = useContainer();
+  // Re-register after other suites call clear() — @Container() only runs once at import time.
+  if (!container.has(DatabaseService)) container.register(DatabaseService, { singleton: true });
+  if (!container.has(LoggerService)) container.register(LoggerService, { singleton: true });
+  if (!container.has(UserService)) container.register(UserService, { singleton: true });
+  if (!container.has(ApplicationContext))
+    container.register(ApplicationContext, { singleton: true });
+});
 
 describe('services example', () => {
   test('DatabaseService connects and queries', () => {
@@ -45,8 +56,7 @@ describe('services example', () => {
   });
 
   test('ApplicationContext manages environment and context', () => {
-    const { ApplicationContext } = require('./ApplicationContext');
-    const appCtx: any = useContainer().resolve(ApplicationContext);
+    const appCtx = useContainer().resolve(ApplicationContext);
 
     appCtx.setEnv({ FOO: 'bar' });
     expect(appCtx.getEnv()).toEqual({ FOO: 'bar' });
