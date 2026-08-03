@@ -26,7 +26,7 @@ export interface SearchRequestOptions {
  */
 export function searchRequest(options: SearchRequestOptions = {}): SearchRequest {
   const topK = options.topK ?? DEFAULT_TOP_K;
-  if (topK < 0) {
+  if (topK <= 0) {
     throw new Error('TopK should be positive.');
   }
   const similarityThreshold = options.similarityThreshold ?? SIMILARITY_THRESHOLD_ACCEPT_ALL;

@@ -326,6 +326,24 @@ describe('toolCallbackAsMcpTool (local → MCP)', () => {
   });
 });
 
+describe('adaptSdkClient', () => {
+  test('normalizes missing tool result content without dropping extension fields', async () => {
+    const session = adaptSdkClient({
+      async listTools() {
+        return { tools: [] };
+      },
+      async callTool() {
+        return { content: undefined, requestId: 'request-1' };
+      },
+    });
+
+    const result = await session.callTool({ name: 'test' });
+
+    expect(result.content).toEqual([]);
+    expect(result.requestId).toBe('request-1');
+  });
+});
+
 describe('Official SDK InMemory transport + adaptSdkClient', () => {
   test('discovers and calls tools through McpToolCallbackProvider', async () => {
     const server = new McpServer({ name: 'memory-server', version: '1.0.0' });

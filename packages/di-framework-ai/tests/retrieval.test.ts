@@ -18,6 +18,14 @@ import {
   VectorStoreDocumentRetriever,
 } from '../src/index.ts';
 
+describe('SearchRequest', () => {
+  test('requires a positive topK', () => {
+    expect(() => searchRequest({ topK: 0 })).toThrow('TopK should be positive.');
+    expect(() => searchRequest({ topK: -1 })).toThrow('TopK should be positive.');
+    expect(searchRequest({ topK: 1 }).topK).toBe(1);
+  });
+});
+
 describe('FakeEmbeddingModel / cosine', () => {
   test('similar texts score higher than unrelated', () => {
     const model = new FakeEmbeddingModel({ dimensions: 64 });

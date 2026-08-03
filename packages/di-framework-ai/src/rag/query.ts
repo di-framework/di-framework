@@ -18,9 +18,6 @@ export interface QueryOptions {
 
 export function query(options: QueryOptions | string): Query {
   if (typeof options === 'string') {
-    if (options == null) {
-      throw new Error('text cannot be null');
-    }
     return { text: options, history: [], context: {} };
   }
   if (options.text == null) {

@@ -109,10 +109,10 @@ export function adaptSdkClient(
         _meta: params._meta,
       });
       return {
+        ...result,
         content: (result.content ?? []) as McpCallToolResult['content'],
         isError: result.isError,
         structuredContent: result.structuredContent,
-        ...result,
       };
     },
   };
