@@ -3,18 +3,19 @@
 <buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-    <variables></variables>
+    <!--
+      search-endpoint must be under top-level <variables> (Writerside docs).
+      It should bake searchService/searchServiceUrl into config.json.
+      CI also patches config.json after the build as a safety net.
+    -->
+    <variables>
+        <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
+    </variables>
     <build-profile instance="d">
         <variables>
             <noindex-content>true</noindex-content>
             <custom-css>footer.css</custom-css>
-            <!--
-              Docs: https://docs.di-framework.dev (GitHub Pages + custom domain)
-              Search Worker (workers.dev is the stable public URL; apex route also
-              exists at di-framework.dev/api/docs/search* when apex DNS is healthy):
-                https://di-framework-docs-search.seemueller.workers.dev/api/docs/search
-              CI reindexes via GitHub OIDC (no CF API tokens in GitHub).
-            -->
+            <!-- Same endpoint at instance level in case the builder only merges profile vars -->
             <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
         </variables>
     </build-profile>

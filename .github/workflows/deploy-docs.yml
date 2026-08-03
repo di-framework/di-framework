@@ -135,6 +135,29 @@ jobs:
       - name: Unzip artifact
         run: unzip -O UTF-8 -qq artifacts/webHelpD2-all.zip -d dir
 
+      # Writerside only shows the search UI when config.json has a truthy
+      # searchService. Some builder versions do not emit these keys from
+      # <search-endpoint> alone — patch so the bar always appears.
+      - name: Ensure custom search is enabled in config.json
+        env:
+          SEARCH_ENDPOINT: ${{ vars.DOCS_SEARCH_URL }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="${SEARCH_ENDPOINT:-https://di-framework-docs-search.seemueller.workers.dev/api/docs/search}"
+          ENDPOINT="${ENDPOINT%/}"
+          # Help module dir + instance id → /preview-search/{project}/{instance}
+          SERVICE_URL="${ENDPOINT}/preview-search/Writerside/d"
+          python3 - <<PY
+          import json
+          from pathlib import Path
+          p = Path("dir/config.json")
+          cfg = json.loads(p.read_text())
+          cfg["searchService"] = "custom"
+          cfg["searchServiceUrl"] = "${SERVICE_URL}"
+          p.write_text(json.dumps(cfg, separators=(",", ":")))
+          print("config.json:", p.read_text())
+          PY
+
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
