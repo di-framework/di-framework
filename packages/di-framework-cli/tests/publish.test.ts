@@ -117,6 +117,7 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-events');
       expect(PACKAGES).toContain('packages/di-framework-config');
       expect(PACKAGES).toContain('packages/di-framework-auth');
+      expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-cli');
     });
 
