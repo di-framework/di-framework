@@ -71,13 +71,13 @@ export async function signJwt(claims: JwtClaims, options: SignJwtOptions): Promi
   const at = now();
 
   const payload: JwtClaims = {
+    ...claims,
     iat: at,
     ...(options.issuer !== undefined ? { iss: options.issuer } : {}),
     ...(options.audience !== undefined ? { aud: options.audience } : {}),
     ...(options.subject !== undefined ? { sub: options.subject } : {}),
     ...(options.expiresInSeconds !== undefined ? { exp: at + options.expiresInSeconds } : {}),
     ...(options.notBeforeSeconds !== undefined ? { nbf: at + options.notBeforeSeconds } : {}),
-    ...claims,
   };
 
   if (options.jti !== false) {

@@ -83,6 +83,17 @@ export function sessionManager(options: SessionManagerOptions): SessionManager {
       ...(record.metadata ? { claims: record.metadata } : {}),
     });
 
+  const expiryReason = (record: SessionRecord, at: number): 'absolute' | 'inactivity' | null => {
+    if (record.absoluteExpiresAt <= at) return 'absolute';
+    if (
+      policy.inactivityTimeoutSeconds > 0 &&
+      record.lastSeenAt + policy.inactivityTimeoutSeconds <= at
+    ) {
+      return 'inactivity';
+    }
+    return null;
+  };
+
   const mint = async (input: CreateSessionInput, at: number): Promise<IssuedSession> => {
     const token = randomToken(tokenBytes);
     const authTime = input.authTime ?? at;
@@ -116,16 +127,10 @@ export function sessionManager(options: SessionManagerOptions): SessionManager {
       if (!record) return { state: 'not-found' };
 
       const at = now();
-      if (record.absoluteExpiresAt <= at) {
+      const expired = expiryReason(record, at);
+      if (expired) {
         await store.delete(id);
-        return { state: 'expired', reason: 'absolute' };
-      }
-      if (
-        policy.inactivityTimeoutSeconds > 0 &&
-        record.lastSeenAt + policy.inactivityTimeoutSeconds <= at
-      ) {
-        await store.delete(id);
-        return { state: 'expired', reason: 'inactivity' };
+        return { state: 'expired', reason: expired };
       }
 
       // Throttled so a busy session does not write on every request.
@@ -142,6 +147,11 @@ export function sessionManager(options: SessionManagerOptions): SessionManager {
       if (!existing) return null;
 
       const at = now();
+      if (expiryReason(existing, at)) {
+        await store.delete(id);
+        return null;
+      }
+
       const issued = await mint(
         {
           subject: changes.subject ?? existing.subject,
