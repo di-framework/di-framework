@@ -54,6 +54,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@di-framework/core": "workspace:*",
+        "@di-framework/http": "workspace:*",
         "@di-framework/repo": "workspace:*",
         "jose": "^6.0.11",
       },
