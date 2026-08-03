@@ -3,8 +3,9 @@
   "name": "di-framework-docs-search",
   "main": "src/index.ts",
   "compatibility_date": "2025-11-09",
-  // Public host is di-framework.dev (zone on this Cloudflare account)
-  "workers_dev": false,
+  // Apex route: di-framework.dev/api/docs/search* (see routes below).
+  // Also expose *.workers.dev as a CI/fallback URL when apex DNS is flaky.
+  "workers_dev": true,
   "preview_urls": false,
   // Path-style mount; handler strips BASE_PATH before routing
   "routes": [
@@ -18,14 +19,17 @@
   },
   // Workers AI → embeddings (@cf/google/embeddinggemma-300m → 768-d)
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
+    "remote": true
   },
   // Vectorize → store + ANN query (dims must match model; Gemma = 768)
   //   wrangler vectorize create di-docs-search --dimensions=768 --metric=cosine
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "di-docs-search"
+      "index_name": "di-docs-search",
+      // Vectorize has no local simulator — use remote index in `wrangler dev`
+      "remote": true
     }
   ],
   // Durable content-hash manifest for incremental sync

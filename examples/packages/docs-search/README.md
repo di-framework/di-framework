@@ -98,7 +98,8 @@ bun run deploy
 | Host | Role |
 | --- | --- |
 | `https://docs.di-framework.dev` | Writerside site (GitHub Pages custom domain) |
-| `https://di-framework.dev/api/docs/search` | Search Worker (`BASE_PATH` on apex zone) |
+| `https://di-framework-docs-search.seemueller.workers.dev/api/docs/search` | Search Worker (public `workers.dev` URL) |
+| `https://di-framework.dev/api/docs/search` | Same Worker via apex route (when apex DNS is healthy) |
 
 | Worker path | Role |
 | --- | --- |
@@ -115,7 +116,7 @@ Workflow dispatch has **full_reindex** → `POST …/reindex?full=1`.
 ### Manual reindex (with a token)
 
 ```bash
-WORKER=https://di-framework.dev/api/docs/search
+WORKER=https://di-framework-docs-search.seemueller.workers.dev/api/docs/search
 curl -X POST "$WORKER/reindex" \
   -H "Authorization: Bearer $REINDEX_JWT" \
   -H "Content-Type: application/json" \
@@ -125,7 +126,7 @@ curl -X POST "$WORKER/reindex" \
 Writerside (`buildprofiles.xml`):
 
 ```xml
-<search-endpoint>https://di-framework.dev/api/docs/search</search-endpoint>
+<search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
 ```
 
 Writerside calls `{search-endpoint}/preview-search/{project}/{instance}`.

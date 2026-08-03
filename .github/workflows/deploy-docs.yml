@@ -53,11 +53,14 @@ jobs:
       - name: Resolve search Worker URL
         id: worker
         env:
-          # Override with vars.DOCS_SEARCH_URL if needed; default is the zone host
+          # Override with vars.DOCS_SEARCH_URL if needed.
+          # Prefer workers.dev for CI: apex DNS (di-framework.dev) has been flaky
+          # for some resolvers including GitHub-hosted runners.
           DOCS_SEARCH_URL: ${{ vars.DOCS_SEARCH_URL }}
         run: |
           set -euo pipefail
-          URL="${DOCS_SEARCH_URL:-https://di-framework.dev/api/docs/search}"
+          # Worker also mounts under BASE_PATH on workers.dev (same as apex route).
+          URL="${DOCS_SEARCH_URL:-https://di-framework-docs-search.seemueller.workers.dev/api/docs/search}"
           URL="${URL%/}"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Worker: $URL"
@@ -137,9 +140,11 @@ jobs:
         with:
           path: dir
 
+  # Pages must ship even if reindex is flaky (DNS/OIDC/Worker). Search UI is
+  # baked into the static build via <search-endpoint>; the Worker can reindex later.
   deploy:
     name: Deploy GitHub Pages
-    needs: [build, index-search]
+    needs: [build]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     environment:
