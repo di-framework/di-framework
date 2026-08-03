@@ -33,7 +33,9 @@
     "dependency-injection",
     "typescript",
     "tools",
-    "rag"
+    "rag",
+    "mcp",
+    "model-context-protocol"
   ],
   "files": [
     "src",
@@ -44,10 +46,14 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@di-framework/core": "workspace:^",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }

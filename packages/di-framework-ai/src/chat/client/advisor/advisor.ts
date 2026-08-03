@@ -17,6 +17,12 @@ export interface Advisor {
 export interface CallAdvisorChain {
   nextCall(request: ChatClientRequest): Promise<ChatClientResponse>;
   readonly callAdvisors: readonly CallAdvisor[];
+  /**
+   * Restart the chain from the advisor immediately after {@code after}.
+   * Used by recursive advisors (e.g. tool-calling loop).
+   * Spring AI: {@code CallAdvisorChain.copy}.
+   */
+  copy?(after: CallAdvisor): CallAdvisorChain;
 }
 
 /**
@@ -26,6 +32,11 @@ export interface CallAdvisorChain {
 export interface StreamAdvisorChain {
   nextStream(request: ChatClientRequest): AsyncIterable<ChatClientResponse>;
   readonly streamAdvisors: readonly StreamAdvisor[];
+  /**
+   * Restart the stream chain from the advisor immediately after {@code after}.
+   * Spring AI: {@code StreamAdvisorChain.copy}.
+   */
+  copy?(after: StreamAdvisor): StreamAdvisorChain;
 }
 
 /**

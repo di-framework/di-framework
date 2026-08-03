@@ -15,6 +15,11 @@ export { ChatModelCallAdvisor } from './chat-model-call-advisor.ts';
 export { ChatModelStreamAdvisor } from './chat-model-stream-advisor.ts';
 export { DefaultAdvisorChain } from './default-advisor-chain.ts';
 export {
+  MessageChatMemoryAdvisor,
+  MessageChatMemoryAdvisorBuilder,
+  type MessageChatMemoryAdvisorOptions,
+} from './message-chat-memory-advisor.ts';
+export {
   compareOrder,
   DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER,
   DEFAULT_TOOL_CALLING_ORDER,
@@ -25,3 +30,15 @@ export {
   SimpleLoggerAdvisor,
   type SimpleLoggerAdvisorOptions,
 } from './simple-logger-advisor.ts';
+export { augmentWithFormatInstructions } from './structured-output-format.ts';
+export {
+  StructuredOutputValidationAdvisor,
+  type StructuredOutputValidationAdvisorOptions,
+} from './structured-output-validation-advisor.ts';
+export {
+  isToolAdvisor,
+  type ToolAdvisor,
+  ToolCallingAdvisor,
+  ToolCallingAdvisorBuilder,
+  type ToolCallingAdvisorOptions,
+} from './tool-calling-advisor.ts';

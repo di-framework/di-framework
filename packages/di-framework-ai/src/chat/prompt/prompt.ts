@@ -2,6 +2,7 @@ import { systemMessage, userMessage } from '../messages/factories.ts';
 import {
   type ChatMessage,
   isSystemMessage,
+  isToolResponseMessage,
   isUserMessage,
   type Message,
   type SystemMessage,
@@ -48,6 +49,21 @@ export class Prompt {
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const message = this.messages[i]!;
       if (isUserMessage(message)) return message;
+    }
+    return userMessage('');
+  }
+
+  /**
+   * Last user or tool-response message in the prompt.
+   * Spring AI: {@code Prompt.getLastUserOrToolResponseMessage}.
+   * Returns an empty user message when none is present.
+   */
+  getLastUserOrToolResponseMessage(): ChatMessage {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const message = this.messages[i]!;
+      if (isUserMessage(message) || isToolResponseMessage(message)) {
+        return message;
+      }
     }
     return userMessage('');
   }

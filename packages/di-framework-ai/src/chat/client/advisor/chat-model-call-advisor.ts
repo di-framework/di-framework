@@ -3,6 +3,7 @@ import type { ChatClientRequest } from '../chat-client-request.ts';
 import { chatClientResponse } from '../chat-client-response.ts';
 import type { CallAdvisor, CallAdvisorChain } from './advisor.ts';
 import { LOWEST_PRECEDENCE } from './ordered.ts';
+import { augmentWithFormatInstructions } from './structured-output-format.ts';
 
 /**
  * Terminal call advisor that invokes {@link ChatModel.call}.
@@ -18,8 +19,9 @@ export class ChatModelCallAdvisor implements CallAdvisor {
     request: ChatClientRequest,
     _chain: CallAdvisorChain,
   ): Promise<ReturnType<typeof chatClientResponse>> {
-    const chatResponse = await this.chatModel.call(request.prompt);
-    return chatClientResponse(chatResponse, request.context);
+    const formatted = augmentWithFormatInstructions(request);
+    const chatResponse = await this.chatModel.call(formatted.prompt);
+    return chatClientResponse(chatResponse, formatted.context);
   }
 
   static of(chatModel: ChatModel): ChatModelCallAdvisor {

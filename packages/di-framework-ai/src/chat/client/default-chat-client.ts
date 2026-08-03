@@ -1,4 +1,12 @@
 import type { Media } from '../../content/media.ts';
+import {
+  isStructuredOutputConverter,
+  type StructuredOutputConverter,
+  schemaOutputConverter,
+} from '../../converter/index.ts';
+import type { ToolCallback } from '../../tool/tool-callback.ts';
+import type { ToolCallbackProvider } from '../../tool/tool-callback-provider.ts';
+import { resolveToolCallbacks } from '../../tool/tool-callback-provider.ts';
 import { systemMessage, userMessage } from '../messages/factories.ts';
 import type { ChatMessage, Message } from '../messages/message.ts';
 import type { ChatModel } from '../model/chat-model.ts';
@@ -11,10 +19,20 @@ import {
   ChatModelCallAdvisor,
   ChatModelStreamAdvisor,
   DefaultAdvisorChain,
+  isToolAdvisor,
+  StructuredOutputValidationAdvisor,
+  ToolCallingAdvisor,
+  type ToolCallingAdvisorOptions,
 } from './advisor/index.ts';
+import { ChatClientAttributes } from './chat-client-attributes.ts';
 import { type ChatClientRequest, chatClientRequest } from './chat-client-request.ts';
 import type { ChatClientResponse } from './chat-client-response.ts';
 import { renderTemplate } from './template.ts';
+
+/** Context / builder flag to skip auto-registration of ToolCallingAdvisor. */
+export const TOOL_CALLING_ADVISOR_AUTO_REGISTER = 'toolCallingAdvisorAutoRegister';
+
+export type ToolSource = ToolCallback | ToolCallbackProvider | readonly ToolCallback[];
 
 export interface ChatClientBuilderOptions {
   readonly defaultSystem?: string;
@@ -22,6 +40,18 @@ export interface ChatClientBuilderOptions {
   readonly defaultOptions?: ChatOptions;
   readonly defaultAdvisors?: readonly Advisor[];
   readonly defaultContext?: Readonly<Record<string, unknown>>;
+  readonly defaultToolCallbacks?: readonly ToolCallback[];
+  readonly defaultToolContext?: Readonly<Record<string, unknown>>;
+  /**
+   * Options used when auto-registering {@link ToolCallingAdvisor}.
+   * Ignored when a ToolAdvisor is already present in the chain.
+   */
+  readonly toolCallingAdvisorOptions?: ToolCallingAdvisorOptions;
+  /**
+   * When false, do not auto-register {@link ToolCallingAdvisor}.
+   * Default true (Spring AI 2.x behavior).
+   */
+  readonly autoRegisterToolCallingAdvisor?: boolean;
 }
 
 export interface ChatClient {
@@ -37,13 +67,60 @@ export interface ChatClientBuilder {
   defaultOptions(options: ChatOptions): ChatClientBuilder;
   defaultAdvisors(...advisors: Advisor[]): ChatClientBuilder;
   defaultContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder;
+  defaultTools(...tools: ToolSource[]): ChatClientBuilder;
+  defaultToolContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder;
+  toolCallingAdvisorOptions(options: ToolCallingAdvisorOptions): ChatClientBuilder;
+  autoRegisterToolCallingAdvisor(enabled: boolean): ChatClientBuilder;
   build(): ChatClient;
 }
+
+/**
+ * Options for {@link CallResponseSpec.entity} / {@code responseEntity}.
+ * Spring AI: {@code ChatClient.EntityParamSpec}.
+ */
+export interface EntityParamSpec {
+  /**
+   * Use provider-native structured output (sets {@code ChatOptions.outputSchema})
+   * instead of appending format instructions to the user message.
+   */
+  useProviderStructuredOutput(): EntityParamSpec;
+  /**
+   * Validate output against the converter JSON schema and re-prompt on failure.
+   */
+  validateSchema(): EntityParamSpec;
+}
+
+/**
+ * Pair of raw {@link ChatResponse} and converted entity.
+ * Spring AI: {@code ResponseEntity<ChatResponse, T>}.
+ */
+export interface EntityResponse<T> {
+  readonly chatResponse: ChatResponse | undefined;
+  readonly entity: T | undefined;
+}
+
+export type EntityInput<T> = StructuredOutputConverter<T> | string | Record<string, unknown>;
 
 export interface CallResponseSpec {
   content(): Promise<string | undefined>;
   chatResponse(): Promise<ChatResponse | undefined>;
   chatClientResponse(): Promise<ChatClientResponse>;
+  /**
+   * Convert the model reply with a structured-output converter or JSON schema.
+   * Spring AI: {@code CallResponseSpec.entity}.
+   */
+  entity<T>(
+    converterOrSchema: EntityInput<T>,
+    configure?: (spec: EntityParamSpec) => void,
+  ): Promise<T | undefined>;
+  /**
+   * Like {@link entity} but also returns the raw {@link ChatResponse}.
+   * Spring AI: {@code CallResponseSpec.responseEntity}.
+   */
+  responseEntity<T>(
+    converterOrSchema: EntityInput<T>,
+    configure?: (spec: EntityParamSpec) => void,
+  ): Promise<EntityResponse<T>>;
 }
 
 export interface StreamResponseSpec {
@@ -68,20 +145,53 @@ export interface ChatClientRequestSpec {
   advisors(advisors: readonly Advisor[]): ChatClientRequestSpec;
   /** Merge values into the advisor context map. */
   advisorContext(context: Readonly<Record<string, unknown>>): ChatClientRequestSpec;
+  /**
+   * Register tools for this call (replaces any previously set call-level tools;
+   * merges with builder defaults when call-level tools are empty).
+   * Spring AI: {@code ChatClientRequestSpec.tools}.
+   */
+  tools(...tools: ToolSource[]): ChatClientRequestSpec;
+  /** Merge values into the tool context passed to callbacks. */
+  toolContext(context: Readonly<Record<string, unknown>>): ChatClientRequestSpec;
   call(): CallResponseSpec;
   stream(): StreamResponseSpec;
   /** Build the immutable request without executing (useful for tests). */
   toRequest(): ChatClientRequest;
 }
 
+class DefaultEntityParamSpec implements EntityParamSpec {
+  enableNative = false;
+  validated = false;
+
+  useProviderStructuredOutput(): EntityParamSpec {
+    this.enableNative = true;
+    return this;
+  }
+
+  validateSchema(): EntityParamSpec {
+    this.validated = true;
+    return this;
+  }
+}
+
 class DefaultCallResponseSpec implements CallResponseSpec {
   constructor(
     private readonly request: ChatClientRequest,
-    private readonly chain: DefaultAdvisorChain,
+    /** Advisors excluding the terminal model advisor (includes auto tool advisor). */
+    private readonly advisors: readonly Advisor[],
+    private readonly chatModel: ChatModel,
   ) {}
 
+  private buildChain(extra: readonly Advisor[] = []): DefaultAdvisorChain {
+    return DefaultAdvisorChain.of([
+      ...this.advisors,
+      ...extra,
+      ChatModelCallAdvisor.of(this.chatModel),
+    ]);
+  }
+
   async chatClientResponse(): Promise<ChatClientResponse> {
-    return this.chain.nextCall(this.request);
+    return this.buildChain().nextCall(this.request);
   }
 
   async chatResponse(): Promise<ChatResponse | undefined> {
@@ -93,6 +203,74 @@ class DefaultCallResponseSpec implements CallResponseSpec {
     if (!response?.getResult()) return undefined;
     return response.content;
   }
+
+  async entity<T>(
+    converterOrSchema: EntityInput<T>,
+    configure?: (spec: EntityParamSpec) => void,
+  ): Promise<T | undefined> {
+    const result = await this.responseEntity(converterOrSchema, configure);
+    return result.entity;
+  }
+
+  async responseEntity<T>(
+    converterOrSchema: EntityInput<T>,
+    configure?: (spec: EntityParamSpec) => void,
+  ): Promise<EntityResponse<T>> {
+    const converter = resolveEntityConverter<T>(converterOrSchema);
+    const params = new DefaultEntityParamSpec();
+    configure?.(params);
+
+    // Context is mutable for this request (Spring AI puts format keys here).
+    const context = this.request.context;
+    const format = converter.getFormat();
+    if (format) {
+      context.set(ChatClientAttributes.OUTPUT_FORMAT, format);
+    }
+
+    if (params.enableNative) {
+      context.set(ChatClientAttributes.STRUCTURED_OUTPUT_NATIVE, true);
+      const schema = converter.getJsonSchema();
+      if (schema) {
+        context.set(ChatClientAttributes.STRUCTURED_OUTPUT_SCHEMA, schema);
+      }
+    }
+
+    const extra: Advisor[] = [];
+    if (params.validated) {
+      const schema = converter.getJsonSchema();
+      if (!schema) {
+        throw new Error('validateSchema() requires a converter with a JSON schema');
+      }
+      extra.push(
+        new StructuredOutputValidationAdvisor({
+          outputJsonSchema: schema,
+        }),
+      );
+    }
+
+    const chain = this.buildChain(extra);
+    const clientResponse = await chain.nextCall(this.request);
+    const chatResponse = clientResponse.chatResponse;
+    const text = chatResponse?.getResult()?.output.text;
+    if (text == null || text === '') {
+      return { chatResponse, entity: undefined };
+    }
+    return {
+      chatResponse,
+      entity: converter.convert(text),
+    };
+  }
+}
+
+function resolveEntityConverter<T>(
+  converterOrSchema: EntityInput<T>,
+): StructuredOutputConverter<T> {
+  if (isStructuredOutputConverter(converterOrSchema)) {
+    return converterOrSchema as StructuredOutputConverter<T>;
+  }
+  return schemaOutputConverter<T>({
+    schema: converterOrSchema as string | Record<string, unknown>,
+  });
 }
 
 class DefaultStreamResponseSpec implements StreamResponseSpec {
@@ -131,6 +309,8 @@ class DefaultChatClientRequestSpec implements ChatClientRequestSpec {
   private optionsValue: ChatOptions | undefined;
   private readonly advisorList: Advisor[] = [];
   private readonly context: Map<string, unknown> = new Map();
+  private callToolCallbacks: ToolCallback[] | undefined;
+  private toolContextValue: Record<string, unknown> = {};
 
   constructor(
     private readonly chatModel: ChatModel,
@@ -150,6 +330,9 @@ class DefaultChatClientRequestSpec implements ChatClientRequestSpec {
       for (const [k, v] of Object.entries(defaults.defaultContext)) {
         this.context.set(k, v);
       }
+    }
+    if (defaults.defaultToolContext) {
+      Object.assign(this.toolContextValue, defaults.defaultToolContext);
     }
   }
 
@@ -226,6 +409,16 @@ class DefaultChatClientRequestSpec implements ChatClientRequestSpec {
     return this;
   }
 
+  tools(...tools: ToolSource[]): ChatClientRequestSpec {
+    this.callToolCallbacks = resolveToolCallbacks(...tools);
+    return this;
+  }
+
+  toolContext(context: Readonly<Record<string, unknown>>): ChatClientRequestSpec {
+    Object.assign(this.toolContextValue, context);
+    return this;
+  }
+
   toRequest(): ChatClientRequest {
     const messages: ChatMessage[] = [];
 
@@ -252,24 +445,63 @@ class DefaultChatClientRequestSpec implements ChatClientRequestSpec {
     }
 
     const modelDefaults = this.chatModel.options;
-    const options = mergeChatOptions(modelDefaults, this.optionsValue);
+    let options = mergeChatOptions(modelDefaults, this.optionsValue);
+
+    const toolCallbacks = this.resolveEffectiveToolCallbacks();
+    const toolContext =
+      Object.keys(this.toolContextValue).length > 0
+        ? { ...this.toolContextValue }
+        : options?.toolContext;
+
+    if (toolCallbacks !== undefined || toolContext !== undefined) {
+      options = mergeChatOptions(options, {
+        toolCallbacks,
+        toolContext,
+      });
+    }
+
     const prompt = new Prompt(messages, options);
     return chatClientRequest(prompt, this.context);
   }
 
+  private resolveEffectiveToolCallbacks(): readonly ToolCallback[] | undefined {
+    if (this.callToolCallbacks !== undefined) {
+      return this.callToolCallbacks;
+    }
+    if (this.defaults.defaultToolCallbacks !== undefined) {
+      return this.defaults.defaultToolCallbacks;
+    }
+    return this.optionsValue?.toolCallbacks ?? this.chatModel.options?.toolCallbacks;
+  }
+
+  /** Advisors for the call/stream chain, excluding terminal model advisors. */
+  private collectAdvisors(): Advisor[] {
+    const advisors: Advisor[] = [...this.advisorList];
+    this.autoRegisterToolCallingAdvisor(advisors);
+    return advisors;
+  }
+
+  private autoRegisterToolCallingAdvisor(advisors: Advisor[]): void {
+    const autoRegisterDisabled =
+      this.defaults.autoRegisterToolCallingAdvisor === false ||
+      this.context.get(TOOL_CALLING_ADVISOR_AUTO_REGISTER) === false;
+
+    if (autoRegisterDisabled) return;
+
+    if (advisors.some(isToolAdvisor)) return;
+
+    advisors.push(ToolCallingAdvisor.of(this.defaults.toolCallingAdvisorOptions));
+  }
+
   call(): CallResponseSpec {
     const request = this.toRequest();
-    const chain = DefaultAdvisorChain.of([
-      ...this.advisorList,
-      ChatModelCallAdvisor.of(this.chatModel),
-    ]);
-    return new DefaultCallResponseSpec(request, chain);
+    return new DefaultCallResponseSpec(request, this.collectAdvisors(), this.chatModel);
   }
 
   stream(): StreamResponseSpec {
     const request = this.toRequest();
     const chain = DefaultAdvisorChain.of([
-      ...this.advisorList,
+      ...this.collectAdvisors(),
       ChatModelStreamAdvisor.of(this.chatModel),
     ]);
     return new DefaultStreamResponseSpec(request, chain);
@@ -311,6 +543,12 @@ class DefaultChatClientBuilder implements ChatClientBuilder {
       defaultAdvisors: options.defaultAdvisors ? [...options.defaultAdvisors] : [],
       defaultContext: options.defaultContext ? { ...options.defaultContext } : {},
       defaultOptions: options.defaultOptions ? { ...options.defaultOptions } : undefined,
+      defaultToolCallbacks: options.defaultToolCallbacks
+        ? [...options.defaultToolCallbacks]
+        : undefined,
+      defaultToolContext: options.defaultToolContext
+        ? { ...options.defaultToolContext }
+        : undefined,
     };
   }
 
@@ -345,6 +583,44 @@ class DefaultChatClientBuilder implements ChatClientBuilder {
     this.options = {
       ...this.options,
       defaultContext: { ...this.options.defaultContext, ...context },
+    };
+    return this;
+  }
+
+  defaultTools(...tools: ToolSource[]): ChatClientBuilder {
+    this.options = {
+      ...this.options,
+      defaultToolCallbacks: resolveToolCallbacks(this.options.defaultToolCallbacks, ...tools),
+    };
+    return this;
+  }
+
+  defaultToolContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder {
+    this.options = {
+      ...this.options,
+      defaultToolContext: {
+        ...this.options.defaultToolContext,
+        ...context,
+      },
+    };
+    return this;
+  }
+
+  toolCallingAdvisorOptions(options: ToolCallingAdvisorOptions): ChatClientBuilder {
+    this.options = {
+      ...this.options,
+      toolCallingAdvisorOptions: {
+        ...this.options.toolCallingAdvisorOptions,
+        ...options,
+      },
+    };
+    return this;
+  }
+
+  autoRegisterToolCallingAdvisor(enabled: boolean): ChatClientBuilder {
+    this.options = {
+      ...this.options,
+      autoRegisterToolCallingAdvisor: enabled,
     };
     return this;
   }

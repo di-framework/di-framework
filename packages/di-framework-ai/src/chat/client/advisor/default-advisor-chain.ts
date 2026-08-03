@@ -69,4 +69,24 @@ export class DefaultAdvisorChain implements CallAdvisorChain, StreamAdvisorChain
     );
     yield* advisor.adviseStream(request, next);
   }
+
+  /**
+   * Return a chain starting after {@code after}, so recursive advisors can
+   * re-enter remaining advisors without re-running themselves.
+   */
+  copy(after: CallAdvisor | StreamAdvisor): DefaultAdvisorChain {
+    const callIdx = this.callAdvisors.indexOf(after as CallAdvisor);
+    const streamIdx = this.streamAdvisors.indexOf(after as StreamAdvisor);
+
+    if (callIdx < 0 && streamIdx < 0) {
+      throw new Error(`The specified advisor is not part of the chain: ${after.name}`);
+    }
+
+    return new DefaultAdvisorChain(
+      this.callAdvisors,
+      this.streamAdvisors,
+      callIdx >= 0 ? callIdx + 1 : this.callIndex,
+      streamIdx >= 0 ? streamIdx + 1 : this.streamIndex,
+    );
+  }
 }
