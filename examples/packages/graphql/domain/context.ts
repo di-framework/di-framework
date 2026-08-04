@@ -14,16 +14,15 @@ export interface LibraryContext extends GraphQLContext {
   roles?: string[];
 }
 
-/** Authorization lives in the domain, not in a resolver map. */
+/**
+ * Authorization lives in the domain, not in a resolver map.
+ *
+ * Declarative requirements are expressed with `@Requires` on the field or
+ * action itself (see `addBook` in `catalog.ts`); `schema.ts` teaches it how to
+ * read the member and roles off this context. This helper remains for the rare
+ * check that has to run inside a method body.
+ */
 export function requireMember(ctx: LibraryContext): string {
   if (!ctx.memberId) throw new Error('Not authenticated: no member on this request.');
   return ctx.memberId;
-}
-
-export function requireLibrarian(ctx: LibraryContext): string {
-  const memberId = requireMember(ctx);
-  if (!ctx.roles?.includes('librarian')) {
-    throw new Error(`Member ${memberId} is not a librarian.`);
-  }
-  return memberId;
 }

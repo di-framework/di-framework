@@ -15,6 +15,7 @@ import {
   getImplements,
   getLookup,
   getParamNames,
+  getRequirements,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
 import { CUSTOM_SCALARS, ScalarRef, scalarNameForConstructor } from './scalars.ts';
@@ -408,6 +409,7 @@ class GraphBuilder {
     const path = `${ownerName}.${name}`;
     const type = this.resolveTypeRef(declaration.options.type, declaration.options, path);
     const { params, args } = this.planParams(target, declaration, holder, path);
+    const requirements = getRequirements(target, declaration.propertyKey);
 
     this.fieldContexts.set(path, context);
 
@@ -426,6 +428,7 @@ class GraphBuilder {
         params,
         batch: declaration.options.batch,
         middleware: declaration.options.middleware,
+        requirements: requirements.length > 0 ? requirements : undefined,
         subscription: declaration.event
           ? {
               event: declaration.event,
@@ -487,6 +490,7 @@ class GraphBuilder {
         : nonNull({ kind: 'object', name: object.name, target: object.target });
 
       const { params, args } = this.planParams(object.target, declaration, 'entity', path);
+      const entityRequirements = getRequirements(object.target, declaration.propertyKey);
       const keyArgName = declaration.options.keyArg ?? keyArg;
       if (!args.some((arg) => arg.name === keyArgName)) {
         args.unshift({
@@ -511,6 +515,7 @@ class GraphBuilder {
           member: declaration.member,
           holder: 'entity',
           params,
+          requirements: entityRequirements.length > 0 ? entityRequirements : undefined,
           entity: {
             typeName: object.name,
             keyArg: keyArgName,

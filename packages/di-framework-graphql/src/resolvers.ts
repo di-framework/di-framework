@@ -13,6 +13,7 @@
  */
 
 import { type Container, useContainer } from '@di-framework/core/container';
+import { type AuthorizationOptions, denialToError, evaluateRequirements } from './authorization.ts';
 import { BatchLoader } from './loader.ts';
 import type {
   Ctor,
@@ -27,6 +28,8 @@ export interface ResolverOptions {
   /** Container used to resolve portals, extensions and event subscriptions. */
   container?: Container;
   graph: TypeGraph;
+  /** How `@Requires` reads the principal off the request context. */
+  authorization?: AuthorizationOptions;
 }
 
 interface RequestState {
@@ -86,12 +89,14 @@ function stableStringify(value: unknown): string {
 
 export class ResolverFactory {
   private readonly container: Container;
+  private readonly authorization: AuthorizationOptions;
   private readonly inputsByName = new Map<string, ResolvedInputType>();
   /** Instances of classes that are not registered with the container. */
   private readonly unmanaged = new Map<Ctor, any>();
 
   constructor(private readonly options: ResolverOptions) {
     this.container = options.container ?? useContainer();
+    this.authorization = options.authorization ?? {};
     for (const input of options.graph.inputs) this.inputsByName.set(input.name, input);
   }
 
@@ -106,11 +111,11 @@ export class ResolverFactory {
       return () => constant;
     }
 
-    if (source.entity) return this.createEntityActionResolver(field);
+    if (source.entity) return this.authorized(field, this.createEntityActionResolver(field));
 
     const argTypes = new Map(field.args.map((arg) => [arg.name, arg.type]));
 
-    return (parent, args, ctx, info) => {
+    return this.authorized(field, (parent, args, ctx, info) => {
       const state = getRequestState(ctx);
       const holder = this.resolveHolder(field, parent, state);
 
@@ -123,7 +128,33 @@ export class ResolverFactory {
       }
 
       return this.invoke(holder, field, argTypes, parent, args, ctx, info);
-    };
+    });
+  }
+
+  /**
+   * Gate a resolver behind the field's `@Requires` declarations.
+   *
+   * The check runs before the member is read or invoked — and before the entity
+   * is loaded — so a denied caller never reaches the domain object at all.
+   */
+  private authorized<T extends (parent: any, args: any, ctx: any, info: any) => any>(
+    field: ResolvedField,
+    resolver: T,
+  ): T {
+    const requirements = field.source.requirements;
+    if (!requirements || requirements.length === 0) return resolver;
+
+    const path = `${field.source.target.name}.${field.name}`;
+    return (async (parent: any, args: any, ctx: any, info: any) => {
+      const denial = await evaluateRequirements(
+        requirements,
+        path,
+        { parent, args, ctx, info },
+        this.authorization,
+      );
+      if (denial) throw denialToError(denial, this.authorization);
+      return resolver(parent, args, ctx, info);
+    }) as unknown as T;
   }
 
   /** `subscribe` implementation for a `@Subscription` field. */
@@ -140,12 +171,31 @@ export class ResolverFactory {
       throw new Error(`${field.name} is not a subscription field`);
     }
 
-    return (_parent, args, ctx) =>
-      containerEventIterator(this.container, subscription.event, (payload) => {
-        if (subscription.filter && !subscription.filter(payload, args, ctx)) return SKIP;
-        if (subscription.map) return subscription.map(payload, args, ctx);
-        return unwrapPublisherPayload(payload);
+    const requirements = field.source.requirements;
+    const path = `${field.source.target.name}.${field.name}`;
+
+    return (_parent, args, ctx, info) => {
+      const stream = () =>
+        containerEventIterator(this.container, subscription.event, (payload) => {
+          if (subscription.filter && !subscription.filter(payload, args, ctx)) return SKIP;
+          if (subscription.map) return subscription.map(payload, args, ctx);
+          return unwrapPublisherPayload(payload);
+        });
+
+      if (!requirements || requirements.length === 0) return stream();
+
+      // Authorize before subscribing, so a denied caller never gets a stream.
+      return deferredIterator(async () => {
+        const denial = await evaluateRequirements(
+          requirements,
+          path,
+          { parent: _parent, args, ctx, info },
+          this.authorization,
+        );
+        if (denial) throw denialToError(denial, this.authorization);
+        return stream();
       });
+    };
   }
 
   /** Field resolver applied to each published event of a subscription. */
@@ -392,6 +442,35 @@ function unwrapPublisherPayload(payload: any): any {
     return payload.result;
   }
   return payload;
+}
+
+/**
+ * An iterator whose source is decided on first `next()`.
+ *
+ * Lets an async authorization check run before the underlying subscription is
+ * opened while still handing `subscribe` a synchronous iterator.
+ */
+function deferredIterator(open: () => Promise<AsyncIterableIterator<any>>) {
+  let source: AsyncIterableIterator<any> | undefined;
+  const ensure = async () => {
+    source ??= await open();
+    return source;
+  };
+  return {
+    async next(): Promise<IteratorResult<any>> {
+      return (await ensure()).next();
+    },
+    async return(): Promise<IteratorResult<any>> {
+      return (await source?.return?.()) ?? { value: undefined, done: true };
+    },
+    async throw(error: unknown): Promise<IteratorResult<any>> {
+      if (source?.throw) return source.throw(error);
+      throw error;
+    },
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+  } as AsyncIterableIterator<any>;
 }
 
 /** Bridge container events onto an async iterator for GraphQL subscriptions. */

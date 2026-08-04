@@ -8,13 +8,16 @@
  */
 
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
+import type { AuthRequirement } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
 import {
   defineBoundedContext,
   defineFieldDeclaration,
   defineImplements,
   defineLookup,
+  defineMemberRequirements,
   defineParamDeclaration,
+  defineTypeRequirements,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
 import { ScalarRef, scalarNameForConstructor } from './scalars.ts';
@@ -352,6 +355,43 @@ export function Subscription(
 ): any {
   const { type, options } = normalizeArgs<SubscriptionOptions>(typeOrOptions, maybeOptions);
   return declareMember('subscription', type, options, event);
+}
+
+/**
+ * Declares what a caller must satisfy before a field or action runs.
+ *
+ * Auth lives with the thing it protects, and fails the way boundary checks do:
+ * the requirement is part of the domain declaration rather than a guard clause
+ * repeated at the top of every resolver.
+ *
+ * Applies to a `@Field`, an `@Action`, a portal root, or a whole class — a
+ * class-level requirement guards every field on it. Requirements accumulate and
+ * are conjunctive: all of them must pass.
+ *
+ * @example
+ * ```ts
+ * @Portal()
+ * class Library {
+ *   @Requires({ roles: ['librarian'] })
+ *   @Action(() => Loan)
+ *   lend(@Arg('bookId', () => ID) bookId: string) { ... }
+ *
+ *   @Requires({ predicate: ({ parent, ctx }) => parent.ownerId === ctx.user.id })
+ *   @Field(() => String)
+ *   privateNote(): string { ... }
+ * }
+ * ```
+ */
+export function Requires(
+  ...requirements: AuthRequirement[]
+): ClassDecorator & PropertyDecorator & MethodDecorator {
+  return ((target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor): any => {
+    if (propertyKey === undefined) {
+      defineTypeRequirements(target as Ctor, requirements);
+      return target;
+    }
+    defineMemberRequirements(target, propertyKey as string, requirements);
+  }) as ClassDecorator & PropertyDecorator & MethodDecorator;
 }
 
 /**

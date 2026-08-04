@@ -38,6 +38,7 @@ import {
   subscribe,
   validate,
 } from 'graphql';
+import type { AuthorizationOptions } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
 import { ResolverFactory } from './resolvers.ts';
 import { registerScalarName, type ScalarRef } from './scalars.ts';
@@ -142,6 +143,8 @@ export function registerScalar(name: string, scalar: GraphQLScalarType): ScalarR
 export interface SemanticSchemaOptions extends BuildOptions {
   /** Container used to resolve portals and read the event bus. */
   container?: Container;
+  /** How `@Requires` reads the principal, roles and claims off the context. */
+  authorization?: AuthorizationOptions;
   /** Options for the SDL rendered onto `SemanticSchema.sdl`. */
   print?: PrintOptions;
   /** Optional query resource limits enforced before execution. */
@@ -184,7 +187,11 @@ class SchemaAssembler {
     private readonly graph: TypeGraph,
     options: SemanticSchemaOptions,
   ) {
-    this.factory = new ResolverFactory({ container: options.container, graph });
+    this.factory = new ResolverFactory({
+      container: options.container,
+      graph,
+      authorization: options.authorization,
+    });
   }
 
   assemble(): GraphQLSchema {

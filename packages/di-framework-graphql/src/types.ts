@@ -301,6 +301,8 @@ export interface FieldSource {
   };
   /** Synthesized field that always resolves to this value. */
   constant?: unknown;
+  /** Requirements that must pass before the member is read or invoked. */
+  requirements?: readonly import('./authorization.ts').AuthRequirement[];
 }
 
 export interface ResolvedArg {

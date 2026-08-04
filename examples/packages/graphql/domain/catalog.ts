@@ -23,12 +23,13 @@ import {
   Lookup,
   Portal,
   registerEnum,
+  Requires,
   SemanticType,
 } from '@di-framework/graphql';
 import type { GraphQLResolveInfo } from 'graphql';
 // Must be evaluated before the first decorated class below. See registry.ts.
 import './registry.ts';
-import { type LibraryContext, requireLibrarian } from './context.ts';
+import type { LibraryContext } from './context.ts';
 
 /* -------------------------------------------------------------------------- */
 /* Enums                                                                      */
@@ -266,11 +267,12 @@ export class CatalogPortal {
 
   /**
    * An action on a portal is a plain root mutation. Authorization is a domain
-   * decision, so it is expressed here rather than in transport middleware.
+   * decision, so it is declared on the action with `@Requires` rather than
+   * checked by transport middleware or a guard clause in the body.
    */
+  @Requires({ roles: ['librarian'], message: 'Only librarians can acquire titles.' })
   @Action(() => Book, { description: 'Acquire a new title.' })
-  addBook(@Arg('input', () => BookInput) input: BookInput, @Ctx() ctx: LibraryContext): BookRow {
-    requireLibrarian(ctx);
+  addBook(@Arg('input', () => BookInput) input: BookInput): BookRow {
     return this.repo.add({
       id: input.slug(),
       title: input.title,

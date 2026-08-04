@@ -6,6 +6,7 @@
  */
 
 import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
+import type { AuthRequirement } from './authorization.ts';
 import type { Ctor, FieldDeclaration, ParamDeclaration, TypeThunk } from './types.ts';
 
 export const FIELDS_METADATA_KEY = 'graphql:fields';
@@ -13,6 +14,8 @@ export const PARAMS_METADATA_KEY = 'graphql:params';
 export const LOOKUP_METADATA_KEY = 'graphql:lookup';
 export const CONTEXT_METADATA_KEY = 'graphql:bounded-context';
 export const IMPLEMENTS_METADATA_KEY = 'graphql:implements';
+export const REQUIRES_METADATA_KEY = 'graphql:requires';
+export const TYPE_REQUIRES_METADATA_KEY = 'graphql:type-requires';
 
 type FieldMap = Record<string, FieldDeclaration>;
 type ParamMap = Record<string, Record<number, ParamDeclaration>>;
@@ -84,6 +87,56 @@ export function getLookup(target: Ctor): string | undefined {
     current = Object.getPrototypeOf(current);
   }
   return undefined;
+}
+
+/** Record a requirement on a member (`@Requires` on a `@Field`/`@Action`). */
+export function defineMemberRequirements(
+  prototype: object,
+  propertyKey: string,
+  requirements: readonly AuthRequirement[],
+): void {
+  const all: Record<string, AuthRequirement[]> =
+    getOwnMetadata(REQUIRES_METADATA_KEY, prototype) || {};
+  all[propertyKey] = [...requirements, ...(all[propertyKey] ?? [])];
+  defineMetadata(REQUIRES_METADATA_KEY, all, prototype);
+}
+
+/** Record a requirement covering every field of a class (`@Requires` on a type). */
+export function defineTypeRequirements(
+  target: Ctor,
+  requirements: readonly AuthRequirement[],
+): void {
+  const own: AuthRequirement[] = getOwnMetadata(TYPE_REQUIRES_METADATA_KEY, target) || [];
+  defineMetadata(TYPE_REQUIRES_METADATA_KEY, [...requirements, ...own], target);
+}
+
+/**
+ * Every requirement guarding a member: those declared on the class come first,
+ * then those on the member, walking the prototype chain so a subclass inherits
+ * whatever its base already required.
+ */
+export function getRequirements(target: Ctor, propertyKey: string): AuthRequirement[] {
+  const typeLevel: AuthRequirement[] = [];
+  let current: any = target;
+  while (current && current !== Function.prototype) {
+    const own: AuthRequirement[] | undefined = getOwnMetadata(TYPE_REQUIRES_METADATA_KEY, current);
+    if (own) typeLevel.unshift(...own);
+    current = Object.getPrototypeOf(current);
+  }
+
+  const memberLevel: AuthRequirement[] = [];
+  let prototype: object | null = target.prototype;
+  while (prototype && prototype !== Object.prototype) {
+    const all: Record<string, AuthRequirement[]> | undefined = getOwnMetadata(
+      REQUIRES_METADATA_KEY,
+      prototype,
+    );
+    const own = all?.[propertyKey];
+    if (own) memberLevel.unshift(...own);
+    prototype = Object.getPrototypeOf(prototype);
+  }
+
+  return [...typeLevel, ...memberLevel];
 }
 
 /** Record an interface implemented by a class (`@Implements`). */

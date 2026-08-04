@@ -190,7 +190,11 @@ describe('mutations', () => {
     }`;
 
     const denied = await run(mutation, { memberId: 'm1', roles: [] });
-    expect(denied.errors?.[0]?.message).toContain('not a librarian');
+    expect(denied.errors?.[0]?.message).toBe('Only librarians can acquire titles.');
+    expect(denied.errors?.[0]?.extensions?.code).toBe('FORBIDDEN');
+
+    const anonymous = await run(mutation, { roles: ['librarian'] });
+    expect(anonymous.errors?.[0]?.extensions?.code).toBe('UNAUTHENTICATED');
 
     const allowed = data(await run(mutation, { memberId: 'm1', roles: ['librarian'] }));
     expect(allowed.addBook).toEqual({ id: 'the-dispossessed', title: 'The Dispossessed' });
