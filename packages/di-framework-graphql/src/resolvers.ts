@@ -212,17 +212,15 @@ export class ResolverFactory {
         `${field.source.target.name}.${field.source.propertyKey} is not callable on the resolved instance.`,
       );
     }
-    const call = () => method.apply(holder, this.buildCallArgs(field, argTypes, parent, args, ctx, info));
+    const call = () =>
+      method.apply(holder, this.buildCallArgs(field, argTypes, parent, args, ctx, info));
     const middleware = field.source.middleware;
     if (!middleware) return call();
     const layers = Array.isArray(middleware) ? [...middleware] : [middleware];
     const run = (index: number): unknown => {
       const layer = layers[index];
       if (!layer) return call();
-      return layer(
-        () => run(index + 1),
-        { parent, args, ctx, info, field },
-      );
+      return layer(() => run(index + 1), { parent, args, ctx, info, field });
     };
     return run(0);
   }
