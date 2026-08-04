@@ -476,6 +476,12 @@ export interface HandlerOptions {
   context?: (request: Request) => GraphQLContext | Promise<GraphQLContext>;
 }
 
+/** Options for the lightweight GraphQL-over-SSE subscription endpoint. */
+export interface SubscriptionHandlerOptions extends HandlerOptions {
+  /** Keep the stream open with periodic SSE comments (milliseconds). */
+  heartbeatMs?: number;
+}
+
 /** Minimal router surface accepted by {@link mountGraphQL}. */
 export interface GraphQLRouterLike {
   get(
@@ -557,6 +563,74 @@ export function mountGraphQL<R extends GraphQLRouterLike>(
   router.get(path, handler);
   router.post(path, handler);
   return router;
+}
+
+/**
+ * Serve GraphQL subscriptions over Server-Sent Events. The endpoint accepts a
+ * GET request with the standard `query`, `variables`, and `operationName`
+ * parameters and emits `data` events until the client aborts the request.
+ */
+export function createGraphQLSSEHandler(
+  api: SemanticSchema,
+  options: SubscriptionHandlerOptions = {},
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    if (request.method !== 'GET') {
+      return new Response(JSON.stringify({ errors: [{ message: 'Subscriptions require GET' }] }), {
+        status: 405,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const url = new URL(request.url);
+    const query = url.searchParams.get('query');
+    if (!query) return new Response('Missing "query" parameter', { status: 400 });
+    const variables = url.searchParams.get('variables');
+    const context = options.context ? await options.context(request) : {};
+    const result = await api.subscribe({
+      query,
+      variables: variables ? JSON.parse(variables) : undefined,
+      operationName: url.searchParams.get('operationName'),
+      context,
+    });
+    if (!Symbol.asyncIterator || typeof (result as any)?.[Symbol.asyncIterator] !== 'function') {
+      return new Response(JSON.stringify(result), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const iterator = result as AsyncIterableIterator<ExecutionResult>;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        if (options.heartbeatMs && options.heartbeatMs > 0) {
+          heartbeat = setInterval(() => controller.enqueue(encoder.encode(': heartbeat\n\n')), options.heartbeatMs);
+        }
+        try {
+          for await (const item of iterator) {
+            controller.enqueue(encoder.encode(`event: next\ndata: ${JSON.stringify(item)}\n\n`));
+          }
+          controller.enqueue(encoder.encode('event: complete\ndata: {}\n\n'));
+          controller.close();
+        } catch (error) {
+          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ errors: [{ message: String(error) }] })}\n\n`));
+          controller.close();
+        } finally {
+          if (heartbeat) clearInterval(heartbeat);
+        }
+      },
+      async cancel() {
+        await iterator.return?.();
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      },
+    });
+  };
 }
 
 export { DateTimeScalar, JSONScalar };
