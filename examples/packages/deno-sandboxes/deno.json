@@ -1,4 +1,5 @@
 {
+  "nodeModulesDir": "auto",
   "exports": "./src/main.ts",
   "imports": {
     "itty-router": "npm:itty-router@^5.0.0",
