@@ -196,4 +196,4 @@ const model = new ScriptedChatModel([
 MIT
 # Durable vector stores
 
-The package exports `BunSqliteVectorStore`, `VectorizeVectorStore`, and `PgVectorStore`. All implement the same `VectorStore` API and can be passed to RAG advisors. SQLite stores rows as JSON and perform exact cosine scans (appropriate for local/test corpora); Vectorize and pgvector delegate ranking to their managed backends. Create provider schemas and indexes out of band, and keep provider clients optional so Workers and Bun bundles do not pull Postgres dependencies.
+The package exports `BunSqliteVectorStore`, `VectorizeVectorStore`, and `PgVectorStore`. All implement the same `VectorStore` API and can be passed to RAG advisors. The Bun store uses the optional `wasm-similarity` package for batch cosine ranking when installed, and automatically falls back to a portable exact cosine scan when it is unavailable. SQLite stores rows as JSON (appropriate for local/test corpora); Vectorize and pgvector delegate ranking to their managed backends. Create provider schemas and indexes out of band and keep provider clients optional so Workers and Bun bundles do not pull Postgres dependencies.
