@@ -386,8 +386,16 @@ export interface HandlerOptions {
 
 /** Minimal router surface accepted by {@link mountGraphQL}. */
 export interface GraphQLRouterLike {
-  get(path: string, handler: (request: Request, ...rest: any[]) => unknown, ...rest: any[]): unknown;
-  post(path: string, handler: (request: Request, ...rest: any[]) => unknown, ...rest: any[]): unknown;
+  get(
+    path: string,
+    handler: (request: Request, ...rest: any[]) => unknown,
+    ...rest: any[]
+  ): unknown;
+  post(
+    path: string,
+    handler: (request: Request, ...rest: any[]) => unknown,
+    ...rest: any[]
+  ): unknown;
 }
 
 export interface GraphQLRouteOptions extends HandlerOptions {
