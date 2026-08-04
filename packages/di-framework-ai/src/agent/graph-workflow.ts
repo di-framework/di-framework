@@ -81,10 +81,7 @@ export interface GraphRunResult<TOut = unknown> {
 }
 
 export interface GraphLifecycleHooks {
-  onGraphStart?(event: {
-    graphName: string;
-    input: unknown;
-  }): void | Promise<void>;
+  onGraphStart?(event: { graphName: string; input: unknown }): void | Promise<void>;
   onGraphComplete?(event: {
     graphName: string;
     output: unknown;
@@ -571,12 +568,9 @@ export class GraphWorkflowBuilder<TIn = unknown, TOut = unknown> {
     this.assertOpen();
     validateGraph(this.name, this.nodes, groupEdges(this.edges));
     this.sealed = true;
-    return new GraphWorkflow<TIn, TOut>(
-      this.name,
-      new Map(this.nodes),
-      [...this.edges],
-      { ...this.options },
-    );
+    return new GraphWorkflow<TIn, TOut>(this.name, new Map(this.nodes), [...this.edges], {
+      ...this.options,
+    });
   }
 
   private assertOpen(): void {
@@ -652,9 +646,7 @@ function validateGraph(
     const outs = edgesByFrom.get(id) ?? [];
     if (outs.length === 0 && id !== GRAPH_FINISH) {
       // Only enforce for start and nodes that are edge targets / sources.
-      const isReferenced =
-        id === GRAPH_START ||
-        allEdges.some((e) => e.from === id || e.to === id);
+      const isReferenced = id === GRAPH_START || allEdges.some((e) => e.from === id || e.to === id);
       if (isReferenced) {
         throw graphError(
           `Graph "${name}": node "${id}" has no outgoing edges (must reach finish or loop)`,
@@ -681,17 +673,12 @@ function validateGraph(
   // Every edge endpoint should be reachable from start (no dead fragments that look wired).
   for (const edge of allEdges) {
     if (!reachable.has(edge.from)) {
-      throw graphError(
-        `Graph "${name}": edge from unreachable node "${edge.from}"`,
-      );
+      throw graphError(`Graph "${name}": edge from unreachable node "${edge.from}"`);
     }
   }
 }
 
-function mergeHooks(
-  base?: GraphLifecycleHooks,
-  extra?: GraphLifecycleHooks,
-): GraphLifecycleHooks {
+function mergeHooks(base?: GraphLifecycleHooks, extra?: GraphLifecycleHooks): GraphLifecycleHooks {
   if (!base) return extra ?? {};
   if (!extra) return base;
   return {
@@ -765,8 +752,7 @@ export function chatToolLoopGraph(
       }
       throwIfAborted(ctx.signal);
       const message = typeof input === 'string' ? input : input.message;
-      const system =
-        (typeof input === 'string' ? undefined : input.system) ?? options.system;
+      const system = (typeof input === 'string' ? undefined : input.system) ?? options.system;
 
       let spec = client.prompt();
       if (system) spec = spec.system(system);

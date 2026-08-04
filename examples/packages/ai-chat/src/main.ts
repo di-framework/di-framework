@@ -1,6 +1,7 @@
 import {
   AiService,
   ChatClient,
+  chatToolLoopGraph,
   configureAi,
   FakeEmbeddingModel,
   functionToolCallback,
@@ -17,7 +18,6 @@ import {
   toolCallResponse,
   UserMessageAnn,
   WithRag,
-  chatToolLoopGraph,
 } from '@di-framework/ai';
 import { Container } from '@di-framework/core/decorators';
 

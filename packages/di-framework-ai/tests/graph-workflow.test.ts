@@ -7,11 +7,11 @@ import {
   GRAPH_START,
   GraphWorkflow,
   isAiError,
+  ScriptedChatModel,
   simpleAgentGraph,
+  textResponse,
   toolCall,
   toolCallResponse,
-  ScriptedChatModel,
-  textResponse,
 } from '../src/index.ts';
 
 describe('GraphWorkflow', () => {
@@ -309,7 +309,9 @@ describe('GraphWorkflow', () => {
 
   test('GraphWorkflow.of factory', async () => {
     const graph = GraphWorkflow.of<number, number>('of', (b) => {
-      b.node('id', (n: number) => n).edge(GRAPH_START, 'id').edge('id', GRAPH_FINISH);
+      b.node('id', (n: number) => n)
+        .edge(GRAPH_START, 'id')
+        .edge('id', GRAPH_FINISH);
     });
     expect((await graph.run(7)).output).toBe(7);
   });

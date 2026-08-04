@@ -35,11 +35,11 @@ export type {
   GraphWorkflowOptions,
 } from './graph-workflow.ts';
 export {
+  chatToolLoopGraph,
   GRAPH_FINISH,
   GRAPH_START,
   GraphWorkflow,
   GraphWorkflowBuilder,
-  chatToolLoopGraph,
   graphWorkflow,
   simpleAgentGraph,
 } from './graph-workflow.ts';
