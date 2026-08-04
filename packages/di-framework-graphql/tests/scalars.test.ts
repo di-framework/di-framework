@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { GraphQLScalarType, Kind } from 'graphql';
+import { Field, Portal } from '../src/decorators.ts';
 import {
   Bool,
   DateTime,
@@ -13,7 +14,6 @@ import {
   scalarNameForConstructor,
 } from '../src/scalars.ts';
 import { buildSemanticSchema, registerScalar } from '../src/schema.ts';
-import { Field, Portal } from '../src/decorators.ts';
 import { withRegistry } from './helpers.ts';
 
 describe('ScalarRef', () => {

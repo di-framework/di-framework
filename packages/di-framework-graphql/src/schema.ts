@@ -36,8 +36,8 @@ import {
 } from 'graphql';
 import { SemanticSchemaError } from './errors.ts';
 import { ResolverFactory } from './resolvers.ts';
-import { type PrintOptions, printSDL } from './sdl.ts';
 import { registerScalarName, type ScalarRef } from './scalars.ts';
+import { type PrintOptions, printSDL } from './sdl.ts';
 import { buildTypeGraph } from './type-graph.ts';
 import type {
   BuildOptions,
