@@ -6,6 +6,7 @@
  * schema, with an escape hatch (`new SemanticRegistry()`) for tests.
  */
 
+import { getBoundedContext } from './metadata.ts';
 import type {
   Ctor,
   EnumDeclaration,
@@ -94,16 +95,24 @@ export class SemanticRegistry {
     return [...this.extensions];
   }
 
-  /** Bounded contexts that have declared something. */
+  /**
+   * Bounded contexts that have declared something.
+   *
+   * `@SemanticType` records no context of its own — class decorators run
+   * bottom-up, so `@BoundedContext` may not have applied yet and the context is
+   * read from metadata instead. Both sources are consulted here.
+   */
   getContexts(): string[] {
     const names = new Set<string>();
     for (const declaration of this.types.values()) {
-      if (declaration.context) names.add(declaration.context);
+      const context = declaration.context ?? getBoundedContext(declaration.target);
+      if (context) names.add(context);
     }
     for (const extension of this.extensions) {
-      if (extension.context) names.add(extension.context);
+      const context = extension.context ?? getBoundedContext(extension.target);
+      if (context) names.add(context);
     }
-    return Array.from(names);
+    return Array.from(names).sort();
   }
 
   /** Copy every declaration into a fresh registry (prototype pattern, as the container does). */

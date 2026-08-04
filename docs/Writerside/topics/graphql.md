@@ -358,6 +358,44 @@ Reach for `directives` when the artifact exists so a reviewer can see a boundary
 
 Types this subgraph does not own are printed as stubs: the key field only, marked `@external`, plus whatever this subgraph contributes via `@Extends`.
 
+## Deployable Subgraphs
+
+`contexts: [...]` slices a schema. What makes a slice *deployable* is that it still resolves references across the seam — through boundary stubs:
+
+```typescript
+const subgraphs = buildSemanticSubgraphs({ federation: true });
+// { Catalog: SemanticSchema, Lending: SemanticSchema }
+
+Bun.serve({ port: 4001, fetch: createGraphQLHandler(subgraphs.Catalog) });
+```
+
+For SDL artifacts, `buildContextSubgraphs()` does the same on the `graphql`-free path:
+
+```typescript
+import { buildContextSubgraphs, printSDL } from '@di-framework/graphql/core';
+
+for (const [context, graph] of Object.entries(buildContextSubgraphs())) {
+  await Bun.write(`${context}.graphql`, printSDL(graph, { federation: true }));
+}
+```
+
+### What crosses the slice
+
+A context sees another context's type only if that type is a boundary type, and then only as a stub. The rules are:
+
+| | Stays inside the owning slice | Crosses as a stub |
+|---|---|---|
+| Non-boundary type | ✅ never leaves | — |
+| Boundary type's key | — | ✅ the whole contract |
+| Boundary type's other fields | ✅ owner only | ❌ |
+| `@Action` behaviour | ✅ owner only | ❌ |
+| Fields added with `@Extends` | — | ✅ they belong to the extending context |
+| Portals | ✅ owner only | ❌ |
+
+So `Book` in the Lending subgraph is `{ id, onLoan }`: the key it is identified by, plus the field Lending itself contributed. `title` and `bookReshelve` belong to Catalog and never appear. Two services independently generated from the same domain therefore agree on the shared type by construction.
+
+Stubs nothing references are pruned, so a slice does not carry types it never mentions. Set `boundaryStubs: false` to get the strict old behaviour, where a cross-context reference is a build error instead.
+
 ## API Surface
 
 **Type decorators** — `@SemanticType`, `@Portal`, `@InputType`, `@BoundedContext`, `@Extends`, `registerEnum`

@@ -423,6 +423,16 @@ export interface BuildOptions {
   /** Restrict the schema to these bounded contexts. Defaults to all. */
   contexts?: string[];
   /**
+   * When slicing by context, include *stubs* of boundary types owned by the
+   * contexts left out — the key field, plus anything this slice contributes
+   * through `@Extends`.
+   *
+   * This is what makes a slice deployable on its own: a reference across the
+   * seam still resolves, and the stub is exactly the shared contract the two
+   * services agree on. Defaults to `true` whenever `contexts` is set.
+   */
+  boundaryStubs?: boolean;
+  /**
    * Reject cross-context references to non-boundary types. Default `true` —
    * this is the point of the package; turn it off only while migrating.
    */

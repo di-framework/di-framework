@@ -40,6 +40,7 @@ import {
 } from 'graphql';
 import type { AuthorizationOptions } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
+import { getRegistry } from './registry.ts';
 import { hydrate, ResolverFactory } from './resolvers.ts';
 import { registerScalarName, type ScalarRef } from './scalars.ts';
 import { isEntity, type PrintOptions, printSDL } from './sdl.ts';
@@ -650,6 +651,31 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
       return formatResult(result as ExecutionResult);
     },
   };
+}
+
+/**
+ * Build one executable schema per bounded context.
+ *
+ * Each is a deployable service: it owns its types and portals and sees the rest
+ * only through boundary stubs. Pair with `federation: true` and a gateway
+ * composes them back into one graph.
+ *
+ * @example
+ * ```ts
+ * const subgraphs = buildSemanticSubgraphs({ federation: true });
+ * Bun.serve({ fetch: createGraphQLHandler(subgraphs.Catalog) });
+ * ```
+ */
+export function buildSemanticSubgraphs(
+  options: SemanticSchemaOptions = {},
+): Record<string, SemanticSchema> {
+  const registry = options.registry ?? getRegistry();
+  const contexts = options.contexts ?? registry.getContexts();
+  const subgraphs: Record<string, SemanticSchema> = {};
+  for (const context of [...contexts].sort()) {
+    subgraphs[context] = buildSemanticSchema({ ...options, contexts: [context] });
+  }
+  return subgraphs;
 }
 
 /* -------------------------------------------------------------------------- */

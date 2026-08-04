@@ -80,11 +80,14 @@ class GraphBuilder {
   /** Context that declared each field, keyed by `TypeName.fieldName`. */
   private readonly fieldContexts = new Map<string, string | undefined>();
 
+  private readonly boundaryStubs: boolean;
+
   constructor(options: BuildOptions) {
     this.registry = options.registry ?? getRegistry();
     this.enforceBoundaries = options.enforceBoundaries ?? true;
     this.strictTypes = options.strictTypes ?? false;
     this.contextFilter = options.contexts ? new Set(options.contexts) : undefined;
+    this.boundaryStubs = options.boundaryStubs ?? true;
   }
 
   build(): TypeGraph {
@@ -117,6 +120,33 @@ class GraphBuilder {
       this.objectsByName.set(shell.name, shell);
     }
 
+    // Pass 1b: stubs for boundary types the slice does not own, so a reference
+    // across the seam still resolves. Unreferenced stubs are pruned later.
+    if (this.contextFilter && this.boundaryStubs) {
+      for (const declaration of this.registry.getTypes()) {
+        if (declaration.portal) continue;
+        if (this.inSelectedContext(getBoundedContext(declaration.target))) continue;
+        if (!declaration.options.boundary || !declaration.options.key) continue;
+        if (this.objects.has(declaration.target)) continue;
+
+        const stub: ResolvedObjectType = {
+          name: declaration.name,
+          description: declaration.options.description,
+          target: declaration.target,
+          context: getBoundedContext(declaration.target),
+          boundary: true,
+          key: declaration.options.key,
+          portal: false,
+          fields: [],
+          interfaces: [],
+          lookup: lookupFor(declaration.target),
+          stub: true,
+        };
+        this.objects.set(declaration.target, stub);
+        this.objectsByName.set(stub.name, stub);
+      }
+    }
+
     // Pass 2: interface shells, so a type can implement an interface that
     // references it back.
     for (const declaration of this.registry.getInterfaces()) {
@@ -135,7 +165,9 @@ class GraphBuilder {
     // generated connection/edge types, which have no declarations to collect and
     // must not be revisited here.
     for (const object of Array.from(this.objects.values())) {
-      object.fields = this.resolveOwnFields(object);
+      // A stub carries only the contract: its key. Everything else about it is
+      // the owning subgraph's business.
+      object.fields = object.stub ? [this.keyField(object)] : this.resolveOwnFields(object);
     }
     for (const [target, resolved] of this.interfaces) {
       resolved.fields = this.resolveInterfaceFields(target, resolved);
@@ -182,6 +214,8 @@ class GraphBuilder {
     if (rootQuery.length === 0) {
       rootQuery.push(this.contextsField());
     }
+
+    this.pruneUnreferencedStubs([rootQuery, rootMutation, rootSubscription]);
 
     const graph: TypeGraph = {
       query: { name: 'Query', fields: rootQuery },
@@ -260,26 +294,29 @@ class GraphBuilder {
 
     // A boundary type is identified by its key, so the key is always exposed.
     if (object.key && !fields.some((field) => field.source.propertyKey === object.key)) {
-      const declaration = this.registry.getType(object.target);
-      fields.unshift(
-        this.resolveField(
-          object.target,
-          object.name,
-          {
-            propertyKey: object.key,
-            kind: 'field',
-            member: 'property',
-            options: { type: declaration?.options.keyType ?? new ScalarRef('ID') },
-            params: [],
-          },
-          'parent',
-          object.context,
-        ),
-      );
+      fields.unshift(this.keyField(object));
     }
 
     assertUniqueFieldNames(object.name, fields);
     return fields;
+  }
+
+  /** The field that exposes a type's key — the whole of a stub's contract. */
+  private keyField(object: ResolvedObjectType): ResolvedField {
+    const declaration = this.registry.getType(object.target);
+    return this.resolveField(
+      object.target,
+      object.name,
+      {
+        propertyKey: object.key as string,
+        kind: 'field',
+        member: 'property',
+        options: { type: declaration?.options.keyType ?? new ScalarRef('ID') },
+        params: [],
+      },
+      'parent',
+      object.context,
+    );
   }
 
   private resolveInterfaceFields(target: Ctor, resolved: ResolvedInterfaceType): ResolvedField[] {
@@ -644,6 +681,9 @@ class GraphBuilder {
   }
 
   private resolveEntityActions(object: ResolvedObjectType): ResolvedField[] {
+    // Behaviour on a stub belongs to the subgraph that owns the type.
+    if (object.stub) return [];
+
     const declarations = collectFieldDeclarations(object.target).filter(
       (declaration) => declaration.kind === 'action',
     );
@@ -710,6 +750,50 @@ class GraphBuilder {
         },
       };
     });
+  }
+
+  /**
+   * Drop boundary stubs nothing in the slice actually mentions.
+   *
+   * Stubs are added for every foreign boundary type up front because references
+   * are only known once fields are resolved. Reachability is a fixpoint: one
+   * stub may be reached only through a field another stub contributed.
+   */
+  private pruneUnreferencedStubs(roots: ResolvedField[][]): void {
+    const referenced = new Set<string>();
+
+    const visit = (fields: ResolvedField[]) => {
+      for (const field of fields) {
+        const named = namedTypeNode(field.type);
+        if (named.kind === 'object') referenced.add(named.name);
+        for (const arg of field.args) {
+          const argNamed = namedTypeNode(arg.type);
+          if (argNamed.kind === 'object') referenced.add(argNamed.name);
+        }
+      }
+    };
+
+    for (const root of roots) visit(root);
+    for (const object of this.objects.values()) if (!object.stub) visit(object.fields);
+    for (const resolved of this.interfaces.values()) visit(resolved.fields);
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const object of this.objects.values()) {
+        if (!object.stub || !referenced.has(object.name)) continue;
+        const before = referenced.size;
+        visit(object.fields);
+        if (referenced.size !== before) changed = true;
+      }
+    }
+
+    for (const [target, object] of this.objects) {
+      if (object.stub && !referenced.has(object.name)) {
+        this.objects.delete(target);
+        this.objectsByName.delete(object.name);
+      }
+    }
   }
 
   private contextsField(): ResolvedField {
@@ -1045,7 +1129,10 @@ class GraphBuilder {
 
   private collectContexts(): string[] {
     const names = new Set<string>();
-    for (const object of this.objects.values()) if (object.context) names.add(object.context);
+    // Stubs belong to a context this slice depends on, not one it represents.
+    for (const object of this.objects.values()) {
+      if (object.context && !object.stub) names.add(object.context);
+    }
     for (const declaration of this.registry.getTypes()) {
       const context = getBoundedContext(declaration.target);
       if (declaration.portal && context && this.inSelectedContext(context)) names.add(context);
@@ -1168,4 +1255,32 @@ function unwrapThunk(ref: TypeRef, registry: ReturnType<typeof getRegistry>): Ty
  */
 export function buildTypeGraph(options: BuildOptions = {}): TypeGraph {
   return new GraphBuilder(options).build();
+}
+
+/**
+ * Build one type graph per bounded context.
+ *
+ * Each slice is deployable on its own: it owns its types and portals, and sees
+ * every other context only through boundary stubs — the key, plus whatever this
+ * context contributes with `@Extends`. That stub *is* the contract between the
+ * two services, so what crosses the seam is exactly what was declared as a
+ * boundary and nothing else.
+ *
+ * @example
+ * ```ts
+ * for (const [context, graph] of Object.entries(buildContextSubgraphs())) {
+ *   await Bun.write(`${context}.graphql`, printSDL(graph, { federation: true }));
+ * }
+ * ```
+ */
+export function buildContextSubgraphs(
+  options: Omit<BuildOptions, 'contexts'> & { contexts?: string[] } = {},
+): Record<string, TypeGraph> {
+  const registry = options.registry ?? getRegistry();
+  const contexts = options.contexts ?? registry.getContexts();
+  const subgraphs: Record<string, TypeGraph> = {};
+  for (const context of [...contexts].sort()) {
+    subgraphs[context] = buildTypeGraph({ ...options, contexts: [context] });
+  }
+  return subgraphs;
 }

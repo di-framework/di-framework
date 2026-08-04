@@ -2,6 +2,7 @@ export * from './core.ts';
 export { containerEventIterator, hydrate, ResolverFactory } from './src/resolvers.ts';
 export {
   buildSemanticSchema,
+  buildSemanticSubgraphs,
   createGraphQLHandler,
   createGraphQLSSEHandler,
   DateTimeScalar,
