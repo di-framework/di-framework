@@ -26,6 +26,8 @@ export {
   TOOL_CONTEXT_MCP_EXCHANGE_KEY,
 } from './mcp-tool-utils.ts';
 export type { McpToolHandler } from './tool-callback-as-mcp.ts';
+export type { McpToolServer, McpToolServerOptions } from './mcp-tool-server.ts';
+export { createMcpToolServer } from './mcp-tool-server.ts';
 export {
   toolCallbackAsMcpTool,
   toolCallbackToMcpDescriptor,

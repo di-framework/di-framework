@@ -38,6 +38,7 @@ export type {
   ToolAdvisor,
   ToolCallingAdvisorOptions,
   ToolSource,
+  RetryAdvisorOptions,
 } from './chat/client/index.ts';
 // ChatClient + advisors
 export {
@@ -68,6 +69,8 @@ export {
   TOOL_CALLING_ADVISOR_AUTO_REGISTER,
   ToolCallingAdvisor,
   ToolCallingAdvisorBuilder,
+  RetryAdvisor,
+  retryAdvisor,
 } from './chat/client/index.ts';
 export {
   assistantMessage,
@@ -185,6 +188,9 @@ export type {
   SchemaOutputConverterOptions,
   SchemaValidationResult,
   StructuredOutputConverter,
+  StandardSchemaV1,
+  StandardSchemaIssue,
+  StandardSchemaOutputConverterOptions,
 } from './converter/index.ts';
 export {
   compositeResponseTextCleaner,
@@ -196,6 +202,10 @@ export {
   NO_JSON_SCHEMA,
   SchemaOutputConverter,
   schemaOutputConverter,
+  isStandardSchema,
+  parseStandardSchema,
+  StandardSchemaOutputConverter,
+  standardSchemaOutputConverter,
   schemaValidationFailed,
   schemaValidationOk,
   thinkingTagCleaner,
@@ -326,7 +336,12 @@ export {
   isTextDocument,
   textDocument,
   withDocumentScore,
+  htmlDocumentLoader,
+  loadDocuments,
+  pdfDocumentLoader,
+  textDocumentLoader,
 } from './document/index.ts';
+export type { DocumentLoader, TextDocumentLoaderOptions } from './document/index.ts';
 // Embedding
 export type { EmbeddingModel, FakeEmbeddingModelOptions } from './embedding/index.ts';
 export {
@@ -350,6 +365,8 @@ export type {
   McpToolDescriptor,
   McpToolFilter,
   McpToolHandler,
+  McpToolServer,
+  McpToolServerOptions,
   McpToolNamePrefixGenerator,
   SdkMcpClientLike,
   ToolContextToMcpMetaConverter,
@@ -358,6 +375,7 @@ export {
   adaptSdkClient,
   contentBlocksToString,
   createMcpToolCallbackProvider,
+  createMcpToolServer,
   createToolDefinitionFromMcp,
   defaultMcpToolNamePrefixGenerator,
   defaultToolContextToMcpMetaConverter,

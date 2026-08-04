@@ -1,0 +1,7 @@
+import { document, type Document } from './document.ts';
+export interface DocumentLoader<T = unknown> { load(input: T, options?: { id?: string; metadata?: Readonly<Record<string, unknown>> }): Promise<readonly Document[]>; }
+export interface TextDocumentLoaderOptions { readonly encoding?: string; }
+export function textDocumentLoader(_options: TextDocumentLoaderOptions = {}): DocumentLoader<string | Uint8Array> { return { async load(input, options = {}) { const text = typeof input === 'string' ? input : new TextDecoder().decode(input); return [document({ ...options, text })]; } }; }
+export function htmlDocumentLoader(): DocumentLoader<string> { return { async load(input, options = {}) { const text = input.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim(); return [document({ ...options, text, metadata: { ...options.metadata, format: 'html' } })]; } }; }
+export function pdfDocumentLoader(extractText: (input: Uint8Array) => string | Promise<string>): DocumentLoader<Uint8Array> { return { async load(input, options = {}) { return [document({ ...options, text: await extractText(input), metadata: { ...options.metadata, format: 'pdf' } })]; } }; }
+export async function loadDocuments<T>(loader: DocumentLoader<T>, inputs: readonly T[], options?: { metadata?: Readonly<Record<string, unknown>> }): Promise<Document[]> { const loaded = await Promise.all(inputs.map((input) => loader.load(input, options))); return loaded.flat(); }

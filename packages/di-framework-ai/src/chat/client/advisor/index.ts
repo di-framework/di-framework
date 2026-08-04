@@ -31,6 +31,8 @@ export {
   type SimpleLoggerAdvisorOptions,
 } from './simple-logger-advisor.ts';
 export { augmentWithFormatInstructions } from './structured-output-format.ts';
+export type { RetryAdvisorOptions } from './retry-advisor.ts';
+export { RetryAdvisor, retryAdvisor } from './retry-advisor.ts';
 export {
   StructuredOutputValidationAdvisor,
   type StructuredOutputValidationAdvisorOptions,

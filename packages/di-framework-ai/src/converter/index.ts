@@ -26,3 +26,5 @@ export {
   isStructuredOutputConverter,
   NO_JSON_SCHEMA,
 } from './structured-output-converter.ts';
+export type { StandardSchemaV1, StandardSchemaIssue, StandardSchemaOutputConverterOptions } from './standard-schema.ts';
+export { isStandardSchema, parseStandardSchema, StandardSchemaOutputConverter, standardSchemaOutputConverter } from './standard-schema.ts';
