@@ -96,4 +96,18 @@ describe('AI platform additions', () => {
     );
     expect(document({ text: 'x' }).metadata).toEqual({});
   });
+
+  test('strips HTML markup that defeats naive tag regexes', async () => {
+    const load = async (html: string) => (await htmlDocumentLoader().load(html))[0]?.text;
+    expect(await load('<script>evil()</script >keep')).toBe('keep');
+    expect(await load('<SCRIPT\ntype="text/javascript">evil()</SCRIPT>keep')).toBe('keep');
+    expect(await load('<style>a{}</style\t>keep')).toBe('keep');
+    expect(await load('<div title="a > b">keep</div>')).toBe('keep');
+    expect(await load('<!-- <script>evil()</script> -->keep')).toBe('keep');
+    expect(await load('<script>a</script><script>b</script>keep')).toBe('keep');
+    expect(await load('1 < 2 and 3 > 2')).toBe('1 < 2 and 3 > 2');
+    expect(await load('<p>a&nbsp;b</p>')).toBe('a b');
+    expect(await load('<title>Doc</title><p>body</p>')).toBe('Doc body');
+    expect(await load('<script>unterminated')).toBe('');
+  });
 });

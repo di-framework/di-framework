@@ -29,10 +29,34 @@ const cosine = (a: number[], b: number[]) => {
   }
   return aa && bb ? dot / Math.sqrt(aa * bb) : 0;
 };
-type WasmSimilarity = typeof import('wasm-similarity');
+interface WasmSimilarity {
+  cosine_similarity_dataspace(
+    dataspace: Float64Array,
+    rows: number,
+    dimensions: number,
+    query: Float64Array,
+  ): ArrayLike<number>;
+}
+interface VectorRow {
+  readonly id: string;
+  readonly text: string;
+  readonly metadata: Record<string, unknown>;
+  readonly embedding: number[];
+}
+interface ScoredRow {
+  readonly r: VectorRow;
+  readonly score: number;
+}
+const WASM_SIMILARITY_SPECIFIER = 'wasm-similarity';
 let wasmPromise: Promise<WasmSimilarity | null> | undefined;
 function loadWasm(): Promise<WasmSimilarity | null> {
-  wasmPromise ??= import('wasm-similarity').catch(() => null);
+  wasmPromise ??= import(WASM_SIMILARITY_SPECIFIER)
+    .then((module: unknown) =>
+      typeof (module as WasmSimilarity | null)?.cosine_similarity_dataspace === 'function'
+        ? (module as WasmSimilarity)
+        : null,
+    )
+    .catch(() => null);
   return wasmPromise;
 }
 export class BunSqliteVectorStore implements VectorStore {
@@ -76,27 +100,7 @@ export class BunSqliteVectorStore implements VectorStore {
       (r) =>
         !request.filterExpression || evaluateFilterExpression(request.filterExpression, r.metadata),
     );
-    const wasm = await loadWasm();
-    const ranked =
-      wasm && candidates.length > 0
-        ? wasm
-            .cosine_similarity_dataspace(
-              new Float64Array(candidates.flatMap((r) => r.embedding)),
-              candidates.length,
-              query.length,
-              new Float64Array(query),
-            )
-            .reduce<Array<{ r: (typeof candidates)[number]; score: number }>>(
-              (out, value, i, values) => {
-                if (i % 2 === 0 && i + 1 < values.length)
-                  out.push({ r: candidates[values[i + 1]!]!, score: value });
-                return out;
-              },
-              [],
-            )
-        : candidates
-            .map((r) => ({ r, score: cosine(query, r.embedding) }))
-            .sort((a, b) => b.score - a.score);
+    const ranked = (await this.score(query, candidates)).sort((a, b) => b.score - a.score);
     return ranked
       .filter((x) => x.score >= request.similarityThreshold)
       .slice(0, request.topK)
@@ -109,6 +113,22 @@ export class BunSqliteVectorStore implements VectorStore {
   }
   similaritySearchQuery(query: string) {
     return this.similaritySearch(searchRequest({ query }));
+  }
+  private async score(query: number[], candidates: readonly VectorRow[]): Promise<ScoredRow[]> {
+    const wasm = candidates.length > 0 ? await loadWasm() : null;
+    if (!wasm) return candidates.map((r) => ({ r, score: cosine(query, r.embedding) }));
+    const pairs = wasm.cosine_similarity_dataspace(
+      new Float64Array(candidates.flatMap((r) => r.embedding)),
+      candidates.length,
+      query.length,
+      new Float64Array(query),
+    );
+    const scored: ScoredRow[] = [];
+    for (let i = 0; i + 1 < pairs.length; i += 2) {
+      const candidate = candidates[pairs[i + 1] as number];
+      if (candidate) scored.push({ r: candidate, score: pairs[i] as number });
+    }
+    return scored;
   }
   private rows() {
     return this.db
