@@ -123,7 +123,7 @@ export { media } from './content/media.ts';
 
 // ChatClient is a value (factory) + interface type via declaration merge in default-chat-client.
 
-// Agents / workflows (Spring AI effective-agent patterns)
+// Agents / workflows (Spring AI effective-agent patterns + graph runtime)
 export type {
   ChainStep,
   ChainWorkflowResult,
@@ -131,9 +131,24 @@ export type {
   ChatAgentOptions,
   ChatAgentResult,
   ChatAgentRunOptions,
+  ChatToolLoopGraphOptions,
+  ChatToolLoopInput,
+  ChatToolLoopOutput,
   EvaluationResponse,
   EvaluatorOptimizerWorkflowOptions,
   GenerationRecord,
+  GraphEdgeOptions,
+  GraphEdgePredicate,
+  GraphEdgeTransform,
+  GraphLifecycleHooks,
+  GraphNodeContext,
+  GraphNodeHandler,
+  GraphNodeId,
+  GraphRunOptions,
+  GraphRunResult,
+  GraphState,
+  GraphStepRecord,
+  GraphWorkflowOptions,
   OrchestratorPlan,
   OrchestratorWorkersResult,
   OrchestratorWorkersWorkflowOptions,
@@ -154,9 +169,15 @@ export {
   callChatEntity,
   chainWorkflow,
   chatAgent,
+  chatToolLoopGraph,
   EvaluatorOptimizerWorkflow,
   evaluatorOptimizerWorkflow,
   extractJsonObject,
+  GRAPH_FINISH,
+  GRAPH_START,
+  GraphWorkflow,
+  GraphWorkflowBuilder,
+  graphWorkflow,
   mapPool,
   OrchestratorWorkersWorkflow,
   orchestratorWorkersWorkflow,
@@ -164,6 +185,7 @@ export {
   parallelizationWorkflow,
   RoutingWorkflow,
   routingWorkflow,
+  simpleAgentGraph,
   throwIfAborted,
 } from './agent/index.ts';
 // Memory

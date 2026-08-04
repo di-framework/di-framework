@@ -18,6 +18,32 @@ export {
   evaluatorOptimizerWorkflow,
 } from './evaluator-optimizer-workflow.ts';
 export type {
+  ChatToolLoopGraphOptions,
+  ChatToolLoopInput,
+  ChatToolLoopOutput,
+  GraphEdgeOptions,
+  GraphEdgePredicate,
+  GraphEdgeTransform,
+  GraphLifecycleHooks,
+  GraphNodeContext,
+  GraphNodeHandler,
+  GraphNodeId,
+  GraphRunOptions,
+  GraphRunResult,
+  GraphState,
+  GraphStepRecord,
+  GraphWorkflowOptions,
+} from './graph-workflow.ts';
+export {
+  chatToolLoopGraph,
+  GRAPH_FINISH,
+  GRAPH_START,
+  GraphWorkflow,
+  GraphWorkflowBuilder,
+  graphWorkflow,
+  simpleAgentGraph,
+} from './graph-workflow.ts';
+export type {
   OrchestratorPlan,
   OrchestratorWorkersResult,
   OrchestratorWorkersWorkflowOptions,

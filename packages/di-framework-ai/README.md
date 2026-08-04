@@ -165,6 +165,42 @@ configureAi({
 
 Imperative APIs are unchanged: `functionToolCallback`, `MessageChatMemoryAdvisor`, `RetrievalAugmentationAdvisor`, MCP adapters, and `ChainWorkflow` / `RoutingWorkflow` / … See source tests under `tests/` for examples.
 
+### Graph workflows
+
+For arbitrary agent control flow (branches, loops, nested subgraphs), use the typed graph runtime:
+
+```ts
+import {
+  ChatClient,
+  GRAPH_FINISH,
+  GRAPH_START,
+  GraphWorkflow,
+  chatToolLoopGraph,
+  functionToolCallback,
+} from '@di-framework/ai';
+
+const graph = GraphWorkflow.builder<number, string>('example')
+  .node('double', (n) => n * 2)
+  .node('label', (n) => `value=${n}`)
+  .edge(GRAPH_START, 'double')
+  .edge('double', 'label')
+  .edge('label', GRAPH_FINISH)
+  .build();
+
+const { output, path, steps } = await graph.run(21, { maxSteps: 50, signal });
+// output === "value=42"
+
+// LLM + tools as a ready-made graph (uses ChatClient tool-calling)
+const agentGraph = chatToolLoopGraph({
+  chatClient: ChatClient.create(model),
+  tools: [weatherTool],
+  system: 'Help with weather.',
+});
+const answer = await agentGraph.run({ message: 'Weather in Yorktown?' });
+```
+
+Edges support async `when` predicates and `transform` functions. Nested graphs use `.subgraph(id, childGraph)`. Validation runs at `build()` (reachable finish, no edges from finish, unique ids). Lifecycle hooks (`onNodeStart`, `onGraphComplete`, …) align with observation-friendly debugging. Prefer fixed workflows when the path is known; use graphs when control flow must be composed dynamically. Stereotype annotations for graphs are deferred until the imperative API stabilizes.
+
 ## Providers
 
 ```ts
