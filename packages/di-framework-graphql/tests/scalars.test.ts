@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { GraphQLScalarType, Kind } from 'graphql';
 import {
   Bool,
   DateTime,
@@ -11,6 +12,9 @@ import {
   Str,
   scalarNameForConstructor,
 } from '../src/scalars.ts';
+import { buildSemanticSchema, registerScalar } from '../src/schema.ts';
+import { Field, Portal } from '../src/decorators.ts';
+import { withRegistry } from './helpers.ts';
 
 describe('ScalarRef', () => {
   it('stores the scalar name', () => {
@@ -101,5 +105,35 @@ describe('scalarNameForConstructor', () => {
   it('returns undefined for unknown constructors', () => {
     expect(scalarNameForConstructor(Symbol)).toBeUndefined();
     expect(scalarNameForConstructor(Array)).toBeUndefined();
+  });
+});
+
+describe('application scalar registration', () => {
+  it('makes a custom scalar available to SDL and executable schemas', async () => {
+    await withRegistry(async (registry) => {
+      const UUID = registerScalar(
+        'UUID',
+        new GraphQLScalarType({
+          name: 'UUID',
+          serialize: (value) => String(value),
+          parseValue: (value) => String(value),
+          parseLiteral: (node) => (node.kind === Kind.STRING ? node.value : null),
+        }),
+      );
+
+      @Portal()
+      class IdPortal {
+        @Field(() => UUID)
+        id() {
+          return 'abc-123';
+        }
+      }
+
+      const api = buildSemanticSchema({ registry });
+      expect(api.sdl).toContain('scalar UUID');
+      await expect(api.execute({ query: '{ id }' })).resolves.toEqual({
+        data: { id: 'abc-123' },
+      });
+    });
   });
 });

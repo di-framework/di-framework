@@ -7,6 +7,7 @@ export {
   type ExecuteRequest,
   type HandlerOptions,
   JSONScalar,
+  registerScalar,
   type SemanticSchema,
   type SemanticSchemaOptions,
 } from './src/schema.ts';

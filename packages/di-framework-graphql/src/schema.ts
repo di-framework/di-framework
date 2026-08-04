@@ -37,6 +37,7 @@ import {
 import { SemanticSchemaError } from './errors.ts';
 import { ResolverFactory } from './resolvers.ts';
 import { type PrintOptions, printSDL } from './sdl.ts';
+import { registerScalarName, type ScalarRef } from './scalars.ts';
 import { buildTypeGraph } from './type-graph.ts';
 import type {
   BuildOptions,
@@ -112,6 +113,22 @@ const SPEC_SCALAR_TYPES: Record<string, GraphQLScalarType> = {
   DateTime: DateTimeScalar,
   JSON: JSONScalar,
 };
+
+/** Application scalar implementations keyed by their GraphQL name. */
+const REGISTERED_SCALARS = new Map<string, GraphQLScalarType>();
+
+/**
+ * Register an application-defined scalar implementation.
+ *
+ * Use the returned `ScalarRef` in `@Field`/`@Arg` declarations. Registration
+ * is process-wide, matching the decorator registry, and can be performed once
+ * during application startup before `buildSemanticSchema()`.
+ */
+export function registerScalar(name: string, scalar: GraphQLScalarType): ScalarRef {
+  const ref = registerScalarName(name);
+  REGISTERED_SCALARS.set(name, scalar);
+  return ref;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Schema assembly                                                            */
@@ -291,7 +308,7 @@ class SchemaAssembler {
       case 'list':
         return new GraphQLList(this.toType(node.of));
       case 'scalar': {
-        const scalar = SPEC_SCALAR_TYPES[node.name];
+        const scalar = SPEC_SCALAR_TYPES[node.name] ?? REGISTERED_SCALARS.get(node.name);
         if (!scalar) throw new SemanticSchemaError(`Unknown scalar '${node.name}'.`);
         return scalar;
       }
