@@ -73,22 +73,30 @@ export class BunSqliteVectorStore implements VectorStore {
   async similaritySearch(request: SearchRequest): Promise<readonly Document[]> {
     const query = await this.model.embed(request.query);
     const candidates = this.rows().filter(
-        (r) =>
-          !request.filterExpression ||
-          evaluateFilterExpression(request.filterExpression, r.metadata),
-      );
+      (r) =>
+        !request.filterExpression || evaluateFilterExpression(request.filterExpression, r.metadata),
+    );
     const wasm = await loadWasm();
-    const ranked = wasm && candidates.length > 0
-      ? wasm.cosine_similarity_dataspace(
-          new Float64Array(candidates.flatMap((r) => r.embedding)),
-          candidates.length,
-          query.length,
-          new Float64Array(query),
-        ).reduce<Array<{ r: (typeof candidates)[number]; score: number }>>((out, value, i, values) => {
-          if (i % 2 === 0 && i + 1 < values.length) out.push({ r: candidates[values[i + 1]!]!, score: value });
-          return out;
-        }, [])
-      : candidates.map((r) => ({ r, score: cosine(query, r.embedding) })).sort((a, b) => b.score - a.score);
+    const ranked =
+      wasm && candidates.length > 0
+        ? wasm
+            .cosine_similarity_dataspace(
+              new Float64Array(candidates.flatMap((r) => r.embedding)),
+              candidates.length,
+              query.length,
+              new Float64Array(query),
+            )
+            .reduce<Array<{ r: (typeof candidates)[number]; score: number }>>(
+              (out, value, i, values) => {
+                if (i % 2 === 0 && i + 1 < values.length)
+                  out.push({ r: candidates[values[i + 1]!]!, score: value });
+                return out;
+              },
+              [],
+            )
+        : candidates
+            .map((r) => ({ r, score: cosine(query, r.embedding) }))
+            .sort((a, b) => b.score - a.score);
     return ranked
       .filter((x) => x.score >= request.similarityThreshold)
       .slice(0, request.topK)

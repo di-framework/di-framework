@@ -25,10 +25,18 @@ test('D1Adapter uses prepared statements and maps CRUD', async () => {
   const db: D1Database = {
     prepare() {
       return {
-        bind() { return this; },
-        async all<T = Record<string, unknown>>() { return { results: rows as T[] }; },
-        async first<T = Record<string, unknown>>() { return rows[0] as T ?? null; },
-        async run() { return { meta: { changes: 1 }, success: true }; },
+        bind() {
+          return this;
+        },
+        async all<T = Record<string, unknown>>() {
+          return { results: rows as T[] };
+        },
+        async first<T = Record<string, unknown>>() {
+          return (rows[0] as T) ?? null;
+        },
+        async run() {
+          return { meta: { changes: 1 }, success: true };
+        },
       };
     },
   } as D1Database;
