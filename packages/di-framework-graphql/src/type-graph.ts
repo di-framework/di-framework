@@ -105,6 +105,7 @@ class GraphBuilder {
         portal: false,
         fields: [],
         interfaces: [],
+        lookup: lookupFor(declaration.target),
       };
       const existing = this.objectsByName.get(shell.name);
       if (existing && existing.target !== shell.target) {
@@ -1124,6 +1125,12 @@ function isFieldOptions(value: unknown): boolean {
 
 function isArgOptions(value: unknown): value is ArgOptions {
   return isFieldOptions(value);
+}
+
+/** The `@Lookup` static a type declares, in the shape the resolved graph carries. */
+function lookupFor(target: Ctor): { target: Ctor; propertyKey: string } | undefined {
+  const propertyKey = getLookup(target);
+  return propertyKey ? { target, propertyKey } : undefined;
 }
 
 /** Render a resolved type expression the way SDL would, for error messages. */

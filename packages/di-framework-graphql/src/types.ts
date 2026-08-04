@@ -347,6 +347,16 @@ export interface ResolvedObjectType {
   fields: ResolvedField[];
   /** Names of the interfaces this type implements. */
   interfaces: string[];
+  /**
+   * Static method that loads an instance by key (`@Lookup`). This is what makes
+   * a boundary type resolvable as a federation entity.
+   */
+  lookup?: { target: Ctor; propertyKey: string };
+  /**
+   * Set on a boundary type that another subgraph owns: this schema references
+   * it and may extend it, but does not define its fields.
+   */
+  stub?: boolean;
 }
 
 export interface ResolvedInterfaceType {

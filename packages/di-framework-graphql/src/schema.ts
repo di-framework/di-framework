@@ -40,9 +40,9 @@ import {
 } from 'graphql';
 import type { AuthorizationOptions } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
-import { ResolverFactory } from './resolvers.ts';
+import { hydrate, ResolverFactory } from './resolvers.ts';
 import { registerScalarName, type ScalarRef } from './scalars.ts';
-import { type PrintOptions, printSDL } from './sdl.ts';
+import { isEntity, type PrintOptions, printSDL } from './sdl.ts';
 import { buildTypeGraph } from './type-graph.ts';
 import type {
   BuildOptions,
@@ -145,6 +145,12 @@ export interface SemanticSchemaOptions extends BuildOptions {
   container?: Container;
   /** How `@Requires` reads the principal, roles and claims off the context. */
   authorization?: AuthorizationOptions;
+  /**
+   * Build an Apollo Federation subgraph: adds `_entities` and `_service`, and
+   * renders `sdl` as a federation document. Boundary types become entities,
+   * resolved by key through their `@Lookup`.
+   */
+  federation?: boolean;
   /** Options for the SDL rendered onto `SemanticSchema.sdl`. */
   print?: PrintOptions;
   /** Optional query resource limits enforced before execution. */
@@ -182,6 +188,9 @@ export interface SemanticSchema {
 class SchemaAssembler {
   private readonly factory: ResolverFactory;
   private readonly named = new Map<string, GraphQLNamedType>();
+  private readonly federation: boolean;
+  /** The document `_service { sdl }` returns: this subgraph's federation SDL. */
+  private readonly subgraphSdl: string;
 
   constructor(
     private readonly graph: TypeGraph,
@@ -192,6 +201,10 @@ class SchemaAssembler {
       graph,
       authorization: options.authorization,
     });
+    this.federation = options.federation ?? false;
+    this.subgraphSdl = this.federation
+      ? printSDL(graph, { ...options.print, federation: true })
+      : '';
   }
 
   assemble(): GraphQLSchema {
@@ -272,7 +285,10 @@ class SchemaAssembler {
 
     const query = new GraphQLObjectType({
       name: 'Query',
-      fields: () => this.toFieldConfigMap(this.graph.query.fields),
+      fields: () => ({
+        ...this.toFieldConfigMap(this.graph.query.fields),
+        ...this.federationFields(),
+      }),
     });
 
     const mutation = this.graph.mutation
@@ -295,6 +311,99 @@ class SchemaAssembler {
       subscription,
       types: Array.from(this.named.values()),
     });
+  }
+
+  /**
+   * `_entities` and `_service`, the two entry points a federation gateway calls.
+   *
+   * `_entities` is the reason boundary types are natural federation entities:
+   * each already declares a key and a `@Lookup` that turns that key back into an
+   * object, which is exactly the resolver signature federation asks for.
+   */
+  private federationFields(): GraphQLFieldConfigMap<any, any> {
+    if (!this.federation) return {};
+
+    const entities = this.graph.objects.filter(isEntity);
+    const fields: GraphQLFieldConfigMap<any, any> = {
+      _service: {
+        type: new GraphQLNonNull(
+          new GraphQLObjectType({
+            name: '_Service',
+            fields: { sdl: { type: GraphQLString, resolve: () => this.subgraphSdl } },
+          }),
+        ),
+        resolve: () => ({ sdl: this.subgraphSdl }),
+      },
+    };
+    if (entities.length === 0) return fields;
+
+    const anyScalar = new GraphQLScalarType({
+      name: '_Any',
+      serialize: (value) => value,
+      parseValue: (value) => value,
+      parseLiteral: (node) => literalToValue(node),
+    });
+
+    const entityUnion = new GraphQLUnionType({
+      name: '_Entity',
+      types: () => entities.map((entity) => this.named.get(entity.name) as GraphQLObjectType),
+      resolveType: this.createTypeResolver(
+        entities.map((entity) => entity.name),
+        undefined,
+      ),
+    });
+
+    fields._entities = {
+      type: new GraphQLNonNull(new GraphQLList(entityUnion)),
+      args: {
+        representations: {
+          type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(anyScalar))),
+        },
+      },
+      resolve: (_parent, args, ctx, info) =>
+        Promise.all(
+          (args.representations as Array<Record<string, unknown>>).map((representation) =>
+            this.resolveEntity(representation, ctx, info),
+          ),
+        ),
+    };
+    return fields;
+  }
+
+  /** Turn one `_entities` representation back into a domain object. */
+  private async resolveEntity(
+    representation: Record<string, unknown>,
+    ctx: GraphQLContext,
+    info: any,
+  ): Promise<unknown> {
+    const typename = representation.__typename;
+    const object = this.graph.objects.find(
+      (candidate) => candidate.name === typename && isEntity(candidate),
+    );
+    if (!object) {
+      throw new GraphQLError(`'${String(typename)}' is not an entity in this subgraph.`, {
+        extensions: { code: 'INVALID_ENTITY' },
+      });
+    }
+    if (!object.lookup) {
+      throw new GraphQLError(`${object.name} has no @Lookup, so it cannot be resolved by key.`, {
+        extensions: { code: 'INVALID_ENTITY' },
+      });
+    }
+
+    const load = (object.lookup.target as any)[object.lookup.propertyKey];
+    if (typeof load !== 'function') {
+      throw new GraphQLError(
+        `${object.name}.${object.lookup.propertyKey} is not a static @Lookup.`,
+      );
+    }
+
+    const key = representation[object.key as string];
+    const loaded = await load.call(object.lookup.target, key, ctx, info);
+    if (loaded === null || loaded === undefined) return null;
+    // Hydrate so the entity's own methods resolve, and so __typename can be
+    // decided by instanceof rather than trusting the representation.
+    return hydrate(object.target, loaded);
   }
 
   /**
@@ -466,7 +575,7 @@ function queryCost(document: DocumentNode): { depth: number; complexity: number 
 export function buildSemanticSchema(options: SemanticSchemaOptions = {}): SemanticSchema {
   const graph = buildTypeGraph(options);
   const schema = new SchemaAssembler(graph, options).assemble();
-  const sdl = printSDL(graph, options.print);
+  const sdl = printSDL(graph, { ...options.print, federation: options.federation });
 
   const prepare = (request: ExecuteRequest) => {
     const document = parse(request.query);
