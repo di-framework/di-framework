@@ -6,7 +6,9 @@ describe('BunSqliteAdapter', () => {
   test('CRUD, filters and pagination', async () => {
     const db = new Database(':memory:');
     db.run('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
-    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, { table: 'users' });
+    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, {
+      table: 'users',
+    });
     await adapter.save({ id: 1, name: 'Ada', active: 1 });
     await adapter.save({ id: 2, name: 'Bob', active: 0 });
     expect(await adapter.findById(1)).toMatchObject({ name: 'Ada' });
