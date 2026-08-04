@@ -3,13 +3,13 @@ import {
   A2ABus,
   ChatClient,
   functionToolCallback,
-  planFingerprint,
   PlannerExecutorWorkflow,
+  planFingerprint,
   requestContains,
   ScriptedChatModel,
+  textResponse,
   toolCall,
   toolCallResponse,
-  textResponse,
 } from '../src/index.ts';
 
 function planJson(partial: {
@@ -56,7 +56,8 @@ describe('PlannerExecutorWorkflow', () => {
         respond: toolCallResponse([toolCall('c1', 'getWeather', { city: 'Yorktown' })]),
       },
       {
-        when: (p) => p.messages.some((m) => (m.text ?? '').includes('Yorktown') || m.messageType === 'tool'),
+        when: (p) =>
+          p.messages.some((m) => (m.text ?? '').includes('Yorktown') || m.messageType === 'tool'),
         respond: textResponse('Weather is 70F'),
       },
       {

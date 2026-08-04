@@ -26,7 +26,9 @@ export interface A2ASendOptions {
   readonly id?: string;
 }
 
-export type A2AHumanHook = (message: A2AMessage) => A2AMessage | Promise<A2AMessage | null | undefined> | null | undefined;
+export type A2AHumanHook = (
+  message: A2AMessage,
+) => A2AMessage | Promise<A2AMessage | null | undefined> | null | undefined;
 
 export type A2AAgentHandler = (
   message: A2AMessage,
@@ -130,8 +132,7 @@ export class A2ABus {
     };
 
     const needsHuman =
-      message.kind === 'human' ||
-      (this.options.requireHumanFor?.(message) ?? false);
+      message.kind === 'human' || (this.options.requireHumanFor?.(message) ?? false);
 
     if (needsHuman && this.options.onHumanInTheLoop) {
       const maybe = await this.options.onHumanInTheLoop(message);

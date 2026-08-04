@@ -1,5 +1,4 @@
-import type { ChatClient } from '../chat/client/default-chat-client.ts';
-import type { ToolSource } from '../chat/client/default-chat-client.ts';
+import type { ChatClient, ToolSource } from '../chat/client/default-chat-client.ts';
 import type { ChatOptions } from '../chat/prompt/chat-options.ts';
 import { AiError } from '../model/errors.ts';
 import { resolveToolCallbacks } from '../tool/tool-callback-provider.ts';
@@ -119,10 +118,7 @@ function normalizePlan(raw: unknown, fallbackGoal: string): PlannerPlan {
         const step = s as Partial<PlannerStep>;
         const status = step.status;
         const okStatus =
-          status === 'pending' ||
-          status === 'done' ||
-          status === 'failed' ||
-          status === 'skipped'
+          status === 'pending' || status === 'done' || status === 'failed' || status === 'skipped'
             ? status
             : 'pending';
         return {
@@ -201,8 +197,7 @@ export class PlannerExecutorWorkflow {
     const seen = new Set<string>();
 
     let plan: PlannerPlan =
-      options?.initialPlan ??
-      (await this.plan(goal, undefined, undefined, options));
+      options?.initialPlan ?? (await this.plan(goal, undefined, undefined, options));
 
     rounds.push({ index: 0, phase: 'plan', plan });
     seen.add(planFingerprint(plan));
@@ -223,7 +218,12 @@ export class PlannerExecutorWorkflow {
       const next = plan.steps.find((s) => s.status === 'pending');
       if (!next) {
         // No pending work but not done — force a replan that must finish or add steps.
-        plan = await this.plan(goal, plan, 'No pending steps remain but done=false. Finish or add steps.', options);
+        plan = await this.plan(
+          goal,
+          plan,
+          'No pending steps remain but done=false. Finish or add steps.',
+          options,
+        );
         rounds.push({ index: rounds.length, phase: 'replan', plan });
         this.assertNoCycle(seen, plan);
         continue;
@@ -233,9 +233,7 @@ export class PlannerExecutorWorkflow {
       const afterAct: PlannerPlan = {
         ...plan,
         steps: plan.steps.map((s) =>
-          s.id === next.id
-            ? { ...s, status: 'done' as const, result: observation }
-            : s,
+          s.id === next.id ? { ...s, status: 'done' as const, result: observation } : s,
         ),
       };
       rounds.push({
@@ -318,7 +316,10 @@ export class PlannerExecutorWorkflow {
 
     if (tools?.length) {
       let spec = this.chatClient.prompt();
-      spec = spec.system(options?.actorSystem ?? DEFAULT_ACTOR).user(user).tools(...tools);
+      spec = spec
+        .system(options?.actorSystem ?? DEFAULT_ACTOR)
+        .user(user)
+        .tools(...tools);
       const merged: ChatOptions = {
         ...options?.options,
         signal: options?.signal ?? options?.options?.signal,

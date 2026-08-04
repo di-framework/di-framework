@@ -63,6 +63,11 @@ export {
   OrchestratorWorkersWorkflow,
   orchestratorWorkersWorkflow,
 } from './orchestrator-workers-workflow.ts';
+export type { ParallelizationWorkflowOptions } from './parallelization-workflow.ts';
+export {
+  ParallelizationWorkflow,
+  parallelizationWorkflow,
+} from './parallelization-workflow.ts';
 export type {
   PlannerExecutorOptions,
   PlannerExecutorResult,
@@ -75,11 +80,6 @@ export {
   planFingerprint,
   plannerExecutorWorkflow,
 } from './planner-executor-workflow.ts';
-export type { ParallelizationWorkflowOptions } from './parallelization-workflow.ts';
-export {
-  ParallelizationWorkflow,
-  parallelizationWorkflow,
-} from './parallelization-workflow.ts';
 export type {
   RouteHandler,
   RouteMap,
