@@ -2,6 +2,8 @@
 
 Spring AI–aligned chat, tools, RAG, MCP, and agents for TypeScript. Portable model abstractions sit on top of OpenAI-compatible and Anthropic HTTP adapters (no vendor SDKs). Wire everything into `@di-framework/core` with annotations (`@AiService`, `@Agent`, `@Tool`, …) or `configureAi`.
 
+**Style:** prefer `static of` / `static builder` factories and free functions for pure helpers; keep instance methods for stateful clients and fluent builders. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).
+
 ## Features
 
 - **Annotation DX**: `@AiService` / `@Agent` assistants, `@Tool` / `@ToolSet` beans, `@WithMemory` / `@WithRag` / `@WithTools`, workflows (`@Chain`, `@Route`, …).

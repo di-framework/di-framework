@@ -86,6 +86,11 @@ export class OrchestratorWorkersWorkflow {
     this.chatClient = chatClient;
   }
 
+  /** Factory alias (same as {@link orchestratorWorkersWorkflow}). */
+  static of(chatClient: ChatClient): OrchestratorWorkersWorkflow {
+    return new OrchestratorWorkersWorkflow(chatClient);
+  }
+
   async process(
     taskDescription: string,
     options?: OrchestratorWorkersWorkflowOptions,
@@ -163,5 +168,5 @@ export class OrchestratorWorkersWorkflow {
 }
 
 export function orchestratorWorkersWorkflow(chatClient: ChatClient): OrchestratorWorkersWorkflow {
-  return new OrchestratorWorkersWorkflow(chatClient);
+  return OrchestratorWorkersWorkflow.of(chatClient);
 }

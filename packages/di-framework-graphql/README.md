@@ -4,6 +4,8 @@ Radically object-oriented, decorator-driven GraphQL for [di-framework](https://g
 
 Your domain classes **are** the schema. There is no SDL document to keep in sync, no resolver map, and no field-by-field mapping layer — decorators declare semantic *exposure* (`@Field`, `@Action`), *ownership* (`@BoundedContext`) and *boundaries* (`@SemanticType({ boundary: true })`), and the schema falls out of that.
 
+**Style:** `@Lookup` loaders must be **static**; `@Field` / `@Action` stay **instance** methods on domain objects. Pure schema helpers may be free functions. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).
+
 ## Features
 
 - **Objects, not resolvers**: behaviour lives on the class that owns the invariant. `@Action` on an entity becomes a root mutation that loads the entity first, so the rule cannot be routed around.

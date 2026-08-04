@@ -30,6 +30,11 @@ export class ParallelizationWorkflow {
     this.chatClient = chatClient;
   }
 
+  /** Factory alias (same as {@link parallelizationWorkflow}). */
+  static of(chatClient: ChatClient): ParallelizationWorkflow {
+    return new ParallelizationWorkflow(chatClient);
+  }
+
   async parallel(
     systemPrompt: string,
     inputs: readonly string[],
@@ -53,5 +58,5 @@ export class ParallelizationWorkflow {
 }
 
 export function parallelizationWorkflow(chatClient: ChatClient): ParallelizationWorkflow {
-  return new ParallelizationWorkflow(chatClient);
+  return ParallelizationWorkflow.of(chatClient);
 }
