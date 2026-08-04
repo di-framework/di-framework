@@ -1,3 +1,9 @@
+export type { BunSqliteVectorStoreOptions, BunVectorDatabase } from './adapters/bun-sqlite.ts';
+export { BunSqliteVectorStore } from './adapters/bun-sqlite.ts';
+export type { PgClient, PgVectorStoreOptions } from './adapters/pgvector.ts';
+export { PgVectorStore } from './adapters/pgvector.ts';
+export type { VectorizeIndex, VectorizeVectorStoreOptions } from './adapters/vectorize.ts';
+export { VectorizeVectorStore } from './adapters/vectorize.ts';
 export * from './filter/index.ts';
 export {
   DEFAULT_TOP_K,

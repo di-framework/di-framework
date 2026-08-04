@@ -10,15 +10,35 @@ import type { ScalarRef } from './scalars.ts';
 
 export type Ctor<T = any> = new (...args: any[]) => T;
 
+/**
+ * A class that may be `abstract` — interfaces are declared as abstract classes,
+ * and those cannot be assigned to {@link Ctor}.
+ */
+export type AbstractCtor<T = any> = abstract new (...args: any[]) => T;
+
 /** An enum declared with `registerEnum()`. */
 export type EnumObject = Record<string, string | number>;
 
 /**
+ * A named union over concrete `@SemanticType`s.
+ *
+ * Unions have no class of their own — `registerUnion()` returns one of these and
+ * it is used directly as a type reference: `@Field(() => SearchResult)`.
+ */
+export class UnionRef {
+  constructor(
+    readonly unionName: string,
+    readonly members: () => readonly Ctor[],
+    readonly options: UnionOptions = {},
+  ) {}
+}
+
+/**
  * Anything usable as a type reference in a decorator:
  * a scalar marker (`ID`, `Int`), a decorated class, a registered enum object,
- * or a single-element array denoting a list (`[Order]`).
+ * a union marker, or a single-element array denoting a list (`[Order]`).
  */
-export type TypeInput = ScalarRef | Ctor | EnumObject | readonly TypeInput[];
+export type TypeInput = ScalarRef | UnionRef | AbstractCtor | EnumObject | readonly TypeInput[];
 
 /** Lazy type reference — required for types that are declared later in the file. */
 export type TypeThunk = () => TypeInput;
@@ -29,6 +49,8 @@ export type TypeRef = TypeInput | TypeThunk;
 export type TypeNode =
   | { kind: 'scalar'; name: string }
   | { kind: 'object'; name: string; target: Ctor }
+  | { kind: 'interface'; name: string; target: Ctor }
+  | { kind: 'union'; name: string; target: UnionRef }
   | { kind: 'input'; name: string; target: Ctor }
   | { kind: 'enum'; name: string; target: EnumObject }
   | { kind: 'list'; of: TypeNode }
@@ -47,6 +69,11 @@ export interface SemanticTypeOptions {
   /** Schema name. Defaults to the class name. */
   name?: string;
   description?: string;
+  /**
+   * Interfaces this type implements. Usually declared with `@Implements`;
+   * listing them here is equivalent.
+   */
+  implements?: TypeThunk | readonly TypeThunk[];
   /**
    * Marks the type as a *boundary type*: other bounded contexts are allowed to
    * reference it and to extend it with `@Extends`. Requires `key`.
@@ -71,6 +98,31 @@ export interface InputTypeOptions {
   name?: string;
   description?: string;
 }
+
+export interface InterfaceTypeOptions {
+  /** Schema name. Defaults to the class name. */
+  name?: string;
+  description?: string;
+  /**
+   * Decide the concrete type for a value. Defaults to matching the value
+   * against each implementing class with `instanceof`, then falling back to a
+   * `__typename` property.
+   */
+  resolveType?: TypeResolver;
+}
+
+export interface UnionOptions {
+  description?: string;
+  /** Same fallback chain as {@link InterfaceTypeOptions.resolveType}. */
+  resolveType?: TypeResolver;
+}
+
+/** Returns the schema name of the concrete type backing a value. */
+export type TypeResolver = (
+  value: any,
+  ctx: GraphQLContext,
+  info: any,
+) => string | undefined | Promise<string | undefined>;
 
 export interface EnumOptions {
   name: string;
@@ -100,6 +152,30 @@ export interface FieldOptions {
    * - function — the same batch signature, inline.
    */
   batch?: boolean | string | BatchResolver;
+  /** Ordered field middleware; each layer may inspect or replace the result. */
+  middleware?: FieldMiddleware | readonly FieldMiddleware[];
+}
+
+export interface FieldMiddlewareContext {
+  parent: unknown;
+  args: Record<string, any>;
+  ctx: GraphQLContext;
+  info: any;
+  field: ResolvedField;
+}
+
+export type FieldMiddleware = (
+  next: () => unknown | Promise<unknown>,
+  context: FieldMiddlewareContext,
+) => unknown | Promise<unknown>;
+
+export interface ConnectionOptions extends Omit<FieldOptions, 'type'> {
+  /** Name of the generated connection type. Defaults to `<Node>Connection`. */
+  connectionName?: string;
+  /** Default `first` when the caller supplies no pagination arguments. */
+  defaultPageSize?: number;
+  /** Largest `first`/`last` accepted. Requests above it are an error. */
+  maxPageSize?: number;
 }
 
 export interface ActionOptions extends FieldOptions {
@@ -163,6 +239,8 @@ export interface FieldDeclaration {
   /** Container event backing a `@Subscription`. */
   event?: string;
   params: ParamDeclaration[];
+  /** Set by `@Connection`: the node type to paginate over, plus paging limits. */
+  connection?: { node: TypeRef; options: ConnectionOptions };
 }
 
 export interface SemanticTypeDeclaration {
@@ -183,6 +261,18 @@ export interface EnumDeclaration {
   target: EnumObject;
   name: string;
   description?: string;
+}
+
+export interface InterfaceTypeDeclaration {
+  target: Ctor;
+  name: string;
+  options: InterfaceTypeOptions;
+}
+
+export interface UnionDeclaration {
+  ref: UnionRef;
+  name: string;
+  options: UnionOptions;
 }
 
 export interface ExtensionDeclaration {
@@ -206,6 +296,7 @@ export interface FieldSource {
   holder: 'portal' | 'parent' | 'extension' | 'entity';
   params: ParamDeclaration[];
   batch?: boolean | string | BatchResolver;
+  middleware?: FieldMiddleware | readonly FieldMiddleware[];
   /** For actions declared on a semantic type: how to load the entity. */
   entity?: {
     typeName: string;
@@ -221,6 +312,10 @@ export interface FieldSource {
   };
   /** Synthesized field that always resolves to this value. */
   constant?: unknown;
+  /** Requirements that must pass before the member is read or invoked. */
+  requirements?: readonly import('./authorization.ts').AuthRequirement[];
+  /** Shape the result as a Relay connection, slicing arrays if needed. */
+  connection?: { defaultPageSize?: number; maxPageSize?: number };
 }
 
 export interface ResolvedArg {
@@ -250,6 +345,37 @@ export interface ResolvedObjectType {
   key?: string;
   portal: boolean;
   fields: ResolvedField[];
+  /** Names of the interfaces this type implements. */
+  interfaces: string[];
+  /**
+   * Static method that loads an instance by key (`@Lookup`). This is what makes
+   * a boundary type resolvable as a federation entity.
+   */
+  lookup?: { target: Ctor; propertyKey: string };
+  /**
+   * Set on a boundary type that another subgraph owns: this schema references
+   * it and may extend it, but does not define its fields.
+   */
+  stub?: boolean;
+}
+
+export interface ResolvedInterfaceType {
+  name: string;
+  description?: string;
+  target: Ctor;
+  context?: string;
+  fields: ResolvedField[];
+  /** Schema names of the object types implementing this interface. */
+  implementations: string[];
+  resolveType?: TypeResolver;
+}
+
+export interface ResolvedUnionType {
+  name: string;
+  description?: string;
+  /** Schema names of the union's members. */
+  members: string[];
+  resolveType?: TypeResolver;
 }
 
 export interface ResolvedInputField {
@@ -283,6 +409,8 @@ export interface TypeGraph {
   mutation?: ResolvedRootType;
   subscription?: ResolvedRootType;
   objects: ResolvedObjectType[];
+  interfaces: ResolvedInterfaceType[];
+  unions: ResolvedUnionType[];
   inputs: ResolvedInputType[];
   enums: ResolvedEnumType[];
   /** Custom scalars actually referenced by the schema. */
@@ -294,6 +422,16 @@ export interface TypeGraph {
 export interface BuildOptions {
   /** Restrict the schema to these bounded contexts. Defaults to all. */
   contexts?: string[];
+  /**
+   * When slicing by context, include *stubs* of boundary types owned by the
+   * contexts left out — the key field, plus anything this slice contributes
+   * through `@Extends`.
+   *
+   * This is what makes a slice deployable on its own: a reference across the
+   * seam still resolves, and the stub is exactly the shared contract the two
+   * services agree on. Defaults to `true` whenever `contexts` is set.
+   */
+  boundaryStubs?: boolean;
   /**
    * Reject cross-context references to non-boundary types. Default `true` —
    * this is the point of the package; turn it off only while migrating.

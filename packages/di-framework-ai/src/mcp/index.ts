@@ -13,6 +13,8 @@ export {
   McpToolCallbackProvider,
   mcpToolCallbacks,
 } from './mcp-tool-callback-provider.ts';
+export type { McpToolServer, McpToolServerOptions } from './mcp-tool-server.ts';
+export { createMcpToolServer } from './mcp-tool-server.ts';
 export {
   contentBlocksToString,
   createToolDefinitionFromMcp,

@@ -30,6 +30,7 @@ export type {
   EntityParamSpec,
   EntityResponse,
   MessageChatMemoryAdvisorOptions,
+  RetryAdvisorOptions,
   SimpleLoggerAdvisorOptions,
   StreamAdvisor,
   StreamAdvisorChain,
@@ -62,7 +63,9 @@ export {
   LOWEST_PRECEDENCE,
   MessageChatMemoryAdvisor,
   MessageChatMemoryAdvisorBuilder,
+  RetryAdvisor,
   renderTemplate,
+  retryAdvisor,
   SimpleLoggerAdvisor,
   StructuredOutputValidationAdvisor,
   TOOL_CALLING_ADVISOR_AUTO_REGISTER,
@@ -184,20 +187,27 @@ export type {
   ResponseTextCleaner,
   SchemaOutputConverterOptions,
   SchemaValidationResult,
+  StandardSchemaIssue,
+  StandardSchemaOutputConverterOptions,
+  StandardSchemaV1,
   StructuredOutputConverter,
 } from './converter/index.ts';
 export {
   compositeResponseTextCleaner,
   defaultResponseTextCleaner,
+  isStandardSchema,
   isStructuredOutputConverter,
   listOutputConverter,
   mapOutputConverter,
   markdownCodeBlockCleaner,
   NO_JSON_SCHEMA,
+  parseStandardSchema,
   SchemaOutputConverter,
+  StandardSchemaOutputConverter,
   schemaOutputConverter,
   schemaValidationFailed,
   schemaValidationOk,
+  standardSchemaOutputConverter,
   thinkingTagCleaner,
   validateAgainstJsonSchema,
   whitespaceCleaner,
@@ -320,11 +330,20 @@ export {
   Worker,
 } from './di/index.ts';
 // Document
-export type { Document, DocumentOptions } from './document/index.ts';
+export type {
+  Document,
+  DocumentLoader,
+  DocumentOptions,
+  TextDocumentLoaderOptions,
+} from './document/index.ts';
 export {
   document,
+  htmlDocumentLoader,
   isTextDocument,
+  loadDocuments,
+  pdfDocumentLoader,
   textDocument,
+  textDocumentLoader,
   withDocumentScore,
 } from './document/index.ts';
 // Embedding
@@ -351,6 +370,8 @@ export type {
   McpToolFilter,
   McpToolHandler,
   McpToolNamePrefixGenerator,
+  McpToolServer,
+  McpToolServerOptions,
   SdkMcpClientLike,
   ToolContextToMcpMetaConverter,
 } from './mcp/index.ts';
@@ -358,6 +379,7 @@ export {
   adaptSdkClient,
   contentBlocksToString,
   createMcpToolCallbackProvider,
+  createMcpToolServer,
   createToolDefinitionFromMcp,
   defaultMcpToolNamePrefixGenerator,
   defaultToolContextToMcpMetaConverter,
@@ -513,18 +535,25 @@ export {
 } from './tool/index.ts';
 // Vector store
 export type {
+  BunSqliteVectorStoreOptions,
+  BunVectorDatabase,
   FilterExpression,
   FilterGroup,
   FilterKey,
   FilterOperand,
   FilterValue,
+  PgClient,
+  PgVectorStoreOptions,
   SearchRequest,
   SearchRequestOptions,
   SimpleVectorStoreOptions,
+  VectorizeIndex,
+  VectorizeVectorStoreOptions,
   VectorStore,
   VectorStoreRetriever,
 } from './vectorstore/index.ts';
 export {
+  BunSqliteVectorStore,
   DEFAULT_TOP_K,
   evaluateFilterExpression,
   FilterExpressionBuilder,
@@ -536,6 +565,7 @@ export {
   filterKey,
   filterValue,
   isFilterExpression,
+  PgVectorStore,
   parseFilterExpression,
   SearchRequestBuilder,
   SIMILARITY_THRESHOLD_ACCEPT_ALL,
@@ -544,4 +574,5 @@ export {
   searchRequest,
   searchRequestBuilder,
   similaritySearchQuery,
+  VectorizeVectorStore,
 } from './vectorstore/index.ts';

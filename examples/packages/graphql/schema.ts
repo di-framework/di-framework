@@ -13,7 +13,7 @@
  *   the fields Lending contributed to `Book`.
  */
 
-import { buildSemanticSchema } from '@di-framework/graphql';
+import { type AuthorizationOptions, buildSemanticSchema } from '@di-framework/graphql';
 
 // Side-effect imports: defining the classes is what registers them.
 import './domain/catalog.ts';
@@ -21,8 +21,20 @@ import './domain/reviews.ts';
 import './domain/lending.ts';
 import { libraryRegistry } from './domain/registry.ts';
 
+/**
+ * Teach `@Requires` how to read *this* application's context.
+ *
+ * The defaults look for `ctx.user`; a `LibraryContext` carries the member id
+ * and roles at the top level, so both readers are pointed at them.
+ */
+const authorization: AuthorizationOptions = {
+  principal: (ctx) => ctx.memberId,
+  roles: (ctx) => ctx.roles ?? [],
+};
+
 /** The whole library API. */
 export const library = buildSemanticSchema({
+  authorization,
   // Read this application's declarations, not whatever else the process has
   // defined. Omit it and you get the global registry, which is fine for an app
   // that owns its process.
@@ -38,6 +50,7 @@ export const library = buildSemanticSchema({
 
 /** What a public, read-mostly catalog service would expose. */
 export const publicCatalog = buildSemanticSchema({
+  authorization,
   registry: libraryRegistry,
   contexts: ['Catalog', 'Reviews'],
   enforceBoundaries: true,

@@ -21,6 +21,17 @@ export {
   SchemaOutputConverter,
   schemaOutputConverter,
 } from './schema-output-converter.ts';
+export type {
+  StandardSchemaIssue,
+  StandardSchemaOutputConverterOptions,
+  StandardSchemaV1,
+} from './standard-schema.ts';
+export {
+  isStandardSchema,
+  parseStandardSchema,
+  StandardSchemaOutputConverter,
+  standardSchemaOutputConverter,
+} from './standard-schema.ts';
 export type { StructuredOutputConverter } from './structured-output-converter.ts';
 export {
   isStructuredOutputConverter,

@@ -8,30 +8,38 @@
  */
 
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
+import type { AuthRequirement } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
 import {
   defineBoundedContext,
   defineFieldDeclaration,
+  defineImplements,
   defineLookup,
+  defineMemberRequirements,
   defineParamDeclaration,
+  defineTypeRequirements,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
-import { ScalarRef, scalarNameForConstructor } from './scalars.ts';
-import type {
-  ActionOptions,
-  ArgOptions,
-  Ctor,
-  EnumObject,
-  EnumOptions,
-  ExtendsOptions,
-  FieldOptions,
-  InputTypeOptions,
-  PortalOptions,
-  SemanticTypeOptions,
-  SubscriptionOptions,
-  TypeInput,
-  TypeRef,
-  TypeThunk,
+import { ScalarRef } from './scalars.ts';
+import {
+  type AbstractCtor,
+  type ActionOptions,
+  type ArgOptions,
+  type ConnectionOptions,
+  type Ctor,
+  type EnumObject,
+  type EnumOptions,
+  type ExtendsOptions,
+  type FieldOptions,
+  type InputTypeOptions,
+  type InterfaceTypeOptions,
+  type PortalOptions,
+  type SemanticTypeOptions,
+  type SubscriptionOptions,
+  type TypeRef,
+  type TypeThunk,
+  type UnionOptions,
+  UnionRef,
 } from './types.ts';
 
 /* -------------------------------------------------------------------------- */
@@ -40,6 +48,7 @@ import type {
 
 function isTypeReference(value: unknown): boolean {
   if (value instanceof ScalarRef) return true;
+  if (value instanceof UnionRef) return true;
   if (Array.isArray(value)) return true;
   if (typeof value !== 'function') return false;
   // A thunk (`() => User`) is a type reference too; so is a class passed directly.
@@ -118,6 +127,72 @@ export function Portal(options: PortalOptions & { singleton?: boolean } = {}) {
     ContainerDecorator({ singleton })(target as any);
     return target;
   };
+}
+
+/**
+ * Declares a class as a GraphQL interface — a shared contract that concrete
+ * `@SemanticType`s implement.
+ *
+ * The class itself is never instantiated by the schema; it exists so the shared
+ * fields have somewhere to live and so implementations can inherit them by
+ * extending it.
+ *
+ * @example
+ * ```ts
+ * @InterfaceType({ description: 'Anything addressable by a global id.' })
+ * abstract class Node {
+ *   @Field(() => ID) id!: string;
+ * }
+ *
+ * @Implements(() => Node)
+ * @SemanticType()
+ * class User extends Node {}
+ * ```
+ */
+export function InterfaceType(options: InterfaceTypeOptions = {}) {
+  return <T extends AbstractCtor>(target: T): T => {
+    getRegistry().registerInterface({
+      target: target as unknown as Ctor,
+      name: options.name ?? (target as unknown as Ctor).name,
+      options,
+    });
+    return target;
+  };
+}
+
+/**
+ * Declares that a semantic type implements one or more interfaces.
+ *
+ * Interface fields the class does not redeclare are inherited, so a type only
+ * has to write down what it adds.
+ */
+export function Implements(...interfaces: TypeThunk[]) {
+  return <T extends Ctor>(target: T): T => {
+    defineImplements(target, interfaces);
+    return target;
+  };
+}
+
+/**
+ * Registers a union over concrete `@SemanticType`s and returns a reference
+ * usable anywhere a type is expected.
+ *
+ * @example
+ * ```ts
+ * const SearchResult = registerUnion('SearchResult', () => [User, Order]);
+ *
+ * @Field(() => [SearchResult])
+ * search(@Arg('q', () => String) q: string) { ... }
+ * ```
+ */
+export function registerUnion(
+  name: string,
+  members: () => readonly Ctor[],
+  options: UnionOptions = {},
+): UnionRef {
+  const ref = new UnionRef(name, members, options);
+  getRegistry().registerUnion({ ref, name, options });
+  return ref;
 }
 
 /** Declares a GraphQL input object. Its `@Field`s become input fields. */
@@ -246,6 +321,45 @@ export function Field(typeOrOptions?: TypeRef | FieldOptions, maybeOptions?: Fie
 }
 
 /**
+ * Exposes a member as a Relay cursor connection over `node`.
+ *
+ * The `<Node>Connection`, `<Node>Edge` and shared `PageInfo` types are
+ * generated, and `first`/`after`/`last`/`before` are added to the field. The
+ * method may return a plain array — sliced against those arguments — or a
+ * connection built with `connectionFromSlice()` when the repository pages
+ * natively.
+ *
+ * @example
+ * ```ts
+ * @Connection(() => Review, { defaultPageSize: 20, maxPageSize: 100 })
+ * reviews(): Review[] { return this.repo.forBook(this.id); }
+ * ```
+ */
+export function Connection(
+  node: TypeRef,
+  options: ConnectionOptions = {},
+): PropertyDecorator & MethodDecorator {
+  return ((target: any, propertyKey: string, descriptor?: PropertyDescriptor): void => {
+    if (typeof target === 'function') {
+      throw new SemanticSchemaError(
+        `${target.name}.${propertyKey}: @Connection is not supported on static members`,
+      );
+    }
+    const member: 'method' | 'property' =
+      descriptor && typeof descriptor.value === 'function' ? 'method' : 'property';
+
+    defineFieldDeclaration(target, {
+      propertyKey,
+      kind: 'field',
+      member,
+      options: options as FieldOptions,
+      params: [],
+      connection: { node, options },
+    });
+  }) as PropertyDecorator & MethodDecorator;
+}
+
+/**
  * Exposes a method as a mutation — behaviour that lives with the object owning
  * the invariant it protects.
  *
@@ -280,6 +394,43 @@ export function Subscription(
 ): any {
   const { type, options } = normalizeArgs<SubscriptionOptions>(typeOrOptions, maybeOptions);
   return declareMember('subscription', type, options, event);
+}
+
+/**
+ * Declares what a caller must satisfy before a field or action runs.
+ *
+ * Auth lives with the thing it protects, and fails the way boundary checks do:
+ * the requirement is part of the domain declaration rather than a guard clause
+ * repeated at the top of every resolver.
+ *
+ * Applies to a `@Field`, an `@Action`, a portal root, or a whole class — a
+ * class-level requirement guards every field on it. Requirements accumulate and
+ * are conjunctive: all of them must pass.
+ *
+ * @example
+ * ```ts
+ * @Portal()
+ * class Library {
+ *   @Requires({ roles: ['librarian'] })
+ *   @Action(() => Loan)
+ *   lend(@Arg('bookId', () => ID) bookId: string) { ... }
+ *
+ *   @Requires({ predicate: ({ parent, ctx }) => parent.ownerId === ctx.user.id })
+ *   @Field(() => String)
+ *   privateNote(): string { ... }
+ * }
+ * ```
+ */
+export function Requires(
+  ...requirements: AuthRequirement[]
+): ClassDecorator & PropertyDecorator & MethodDecorator {
+  return ((target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor): any => {
+    if (propertyKey === undefined) {
+      defineTypeRequirements(target as Ctor, requirements);
+      return target;
+    }
+    defineMemberRequirements(target, propertyKey as string, requirements);
+  }) as ClassDecorator & PropertyDecorator & MethodDecorator;
 }
 
 /**

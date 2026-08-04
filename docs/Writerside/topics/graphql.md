@@ -332,6 +332,70 @@ await Bun.write('schema.graphql', printSDL(graph, { directives: true }));
 
 With `directives: true`, ownership is recorded (`@key`, `@context`), which makes the artifact worth diffing in review. `buildTypeGraph()` also throws if a context has reached somewhere it should not.
 
+## Apollo Federation
+
+A boundary type already declares the two things federation needs from an entity: a `key` that identifies it, and a `@Lookup` that turns that key back into an object. Turning a schema into a subgraph is therefore a flag, not a second set of annotations:
+
+```typescript
+const catalog = buildSemanticSchema({ contexts: ['Catalog'], federation: true });
+```
+
+That adds `_entities(representations: [_Any!]!)` and `_service { sdl }` to `Query`, prints the federation `@link` header, declares `_Any`/`_FieldSet`/`_Service`/`_Entity`, and gives every boundary type a real `@key`. `_entities` resolves each representation through that type's `@Lookup` and hydrates the result, so the entity's own methods work on the way back out.
+
+### Two directive modes, deliberately separate
+
+`print.directives` and `federation` both describe ownership, but they are not the same output and should not be mixed up:
+
+| | `print: { directives: true }` | `federation: true` |
+|---|---|---|
+| Audience | humans, in review | an Apollo gateway |
+| Vocabulary | this package's `@key` / `@context` | Apollo Federation v2 |
+| Declares `@context` | yes — which context owns each type and field | no; federation has no such concept |
+| Adds `_entities` / `_service` | no | yes |
+| Portable SDL | yes, once the two directives are declared | only to a federation-aware gateway |
+
+Reach for `directives` when the artifact exists so a reviewer can see a boundary move. Reach for `federation` when a gateway is going to compose the result.
+
+Types this subgraph does not own are printed as stubs: the key field only, marked `@external`, plus whatever this subgraph contributes via `@Extends`.
+
+## Deployable Subgraphs
+
+`contexts: [...]` slices a schema. What makes a slice *deployable* is that it still resolves references across the seam — through boundary stubs:
+
+```typescript
+const subgraphs = buildSemanticSubgraphs({ federation: true });
+// { Catalog: SemanticSchema, Lending: SemanticSchema }
+
+Bun.serve({ port: 4001, fetch: createGraphQLHandler(subgraphs.Catalog) });
+```
+
+For SDL artifacts, `buildContextSubgraphs()` does the same on the `graphql`-free path:
+
+```typescript
+import { buildContextSubgraphs, printSDL } from '@di-framework/graphql/core';
+
+for (const [context, graph] of Object.entries(buildContextSubgraphs())) {
+  await Bun.write(`${context}.graphql`, printSDL(graph, { federation: true }));
+}
+```
+
+### What crosses the slice
+
+A context sees another context's type only if that type is a boundary type, and then only as a stub. The rules are:
+
+| | Stays inside the owning slice | Crosses as a stub |
+|---|---|---|
+| Non-boundary type | ✅ never leaves | — |
+| Boundary type's key | — | ✅ the whole contract |
+| Boundary type's other fields | ✅ owner only | ❌ |
+| `@Action` behaviour | ✅ owner only | ❌ |
+| Fields added with `@Extends` | — | ✅ they belong to the extending context |
+| Portals | ✅ owner only | ❌ |
+
+So `Book` in the Lending subgraph is `{ id, onLoan }`: the key it is identified by, plus the field Lending itself contributed. `title` and `bookReshelve` belong to Catalog and never appear. Two services independently generated from the same domain therefore agree on the shared type by construction.
+
+Stubs nothing references are pruned, so a slice does not carry types it never mentions. Set `boundaryStubs: false` to get the strict old behaviour, where a cross-context reference is a build error instead.
+
 ## API Surface
 
 **Type decorators** — `@SemanticType`, `@Portal`, `@InputType`, `@BoundedContext`, `@Extends`, `registerEnum`

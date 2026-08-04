@@ -6,19 +6,25 @@
  * schema, with an escape hatch (`new SemanticRegistry()`) for tests.
  */
 
+import { getBoundedContext } from './metadata.ts';
 import type {
   Ctor,
   EnumDeclaration,
   EnumObject,
   ExtensionDeclaration,
   InputTypeDeclaration,
+  InterfaceTypeDeclaration,
   SemanticTypeDeclaration,
+  UnionDeclaration,
+  UnionRef,
 } from './types.ts';
 
 export class SemanticRegistry {
   private types = new Map<Ctor, SemanticTypeDeclaration>();
   private inputs = new Map<Ctor, InputTypeDeclaration>();
   private enums = new Map<EnumObject, EnumDeclaration>();
+  private interfaces = new Map<Ctor, InterfaceTypeDeclaration>();
+  private unions = new Map<UnionRef, UnionDeclaration>();
   private extensions: ExtensionDeclaration[] = [];
 
   registerType(declaration: SemanticTypeDeclaration): void {
@@ -35,6 +41,30 @@ export class SemanticRegistry {
 
   registerExtension(declaration: ExtensionDeclaration): void {
     this.extensions.push(declaration);
+  }
+
+  registerInterface(declaration: InterfaceTypeDeclaration): void {
+    this.interfaces.set(declaration.target, declaration);
+  }
+
+  registerUnion(declaration: UnionDeclaration): void {
+    this.unions.set(declaration.ref, declaration);
+  }
+
+  getInterface(target: Ctor): InterfaceTypeDeclaration | undefined {
+    return this.interfaces.get(target);
+  }
+
+  getUnion(ref: UnionRef): UnionDeclaration | undefined {
+    return this.unions.get(ref);
+  }
+
+  getInterfaces(): InterfaceTypeDeclaration[] {
+    return Array.from(this.interfaces.values());
+  }
+
+  getUnions(): UnionDeclaration[] {
+    return Array.from(this.unions.values());
   }
 
   getType(target: Ctor): SemanticTypeDeclaration | undefined {
@@ -65,16 +95,24 @@ export class SemanticRegistry {
     return [...this.extensions];
   }
 
-  /** Bounded contexts that have declared something. */
+  /**
+   * Bounded contexts that have declared something.
+   *
+   * `@SemanticType` records no context of its own — class decorators run
+   * bottom-up, so `@BoundedContext` may not have applied yet and the context is
+   * read from metadata instead. Both sources are consulted here.
+   */
   getContexts(): string[] {
     const names = new Set<string>();
     for (const declaration of this.types.values()) {
-      if (declaration.context) names.add(declaration.context);
+      const context = declaration.context ?? getBoundedContext(declaration.target);
+      if (context) names.add(context);
     }
     for (const extension of this.extensions) {
-      if (extension.context) names.add(extension.context);
+      const context = extension.context ?? getBoundedContext(extension.target);
+      if (context) names.add(context);
     }
-    return Array.from(names);
+    return Array.from(names).sort();
   }
 
   /** Copy every declaration into a fresh registry (prototype pattern, as the container does). */
@@ -83,6 +121,8 @@ export class SemanticRegistry {
     for (const [key, value] of this.types) clone.types.set(key, value);
     for (const [key, value] of this.inputs) clone.inputs.set(key, value);
     for (const [key, value] of this.enums) clone.enums.set(key, value);
+    for (const [key, value] of this.interfaces) clone.interfaces.set(key, value);
+    for (const [key, value] of this.unions) clone.unions.set(key, value);
     clone.extensions = [...this.extensions];
     return clone;
   }
@@ -91,6 +131,8 @@ export class SemanticRegistry {
     this.types.clear();
     this.inputs.clear();
     this.enums.clear();
+    this.interfaces.clear();
+    this.unions.clear();
     this.extensions = [];
   }
 }

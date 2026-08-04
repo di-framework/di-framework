@@ -9,10 +9,12 @@
 import type { Container } from '@di-framework/core/container';
 import {
   type ASTNode,
+  type DocumentNode,
   type ExecutionResult,
   execute,
   GraphQLBoolean,
   GraphQLEnumType,
+  GraphQLError,
   type GraphQLFieldConfigArgumentMap,
   type GraphQLFieldConfigMap,
   GraphQLFloat,
@@ -20,6 +22,7 @@ import {
   GraphQLInputObjectType,
   type GraphQLInputType,
   GraphQLInt,
+  GraphQLInterfaceType,
   GraphQLList,
   type GraphQLNamedType,
   GraphQLNonNull,
@@ -29,14 +32,18 @@ import {
   GraphQLSchema,
   GraphQLString,
   type GraphQLType,
+  GraphQLUnionType,
   Kind,
   parse,
   subscribe,
   validate,
 } from 'graphql';
+import type { AuthorizationOptions } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
-import { ResolverFactory } from './resolvers.ts';
-import { type PrintOptions, printSDL } from './sdl.ts';
+import { getRegistry } from './registry.ts';
+import { hydrate, ResolverFactory } from './resolvers.ts';
+import { registerScalarName, type ScalarRef } from './scalars.ts';
+import { isEntity, type PrintOptions, printSDL } from './sdl.ts';
 import { buildTypeGraph } from './type-graph.ts';
 import type {
   BuildOptions,
@@ -45,6 +52,7 @@ import type {
   ResolvedField,
   TypeGraph,
   TypeNode,
+  TypeResolver,
 } from './types.ts';
 
 /* -------------------------------------------------------------------------- */
@@ -113,6 +121,22 @@ const SPEC_SCALAR_TYPES: Record<string, GraphQLScalarType> = {
   JSON: JSONScalar,
 };
 
+/** Application scalar implementations keyed by their GraphQL name. */
+const REGISTERED_SCALARS = new Map<string, GraphQLScalarType>();
+
+/**
+ * Register an application-defined scalar implementation.
+ *
+ * Use the returned `ScalarRef` in `@Field`/`@Arg` declarations. Registration
+ * is process-wide, matching the decorator registry, and can be performed once
+ * during application startup before `buildSemanticSchema()`.
+ */
+export function registerScalar(name: string, scalar: GraphQLScalarType): ScalarRef {
+  const ref = registerScalarName(name);
+  REGISTERED_SCALARS.set(name, scalar);
+  return ref;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Schema assembly                                                            */
 /* -------------------------------------------------------------------------- */
@@ -120,8 +144,21 @@ const SPEC_SCALAR_TYPES: Record<string, GraphQLScalarType> = {
 export interface SemanticSchemaOptions extends BuildOptions {
   /** Container used to resolve portals and read the event bus. */
   container?: Container;
+  /** How `@Requires` reads the principal, roles and claims off the context. */
+  authorization?: AuthorizationOptions;
+  /**
+   * Build an Apollo Federation subgraph: adds `_entities` and `_service`, and
+   * renders `sdl` as a federation document. Boundary types become entities,
+   * resolved by key through their `@Lookup`.
+   */
+  federation?: boolean;
   /** Options for the SDL rendered onto `SemanticSchema.sdl`. */
   print?: PrintOptions;
+  /** Optional query resource limits enforced before execution. */
+  maxDepth?: number;
+  maxComplexity?: number;
+  /** Transform execution/validation errors before they leave the API. */
+  errorFormatter?: (error: GraphQLError) => GraphQLError;
 }
 
 export interface ExecuteRequest {
@@ -131,6 +168,7 @@ export interface ExecuteRequest {
   /** Per-request context. Defaults to `{}` so request-scoped batching works. */
   context?: GraphQLContext;
   rootValue?: unknown;
+  extensions?: Record<string, any>;
 }
 
 export interface SemanticSchema {
@@ -151,12 +189,23 @@ export interface SemanticSchema {
 class SchemaAssembler {
   private readonly factory: ResolverFactory;
   private readonly named = new Map<string, GraphQLNamedType>();
+  private readonly federation: boolean;
+  /** The document `_service { sdl }` returns: this subgraph's federation SDL. */
+  private readonly subgraphSdl: string;
 
   constructor(
     private readonly graph: TypeGraph,
     options: SemanticSchemaOptions,
   ) {
-    this.factory = new ResolverFactory({ container: options.container, graph });
+    this.factory = new ResolverFactory({
+      container: options.container,
+      graph,
+      authorization: options.authorization,
+    });
+    this.federation = options.federation ?? false;
+    this.subgraphSdl = this.federation
+      ? printSDL(graph, { ...options.print, federation: true })
+      : '';
   }
 
   assemble(): GraphQLSchema {
@@ -190,6 +239,31 @@ class SchemaAssembler {
       );
     }
 
+    for (const resolved of this.graph.interfaces) {
+      this.named.set(
+        resolved.name,
+        new GraphQLInterfaceType({
+          name: resolved.name,
+          description: resolved.description,
+          extensions: { diFramework: { context: resolved.context } },
+          fields: () => this.toFieldConfigMap(resolved.fields),
+          resolveType: this.createTypeResolver(resolved.implementations, resolved.resolveType),
+        }),
+      );
+    }
+
+    for (const union of this.graph.unions) {
+      this.named.set(
+        union.name,
+        new GraphQLUnionType({
+          name: union.name,
+          description: union.description,
+          types: () => union.members.map((name) => this.named.get(name) as GraphQLObjectType),
+          resolveType: this.createTypeResolver(union.members, union.resolveType),
+        }),
+      );
+    }
+
     for (const object of this.graph.objects) {
       this.named.set(
         object.name,
@@ -203,6 +277,8 @@ class SchemaAssembler {
               key: object.key,
             },
           },
+          interfaces: () =>
+            object.interfaces.map((name) => this.named.get(name) as GraphQLInterfaceType),
           fields: () => this.toFieldConfigMap(object.fields),
         }),
       );
@@ -210,7 +286,10 @@ class SchemaAssembler {
 
     const query = new GraphQLObjectType({
       name: 'Query',
-      fields: () => this.toFieldConfigMap(this.graph.query.fields),
+      fields: () => ({
+        ...this.toFieldConfigMap(this.graph.query.fields),
+        ...this.federationFields(),
+      }),
     });
 
     const mutation = this.graph.mutation
@@ -233,6 +312,137 @@ class SchemaAssembler {
       subscription,
       types: Array.from(this.named.values()),
     });
+  }
+
+  /**
+   * `_entities` and `_service`, the two entry points a federation gateway calls.
+   *
+   * `_entities` is the reason boundary types are natural federation entities:
+   * each already declares a key and a `@Lookup` that turns that key back into an
+   * object, which is exactly the resolver signature federation asks for.
+   */
+  private federationFields(): GraphQLFieldConfigMap<any, any> {
+    if (!this.federation) return {};
+
+    const entities = this.graph.objects.filter(isEntity);
+    const fields: GraphQLFieldConfigMap<any, any> = {
+      _service: {
+        type: new GraphQLNonNull(
+          new GraphQLObjectType({
+            name: '_Service',
+            fields: { sdl: { type: GraphQLString, resolve: () => this.subgraphSdl } },
+          }),
+        ),
+        resolve: () => ({ sdl: this.subgraphSdl }),
+      },
+    };
+    if (entities.length === 0) return fields;
+
+    const anyScalar = new GraphQLScalarType({
+      name: '_Any',
+      serialize: (value) => value,
+      parseValue: (value) => value,
+      parseLiteral: (node) => literalToValue(node),
+    });
+
+    const entityUnion = new GraphQLUnionType({
+      name: '_Entity',
+      types: () => entities.map((entity) => this.named.get(entity.name) as GraphQLObjectType),
+      resolveType: this.createTypeResolver(
+        entities.map((entity) => entity.name),
+        undefined,
+      ),
+    });
+
+    fields._entities = {
+      type: new GraphQLNonNull(new GraphQLList(entityUnion)),
+      args: {
+        representations: {
+          type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(anyScalar))),
+        },
+      },
+      resolve: (_parent, args, ctx, info) =>
+        Promise.all(
+          (args.representations as Array<Record<string, unknown>>).map((representation) =>
+            this.resolveEntity(representation, ctx, info),
+          ),
+        ),
+    };
+    return fields;
+  }
+
+  /** Turn one `_entities` representation back into a domain object. */
+  private async resolveEntity(
+    representation: Record<string, unknown>,
+    ctx: GraphQLContext,
+    info: any,
+  ): Promise<unknown> {
+    const typename = representation.__typename;
+    const object = this.graph.objects.find(
+      (candidate) => candidate.name === typename && isEntity(candidate),
+    );
+    if (!object) {
+      throw new GraphQLError(`'${String(typename)}' is not an entity in this subgraph.`, {
+        extensions: { code: 'INVALID_ENTITY' },
+      });
+    }
+    if (!object.lookup) {
+      throw new GraphQLError(`${object.name} has no @Lookup, so it cannot be resolved by key.`, {
+        extensions: { code: 'INVALID_ENTITY' },
+      });
+    }
+
+    const load = (object.lookup.target as any)[object.lookup.propertyKey];
+    if (typeof load !== 'function') {
+      throw new GraphQLError(
+        `${object.name}.${object.lookup.propertyKey} is not a static @Lookup.`,
+      );
+    }
+
+    const key = representation[object.key as string];
+    const loaded = await load.call(object.lookup.target, key, ctx, info);
+    if (loaded === null || loaded === undefined) return null;
+    // Hydrate so the entity's own methods resolve, and so __typename can be
+    // decided by instanceof rather than trusting the representation.
+    return hydrate(object.target, loaded);
+  }
+
+  /**
+   * Decide which concrete type backs a value for an interface or union.
+   *
+   * Explicit `resolveType` wins; otherwise the value is matched against each
+   * candidate class with `instanceof` — which is what hydration produces — and
+   * finally against a `__typename` carried by plain data.
+   */
+  private createTypeResolver(
+    candidates: string[],
+    explicit: TypeResolver | undefined,
+  ): (
+    value: any,
+    ctx: GraphQLContext,
+    info: any,
+  ) => string | undefined | Promise<string | undefined> {
+    const targets = candidates
+      .map((name) => this.graph.objects.find((object) => object.name === name))
+      .filter((object): object is (typeof this.graph.objects)[number] => object !== undefined);
+
+    const match = (value: any): string | undefined => {
+      for (const object of targets) {
+        if (value instanceof object.target) return object.name;
+      }
+      const declared = value?.__typename;
+      if (typeof declared === 'string' && candidates.includes(declared)) return declared;
+      return undefined;
+    };
+
+    return (value, ctx, info) => {
+      if (!explicit) return match(value);
+      const resolved = explicit(value, ctx, info);
+      if (resolved && typeof (resolved as Promise<string>).then === 'function') {
+        return (resolved as Promise<string | undefined>).then((name) => name ?? match(value));
+      }
+      return (resolved as string | undefined) ?? match(value);
+    };
   }
 
   private toFieldConfigMap(
@@ -291,7 +501,7 @@ class SchemaAssembler {
       case 'list':
         return new GraphQLList(this.toType(node.of));
       case 'scalar': {
-        const scalar = SPEC_SCALAR_TYPES[node.name];
+        const scalar = SPEC_SCALAR_TYPES[node.name] ?? REGISTERED_SCALARS.get(node.name);
         if (!scalar) throw new SemanticSchemaError(`Unknown scalar '${node.name}'.`);
         return scalar;
       }
@@ -302,6 +512,56 @@ class SchemaAssembler {
       }
     }
   }
+}
+
+function queryCost(document: DocumentNode): { depth: number; complexity: number } {
+  const fragments = new Map<string, any>();
+  for (const definition of document.definitions) {
+    if (definition.kind === Kind.FRAGMENT_DEFINITION)
+      fragments.set(definition.name.value, definition);
+  }
+  const walk = (
+    selectionSet: any,
+    active: Set<string>,
+    level: number,
+  ): { depth: number; complexity: number } => {
+    let depth = level;
+    let complexity = 0;
+    for (const selection of selectionSet?.selections ?? []) {
+      if (selection.kind === Kind.FRAGMENT_SPREAD) {
+        if (active.has(selection.name.value)) continue;
+        const next = new Set(active).add(selection.name.value);
+        const fragment = fragments.get(selection.name.value);
+        const nested = fragment
+          ? walk(fragment.selectionSet, next, level)
+          : { depth: level, complexity: 0 };
+        depth = Math.max(depth, nested.depth);
+        complexity += nested.complexity;
+        continue;
+      }
+      if (selection.kind === Kind.INLINE_FRAGMENT) {
+        const nested = walk(selection.selectionSet, active, level);
+        depth = Math.max(depth, nested.depth);
+        complexity += nested.complexity;
+        continue;
+      }
+      complexity += 1;
+      const nested = walk(selection.selectionSet, active, level + 1);
+      depth = Math.max(depth, nested.depth);
+      complexity += nested.complexity;
+    }
+    return { depth, complexity };
+  };
+  let result = { depth: 0, complexity: 0 };
+  for (const definition of document.definitions) {
+    if (definition.kind !== Kind.OPERATION_DEFINITION) continue;
+    const current = walk(definition.selectionSet, new Set(), 0);
+    result = {
+      depth: Math.max(result.depth, current.depth),
+      complexity: Math.max(result.complexity, current.complexity),
+    };
+  }
+  return result;
 }
 
 /**
@@ -316,12 +576,36 @@ class SchemaAssembler {
 export function buildSemanticSchema(options: SemanticSchemaOptions = {}): SemanticSchema {
   const graph = buildTypeGraph(options);
   const schema = new SchemaAssembler(graph, options).assemble();
-  const sdl = printSDL(graph, options.print);
+  const sdl = printSDL(graph, { ...options.print, federation: options.federation });
 
   const prepare = (request: ExecuteRequest) => {
     const document = parse(request.query);
-    const errors = validate(schema, document);
+    const errors = [...validate(schema, document)];
+    if (errors.length === 0) {
+      const cost = queryCost(document);
+      if (options.maxDepth !== undefined && cost.depth > options.maxDepth) {
+        errors.push(
+          new GraphQLError(
+            `Query depth ${cost.depth} exceeds the configured maximum of ${options.maxDepth}.`,
+            { extensions: { code: 'QUERY_DEPTH_LIMIT' } },
+          ),
+        );
+      }
+      if (options.maxComplexity !== undefined && cost.complexity > options.maxComplexity) {
+        errors.push(
+          new GraphQLError(
+            `Query complexity ${cost.complexity} exceeds the configured maximum of ${options.maxComplexity}.`,
+            { extensions: { code: 'QUERY_COMPLEXITY_LIMIT' } },
+          ),
+        );
+      }
+    }
     return { document, errors };
+  };
+
+  const formatResult = (result: ExecutionResult): ExecutionResult => {
+    if (!options.errorFormatter || !result.errors) return result;
+    return { ...result, errors: result.errors.map(options.errorFormatter) };
   };
 
   return {
@@ -332,30 +616,66 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
 
     async execute(request) {
       const { document, errors } = prepare(request);
-      if (errors.length > 0) return { errors };
-      return execute({
-        schema,
-        document,
-        contextValue: request.context ?? {},
-        variableValues: request.variables ?? undefined,
-        operationName: request.operationName ?? undefined,
-        rootValue: request.rootValue,
-      });
+      if (errors.length > 0)
+        return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+      return formatResult(
+        await execute({
+          schema,
+          document,
+          contextValue: request.context ?? {},
+          variableValues: request.variables ?? undefined,
+          operationName: request.operationName ?? undefined,
+          rootValue: request.rootValue,
+        }),
+      );
     },
 
     async subscribe(request) {
       const { document, errors } = prepare(request);
-      if (errors.length > 0) return { errors };
-      return subscribe({
+      if (errors.length > 0)
+        return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+      const result = (await subscribe({
         schema,
         document,
         contextValue: request.context ?? {},
         variableValues: request.variables ?? undefined,
         operationName: request.operationName ?? undefined,
         rootValue: request.rootValue,
-      }) as Promise<AsyncIterableIterator<ExecutionResult> | ExecutionResult>;
+      })) as AsyncIterableIterator<ExecutionResult> | ExecutionResult;
+      if (typeof (result as any)?.[Symbol.asyncIterator] === 'function') {
+        const iterator = result as AsyncIterableIterator<ExecutionResult>;
+        return (async function* () {
+          for await (const item of iterator) yield formatResult(item);
+        })();
+      }
+      return formatResult(result as ExecutionResult);
     },
   };
+}
+
+/**
+ * Build one executable schema per bounded context.
+ *
+ * Each is a deployable service: it owns its types and portals and sees the rest
+ * only through boundary stubs. Pair with `federation: true` and a gateway
+ * composes them back into one graph.
+ *
+ * @example
+ * ```ts
+ * const subgraphs = buildSemanticSubgraphs({ federation: true });
+ * Bun.serve({ fetch: createGraphQLHandler(subgraphs.Catalog) });
+ * ```
+ */
+export function buildSemanticSubgraphs(
+  options: SemanticSchemaOptions = {},
+): Record<string, SemanticSchema> {
+  const registry = options.registry ?? getRegistry();
+  const contexts = options.contexts ?? registry.getContexts();
+  const subgraphs: Record<string, SemanticSchema> = {};
+  for (const context of [...contexts].sort()) {
+    subgraphs[context] = buildSemanticSchema({ ...options, contexts: [context] });
+  }
+  return subgraphs;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -365,6 +685,33 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
 export interface HandlerOptions {
   /** Build the per-request context. Receives the incoming request. */
   context?: (request: Request) => GraphQLContext | Promise<GraphQLContext>;
+  /** Optional persisted-query hash to document lookup. */
+  persistedQueries?: Map<string, string>;
+}
+
+/** Options for the lightweight GraphQL-over-SSE subscription endpoint. */
+export interface SubscriptionHandlerOptions extends HandlerOptions {
+  /** Keep the stream open with periodic SSE comments (milliseconds). */
+  heartbeatMs?: number;
+}
+
+/** Minimal router surface accepted by {@link mountGraphQL}. */
+export interface GraphQLRouterLike {
+  get(
+    path: string,
+    handler: (request: Request, ...rest: any[]) => unknown,
+    ...rest: any[]
+  ): unknown;
+  post(
+    path: string,
+    handler: (request: Request, ...rest: any[]) => unknown,
+    ...rest: any[]
+  ): unknown;
+}
+
+export interface GraphQLRouteOptions extends HandlerOptions {
+  /** Route path. Defaults to `/graphql`. */
+  path?: string;
 }
 
 /**
@@ -386,8 +733,16 @@ export function createGraphQLHandler(
 
     if (request.method === 'GET') {
       const url = new URL(request.url);
-      const query = url.searchParams.get('query');
-      if (!query) return json({ errors: [{ message: 'Missing "query" parameter' }] }, 400);
+      let query = url.searchParams.get('query');
+      const hash = url.searchParams.get('extensions.persistedQuery.sha256Hash');
+      if (!query && hash) query = options.persistedQueries?.get(hash) ?? null;
+      if (!query)
+        return json(
+          {
+            errors: [{ message: hash ? 'Persisted query not found' : 'Missing "query" parameter' }],
+          },
+          400,
+        );
       const variables = url.searchParams.get('variables');
       payload = {
         query,
@@ -396,9 +751,22 @@ export function createGraphQLHandler(
       };
     } else if (request.method === 'POST') {
       try {
-        const body = (await request.json()) as ExecuteRequest;
+        const contentType = request.headers.get('content-type') ?? '';
+        let body: ExecuteRequest;
+        if (contentType.startsWith('multipart/form-data')) {
+          const form = await request.formData();
+          const operations = JSON.parse(String(form.get('operations') ?? '{}')) as ExecuteRequest;
+          body = operations;
+        } else {
+          body = (await request.json()) as ExecuteRequest;
+        }
         if (!body || typeof body.query !== 'string') {
-          return json({ errors: [{ message: 'Missing "query" in request body' }] }, 400);
+          const hash = (body?.extensions as any)?.persistedQuery?.sha256Hash;
+          if (hash && options.persistedQueries?.has(hash)) {
+            body.query = options.persistedQueries.get(hash) as string;
+          } else {
+            return json({ errors: [{ message: 'Missing "query" in request body' }] }, 400);
+          }
         }
         payload = body;
       } catch {
@@ -411,6 +779,98 @@ export function createGraphQLHandler(
     const context = options.context ? await options.context(request) : {};
     const result = await api.execute({ ...payload, context });
     return json(result, result.data === undefined && result.errors ? 400 : 200);
+  };
+}
+
+/**
+ * Mount a semantic schema on any Fetch-compatible typed router (including
+ * `@di-framework/http`'s `TypedRouter`). Both GET and POST GraphQL-over-HTTP
+ * routes are registered and the router is returned for fluent composition.
+ */
+export function mountGraphQL<R extends GraphQLRouterLike>(
+  router: R,
+  api: SemanticSchema,
+  options: GraphQLRouteOptions = {},
+): R {
+  const { path = '/graphql', ...handlerOptions } = options;
+  const handler = createGraphQLHandler(api, handlerOptions);
+  router.get(path, handler);
+  router.post(path, handler);
+  return router;
+}
+
+/**
+ * Serve GraphQL subscriptions over Server-Sent Events. The endpoint accepts a
+ * GET request with the standard `query`, `variables`, and `operationName`
+ * parameters and emits `data` events until the client aborts the request.
+ */
+export function createGraphQLSSEHandler(
+  api: SemanticSchema,
+  options: SubscriptionHandlerOptions = {},
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    if (request.method !== 'GET') {
+      return new Response(JSON.stringify({ errors: [{ message: 'Subscriptions require GET' }] }), {
+        status: 405,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const url = new URL(request.url);
+    const query = url.searchParams.get('query');
+    if (!query) return new Response('Missing "query" parameter', { status: 400 });
+    const variables = url.searchParams.get('variables');
+    const context = options.context ? await options.context(request) : {};
+    const result = await api.subscribe({
+      query,
+      variables: variables ? JSON.parse(variables) : undefined,
+      operationName: url.searchParams.get('operationName'),
+      context,
+    });
+    if (!Symbol.asyncIterator || typeof (result as any)?.[Symbol.asyncIterator] !== 'function') {
+      return new Response(JSON.stringify(result), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const iterator = result as AsyncIterableIterator<ExecutionResult>;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        if (options.heartbeatMs && options.heartbeatMs > 0) {
+          heartbeat = setInterval(
+            () => controller.enqueue(encoder.encode(': heartbeat\n\n')),
+            options.heartbeatMs,
+          );
+        }
+        try {
+          for await (const item of iterator) {
+            controller.enqueue(encoder.encode(`event: next\ndata: ${JSON.stringify(item)}\n\n`));
+          }
+          controller.enqueue(encoder.encode('event: complete\ndata: {}\n\n'));
+          controller.close();
+        } catch (error) {
+          controller.enqueue(
+            encoder.encode(
+              `event: error\ndata: ${JSON.stringify({ errors: [{ message: String(error) }] })}\n\n`,
+            ),
+          );
+          controller.close();
+        } finally {
+          if (heartbeat) clearInterval(heartbeat);
+        }
+      },
+      async cancel() {
+        await iterator.return?.();
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      },
+    });
   };
 }
 

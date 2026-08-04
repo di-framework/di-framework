@@ -1,3 +1,10 @@
+/** Keys that must never be used as object property names from untrusted paths. */
+const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function isSafeKey(key: string): boolean {
+  return !DANGEROUS_KEYS.has(key);
+}
+
 /**
  * Read a dotted path from a nested object.
  */
@@ -6,6 +13,7 @@ export function getByPath(obj: unknown, path: string): unknown {
   const parts = path.split('.').filter(Boolean);
   let cur: unknown = obj;
   for (const part of parts) {
+    if (!isSafeKey(part)) return undefined;
     if (cur === null || cur === undefined || typeof cur !== 'object') return undefined;
     cur = (cur as Record<string, unknown>)[part];
   }
@@ -18,6 +26,7 @@ export function getByPath(obj: unknown, path: string): unknown {
 export function setByPath(target: Record<string, unknown>, path: string, value: unknown): void {
   const parts = path.split('.').filter(Boolean);
   if (parts.length === 0) return;
+  if (parts.some((part) => !isSafeKey(part))) return;
 
   let cur: Record<string, unknown> = target;
   for (let i = 0; i < parts.length - 1; i++) {
@@ -25,7 +34,7 @@ export function setByPath(target: Record<string, unknown>, path: string, value: 
     if (key === undefined) continue;
     const next = cur[key];
     if (next === null || next === undefined || typeof next !== 'object' || Array.isArray(next)) {
-      cur[key] = {};
+      cur[key] = Object.create(null) as Record<string, unknown>;
     }
     cur = cur[key] as Record<string, unknown>;
   }
@@ -43,6 +52,7 @@ export function deepMerge(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...target };
   for (const [key, value] of Object.entries(source)) {
+    if (!isSafeKey(key)) continue;
     const existing = out[key];
     if (
       value !== null &&

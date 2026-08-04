@@ -1,0 +1,19 @@
+{
+  "name": "@di-framework/ai-chat-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Annotation-first chat, tools, and RAG example for @di-framework/ai",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@di-framework/ai": "workspace:*",
+    "@di-framework/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

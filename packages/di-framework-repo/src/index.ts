@@ -1,4 +1,7 @@
 export * from './adapter';
+export * from './adapters/bun-sqlite';
+export * from './adapters/d1';
+export * from './adapters/sql';
 export * from './decorators';
 export * from './in-memory';
 export * from './query-derivation';

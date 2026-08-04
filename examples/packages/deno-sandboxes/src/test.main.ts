@@ -29,9 +29,9 @@ async function startTestServer() {
       try {
         const response = await router.fetch(req, env, ctx);
         return response ?? new Response('Not Found', { status: 404 });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return new Response(message, { status: 500 });
+      } catch {
+        // Never surface exception details (or stack traces) to the client.
+        return new Response('Internal Server Error', { status: 500 });
       }
     },
   );

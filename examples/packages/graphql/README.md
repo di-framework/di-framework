@@ -49,7 +49,8 @@ trade-off is that the playground — and only the playground — needs a network
 | Input objects with behaviour | `BookInput.slug()`, `ReviewInput.clampedRating()` | GraphQL's plain input values are hydrated back onto the class. |
 | Hydration | `Book.shelfLabel()`, `Loan.renewable()` | Repository rows are plain data; they get their type's behaviour before resolution. |
 | Enums and scalars | `Genre`, `LoanState`, `ID`/`Int`/`Float`/`DateTime`/`JSON` | Types are runtime markers — no `reflect-metadata`. |
-| Request context | `@Ctx()`, and `myLoans(ctx)` by convention | Authorization (`requireLibrarian`) is a domain decision, not middleware. |
+| Request context | `@Ctx()`, and `myLoans(ctx)` by convention | Whatever the transport builds is threaded straight through. |
+| Authorization as domain | `@Requires({ roles: ['librarian'] })` on `addBook` | Declared on the action it protects, next to the invariant — not a guard clause or transport middleware. `schema.ts` wires the readers that find the member and roles on `LibraryContext`; denials surface as `FORBIDDEN` / `UNAUTHENTICATED` with no internal detail. |
 | Resolve info | `@Info()` in `CatalogPortal.books` | Feeds a `QueryStats` component. |
 | Subscriptions | `@Publisher('loan.checkedOut')` → `@Subscription(...)` | The service publishes on the container and knows nothing about GraphQL. `filter` sees the raw publisher envelope. |
 | Subscriptions over the wire | `sockets` in `server.ts` | ~60 lines of `graphql-transport-ws` so GraphiQL can stream them; the round trip is asserted in `index.test.ts`. |

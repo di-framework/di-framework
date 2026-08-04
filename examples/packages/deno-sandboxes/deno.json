@@ -1,4 +1,5 @@
 {
+  "nodeModulesDir": "auto",
   "exports": "./src/main.ts",
   "imports": {
     "itty-router": "npm:itty-router@^5.0.0",
@@ -14,6 +15,6 @@
   },
   "tasks": {
     "dev": "deno run -A src/main.ts",
-    "test": "deno test -A --sloppy-imports --coverage=lcov"
+    "test": "deno test -A --sloppy-imports --coverage=lcov src/test.main.ts"
   }
 }

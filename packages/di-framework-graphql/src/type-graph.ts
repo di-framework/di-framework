@@ -12,29 +12,35 @@ import { SemanticBoundaryError, SemanticSchemaError } from './errors.ts';
 import {
   collectFieldDeclarations,
   getBoundedContext,
+  getImplements,
   getLookup,
   getParamNames,
+  getRequirements,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
 import { CUSTOM_SCALARS, ScalarRef, scalarNameForConstructor } from './scalars.ts';
-import type {
-  ArgOptions,
-  BuildOptions,
-  Ctor,
-  EnumObject,
-  FieldDeclaration,
-  ParamDeclaration,
-  ResolvedArg,
-  ResolvedEnumType,
-  ResolvedField,
-  ResolvedInputType,
-  ResolvedObjectType,
-  ResolvedRootType,
-  TypeGraph,
-  TypeInput,
-  TypeNode,
-  TypeRef,
-  TypeThunk,
+import {
+  type ArgOptions,
+  type BuildOptions,
+  type ConnectionOptions,
+  type Ctor,
+  type EnumObject,
+  type FieldDeclaration,
+  type ParamDeclaration,
+  type ResolvedArg,
+  type ResolvedEnumType,
+  type ResolvedField,
+  type ResolvedInputType,
+  type ResolvedInterfaceType,
+  type ResolvedObjectType,
+  type ResolvedRootType,
+  type ResolvedUnionType,
+  type TypeGraph,
+  type TypeInput,
+  type TypeNode,
+  type TypeRef,
+  type TypeThunk,
+  UnionRef,
 } from './types.ts';
 
 const CONTEXT_PARAM_NAMES = new Set(['ctx', 'context', '_ctx', '_context']);
@@ -67,15 +73,21 @@ class GraphBuilder {
   private readonly objectsByName = new Map<string, ResolvedObjectType>();
   private readonly inputs = new Map<Ctor, ResolvedInputType>();
   private readonly enums = new Map<EnumObject, ResolvedEnumType>();
+  /** Interfaces included in this build, by class. */
+  private readonly interfaces = new Map<Ctor, ResolvedInterfaceType>();
+  private readonly unions = new Map<UnionRef, ResolvedUnionType>();
   private readonly usedScalars = new Set<string>();
   /** Context that declared each field, keyed by `TypeName.fieldName`. */
   private readonly fieldContexts = new Map<string, string | undefined>();
+
+  private readonly boundaryStubs: boolean;
 
   constructor(options: BuildOptions) {
     this.registry = options.registry ?? getRegistry();
     this.enforceBoundaries = options.enforceBoundaries ?? true;
     this.strictTypes = options.strictTypes ?? false;
     this.contextFilter = options.contexts ? new Set(options.contexts) : undefined;
+    this.boundaryStubs = options.boundaryStubs ?? true;
   }
 
   build(): TypeGraph {
@@ -95,6 +107,8 @@ class GraphBuilder {
         key: declaration.options.key,
         portal: false,
         fields: [],
+        interfaces: [],
+        lookup: lookupFor(declaration.target),
       };
       const existing = this.objectsByName.get(shell.name);
       if (existing && existing.target !== shell.target) {
@@ -106,15 +120,67 @@ class GraphBuilder {
       this.objectsByName.set(shell.name, shell);
     }
 
-    // Pass 2: own fields.
-    for (const object of this.objects.values()) {
-      object.fields = this.resolveOwnFields(object);
+    // Pass 1b: stubs for boundary types the slice does not own, so a reference
+    // across the seam still resolves. Unreferenced stubs are pruned later.
+    if (this.contextFilter && this.boundaryStubs) {
+      for (const declaration of this.registry.getTypes()) {
+        if (declaration.portal) continue;
+        if (this.inSelectedContext(getBoundedContext(declaration.target))) continue;
+        if (!declaration.options.boundary || !declaration.options.key) continue;
+        if (this.objects.has(declaration.target)) continue;
+
+        const stub: ResolvedObjectType = {
+          name: declaration.name,
+          description: declaration.options.description,
+          target: declaration.target,
+          context: getBoundedContext(declaration.target),
+          boundary: true,
+          key: declaration.options.key,
+          portal: false,
+          fields: [],
+          interfaces: [],
+          lookup: lookupFor(declaration.target),
+          stub: true,
+        };
+        this.objects.set(declaration.target, stub);
+        this.objectsByName.set(stub.name, stub);
+      }
     }
 
-    // Pass 3: cross-context extensions of boundary types.
+    // Pass 2: interface shells, so a type can implement an interface that
+    // references it back.
+    for (const declaration of this.registry.getInterfaces()) {
+      this.interfaces.set(declaration.target, {
+        name: declaration.name,
+        description: declaration.options.description,
+        target: declaration.target,
+        context: getBoundedContext(declaration.target),
+        fields: [],
+        implementations: [],
+        resolveType: declaration.options.resolveType,
+      });
+    }
+
+    // Pass 3: own fields. Snapshot first — resolving a @Connection field adds
+    // generated connection/edge types, which have no declarations to collect and
+    // must not be revisited here.
+    for (const object of Array.from(this.objects.values())) {
+      // A stub carries only the contract: its key. Everything else about it is
+      // the owning subgraph's business.
+      object.fields = object.stub ? [this.keyField(object)] : this.resolveOwnFields(object);
+    }
+    for (const [target, resolved] of this.interfaces) {
+      resolved.fields = this.resolveInterfaceFields(target, resolved);
+    }
+
+    // Pass 4: wire implementations to their interfaces and inherit any fields
+    // the concrete type did not redeclare.
+    this.applyInterfaces();
+
+    // Pass 5: cross-context extensions of boundary types.
     this.applyExtensions();
 
-    // Pass 4: roots.
+    // Pass 6: roots.
     const rootQuery: ResolvedField[] = [];
     const rootMutation: ResolvedField[] = [];
     const rootSubscription: ResolvedField[] = [];
@@ -149,6 +215,8 @@ class GraphBuilder {
       rootQuery.push(this.contextsField());
     }
 
+    this.pruneUnreferencedStubs([rootQuery, rootMutation, rootSubscription]);
+
     const graph: TypeGraph = {
       query: { name: 'Query', fields: rootQuery },
       mutation: rootMutation.length > 0 ? { name: 'Mutation', fields: rootMutation } : undefined,
@@ -157,6 +225,8 @@ class GraphBuilder {
           ? { name: 'Subscription', fields: rootSubscription }
           : undefined,
       objects: Array.from(this.objects.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      interfaces: [],
+      unions: [],
       inputs: [],
       enums: [],
       scalars: [],
@@ -170,6 +240,15 @@ class GraphBuilder {
     graph.inputs = reachable.inputs;
     graph.enums = reachable.enums;
     graph.scalars = Array.from(this.usedScalars).sort();
+
+    // An interface is emitted when something implements it or a field returns
+    // it; an orphan interface would make the schema invalid.
+    graph.interfaces = Array.from(this.interfaces.values())
+      .filter(
+        (resolved) => resolved.implementations.length > 0 || reachable.abstracts.has(resolved.name),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    graph.unions = Array.from(this.unions.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     return graph;
   }
@@ -215,26 +294,310 @@ class GraphBuilder {
 
     // A boundary type is identified by its key, so the key is always exposed.
     if (object.key && !fields.some((field) => field.source.propertyKey === object.key)) {
-      const declaration = this.registry.getType(object.target);
-      fields.unshift(
-        this.resolveField(
-          object.target,
-          object.name,
-          {
-            propertyKey: object.key,
-            kind: 'field',
-            member: 'property',
-            options: { type: declaration?.options.keyType ?? new ScalarRef('ID') },
-            params: [],
-          },
-          'parent',
-          object.context,
-        ),
-      );
+      fields.unshift(this.keyField(object));
     }
 
     assertUniqueFieldNames(object.name, fields);
     return fields;
+  }
+
+  /** The field that exposes a type's key — the whole of a stub's contract. */
+  private keyField(object: ResolvedObjectType): ResolvedField {
+    const declaration = this.registry.getType(object.target);
+    return this.resolveField(
+      object.target,
+      object.name,
+      {
+        propertyKey: object.key as string,
+        kind: 'field',
+        member: 'property',
+        options: { type: declaration?.options.keyType ?? new ScalarRef('ID') },
+        params: [],
+      },
+      'parent',
+      object.context,
+    );
+  }
+
+  private resolveInterfaceFields(target: Ctor, resolved: ResolvedInterfaceType): ResolvedField[] {
+    const fields = collectFieldDeclarations(target).map((declaration) => {
+      if (declaration.kind !== 'field') {
+        throw new SemanticSchemaError(
+          `${resolved.name}.${declaration.propertyKey}: interfaces may only declare @Field members.`,
+        );
+      }
+      return this.resolveField(target, resolved.name, declaration, 'parent', resolved.context);
+    });
+
+    if (fields.length === 0) {
+      throw new SemanticSchemaError(
+        `${resolved.name}: interfaces need at least one @Field. GraphQL has no empty interfaces.`,
+      );
+    }
+
+    assertUniqueFieldNames(resolved.name, fields);
+    return fields;
+  }
+
+  /**
+   * Attach each object to the interfaces it declares, copying down any field it
+   * did not redeclare so the concrete type structurally satisfies the contract.
+   */
+  private applyInterfaces(): void {
+    for (const object of this.objects.values()) {
+      const thunks = [
+        ...getImplements(object.target),
+        ...normalizeThunks(this.registry.getType(object.target)?.options.implements),
+      ];
+      if (thunks.length === 0) continue;
+
+      const names = new Set<string>();
+      for (const thunk of thunks) {
+        const interfaceTarget = thunk() as Ctor;
+        const resolved = this.interfaces.get(interfaceTarget);
+        if (!resolved) {
+          throw new SemanticSchemaError(
+            `${object.name} implements '${interfaceTarget?.name}', which is not an @InterfaceType.`,
+          );
+        }
+        if (names.has(resolved.name)) continue;
+        names.add(resolved.name);
+
+        for (const field of resolved.fields) {
+          const own = object.fields.find((existing) => existing.name === field.name);
+          if (!own) {
+            // Re-target the inherited field at the concrete class so an override
+            // on the implementation wins over the interface's own member.
+            object.fields.push({
+              ...field,
+              context: object.context,
+              source: { ...field.source, target: object.target },
+            });
+            continue;
+          }
+          if (printableType(own.type) !== printableType(field.type)) {
+            throw new SemanticBoundaryError(
+              `${object.name}.${own.name} is '${printableType(own.type)}' but interface '${resolved.name}' declares '${printableType(field.type)}'.`,
+            );
+          }
+        }
+
+        resolved.implementations.push(object.name);
+      }
+
+      object.interfaces = Array.from(names).sort();
+      assertUniqueFieldNames(object.name, object.fields);
+    }
+
+    for (const resolved of this.interfaces.values()) {
+      resolved.implementations = Array.from(new Set(resolved.implementations)).sort();
+    }
+  }
+
+  /**
+   * Generate the `PageInfo`, `<Node>Edge` and `<Node>Connection` types backing a
+   * `@Connection` field, and return the connection's type node.
+   *
+   * The generated types inherit the node's bounded context and boundary flag, so
+   * paginating a type does not become a way to smuggle it across a context edge.
+   */
+  private ensureConnection(node: ResolvedObjectType, connectionName: string): TypeNode {
+    const existing = this.objectsByName.get(connectionName);
+    if (existing) return nonNull({ kind: 'object', name: connectionName, target: existing.target });
+
+    const pageInfo = this.ensurePageInfo();
+    const edgeName = `${node.name}Edge`;
+
+    const edge =
+      this.objectsByName.get(edgeName) ??
+      this.addSynthetic({
+        name: edgeName,
+        description: `An edge in a ${connectionName}.`,
+        context: node.context,
+        boundary: node.boundary,
+        fields: [
+          { name: 'node', type: nonNull({ kind: 'object', name: node.name, target: node.target }) },
+          { name: 'cursor', type: nonNull({ kind: 'scalar', name: 'String' }) },
+        ],
+      });
+
+    const connection = this.addSynthetic({
+      name: connectionName,
+      description: `A Relay connection over ${node.name}.`,
+      context: node.context,
+      boundary: node.boundary,
+      fields: [
+        {
+          name: 'edges',
+          type: nonNull({
+            kind: 'list',
+            of: nonNull({ kind: 'object', name: edge.name, target: edge.target }),
+          }),
+        },
+        {
+          name: 'pageInfo',
+          type: nonNull({ kind: 'object', name: pageInfo.name, target: pageInfo.target }),
+        },
+        {
+          name: 'totalCount',
+          type: { kind: 'scalar', name: 'Int' },
+          description: 'Size of the full result set, before slicing.',
+        },
+      ],
+    });
+
+    return nonNull({ kind: 'object', name: connection.name, target: connection.target });
+  }
+
+  /** Resolve a `@Connection` declaration into its type, its paging args and its runtime options. */
+  private planConnection(
+    declaration: { node: TypeRef; options: ConnectionOptions },
+    path: string,
+  ): {
+    type: TypeNode;
+    args: ResolvedArg[];
+    source: { defaultPageSize?: number; maxPageSize?: number };
+  } {
+    const nodeType = this.fromTypeInput(unwrapThunk(declaration.node, this.registry), {}, path);
+    if (nodeType.kind !== 'object') {
+      throw new SemanticSchemaError(
+        `${path}: @Connection needs a @SemanticType to paginate over, got '${nodeType.kind}'.`,
+      );
+    }
+    const node = this.objects.get(nodeType.target as Ctor);
+    if (!node) {
+      throw new SemanticSchemaError(`${path}: '${nodeType.name}' is not in the selected contexts.`);
+    }
+
+    const connectionName = declaration.options.connectionName ?? `${node.name}Connection`;
+
+    return {
+      type: this.ensureConnection(node, connectionName),
+      args: [
+        {
+          name: 'first',
+          description: 'Take this many from the start of the slice.',
+          type: { kind: 'scalar', name: 'Int' },
+        },
+        {
+          name: 'after',
+          description: 'Return items after this cursor.',
+          type: { kind: 'scalar', name: 'String' },
+        },
+        {
+          name: 'last',
+          description: 'Take this many from the end of the slice.',
+          type: { kind: 'scalar', name: 'Int' },
+        },
+        {
+          name: 'before',
+          description: 'Return items before this cursor.',
+          type: { kind: 'scalar', name: 'String' },
+        },
+      ],
+      source: {
+        defaultPageSize: declaration.options.defaultPageSize,
+        maxPageSize: declaration.options.maxPageSize,
+      },
+    };
+  }
+
+  private ensurePageInfo(): ResolvedObjectType {
+    const existing = this.objectsByName.get('PageInfo');
+    if (existing) return existing;
+    return this.addSynthetic({
+      name: 'PageInfo',
+      description: 'Relay pagination metadata for the current slice.',
+      context: undefined,
+      boundary: false,
+      fields: [
+        { name: 'hasNextPage', type: nonNull({ kind: 'scalar', name: 'Boolean' }) },
+        { name: 'hasPreviousPage', type: nonNull({ kind: 'scalar', name: 'Boolean' }) },
+        { name: 'startCursor', type: { kind: 'scalar', name: 'String' } },
+        { name: 'endCursor', type: { kind: 'scalar', name: 'String' } },
+      ],
+    });
+  }
+
+  /**
+   * Register a type that has no class of its own.
+   *
+   * Its fields are plain property reads, so the synthesized carrier object the
+   * connection helpers build resolves through the normal hydration path.
+   */
+  private addSynthetic(spec: {
+    name: string;
+    description?: string;
+    context: string | undefined;
+    boundary: boolean;
+    fields: Array<{ name: string; type: TypeNode; description?: string }>;
+  }): ResolvedObjectType {
+    const target = class {} as Ctor;
+    Object.defineProperty(target, 'name', { value: spec.name });
+
+    const resolved: ResolvedObjectType = {
+      name: spec.name,
+      description: spec.description,
+      target,
+      context: spec.context,
+      boundary: spec.boundary,
+      portal: false,
+      interfaces: [],
+      fields: spec.fields.map((field) => ({
+        name: field.name,
+        description: field.description,
+        type: field.type,
+        args: [],
+        context: spec.context,
+        source: {
+          target,
+          propertyKey: field.name,
+          member: 'property' as const,
+          holder: 'parent' as const,
+          params: [],
+        },
+      })),
+    };
+
+    this.objects.set(target, resolved);
+    this.objectsByName.set(resolved.name, resolved);
+    return resolved;
+  }
+
+  private ensureUnion(ref: UnionRef, path: string): ResolvedUnionType {
+    const existing = this.unions.get(ref);
+    if (existing) return existing;
+
+    const declaration = this.registry.getUnion(ref);
+    if (!declaration) {
+      throw new SemanticSchemaError(
+        `${path}: union '${ref.unionName}' was never registered with registerUnion().`,
+      );
+    }
+
+    const resolved: ResolvedUnionType = {
+      name: declaration.name,
+      description: declaration.options.description,
+      members: [],
+      resolveType: declaration.options.resolveType,
+    };
+    this.unions.set(ref, resolved);
+
+    const members = ref.members();
+    if (members.length === 0) {
+      throw new SemanticSchemaError(`${path}: union '${ref.unionName}' has no members.`);
+    }
+    for (const member of members) {
+      const object = this.objects.get(member);
+      if (!object) {
+        throw new SemanticSchemaError(
+          `${path}: union '${ref.unionName}' includes '${member?.name}', which is not a @SemanticType in this schema.`,
+        );
+      }
+      resolved.members.push(object.name);
+    }
+    resolved.members.sort();
+    return resolved;
   }
 
   private exposedMembers(object: ResolvedObjectType): Record<string, any> {
@@ -255,8 +618,19 @@ class GraphBuilder {
   ): ResolvedField {
     const name = declaration.options.name ?? declaration.propertyKey;
     const path = `${ownerName}.${name}`;
-    const type = this.resolveTypeRef(declaration.options.type, declaration.options, path);
+    const connection = declaration.connection
+      ? this.planConnection(declaration.connection, path)
+      : undefined;
+    const type =
+      connection?.type ?? this.resolveTypeRef(declaration.options.type, declaration.options, path);
     const { params, args } = this.planParams(target, declaration, holder, path);
+    const requirements = getRequirements(target, declaration.propertyKey);
+
+    // A method may declare its own `first`/`after` params to read them; keep the
+    // author's version rather than emitting the argument twice.
+    if (connection) {
+      args.push(...connection.args.filter((arg) => !args.some((own) => own.name === arg.name)));
+    }
 
     this.fieldContexts.set(path, context);
 
@@ -274,6 +648,9 @@ class GraphBuilder {
         holder,
         params,
         batch: declaration.options.batch,
+        middleware: declaration.options.middleware,
+        requirements: requirements.length > 0 ? requirements : undefined,
+        connection: connection?.source,
         subscription: declaration.event
           ? {
               event: declaration.event,
@@ -304,6 +681,9 @@ class GraphBuilder {
   }
 
   private resolveEntityActions(object: ResolvedObjectType): ResolvedField[] {
+    // Behaviour on a stub belongs to the subgraph that owns the type.
+    if (object.stub) return [];
+
     const declarations = collectFieldDeclarations(object.target).filter(
       (declaration) => declaration.kind === 'action',
     );
@@ -335,6 +715,7 @@ class GraphBuilder {
         : nonNull({ kind: 'object', name: object.name, target: object.target });
 
       const { params, args } = this.planParams(object.target, declaration, 'entity', path);
+      const entityRequirements = getRequirements(object.target, declaration.propertyKey);
       const keyArgName = declaration.options.keyArg ?? keyArg;
       if (!args.some((arg) => arg.name === keyArgName)) {
         args.unshift({
@@ -359,6 +740,7 @@ class GraphBuilder {
           member: declaration.member,
           holder: 'entity',
           params,
+          requirements: entityRequirements.length > 0 ? entityRequirements : undefined,
           entity: {
             typeName: object.name,
             keyArg: keyArgName,
@@ -368,6 +750,50 @@ class GraphBuilder {
         },
       };
     });
+  }
+
+  /**
+   * Drop boundary stubs nothing in the slice actually mentions.
+   *
+   * Stubs are added for every foreign boundary type up front because references
+   * are only known once fields are resolved. Reachability is a fixpoint: one
+   * stub may be reached only through a field another stub contributed.
+   */
+  private pruneUnreferencedStubs(roots: ResolvedField[][]): void {
+    const referenced = new Set<string>();
+
+    const visit = (fields: ResolvedField[]) => {
+      for (const field of fields) {
+        const named = namedTypeNode(field.type);
+        if (named.kind === 'object') referenced.add(named.name);
+        for (const arg of field.args) {
+          const argNamed = namedTypeNode(arg.type);
+          if (argNamed.kind === 'object') referenced.add(argNamed.name);
+        }
+      }
+    };
+
+    for (const root of roots) visit(root);
+    for (const object of this.objects.values()) if (!object.stub) visit(object.fields);
+    for (const resolved of this.interfaces.values()) visit(resolved.fields);
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const object of this.objects.values()) {
+        if (!object.stub || !referenced.has(object.name)) continue;
+        const before = referenced.size;
+        visit(object.fields);
+        if (referenced.size !== before) changed = true;
+      }
+    }
+
+    for (const [target, object] of this.objects) {
+      if (object.stub && !referenced.has(object.name)) {
+        this.objects.delete(target);
+        this.objectsByName.delete(object.name);
+      }
+    }
   }
 
   private contextsField(): ResolvedField {
@@ -504,6 +930,11 @@ class GraphBuilder {
       return { kind: 'scalar', name: input.scalarName };
     }
 
+    if (input instanceof UnionRef) {
+      const union = this.ensureUnion(input, path);
+      return { kind: 'union', name: union.name, target: input };
+    }
+
     if (typeof input === 'function') {
       const scalarName = scalarNameForConstructor(input);
       if (scalarName) {
@@ -513,6 +944,11 @@ class GraphBuilder {
 
       const objectType = this.objects.get(input as Ctor);
       if (objectType) return { kind: 'object', name: objectType.name, target: input as Ctor };
+
+      const interfaceType = this.interfaces.get(input as Ctor);
+      if (interfaceType) {
+        return { kind: 'interface', name: interfaceType.name, target: input as Ctor };
+      }
 
       const inputDeclaration = this.registry.getInput(input as Ctor);
       if (inputDeclaration) {
@@ -642,20 +1078,38 @@ class GraphBuilder {
   private validateBoundaries(graph: TypeGraph): void {
     if (!this.enforceBoundaries) return;
 
+    const checkObject = (ownerName: string, fieldName: string, from: string | undefined) => {
+      return (referenced: ResolvedObjectType | undefined) => {
+        if (!referenced) return;
+        const to = referenced.context;
+        if (!from || !to || from === to) return;
+        if (referenced.boundary) return;
+
+        throw new SemanticBoundaryError(
+          `${ownerName}.${fieldName} (context '${from}') references '${referenced.name}', which is owned by context '${to}' and is not a boundary type. Declare it with @SemanticType({ boundary: true, key: '...' }) or keep the reference inside '${to}'.`,
+        );
+      };
+    };
+
     const check = (ownerName: string, field: ResolvedField) => {
       const named = namedTypeNode(field.type);
-      if (named.kind !== 'object') return;
-      const referenced = this.objects.get(named.target as Ctor);
-      if (!referenced) return;
+      const verify = checkObject(ownerName, field.name, field.context);
 
-      const from = field.context;
-      const to = referenced.context;
-      if (!from || !to || from === to) return;
-      if (referenced.boundary) return;
-
-      throw new SemanticBoundaryError(
-        `${ownerName}.${field.name} (context '${from}') references '${referenced.name}', which is owned by context '${to}' and is not a boundary type. Declare it with @SemanticType({ boundary: true, key: '...' }) or keep the reference inside '${to}'.`,
-      );
+      if (named.kind === 'object') {
+        verify(this.objects.get(named.target as Ctor));
+        return;
+      }
+      // A union or interface is only as closed as its widest member: crossing a
+      // context edge through one has to obey the same rule.
+      if (named.kind === 'union') {
+        const union = this.unions.get(named.target as UnionRef);
+        for (const member of union?.members ?? []) verify(this.objectsByName.get(member));
+        return;
+      }
+      if (named.kind === 'interface') {
+        const resolved = this.interfaces.get(named.target as Ctor);
+        for (const name of resolved?.implementations ?? []) verify(this.objectsByName.get(name));
+      }
     };
 
     for (const object of this.objects.values()) {
@@ -675,7 +1129,10 @@ class GraphBuilder {
 
   private collectContexts(): string[] {
     const names = new Set<string>();
-    for (const object of this.objects.values()) if (object.context) names.add(object.context);
+    // Stubs belong to a context this slice depends on, not one it represents.
+    for (const object of this.objects.values()) {
+      if (object.context && !object.stub) names.add(object.context);
+    }
     for (const declaration of this.registry.getTypes()) {
       const context = getBoundedContext(declaration.target);
       if (declaration.portal && context && this.inSelectedContext(context)) names.add(context);
@@ -687,12 +1144,17 @@ class GraphBuilder {
   private collectReachable(graph: TypeGraph): {
     inputs: ResolvedInputType[];
     enums: ResolvedEnumType[];
+    abstracts: Set<string>;
   } {
     const inputs = new Map<string, ResolvedInputType>();
     const enums = new Map<string, ResolvedEnumType>();
+    const abstracts = new Set<string>();
 
     const visitNode = (node: TypeNode) => {
       const named = namedTypeNode(node);
+      if (named.kind === 'interface' || named.kind === 'union') {
+        abstracts.add(named.name);
+      }
       if (named.kind === 'input') {
         const resolved = this.inputs.get(named.target as Ctor);
         if (resolved && !inputs.has(resolved.name)) {
@@ -713,6 +1175,7 @@ class GraphBuilder {
     };
 
     for (const object of graph.objects) object.fields.forEach(visitField);
+    for (const resolved of this.interfaces.values()) resolved.fields.forEach(visitField);
     for (const root of [graph.query, graph.mutation, graph.subscription]) {
       if (root) root.fields.forEach(visitField);
     }
@@ -720,6 +1183,7 @@ class GraphBuilder {
     return {
       inputs: Array.from(inputs.values()).sort((a, b) => a.name.localeCompare(b.name)),
       enums: Array.from(enums.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      abstracts,
     };
   }
 }
@@ -750,12 +1214,35 @@ function isArgOptions(value: unknown): value is ArgOptions {
   return isFieldOptions(value);
 }
 
+/** The `@Lookup` static a type declares, in the shape the resolved graph carries. */
+function lookupFor(target: Ctor): { target: Ctor; propertyKey: string } | undefined {
+  const propertyKey = getLookup(target);
+  return propertyKey ? { target, propertyKey } : undefined;
+}
+
+/** Render a resolved type expression the way SDL would, for error messages. */
+function printableType(node: TypeNode): string {
+  if (node.kind === 'nonNull') return `${printableType(node.of)}!`;
+  if (node.kind === 'list') return `[${printableType(node.of)}]`;
+  return node.name;
+}
+
+function normalizeThunks(value: TypeThunk | readonly TypeThunk[] | undefined): TypeThunk[] {
+  if (!value) return [];
+  return Array.isArray(value) ? [...value] : [value as TypeThunk];
+}
+
 /** Call a type thunk, leaving classes, scalars and lists untouched. */
 function unwrapThunk(ref: TypeRef, registry: ReturnType<typeof getRegistry>): TypeInput {
   if (typeof ref !== 'function') return ref as TypeInput;
   if (ref instanceof ScalarRef) return ref;
   if (scalarNameForConstructor(ref)) return ref as TypeInput;
-  if (registry.getType(ref as Ctor) || registry.getInput(ref as Ctor)) return ref as TypeInput;
+  if (
+    registry.getType(ref as Ctor) ||
+    registry.getInput(ref as Ctor) ||
+    registry.getInterface(ref as Ctor)
+  )
+    return ref as TypeInput;
   if (/^class[\s{]/.test(Function.prototype.toString.call(ref))) return ref as TypeInput;
   return (ref as TypeThunk)();
 }
@@ -768,4 +1255,32 @@ function unwrapThunk(ref: TypeRef, registry: ReturnType<typeof getRegistry>): Ty
  */
 export function buildTypeGraph(options: BuildOptions = {}): TypeGraph {
   return new GraphBuilder(options).build();
+}
+
+/**
+ * Build one type graph per bounded context.
+ *
+ * Each slice is deployable on its own: it owns its types and portals, and sees
+ * every other context only through boundary stubs — the key, plus whatever this
+ * context contributes with `@Extends`. That stub *is* the contract between the
+ * two services, so what crosses the seam is exactly what was declared as a
+ * boundary and nothing else.
+ *
+ * @example
+ * ```ts
+ * for (const [context, graph] of Object.entries(buildContextSubgraphs())) {
+ *   await Bun.write(`${context}.graphql`, printSDL(graph, { federation: true }));
+ * }
+ * ```
+ */
+export function buildContextSubgraphs(
+  options: Omit<BuildOptions, 'contexts'> & { contexts?: string[] } = {},
+): Record<string, TypeGraph> {
+  const registry = options.registry ?? getRegistry();
+  const contexts = options.contexts ?? registry.getContexts();
+  const subgraphs: Record<string, TypeGraph> = {};
+  for (const context of [...contexts].sort()) {
+    subgraphs[context] = buildTypeGraph({ ...options, contexts: [context] });
+  }
+  return subgraphs;
 }

@@ -56,5 +56,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "optionalDependencies": {
+    "wasm-similarity": "^1.0.10"
   }
 }

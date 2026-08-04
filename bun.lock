@@ -33,6 +33,18 @@
         "@di-framework/core": "workspace:*",
       },
     },
+    "examples/packages/ai-chat": {
+      "name": "@di-framework/ai-chat-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@di-framework/ai": "workspace:*",
+        "@di-framework/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "examples/packages/auth": {
       "name": "di-auth-example",
       "version": "0.0.0",
@@ -130,6 +142,9 @@
         "@types/bun": "latest",
         "typescript": "^5",
         "zod": "^4.4.3",
+      },
+      "optionalDependencies": {
+        "wasm-similarity": "^1.0.10",
       },
       "peerDependencies": {
         "@di-framework/core": "workspace:^",
@@ -305,6 +320,8 @@
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
     "@di-framework/ai": ["@di-framework/ai@workspace:packages/di-framework-ai"],
+
+    "@di-framework/ai-chat-example": ["@di-framework/ai-chat-example@workspace:examples/packages/ai-chat"],
 
     "@di-framework/auth": ["@di-framework/auth@workspace:packages/di-framework-auth"],
 
@@ -777,6 +794,8 @@
     "unpipe": ["unpipe@1.0.0", "", {}, "sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ=="],
 
     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
+
+    "wasm-similarity": ["wasm-similarity@1.0.10", "", {}, "sha512-Zz+6FYryHxM45eDox/ifyBTzu7K9aj6SnE5S1wrbucG4Ic7XSjPKSJqtfdA9lwjXJ6vxY+d9Z2cqzsPEkSSsVQ=="],
 
     "whatwg-mimetype": ["whatwg-mimetype@3.0.0", "", {}, "sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q=="],
 

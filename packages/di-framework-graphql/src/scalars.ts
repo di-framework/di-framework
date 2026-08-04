@@ -37,6 +37,24 @@ export const SPEC_SCALARS = new Set(['ID', 'String', 'Int', 'Float', 'Boolean'])
 /** Scalars this package defines, emitted into the schema only when used. */
 export const CUSTOM_SCALARS = new Set(['DateTime', 'JSON']);
 
+/**
+ * Register the name of an application scalar with the semantic layer.
+ *
+ * The executable implementation is registered separately with
+ * `registerScalar` from the package root; keeping this tiny helper free of a
+ * `graphql` import means SDL/core consumers remain dependency-free.
+ */
+export function registerScalarName(name: string): ScalarRef {
+  if (!/^[_A-Za-z][_0-9A-Za-z]*$/.test(name)) {
+    throw new TypeError(`Invalid GraphQL scalar name '${name}'.`);
+  }
+  if (SPEC_SCALARS.has(name)) {
+    throw new TypeError(`Cannot register GraphQL specification scalar '${name}'.`);
+  }
+  CUSTOM_SCALARS.add(name);
+  return new ScalarRef(name);
+}
+
 export function isScalarName(name: string): boolean {
   return SPEC_SCALARS.has(name) || CUSTOM_SCALARS.has(name);
 }

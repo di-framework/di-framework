@@ -5,6 +5,10 @@
 export type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | {
+      type: 'image';
+      source: { type: 'base64' | 'url'; media_type?: string; data?: string; url?: string };
+    }
+  | {
       type: 'tool_use';
       id: string;
       name: string;
