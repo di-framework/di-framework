@@ -212,9 +212,11 @@ Imperative pieces: `SimpleVectorStore`, `FakeEmbeddingModel` / embedding models,
 - **`@Agent` / `@ChatAgentBean`** — declarative bean resolved with `resolveAnnotatedAgent`.
 - **Workflows** (imperative + stereotypes): `ChainWorkflow`, `RoutingWorkflow`, `ParallelizationWorkflow`, `OrchestratorWorkersWorkflow`, `EvaluatorOptimizerWorkflow`, with matching `@Chain`, `@Route` / `@Router`, `@Parallel`, `@Orchestrator` / `@Worker`, `@Evaluate` / `@Optimize`.
 - **`GraphWorkflow`** — typed graph runtime for arbitrary control flow (linear, branch, loop, nested subgraphs). Fluent builder with async edge predicates/transforms, `AbortSignal`, `maxSteps`, build-time validation, and lifecycle hooks. Helpers: `chatToolLoopGraph`, `simpleAgentGraph`. Graph stereotypes are deferred until the imperative API is stable.
+- **`PlannerExecutorWorkflow`** — plan → act → replan loop on `ChatClient` + tools, with step limits and cycle protection.
+- **`A2ABus`** — thin in-process agent-to-agent message bus with optional human-in-the-loop hooks (local only; not a network protocol).
 
 ```typescript
-import { GRAPH_FINISH, GRAPH_START, GraphWorkflow } from '@di-framework/ai';
+import { GRAPH_FINISH, GRAPH_START, GraphWorkflow, PlannerExecutorWorkflow } from '@di-framework/ai';
 
 const graph = GraphWorkflow.builder<number, string>('example')
   .node('double', (n) => n * 2)
@@ -225,6 +227,11 @@ const graph = GraphWorkflow.builder<number, string>('example')
   .build();
 
 const { output, path } = await graph.run(21, { maxSteps: 50 });
+
+const { answer } = await PlannerExecutorWorkflow.of(chatClient).run(goal, {
+  tools: [tool],
+  maxSteps: 6,
+});
 ```
 
 ## MCP
@@ -320,6 +327,8 @@ Prefer `AiTokens` over ad-hoc strings:
 | `RetrievalAugmentationAdvisor` / vector store helpers | RAG |
 | `ChainWorkflow` / `RoutingWorkflow` / … | Fixed-pattern workflows |
 | `GraphWorkflow` / `chatToolLoopGraph` | Graph agent runtime |
+| `PlannerExecutorWorkflow` | Plan → act → replan |
+| `A2ABus` | In-process multi-agent messages |
 | `ScriptedChatModel` / `FakeChatModel` | Tests |
 | `AiTokens` | Well-known DI tokens |
 | `AiError` / `isAiError` | Typed errors |

@@ -123,8 +123,14 @@ export { media } from './content/media.ts';
 
 // ChatClient is a value (factory) + interface type via declaration merge in default-chat-client.
 
-// Agents / workflows (Spring AI effective-agent patterns + graph runtime)
+// Agents / workflows (Spring AI effective-agent patterns + graph / planner / A2A)
 export type {
+  A2AAgentHandler,
+  A2ABusOptions,
+  A2AHumanHook,
+  A2AMessage,
+  A2AMessageKind,
+  A2ASendOptions,
   ChainStep,
   ChainWorkflowResult,
   ChatAgentBuilder,
@@ -153,6 +159,11 @@ export type {
   OrchestratorWorkersResult,
   OrchestratorWorkersWorkflowOptions,
   ParallelizationWorkflowOptions,
+  PlannerExecutorOptions,
+  PlannerExecutorResult,
+  PlannerPlan,
+  PlannerRound,
+  PlannerStep,
   RefinedResponse,
   RouteHandler,
   RouteMap,
@@ -163,6 +174,8 @@ export type {
   WorkflowCallOptions,
 } from './agent/index.ts';
 export {
+  A2ABus,
+  a2aBus,
   ChainWorkflow,
   ChatAgent,
   callChatContent,
@@ -183,6 +196,9 @@ export {
   orchestratorWorkersWorkflow,
   ParallelizationWorkflow,
   parallelizationWorkflow,
+  planFingerprint,
+  PlannerExecutorWorkflow,
+  plannerExecutorWorkflow,
   RoutingWorkflow,
   routingWorkflow,
   simpleAgentGraph,

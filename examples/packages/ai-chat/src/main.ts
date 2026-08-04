@@ -1,4 +1,5 @@
 import {
+  A2ABus,
   AiService,
   ChatClient,
   chatToolLoopGraph,
@@ -9,6 +10,7 @@ import {
   GRAPH_START,
   GraphWorkflow,
   IndexedDocument,
+  PlannerExecutorWorkflow,
   resolveAiService,
   ScriptedChatModel,
   SimpleVectorStore,
@@ -144,7 +146,80 @@ export async function runGraphExample(): Promise<{
   };
 }
 
+/**
+ * Planner–executor + thin A2A recipe (scripted, no credentials).
+ */
+export async function runPlannerAndA2AExample(): Promise<{
+  plannerAnswer: string;
+  a2aArticle: string;
+}> {
+  const model = new ScriptedChatModel([
+    {
+      respond: JSON.stringify({
+        goal: 'Summarize support policy',
+        done: false,
+        reasoning: 'Need tool lookup',
+        steps: [
+          {
+            id: '1',
+            description: 'Call supportPolicy for Acme Widget',
+            status: 'pending',
+            toolName: 'supportPolicy',
+          },
+        ],
+      }),
+    },
+    {
+      respond: () =>
+        toolCallResponse([toolCall('t1', 'supportPolicy', { product: 'Acme Widget' })]),
+    },
+    { respond: 'Policy fetched: weekday email support.' },
+    {
+      respond: JSON.stringify({
+        goal: 'Summarize support policy',
+        done: true,
+        finalAnswer: 'Acme Widget: weekday email support.',
+        steps: [
+          {
+            id: '1',
+            description: 'Call supportPolicy for Acme Widget',
+            status: 'done',
+            result: 'Policy fetched: weekday email support.',
+          },
+        ],
+      }),
+    },
+  ]);
+
+  const tool = functionToolCallback({
+    name: 'supportPolicy',
+    description: 'policy',
+    inputSchema: {
+      type: 'object',
+      properties: { product: { type: 'string' } },
+      required: ['product'],
+    },
+    call: ({ product }: { product: string }) => `${product}: weekday email support`,
+  });
+
+  const planner = await PlannerExecutorWorkflow.of(ChatClient.create(model)).run(
+    'Summarize support policy for Acme Widget',
+    { tools: [tool], maxSteps: 4 },
+  );
+
+  const bus = A2ABus.create();
+  bus.register('researcher', async (msg) => `notes:${msg.content}`);
+  bus.register('writer', async (msg, b) => {
+    const research = await b.request('writer', 'researcher', msg.content);
+    return `Article: ${research.content}`;
+  });
+  const a2a = await bus.request('user', 'writer', planner.answer);
+
+  return { plannerAnswer: planner.answer, a2aArticle: a2a.content };
+}
+
 if (import.meta.main) {
   console.log(await runExample());
   console.log(await runGraphExample());
+  console.log(await runPlannerAndA2AExample());
 }
