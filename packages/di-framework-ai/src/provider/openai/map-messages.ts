@@ -29,7 +29,10 @@ export function toOpenAiMessages(messages: readonly ChatMessage[]): OpenAiChatMe
       const toolCalls = message.toolCalls.map(toOpenAiToolCall);
       out.push({
         role: 'assistant',
-        content: mapOpenAiContent(message.text, message.media),
+        // OpenAI permits null content for tool-call-only assistant turns.
+        content: message.media.length
+          ? mapOpenAiContent(message.text, message.media)
+          : message.text,
         ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       });
       continue;
