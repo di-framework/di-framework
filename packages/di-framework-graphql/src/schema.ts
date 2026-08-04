@@ -526,7 +526,13 @@ export function createGraphQLHandler(
       let query = url.searchParams.get('query');
       const hash = url.searchParams.get('extensions.persistedQuery.sha256Hash');
       if (!query && hash) query = options.persistedQueries?.get(hash) ?? null;
-      if (!query) return json({ errors: [{ message: hash ? 'Persisted query not found' : 'Missing "query" parameter' }] }, 400);
+      if (!query)
+        return json(
+          {
+            errors: [{ message: hash ? 'Persisted query not found' : 'Missing "query" parameter' }],
+          },
+          400,
+        );
       const variables = url.searchParams.get('variables');
       payload = {
         query,
@@ -549,7 +555,7 @@ export function createGraphQLHandler(
           if (hash && options.persistedQueries?.has(hash)) {
             body.query = options.persistedQueries.get(hash) as string;
           } else {
-          return json({ errors: [{ message: 'Missing "query" in request body' }] }, 400);
+            return json({ errors: [{ message: 'Missing "query" in request body' }] }, 400);
           }
         }
         payload = body;
