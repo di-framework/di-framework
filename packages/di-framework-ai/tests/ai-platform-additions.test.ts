@@ -57,12 +57,16 @@ describe('AI platform additions', () => {
   test('maps multimodal content for both providers', () => {
     const msg = userMessage('describe', { media: [media('image/png', 'aGVsbG8=')] });
     const openai = toOpenAiMessages([msg]);
-    expect(openai[0]!.content).toEqual([
+    const openAiMessage = openai[0];
+    expect(openAiMessage).toBeDefined();
+    expect(openAiMessage?.content).toEqual([
       { type: 'text', text: 'describe' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,aGVsbG8=' } },
     ]);
     const anthropic = toAnthropicMessages([msg]);
-    expect(anthropic.messages[0]!.content).toHaveLength(2);
+    const anthropicMessage = anthropic.messages[0];
+    expect(anthropicMessage).toBeDefined();
+    expect(anthropicMessage?.content).toHaveLength(2);
   });
 
   test('serves local tools through MCP surface', async () => {
