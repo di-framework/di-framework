@@ -105,6 +105,9 @@ const result = await api.execute({
 
 // A plain Request -> Response function: Bun.serve, a Worker, anything.
 const handler = createGraphQLHandler(api);
+
+// Or mount both GET and POST on a Fetch-compatible typed router:
+mountGraphQL(router, api, { path: '/graphql' });
 ```
 
 `api.sdl` holds the schema as SDL, `api.schema` is an executable `graphql-js` schema, and `api.graph` is the resolved semantic graph you can assert against.

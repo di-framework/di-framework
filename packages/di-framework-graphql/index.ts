@@ -3,9 +3,12 @@ export { containerEventIterator, hydrate, ResolverFactory } from './src/resolver
 export {
   buildSemanticSchema,
   createGraphQLHandler,
+  mountGraphQL,
   DateTimeScalar,
   type ExecuteRequest,
   type HandlerOptions,
+  type GraphQLRouteOptions,
+  type GraphQLRouterLike,
   JSONScalar,
   registerScalar,
   type SemanticSchema,

@@ -384,6 +384,17 @@ export interface HandlerOptions {
   context?: (request: Request) => GraphQLContext | Promise<GraphQLContext>;
 }
 
+/** Minimal router surface accepted by {@link mountGraphQL}. */
+export interface GraphQLRouterLike {
+  get(path: string, handler: (request: Request, ...rest: any[]) => unknown, ...rest: any[]): unknown;
+  post(path: string, handler: (request: Request, ...rest: any[]) => unknown, ...rest: any[]): unknown;
+}
+
+export interface GraphQLRouteOptions extends HandlerOptions {
+  /** Route path. Defaults to `/graphql`. */
+  path?: string;
+}
+
 /**
  * A `Request -> Response` GraphQL endpoint, ready to drop into `Bun.serve`,
  * a Cloudflare Worker, or `@di-framework/http`.
@@ -429,6 +440,23 @@ export function createGraphQLHandler(
     const result = await api.execute({ ...payload, context });
     return json(result, result.data === undefined && result.errors ? 400 : 200);
   };
+}
+
+/**
+ * Mount a semantic schema on any Fetch-compatible typed router (including
+ * `@di-framework/http`'s `TypedRouter`). Both GET and POST GraphQL-over-HTTP
+ * routes are registered and the router is returned for fluent composition.
+ */
+export function mountGraphQL<R extends GraphQLRouterLike>(
+  router: R,
+  api: SemanticSchema,
+  options: GraphQLRouteOptions = {},
+): R {
+  const { path = '/graphql', ...handlerOptions } = options;
+  const handler = createGraphQLHandler(api, handlerOptions);
+  router.get(path, handler);
+  router.post(path, handler);
+  return router;
 }
 
 export { DateTimeScalar, JSONScalar };
