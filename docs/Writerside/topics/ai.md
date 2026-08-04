@@ -211,6 +211,21 @@ Imperative pieces: `SimpleVectorStore`, `FakeEmbeddingModel` / embedding models,
 - **`ChatAgent`** — multi-turn chat with tools/memory; build via `ChatAgent.create(...)`, `chatAgent(...)`, or `ChatAgent.fromBuilder(builder)`.
 - **`@Agent` / `@ChatAgentBean`** — declarative bean resolved with `resolveAnnotatedAgent`.
 - **Workflows** (imperative + stereotypes): `ChainWorkflow`, `RoutingWorkflow`, `ParallelizationWorkflow`, `OrchestratorWorkersWorkflow`, `EvaluatorOptimizerWorkflow`, with matching `@Chain`, `@Route` / `@Router`, `@Parallel`, `@Orchestrator` / `@Worker`, `@Evaluate` / `@Optimize`.
+- **`GraphWorkflow`** — typed graph runtime for arbitrary control flow (linear, branch, loop, nested subgraphs). Fluent builder with async edge predicates/transforms, `AbortSignal`, `maxSteps`, build-time validation, and lifecycle hooks. Helpers: `chatToolLoopGraph`, `simpleAgentGraph`. Graph stereotypes are deferred until the imperative API is stable.
+
+```typescript
+import { GRAPH_FINISH, GRAPH_START, GraphWorkflow } from '@di-framework/ai';
+
+const graph = GraphWorkflow.builder<number, string>('example')
+  .node('double', (n) => n * 2)
+  .node('label', (n) => `value=${n}`)
+  .edge(GRAPH_START, 'double')
+  .edge('double', 'label')
+  .edge('label', GRAPH_FINISH)
+  .build();
+
+const { output, path } = await graph.run(21, { maxSteps: 50 });
+```
 
 ## MCP
 
@@ -303,7 +318,8 @@ Prefer `AiTokens` over ad-hoc strings:
 | `Tool` / `ToolSet` / `ToolParam` / `functionToolCallback` | Tools |
 | `MessageWindowChatMemory` / `MessageChatMemoryAdvisor` | Memory |
 | `RetrievalAugmentationAdvisor` / vector store helpers | RAG |
-| `ChainWorkflow` / `RoutingWorkflow` / … | Workflows |
+| `ChainWorkflow` / `RoutingWorkflow` / … | Fixed-pattern workflows |
+| `GraphWorkflow` / `chatToolLoopGraph` | Graph agent runtime |
 | `ScriptedChatModel` / `FakeChatModel` | Tests |
 | `AiTokens` | Well-known DI tokens |
 | `AiError` / `isAiError` | Typed errors |
