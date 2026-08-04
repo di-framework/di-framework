@@ -14,6 +14,6 @@
   },
   "tasks": {
     "dev": "deno run -A src/main.ts",
-    "test": "deno test -A --sloppy-imports --coverage=lcov"
+    "test": "deno test -A --sloppy-imports --coverage=lcov src/test.main.ts"
   }
 }
