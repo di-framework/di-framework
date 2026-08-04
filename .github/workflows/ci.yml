@@ -30,3 +30,25 @@ jobs:
 
       - name: Run E2E test suite
         run: di-framework test
+
+  deno-examples:
+    name: Deno examples
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Test Deno HTTP example
+        working-directory: examples/packages/deno-http
+        run: deno task test
+
+      # The sandbox example provisions remote Deno Sandboxes and needs
+      # service credentials, so keep its CI check compile-only.
+      - name: Type-check Deno sandbox example
+        working-directory: examples/packages/deno-sandboxes
+        run: deno check --sloppy-imports src/main.ts src/test.main.ts src/sandbox.example.ts
