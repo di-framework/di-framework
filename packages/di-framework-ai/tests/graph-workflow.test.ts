@@ -256,7 +256,9 @@ describe('GraphWorkflow', () => {
     const client = ChatClient.create(model);
     const graph = GraphWorkflow.builder<string, string>('chat-node')
       .node('ask', async (msg: string, ctx) => {
-        const content = await ctx.chatClient!.prompt().user(msg).call().content();
+        const clientForNode = ctx.chatClient;
+        if (!clientForNode) throw new Error('expected chatClient');
+        const content = await clientForNode.prompt().user(msg).call().content();
         return content ?? '';
       })
       .edge(GRAPH_START, 'ask')

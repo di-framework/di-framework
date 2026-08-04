@@ -243,7 +243,7 @@ export class GraphWorkflow<TIn = unknown, TOut = unknown> {
 
   static of<TIn = unknown, TOut = unknown>(
     name: string,
-    configure: (b: GraphWorkflowBuilder<TIn, TOut>) => GraphWorkflowBuilder<TIn, TOut> | void,
+    configure: (b: GraphWorkflowBuilder<TIn, TOut>) => void,
     options?: GraphWorkflowOptions,
   ): GraphWorkflow<TIn, TOut> {
     const builder = GraphWorkflow.builder<TIn, TOut>(name, options);
@@ -659,7 +659,8 @@ function validateGraph(
   const reachable = new Set<GraphNodeId>();
   const queue: GraphNodeId[] = [GRAPH_START];
   while (queue.length) {
-    const id = queue.shift()!;
+    const id = queue.shift();
+    if (id === undefined) break;
     if (reachable.has(id)) continue;
     reachable.add(id);
     for (const e of edgesByFrom.get(id) ?? []) {
