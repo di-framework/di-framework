@@ -72,3 +72,32 @@ export function validateUniqueToolNames(callbacks: readonly ToolCallback[]): voi
     throw new Error(`Multiple tools with the same name (${duplicates.join(', ')}) found`);
   }
 }
+
+/**
+ * Flatten sources and keep the last callback for each tool name
+ * (later {@code defaultTools} / bean registrations win).
+ */
+export function resolveToolCallbacksDedupe(
+  ...sources: Array<
+    ToolCallback | ToolCallbackProvider | readonly ToolCallback[] | undefined | null
+  >
+): ToolCallback[] {
+  const flat: ToolCallback[] = [];
+  for (const source of sources) {
+    if (source == null) continue;
+    if (Array.isArray(source)) {
+      flat.push(...source);
+    } else if (isToolCallbackProvider(source)) {
+      flat.push(...source.getToolCallbacks());
+    } else if (isToolCallback(source)) {
+      flat.push(source);
+    } else {
+      throw new Error('Expected ToolCallback, ToolCallbackProvider, or array of ToolCallback');
+    }
+  }
+  const byName = new Map<string, ToolCallback>();
+  for (const cb of flat) {
+    byName.set(cb.toolDefinition.name, cb);
+  }
+  return [...byName.values()];
+}

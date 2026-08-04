@@ -1,13 +1,15 @@
 import type { Advisor } from '../chat/client/advisor/advisor.ts';
 import { MessageChatMemoryAdvisor } from '../chat/client/advisor/message-chat-memory-advisor.ts';
-import {
+import type {
   ChatClient,
-  type ChatClientBuilderOptions,
-  type ToolSource,
+  ChatClientBuilder,
+  ToolSource,
 } from '../chat/client/default-chat-client.ts';
+import { ChatClient as ChatClientFactory } from '../chat/client/default-chat-client.ts';
 import { CHAT_MEMORY_CONVERSATION_ID, type ChatMemory } from '../chat/memory/chat-memory.ts';
 import type { ChatModel } from '../chat/model/chat-model.ts';
 import type { ChatOptions } from '../chat/prompt/chat-options.ts';
+import { toolCallbacksFromBean } from '../di/tool-decorator.ts';
 import type { ToolCallback } from '../tool/tool-callback.ts';
 import { resolveToolCallbacks } from '../tool/tool-callback-provider.ts';
 import { throwIfAborted } from './workflow-utils.ts';
@@ -25,7 +27,7 @@ export interface ChatAgentOptions {
    */
   readonly memory?: ChatMemory;
   readonly defaultConversationId?: string;
-  readonly builder?: ChatClientBuilderOptions;
+  readonly builder?: import('../chat/client/default-chat-client.ts').ChatClientBuilderOptions;
 }
 
 export interface ChatAgentRunOptions {
@@ -42,6 +44,21 @@ export interface ChatAgentResult {
 }
 
 /**
+ * Fluent builder started from a prototype {@link ChatClientBuilder}
+ * (Spring/Koog service style).
+ */
+export interface ChatAgentBuilder {
+  system(text: string): ChatAgentBuilder;
+  advisors(...advisors: Advisor[]): ChatAgentBuilder;
+  tools(...tools: ToolSource[]): ChatAgentBuilder;
+  toolBeans(...beans: readonly object[]): ChatAgentBuilder;
+  memory(memory: ChatMemory): ChatAgentBuilder;
+  defaultConversationId(id: string): ChatAgentBuilder;
+  defaultOptions(options: ChatOptions): ChatAgentBuilder;
+  build(): ChatAgent;
+}
+
+/**
  * LLM-directed agent: a preconfigured {@link ChatClient} with tools (and optional memory).
  *
  * This is the “agent” side of Anthropic/Spring AI’s distinction —
@@ -50,11 +67,10 @@ export interface ChatAgentResult {
  *
  * @example
  * ```ts
- * const agent = ChatAgent.create({
- *   chatModel: model,
- *   system: "You help with weather questions.",
- *   tools: [weatherTool],
- * });
+ * const agent = ChatAgent.fromBuilder(builder)
+ *   .system("You help with weather questions.")
+ *   .toolBeans(weatherTools)
+ *   .build();
  * const { content } = await agent.chat("Weather in Yorktown?");
  * ```
  */
@@ -85,7 +101,7 @@ export class ChatAgent {
       }
       const tools = options.tools ? resolveToolCallbacks(...options.tools) : undefined;
 
-      let builder = ChatClient.builder(options.chatModel!);
+      let builder = ChatClientFactory.builder(options.chatModel!);
       if (options.system) builder = builder.defaultSystem(options.system);
       if (options.defaultOptions) {
         builder = builder.defaultOptions(options.defaultOptions);
@@ -95,6 +111,9 @@ export class ChatAgent {
       if (options.builder?.defaultContext) {
         builder = builder.defaultContext(options.builder.defaultContext);
       }
+      if (options.builder?.toolCallingAdvisorOptions) {
+        builder = builder.toolCallingAdvisorOptions(options.builder.toolCallingAdvisorOptions);
+      }
       client = builder.build();
     }
 
@@ -102,6 +121,14 @@ export class ChatAgent {
       defaultConversationId: options.defaultConversationId,
       hasMemory: Boolean(options.memory) || Boolean(options.defaultConversationId),
     });
+  }
+
+  /**
+   * Start from an injected prototype {@link ChatClientBuilder}
+   * (Kotlin Spring AI `ChatClient.Builder` style).
+   */
+  static fromBuilder(builder: ChatClientBuilder): ChatAgentBuilder {
+    return new DefaultChatAgentBuilder(builder);
   }
 
   /** Underlying client (for advanced composition). */
@@ -140,6 +167,72 @@ export class ChatAgent {
 
     const content = (await spec.call().content()) ?? '';
     return { content, conversationId };
+  }
+}
+
+class DefaultChatAgentBuilder implements ChatAgentBuilder {
+  private systemText?: string;
+  private advisorList: Advisor[];
+  private toolList: ToolCallback[];
+  private memoryRef?: ChatMemory;
+  private conversationId?: string;
+  private options?: ChatOptions;
+
+  constructor(private builder: ChatClientBuilder) {
+    this.advisorList = [];
+    this.toolList = [];
+  }
+
+  system(text: string): ChatAgentBuilder {
+    this.systemText = text;
+    return this;
+  }
+
+  advisors(...advisors: Advisor[]): ChatAgentBuilder {
+    this.advisorList.push(...advisors);
+    return this;
+  }
+
+  tools(...tools: ToolSource[]): ChatAgentBuilder {
+    this.toolList.push(...resolveToolCallbacks(...tools));
+    return this;
+  }
+
+  toolBeans(...beans: readonly object[]): ChatAgentBuilder {
+    this.toolList.push(...beans.flatMap((b) => toolCallbacksFromBean(b)));
+    return this;
+  }
+
+  memory(memory: ChatMemory): ChatAgentBuilder {
+    this.memoryRef = memory;
+    return this;
+  }
+
+  defaultConversationId(id: string): ChatAgentBuilder {
+    this.conversationId = id;
+    return this;
+  }
+
+  defaultOptions(options: ChatOptions): ChatAgentBuilder {
+    this.options = options;
+    return this;
+  }
+
+  build(): ChatAgent {
+    let b = this.builder;
+    if (this.systemText) b = b.defaultSystem(this.systemText);
+    if (this.options) b = b.defaultOptions(this.options);
+    const advisors = [...this.advisorList];
+    if (this.memoryRef) {
+      advisors.push(new MessageChatMemoryAdvisor({ chatMemory: this.memoryRef }));
+    }
+    if (advisors.length) b = b.defaultAdvisors(...advisors);
+    if (this.toolList.length) b = b.defaultTools(...this.toolList);
+    return ChatAgent.create({
+      chatClient: b.build(),
+      memory: this.memoryRef,
+      defaultConversationId: this.conversationId,
+    });
   }
 }
 

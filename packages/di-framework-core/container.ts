@@ -191,20 +191,40 @@ export class Container {
   }
 
   /**
-   * Register a service using a factory function
+   * Register a service using a factory function.
+   * Accepts a string token or a class constructor (registers under both the
+   * constructor key and {@code Class.name} so {@code resolve(MyClass)} works).
    */
   public registerFactory<T>(
-    name: string,
+    nameOrClass: string | Constructor<T>,
     factory: ServiceFactory<T>,
     options: { singleton?: boolean } = { singleton: true },
   ): this {
-    this.services.set(name, {
+    const singleton = options.singleton ?? true;
+    if (typeof nameOrClass === 'string') {
+      this.services.set(nameOrClass, {
+        type: factory,
+        singleton,
+      });
+      this.emit('registered', {
+        key: nameOrClass,
+        singleton,
+        kind: 'factory',
+      });
+      return this;
+    }
+
+    this.services.set(nameOrClass, {
       type: factory,
-      singleton: options.singleton ?? true,
+      singleton,
+    });
+    this.services.set(nameOrClass.name, {
+      type: factory,
+      singleton,
     });
     this.emit('registered', {
-      key: name,
-      singleton: options.singleton ?? true,
+      key: nameOrClass,
+      singleton,
       kind: 'factory',
     });
     return this;

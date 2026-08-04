@@ -4,9 +4,13 @@ import {
   type StructuredOutputConverter,
   schemaOutputConverter,
 } from '../../converter/index.ts';
+import { toolCallbacksFromBean } from '../../di/tool-decorator.ts';
 import type { ToolCallback } from '../../tool/tool-callback.ts';
 import type { ToolCallbackProvider } from '../../tool/tool-callback-provider.ts';
-import { resolveToolCallbacks } from '../../tool/tool-callback-provider.ts';
+import {
+  resolveToolCallbacks,
+  resolveToolCallbacksDedupe,
+} from '../../tool/tool-callback-provider.ts';
 import { systemMessage, userMessage } from '../messages/factories.ts';
 import type { ChatMessage, Message } from '../messages/message.ts';
 import type { ChatModel } from '../model/chat-model.ts';
@@ -68,6 +72,8 @@ export interface ChatClientBuilder {
   defaultAdvisors(...advisors: Advisor[]): ChatClientBuilder;
   defaultContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder;
   defaultTools(...tools: ToolSource[]): ChatClientBuilder;
+  /** Expand `@Tool` methods on bean instances into default tools. */
+  defaultToolBeans(...beans: readonly object[]): ChatClientBuilder;
   defaultToolContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder;
   toolCallingAdvisorOptions(options: ToolCallingAdvisorOptions): ChatClientBuilder;
   autoRegisterToolCallingAdvisor(enabled: boolean): ChatClientBuilder;
@@ -590,9 +596,14 @@ class DefaultChatClientBuilder implements ChatClientBuilder {
   defaultTools(...tools: ToolSource[]): ChatClientBuilder {
     this.options = {
       ...this.options,
-      defaultToolCallbacks: resolveToolCallbacks(this.options.defaultToolCallbacks, ...tools),
+      defaultToolCallbacks: resolveToolCallbacksDedupe(this.options.defaultToolCallbacks, ...tools),
     };
     return this;
+  }
+
+  defaultToolBeans(...beans: readonly object[]): ChatClientBuilder {
+    const fromBeans = beans.flatMap((bean) => toolCallbacksFromBean(bean));
+    return this.defaultTools(...fromBeans);
   }
 
   defaultToolContext(context: Readonly<Record<string, unknown>>): ChatClientBuilder {

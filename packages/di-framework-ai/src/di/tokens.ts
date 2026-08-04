@@ -11,17 +11,30 @@ export const AiTokens = {
   CHAT_MODEL_DEFAULT: 'chat.default',
   /** Primary ChatClient built around the default model. */
   CHAT_CLIENT: 'chatClient',
+  /**
+   * Prototype {@link import("../chat/client/default-chat-client.ts").ChatClientBuilder}
+   * (fresh instance per resolve — Spring `@Scope("prototype")`).
+   */
+  CHAT_CLIENT_BUILDER: 'chatClientBuilder',
+  /** Primary ChatAgent when registered via configureAi / @Agent. */
+  CHAT_AGENT: 'chatAgent',
   /** Default chat memory bean. */
   CHAT_MEMORY: 'chatMemory',
   /** Default embedding model. */
   EMBEDDING_MODEL: 'embeddingModel',
   /** Default vector store. */
   VECTOR_STORE: 'vectorStore',
+  /** Default document retriever. */
+  DOCUMENT_RETRIEVER: 'documentRetriever',
   /**
    * Aggregated {@link import("../tool/tool-callback.ts").ToolCallback}[]
-   * (or ToolCallbackProvider) discovered from `@Tool` beans / configureAi.
+   * discovered from `@Tool` beans / configureAi.
    */
   TOOL_CALLBACKS: 'ai.tools',
+  /** Aggregated advisors from `@Advisor` beans. */
+  ADVISORS: 'ai.advisors',
+  /** MCP client session token. */
+  MCP_CLIENT: 'mcpClient',
 } as const;
 
 export type AiToken = (typeof AiTokens)[keyof typeof AiTokens];
