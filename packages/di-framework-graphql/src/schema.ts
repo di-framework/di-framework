@@ -144,6 +144,8 @@ export interface SemanticSchemaOptions extends BuildOptions {
   /** Optional query resource limits enforced before execution. */
   maxDepth?: number;
   maxComplexity?: number;
+  /** Transform execution/validation errors before they leave the API. */
+  errorFormatter?: (error: GraphQLError) => GraphQLError;
 }
 
 export interface ExecuteRequest {
@@ -415,6 +417,11 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
     return { document, errors };
   };
 
+  const formatResult = (result: ExecutionResult): ExecutionResult => {
+    if (!options.errorFormatter || !result.errors) return result;
+    return { ...result, errors: result.errors.map(options.errorFormatter) };
+  };
+
   return {
     graph,
     schema,
@@ -423,28 +430,35 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
 
     async execute(request) {
       const { document, errors } = prepare(request);
-      if (errors.length > 0) return { errors };
-      return execute({
+      if (errors.length > 0) return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+      return formatResult(await execute({
         schema,
         document,
         contextValue: request.context ?? {},
         variableValues: request.variables ?? undefined,
         operationName: request.operationName ?? undefined,
         rootValue: request.rootValue,
-      });
+      }));
     },
 
     async subscribe(request) {
       const { document, errors } = prepare(request);
-      if (errors.length > 0) return { errors };
-      return subscribe({
+      if (errors.length > 0) return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+      const result = await subscribe({
         schema,
         document,
         contextValue: request.context ?? {},
         variableValues: request.variables ?? undefined,
         operationName: request.operationName ?? undefined,
         rootValue: request.rootValue,
-      }) as Promise<AsyncIterableIterator<ExecutionResult> | ExecutionResult>;
+      }) as AsyncIterableIterator<ExecutionResult> | ExecutionResult;
+      if (typeof (result as any)?.[Symbol.asyncIterator] === 'function') {
+        const iterator = result as AsyncIterableIterator<ExecutionResult>;
+        return (async function* () {
+          for await (const item of iterator) yield formatResult(item);
+        })();
+      }
+      return formatResult(result as ExecutionResult);
     },
   };
 }
