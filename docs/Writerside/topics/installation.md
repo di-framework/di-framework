@@ -113,7 +113,7 @@ bun run test.ts
 
 ## Optional Packages
 
-The core package stands alone. Companion packages add data access, HTTP, GraphQL, events, configuration, and authentication support:
+The core package stands alone. Companion packages add data access, HTTP, GraphQL, events, configuration, authentication, and AI support:
 
 | Package | Docs |
 | --- | --- |
@@ -123,6 +123,7 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 | `@di-framework/events` | [Events](events.md) |
 | `@di-framework/config` | [Configuration](config.md) |
 | `@di-framework/auth` | [Authentication](auth.md) |
+| `@di-framework/ai` | [AI](ai.md) |
 
 ## Next Steps
 
