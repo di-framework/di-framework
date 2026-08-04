@@ -201,6 +201,39 @@ const answer = await agentGraph.run({ message: 'Weather in Yorktown?' });
 
 Edges support async `when` predicates and `transform` functions. Nested graphs use `.subgraph(id, childGraph)`. Validation runs at `build()` (reachable finish, no edges from finish, unique ids). Lifecycle hooks (`onNodeStart`, `onGraphComplete`, …) align with observation-friendly debugging. Prefer fixed workflows when the path is known; use graphs when control flow must be composed dynamically. Stereotype annotations for graphs are deferred until the imperative API stabilizes.
 
+### Planner–executor
+
+Iterative plan → act → replan on `ChatClient` (+ tools), with `AbortSignal`, `maxSteps`, and cycle protection:
+
+```ts
+import { ChatClient, PlannerExecutorWorkflow, functionToolCallback } from '@di-framework/ai';
+
+const pe = PlannerExecutorWorkflow.of(ChatClient.create(model));
+const { answer, plan, rounds } = await pe.run('Weather in Yorktown?', {
+  tools: [weatherTool],
+  maxSteps: 6,
+  signal,
+});
+```
+
+### In-process A2A (multi-agent)
+
+Thin local agent-to-agent bus with human-in-the-loop hooks (no network transport):
+
+```ts
+import { A2ABus } from '@di-framework/ai';
+
+const bus = A2ABus.create({
+  onHumanInTheLoop: async (msg) => msg, // approve / rewrite / return null to reject
+});
+bus.register('researcher', async (msg) => `notes:${msg.content}`);
+bus.register('writer', async (msg, b) => {
+  const research = await b.request('writer', 'researcher', msg.content);
+  return `Article: ${research.content}`;
+});
+const reply = await bus.request('user', 'writer', 'Graph workflows');
+```
+
 ## Providers
 
 ```ts
