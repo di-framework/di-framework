@@ -7,14 +7,14 @@ export function asAiContainer(value?: ContainerLike | null): AiContainer {
 
 export function registerOnContainer<T>(
   container: AiContainer,
-  name: string,
+  name: string | (new (...args: never[]) => T) | (abstract new (...args: never[]) => T),
   factory: () => T,
   options: { singleton?: boolean } = { singleton: true },
 ): void {
   if (typeof container.registerFactory !== 'function') {
     throw new Error('Container does not support registerFactory');
   }
-  container.registerFactory(name, factory, options);
+  container.registerFactory(name as string, factory, options);
 }
 
 /**

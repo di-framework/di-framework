@@ -1,6 +1,7 @@
 export type { ChainStep, ChainWorkflowResult } from './chain-workflow.ts';
 export { ChainWorkflow, chainWorkflow } from './chain-workflow.ts';
 export type {
+  ChatAgentBuilder,
   ChatAgentOptions,
   ChatAgentResult,
   ChatAgentRunOptions,

@@ -9,8 +9,14 @@ import type { VectorStore } from '../vectorstore/vector-store.ts';
 
 /** Structural container surface used by AI DI helpers (avoids tight coupling). */
 export interface AiContainer {
-  registerFactory?<T>(name: string, factory: () => T, options?: { singleton?: boolean }): unknown;
-  resolve<T>(key: string | (new (...args: never[]) => T)): T;
+  registerFactory?<T>(
+    nameOrClass: string | (new (...args: never[]) => T) | (abstract new (...args: never[]) => T),
+    factory: () => T,
+    options?: { singleton?: boolean },
+  ): unknown;
+  resolve<T>(
+    key: string | (new (...args: never[]) => T) | (abstract new (...args: never[]) => T),
+  ): T;
   emit?(event: string, payload: unknown): unknown;
   clear?(): unknown;
 }
@@ -50,6 +56,13 @@ export interface ConfigureAiOptions {
   readonly registerChatDefaultAlias?: boolean;
   /** Token for ChatClient. Default {@code chatClient}. */
   readonly chatClientToken?: string;
+  /** Token for prototype ChatClient.Builder. Default {@code chatClientBuilder}. */
+  readonly chatClientBuilderToken?: string;
+  /**
+   * When false, do not register the prototype ChatClient.Builder factory.
+   * Default true.
+   */
+  readonly registerChatClientBuilder?: boolean;
   readonly defaultSystem?: string;
   readonly defaultOptions?: ChatOptions;
   readonly tools?: readonly ToolSource[];
@@ -69,6 +82,16 @@ export interface ConfigureAiOptions {
    * Default true.
    */
   readonly registerChatClient?: boolean;
+  /**
+   * When true (default), scan `@AiService` / `@Agent` / `@ToolSet` / workflow
+   * annotations and register factories.
+   */
+  readonly scanAnnotations?: boolean;
+  /**
+   * Register a default {@link import("../agent/chat-agent.ts").ChatAgent} under
+   * {@link import("./tokens.ts").AiTokens.CHAT_AGENT}.
+   */
+  readonly agent?: boolean | { readonly system?: string; readonly token?: string };
 }
 
 export interface ConfigureAiResult {

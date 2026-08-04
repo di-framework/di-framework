@@ -1,3 +1,87 @@
+export type {
+  AgentOptions,
+  AiAnnKey,
+  AiServiceOptions,
+  AnyConstructor,
+  EnableAiOptions,
+  ProcessAiAnnotationsResult,
+  ToolParamOptions,
+  ToolSetOptions,
+  WithMemoryOptions,
+  WithRagOptions,
+  WithToolsOptions,
+} from './annotations/index.ts';
+// Annotation DX (decorators + processors)
+export {
+  // advisors (Advisor type exists — use AiAdvisor)
+  Advisor as AiAdvisor,
+  AdvisorOrder,
+  Agent,
+  AgentStrategy,
+  AiAnnKeys,
+  AiConfiguration,
+  AiObserved,
+  AiProperties,
+  // assistants / agents (message decorator names collide with chat message types)
+  AiService,
+  Assistant,
+  AssistantMessage as AssistantMessageAnn,
+  // workflows
+  Chain,
+  ChatAgentBean,
+  // model / config (non-colliding)
+  ChatClientAnn,
+  ChatClientDecorator,
+  ChatMemory as ChatMemoryAnn,
+  ChatModel as ChatModelAnn,
+  ConversationId,
+  clearAnnotatedTypes,
+  Document as DocumentAnn,
+  EmbeddingModel as EmbeddingModelAnn,
+  EnableAi,
+  Evaluate,
+  getAnnotatedTypes,
+  IndexedDocument,
+  LLMDescription,
+  MaxIterations,
+  // mcp
+  McpClient,
+  McpTool,
+  MemoryId,
+  Observed,
+  Optimize,
+  Orchestrator,
+  Order,
+  OutputConverter,
+  Parallel,
+  // prompts (Prompt class exists — use PromptTemplate)
+  PromptTemplate,
+  PromptVariable,
+  processAiAnnotations,
+  RetrievalAugmented,
+  Retriever,
+  ReturnDirect,
+  Route,
+  Router,
+  resolveAiService,
+  resolveAnnotated,
+  resolveAnnotatedAgent,
+  StructuredOutput,
+  SystemMessage as SystemMessageAnn,
+  ToolParam,
+  ToolResult,
+  // tools
+  ToolSet,
+  Tools,
+  UserMessage as UserMessageAnn,
+  V,
+  // rag (type name collisions — Ann suffix)
+  VectorStore as VectorStoreAnn,
+  WithMemory,
+  WithRag,
+  WithTools,
+  Worker,
+} from './annotations/index.ts';
 export {
   asAiContainer,
   asFactory,
@@ -17,15 +101,19 @@ export {
 } from './observation.ts';
 export {
   configureAi,
+  enableAi,
+  registerChatAgent,
   registerChatClient,
+  registerChatClientBuilder,
   registerChatMemory,
   registerChatModel,
   registerToolCallbacks,
+  resolveChatAgent,
   resolveChatClient,
+  resolveChatClientBuilder,
   resolveChatModel,
 } from './register.ts';
 export { type AiToken, AiTokens } from './tokens.ts';
-
 export {
   AI_TOOL_METADATA_KEY,
   getToolMethodMetadata,

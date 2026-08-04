@@ -53,6 +53,7 @@
   "exclude": [
     "node_modules",
     "examples/packages/deno-sandboxes/**/*",
-    "examples/packages/deno-http/**/*"
+    "examples/packages/deno-http/**/*",
+    "references/**/*"
   ]
 }
