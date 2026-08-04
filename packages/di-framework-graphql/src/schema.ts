@@ -9,6 +9,7 @@
 import type { Container } from '@di-framework/core/container';
 import {
   type ASTNode,
+  type DocumentNode,
   type ExecutionResult,
   execute,
   GraphQLBoolean,
@@ -27,6 +28,7 @@ import {
   type GraphQLOutputType,
   GraphQLScalarType,
   GraphQLSchema,
+  GraphQLError,
   GraphQLString,
   type GraphQLType,
   Kind,
@@ -139,6 +141,9 @@ export interface SemanticSchemaOptions extends BuildOptions {
   container?: Container;
   /** Options for the SDL rendered onto `SemanticSchema.sdl`. */
   print?: PrintOptions;
+  /** Optional query resource limits enforced before execution. */
+  maxDepth?: number;
+  maxComplexity?: number;
 }
 
 export interface ExecuteRequest {
@@ -321,6 +326,46 @@ class SchemaAssembler {
   }
 }
 
+function queryCost(document: DocumentNode): { depth: number; complexity: number } {
+  const fragments = new Map<string, any>();
+  for (const definition of document.definitions) {
+    if (definition.kind === Kind.FRAGMENT_DEFINITION) fragments.set(definition.name.value, definition);
+  }
+  const walk = (selectionSet: any, active: Set<string>, level: number): { depth: number; complexity: number } => {
+    let depth = level;
+    let complexity = 0;
+    for (const selection of selectionSet?.selections ?? []) {
+      if (selection.kind === Kind.FRAGMENT_SPREAD) {
+        if (active.has(selection.name.value)) continue;
+        const next = new Set(active).add(selection.name.value);
+        const fragment = fragments.get(selection.name.value);
+        const nested = fragment ? walk(fragment.selectionSet, next, level) : { depth: level, complexity: 0 };
+        depth = Math.max(depth, nested.depth);
+        complexity += nested.complexity;
+        continue;
+      }
+      if (selection.kind === Kind.INLINE_FRAGMENT) {
+        const nested = walk(selection.selectionSet, active, level);
+        depth = Math.max(depth, nested.depth);
+        complexity += nested.complexity;
+        continue;
+      }
+      complexity += 1;
+      const nested = walk(selection.selectionSet, active, level + 1);
+      depth = Math.max(depth, nested.depth);
+      complexity += nested.complexity;
+    }
+    return { depth, complexity };
+  };
+  let result = { depth: 0, complexity: 0 };
+  for (const definition of document.definitions) {
+    if (definition.kind !== Kind.OPERATION_DEFINITION) continue;
+    const current = walk(definition.selectionSet, new Set(), 0);
+    result = { depth: Math.max(result.depth, current.depth), complexity: Math.max(result.complexity, current.complexity) };
+  }
+  return result;
+}
+
 /**
  * Build the executable schema from every decorated class.
  *
@@ -337,7 +382,16 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
 
   const prepare = (request: ExecuteRequest) => {
     const document = parse(request.query);
-    const errors = validate(schema, document);
+    const errors = [...validate(schema, document)];
+    if (errors.length === 0) {
+      const cost = queryCost(document);
+      if (options.maxDepth !== undefined && cost.depth > options.maxDepth) {
+        errors.push(new GraphQLError(`Query depth ${cost.depth} exceeds the configured maximum of ${options.maxDepth}.`, { extensions: { code: 'QUERY_DEPTH_LIMIT' } }));
+      }
+      if (options.maxComplexity !== undefined && cost.complexity > options.maxComplexity) {
+        errors.push(new GraphQLError(`Query complexity ${cost.complexity} exceeds the configured maximum of ${options.maxComplexity}.`, { extensions: { code: 'QUERY_COMPLEXITY_LIMIT' } }));
+      }
+    }
     return { document, errors };
   };
 
