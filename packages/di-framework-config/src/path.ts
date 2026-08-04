@@ -86,8 +86,7 @@ function deepMergeAt(
   for (const [key, value] of Object.entries(source)) {
     if (!isSafeKey(key)) continue;
     const existing = out[key];
-    const valueIsPlainObject =
-      value !== null && typeof value === 'object' && !Array.isArray(value);
+    const valueIsPlainObject = value !== null && typeof value === 'object' && !Array.isArray(value);
     const existingIsPlainObject =
       existing !== null && typeof existing === 'object' && !Array.isArray(existing);
 
@@ -102,13 +101,7 @@ function deepMergeAt(
     } else if (valueIsPlainObject) {
       // Clone nested plain objects so depth/cycle checks still apply when the
       // target has no object to merge into (do not attach source by reference).
-      out[key] = deepMergeAt(
-        {},
-        value as Record<string, unknown>,
-        depth + 1,
-        maxDepth,
-        seen,
-      );
+      out[key] = deepMergeAt({}, value as Record<string, unknown>, depth + 1, maxDepth, seen);
     } else {
       out[key] = value;
     }

@@ -54,7 +54,8 @@ function evaluateExpression(
         evaluateOperand(requireRight(expression), metadata, depth + 1, maxDepth)
       );
     case 'NOT':
-      return !evaluateOperand(requireLeft(expression), metadata, depth + 1, maxDepth);    case 'EQ':
+      return !evaluateOperand(requireLeft(expression), metadata, depth + 1, maxDepth);
+    case 'EQ':
       return (
         compare(
           metadataValue(requireLeft(expression), metadata),
