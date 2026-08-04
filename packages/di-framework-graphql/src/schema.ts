@@ -604,7 +604,10 @@ export function createGraphQLSSEHandler(
       async start(controller) {
         let heartbeat: ReturnType<typeof setInterval> | undefined;
         if (options.heartbeatMs && options.heartbeatMs > 0) {
-          heartbeat = setInterval(() => controller.enqueue(encoder.encode(': heartbeat\n\n')), options.heartbeatMs);
+          heartbeat = setInterval(
+            () => controller.enqueue(encoder.encode(': heartbeat\n\n')),
+            options.heartbeatMs,
+          );
         }
         try {
           for await (const item of iterator) {
@@ -613,7 +616,11 @@ export function createGraphQLSSEHandler(
           controller.enqueue(encoder.encode('event: complete\ndata: {}\n\n'));
           controller.close();
         } catch (error) {
-          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ errors: [{ message: String(error) }] })}\n\n`));
+          controller.enqueue(
+            encoder.encode(
+              `event: error\ndata: ${JSON.stringify({ errors: [{ message: String(error) }] })}\n\n`,
+            ),
+          );
           controller.close();
         } finally {
           if (heartbeat) clearInterval(heartbeat);

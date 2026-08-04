@@ -9,10 +9,10 @@ export {
   type GraphQLRouteOptions,
   type GraphQLRouterLike,
   type HandlerOptions,
-  type SubscriptionHandlerOptions,
   JSONScalar,
   mountGraphQL,
   registerScalar,
   type SemanticSchema,
   type SemanticSchemaOptions,
+  type SubscriptionHandlerOptions,
 } from './src/schema.ts';
