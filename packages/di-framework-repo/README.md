@@ -204,3 +204,13 @@ class MyRepository extends BaseRepository<User, number> {
 - `StorageAdapter<E, ID>`: Interface for storage implementations.
 - `Page<T>` / `PaginatedResult<T>`: Standardized pagination metadata.
 - `EntityId`: Type alias for `string | number`.
+# Durable SQL adapters
+
+`BunSqliteAdapter` and `D1Adapter` implement the complete `StorageAdapter` contract over an existing SQLite-compatible table. The adapter intentionally does not run migrations: create the table in your application and provide an explicit `table` (plus `idColumn`, `entityToRow`, and `rowToEntity` when needed).
+
+```ts
+const users = new BunSqliteAdapter(db, { table: 'users', idColumn: 'id' });
+await users.findPaginated({ page: 1, size: 20, sort: 'name:asc', filter: { active: true } });
+```
+
+Cloudflare D1 uses the same options and binding API. D1 transactions are scoped to the callback and D1's platform batch/statement limits apply; schema changes and migrations remain out of band. Bun adapters close their database from `dispose()`; D1 disposal is a no-op.

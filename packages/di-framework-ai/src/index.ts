@@ -523,6 +523,12 @@ export type {
   SimpleVectorStoreOptions,
   VectorStore,
   VectorStoreRetriever,
+  BunSqliteVectorStoreOptions,
+  BunVectorDatabase,
+  VectorizeIndex,
+  VectorizeVectorStoreOptions,
+  PgClient,
+  PgVectorStoreOptions,
 } from './vectorstore/index.ts';
 export {
   DEFAULT_TOP_K,
@@ -541,6 +547,9 @@ export {
   SIMILARITY_THRESHOLD_ACCEPT_ALL,
   SimpleVectorStore,
   SimpleVectorStoreBuilder,
+  BunSqliteVectorStore,
+  VectorizeVectorStore,
+  PgVectorStore,
   searchRequest,
   searchRequestBuilder,
   similaritySearchQuery,

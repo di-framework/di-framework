@@ -4,3 +4,6 @@ export * from './in-memory';
 export * from './query-derivation';
 export * from './repository';
 export * from './types';
+export * from './adapters/sql';
+export * from './adapters/bun-sqlite';
+export * from './adapters/d1';
