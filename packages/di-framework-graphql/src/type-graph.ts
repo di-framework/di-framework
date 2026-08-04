@@ -274,6 +274,7 @@ class GraphBuilder {
         holder,
         params,
         batch: declaration.options.batch,
+        middleware: declaration.options.middleware,
         subscription: declaration.event
           ? {
               event: declaration.event,

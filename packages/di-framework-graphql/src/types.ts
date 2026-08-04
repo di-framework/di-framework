@@ -100,7 +100,22 @@ export interface FieldOptions {
    * - function — the same batch signature, inline.
    */
   batch?: boolean | string | BatchResolver;
+  /** Ordered field middleware; each layer may inspect or replace the result. */
+  middleware?: FieldMiddleware | readonly FieldMiddleware[];
 }
+
+export interface FieldMiddlewareContext {
+  parent: unknown;
+  args: Record<string, any>;
+  ctx: GraphQLContext;
+  info: any;
+  field: ResolvedField;
+}
+
+export type FieldMiddleware = (
+  next: () => unknown | Promise<unknown>,
+  context: FieldMiddlewareContext,
+) => unknown | Promise<unknown>;
 
 export interface ActionOptions extends FieldOptions {
   /**
@@ -206,6 +221,7 @@ export interface FieldSource {
   holder: 'portal' | 'parent' | 'extension' | 'entity';
   params: ParamDeclaration[];
   batch?: boolean | string | BatchResolver;
+  middleware?: FieldMiddleware | readonly FieldMiddleware[];
   /** For actions declared on a semantic type: how to load the entity. */
   entity?: {
     typeName: string;
