@@ -30,6 +30,7 @@ export type {
   EntityParamSpec,
   EntityResponse,
   MessageChatMemoryAdvisorOptions,
+  RetryAdvisorOptions,
   SimpleLoggerAdvisorOptions,
   StreamAdvisor,
   StreamAdvisorChain,
@@ -38,7 +39,6 @@ export type {
   ToolAdvisor,
   ToolCallingAdvisorOptions,
   ToolSource,
-  RetryAdvisorOptions,
 } from './chat/client/index.ts';
 // ChatClient + advisors
 export {
@@ -63,14 +63,14 @@ export {
   LOWEST_PRECEDENCE,
   MessageChatMemoryAdvisor,
   MessageChatMemoryAdvisorBuilder,
+  RetryAdvisor,
   renderTemplate,
+  retryAdvisor,
   SimpleLoggerAdvisor,
   StructuredOutputValidationAdvisor,
   TOOL_CALLING_ADVISOR_AUTO_REGISTER,
   ToolCallingAdvisor,
   ToolCallingAdvisorBuilder,
-  RetryAdvisor,
-  retryAdvisor,
 } from './chat/client/index.ts';
 export {
   assistantMessage,
@@ -187,27 +187,27 @@ export type {
   ResponseTextCleaner,
   SchemaOutputConverterOptions,
   SchemaValidationResult,
-  StructuredOutputConverter,
-  StandardSchemaV1,
   StandardSchemaIssue,
   StandardSchemaOutputConverterOptions,
+  StandardSchemaV1,
+  StructuredOutputConverter,
 } from './converter/index.ts';
 export {
   compositeResponseTextCleaner,
   defaultResponseTextCleaner,
+  isStandardSchema,
   isStructuredOutputConverter,
   listOutputConverter,
   mapOutputConverter,
   markdownCodeBlockCleaner,
   NO_JSON_SCHEMA,
-  SchemaOutputConverter,
-  schemaOutputConverter,
-  isStandardSchema,
   parseStandardSchema,
+  SchemaOutputConverter,
   StandardSchemaOutputConverter,
-  standardSchemaOutputConverter,
+  schemaOutputConverter,
   schemaValidationFailed,
   schemaValidationOk,
+  standardSchemaOutputConverter,
   thinkingTagCleaner,
   validateAgainstJsonSchema,
   whitespaceCleaner,
@@ -330,18 +330,22 @@ export {
   Worker,
 } from './di/index.ts';
 // Document
-export type { Document, DocumentOptions } from './document/index.ts';
+export type {
+  Document,
+  DocumentLoader,
+  DocumentOptions,
+  TextDocumentLoaderOptions,
+} from './document/index.ts';
 export {
   document,
-  isTextDocument,
-  textDocument,
-  withDocumentScore,
   htmlDocumentLoader,
+  isTextDocument,
   loadDocuments,
   pdfDocumentLoader,
+  textDocument,
   textDocumentLoader,
+  withDocumentScore,
 } from './document/index.ts';
-export type { DocumentLoader, TextDocumentLoaderOptions } from './document/index.ts';
 // Embedding
 export type { EmbeddingModel, FakeEmbeddingModelOptions } from './embedding/index.ts';
 export {
@@ -365,9 +369,9 @@ export type {
   McpToolDescriptor,
   McpToolFilter,
   McpToolHandler,
+  McpToolNamePrefixGenerator,
   McpToolServer,
   McpToolServerOptions,
-  McpToolNamePrefixGenerator,
   SdkMcpClientLike,
   ToolContextToMcpMetaConverter,
 } from './mcp/index.ts';

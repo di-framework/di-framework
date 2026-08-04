@@ -5,8 +5,8 @@ import {
   isToolResponseMessage,
   isUserMessage,
 } from '../../chat/messages/message.ts';
-import type { ToolCallback } from '../../tool/tool-callback.ts';
 import type { Media } from '../../content/media.ts';
+import type { ToolCallback } from '../../tool/tool-callback.ts';
 import type {
   AnthropicContentBlock,
   AnthropicMessage,
@@ -83,13 +83,22 @@ export function toAnthropicMessages(messages: readonly ChatMessage[]): Anthropic
   };
 }
 
-function anthropicContent(text: string | null, media: readonly Media[]): string | AnthropicContentBlock[] {
+function anthropicContent(
+  text: string | null,
+  media: readonly Media[],
+): string | AnthropicContentBlock[] {
   if (!media.length) return text ?? '';
   return [...(text ? [{ type: 'text' as const, text }] : []), ...media.map(mediaBlock)];
 }
 function mediaBlock(item: Media): AnthropicContentBlock {
-  if (typeof item.data === 'string' && item.data.startsWith('http')) return { type: 'image', source: { type: 'url', url: item.data } };
-  const data = typeof item.data === 'string' ? item.data.replace(/^data:[^;]+;base64,/, '') : item.data instanceof URL ? item.data.toString() : btoa(String.fromCharCode(...item.data));
+  if (typeof item.data === 'string' && item.data.startsWith('http'))
+    return { type: 'image', source: { type: 'url', url: item.data } };
+  const data =
+    typeof item.data === 'string'
+      ? item.data.replace(/^data:[^;]+;base64,/, '')
+      : item.data instanceof URL
+        ? item.data.toString()
+        : btoa(String.fromCharCode(...item.data));
   return { type: 'image', source: { type: 'base64', media_type: item.mimeType, data } };
 }
 
