@@ -155,6 +155,7 @@ export interface ExecuteRequest {
   /** Per-request context. Defaults to `{}` so request-scoped batching works. */
   context?: GraphQLContext;
   rootValue?: unknown;
+  extensions?: Record<string, any>;
 }
 
 export interface SemanticSchema {
@@ -474,6 +475,8 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
 export interface HandlerOptions {
   /** Build the per-request context. Receives the incoming request. */
   context?: (request: Request) => GraphQLContext | Promise<GraphQLContext>;
+  /** Optional persisted-query hash to document lookup. */
+  persistedQueries?: Map<string, string>;
 }
 
 /** Options for the lightweight GraphQL-over-SSE subscription endpoint. */
@@ -520,8 +523,10 @@ export function createGraphQLHandler(
 
     if (request.method === 'GET') {
       const url = new URL(request.url);
-      const query = url.searchParams.get('query');
-      if (!query) return json({ errors: [{ message: 'Missing "query" parameter' }] }, 400);
+      let query = url.searchParams.get('query');
+      const hash = url.searchParams.get('extensions.persistedQuery.sha256Hash');
+      if (!query && hash) query = options.persistedQueries?.get(hash) ?? null;
+      if (!query) return json({ errors: [{ message: hash ? 'Persisted query not found' : 'Missing "query" parameter' }] }, 400);
       const variables = url.searchParams.get('variables');
       payload = {
         query,
@@ -530,9 +535,22 @@ export function createGraphQLHandler(
       };
     } else if (request.method === 'POST') {
       try {
-        const body = (await request.json()) as ExecuteRequest;
+        const contentType = request.headers.get('content-type') ?? '';
+        let body: ExecuteRequest;
+        if (contentType.startsWith('multipart/form-data')) {
+          const form = await request.formData();
+          const operations = JSON.parse(String(form.get('operations') ?? '{}')) as ExecuteRequest;
+          body = operations;
+        } else {
+          body = (await request.json()) as ExecuteRequest;
+        }
         if (!body || typeof body.query !== 'string') {
+          const hash = (body?.extensions as any)?.persistedQuery?.sha256Hash;
+          if (hash && options.persistedQueries?.has(hash)) {
+            body.query = options.persistedQueries.get(hash) as string;
+          } else {
           return json({ errors: [{ message: 'Missing "query" in request body' }] }, 400);
+          }
         }
         payload = body;
       } catch {
