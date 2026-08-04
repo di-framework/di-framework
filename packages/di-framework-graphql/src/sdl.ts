@@ -69,7 +69,8 @@ function printDescription(
   options: PrintOptions,
 ): string {
   if (!description || options.descriptions === false) return '';
-  const escaped = description.replace(/"""/g, '\\"""');
+  // Escape backslashes first so a trailing `\` cannot neutralize `"""` escaping.
+  const escaped = description.replace(/\\/g, '\\\\').replace(/"""/g, '\\"""');
   if (!escaped.includes('\n')) return `${indent}"""${escaped}"""\n`;
   const body = escaped
     .split('\n')
