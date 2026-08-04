@@ -14,6 +14,7 @@
 
 import { type Container, useContainer } from '@di-framework/core/container';
 import { type AuthorizationOptions, denialToError, evaluateRequirements } from './authorization.ts';
+import { type ConnectionArgs, toConnection } from './connection.ts';
 import { BatchLoader } from './loader.ts';
 import type {
   Ctor,
@@ -111,24 +112,64 @@ export class ResolverFactory {
       return () => constant;
     }
 
-    if (source.entity) return this.authorized(field, this.createEntityActionResolver(field));
+    if (source.entity) {
+      return this.authorized(field, this.paginated(field, this.createEntityActionResolver(field)));
+    }
 
     const argTypes = new Map(field.args.map((arg) => [arg.name, arg.type]));
 
-    return this.authorized(field, (parent, args, ctx, info) => {
-      const state = getRequestState(ctx);
-      const holder = this.resolveHolder(field, parent, state);
+    return this.authorized(
+      field,
+      this.paginated(field, (parent, args, ctx, info) => {
+        const state = getRequestState(ctx);
+        const holder = this.resolveHolder(field, parent, state);
 
-      if (source.member === 'property') {
-        return (holder as any)?.[source.propertyKey];
+        if (source.member === 'property') {
+          return (holder as any)?.[source.propertyKey];
+        }
+
+        if (source.batch && state) {
+          return this.loadBatched(field, argTypes, parent, args, ctx, info, state);
+        }
+
+        return this.invoke(holder, field, argTypes, parent, args, ctx, info);
+      }),
+    );
+  }
+
+  /**
+   * Shape a `@Connection` field's result.
+   *
+   * A plain array is sliced against the incoming cursor arguments; a value that
+   * already has connection shape — because the repository paged natively — is
+   * passed through.
+   */
+  private paginated<T extends (parent: any, args: any, ctx: any, info: any) => any>(
+    field: ResolvedField,
+    resolver: T,
+  ): T {
+    const connection = field.source.connection;
+    if (!connection) return resolver;
+
+    const { defaultPageSize, maxPageSize } = connection;
+
+    return ((parent: any, args: any, ctx: any, info: any) => {
+      const requested = args.first ?? args.last;
+      if (maxPageSize !== undefined && typeof requested === 'number' && requested > maxPageSize) {
+        throw new Error(`Page size ${requested} exceeds the maximum of ${maxPageSize}.`);
       }
+      const paging: ConnectionArgs = {
+        ...args,
+        first:
+          args.first ??
+          (args.last === undefined || args.last === null ? defaultPageSize : undefined),
+      };
 
-      if (source.batch && state) {
-        return this.loadBatched(field, argTypes, parent, args, ctx, info, state);
-      }
-
-      return this.invoke(holder, field, argTypes, parent, args, ctx, info);
-    });
+      const result = resolver(parent, args, ctx, info);
+      return result && typeof result.then === 'function'
+        ? result.then((value: unknown) => toConnection(value, paging))
+        : toConnection(result, paging);
+    }) as unknown as T;
   }
 
   /**

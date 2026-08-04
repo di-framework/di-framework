@@ -16,6 +16,20 @@ export {
   evaluateRequirements,
   SemanticAuthorizationError,
 } from './src/authorization.ts';
+export {
+  type Connection,
+  type ConnectionArgs,
+  connectionFromArray,
+  connectionFromSlice,
+  cursorToOffset,
+  decodeCursor,
+  type Edge,
+  encodeCursor,
+  isConnection,
+  offsetToCursor,
+  type PageInfo,
+  toConnection,
+} from './src/connection.ts';
 export * from './src/decorators.ts';
 export * from './src/errors.ts';
 export { type BatchFunction, BatchLoader } from './src/loader.ts';

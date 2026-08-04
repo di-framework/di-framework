@@ -169,6 +169,15 @@ export type FieldMiddleware = (
   context: FieldMiddlewareContext,
 ) => unknown | Promise<unknown>;
 
+export interface ConnectionOptions extends Omit<FieldOptions, 'type'> {
+  /** Name of the generated connection type. Defaults to `<Node>Connection`. */
+  connectionName?: string;
+  /** Default `first` when the caller supplies no pagination arguments. */
+  defaultPageSize?: number;
+  /** Largest `first`/`last` accepted. Requests above it are an error. */
+  maxPageSize?: number;
+}
+
 export interface ActionOptions extends FieldOptions {
   /**
    * Root mutation field name. Defaults to the method name for portals, and to
@@ -230,6 +239,8 @@ export interface FieldDeclaration {
   /** Container event backing a `@Subscription`. */
   event?: string;
   params: ParamDeclaration[];
+  /** Set by `@Connection`: the node type to paginate over, plus paging limits. */
+  connection?: { node: TypeRef; options: ConnectionOptions };
 }
 
 export interface SemanticTypeDeclaration {
@@ -303,6 +314,8 @@ export interface FieldSource {
   constant?: unknown;
   /** Requirements that must pass before the member is read or invoked. */
   requirements?: readonly import('./authorization.ts').AuthRequirement[];
+  /** Shape the result as a Relay connection, slicing arrays if needed. */
+  connection?: { defaultPageSize?: number; maxPageSize?: number };
 }
 
 export interface ResolvedArg {

@@ -12,7 +12,6 @@ import {
   Action,
   Arg,
   BoundedContext,
-  Ctx,
   DateTime,
   Field,
   ID,
@@ -22,14 +21,13 @@ import {
   Json,
   Lookup,
   Portal,
-  registerEnum,
   Requires,
+  registerEnum,
   SemanticType,
 } from '@di-framework/graphql';
 import type { GraphQLResolveInfo } from 'graphql';
 // Must be evaluated before the first decorated class below. See registry.ts.
 import './registry.ts';
-import type { LibraryContext } from './context.ts';
 
 /* -------------------------------------------------------------------------- */
 /* Enums                                                                      */

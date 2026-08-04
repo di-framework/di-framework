@@ -22,6 +22,7 @@ import { CUSTOM_SCALARS, ScalarRef, scalarNameForConstructor } from './scalars.t
 import {
   type ArgOptions,
   type BuildOptions,
+  type ConnectionOptions,
   type Ctor,
   type EnumObject,
   type FieldDeclaration,
@@ -129,8 +130,10 @@ class GraphBuilder {
       });
     }
 
-    // Pass 3: own fields.
-    for (const object of this.objects.values()) {
+    // Pass 3: own fields. Snapshot first — resolving a @Connection field adds
+    // generated connection/edge types, which have no declarations to collect and
+    // must not be revisited here.
+    for (const object of Array.from(this.objects.values())) {
       object.fields = this.resolveOwnFields(object);
     }
     for (const [target, resolved] of this.interfaces) {
@@ -353,6 +356,176 @@ class GraphBuilder {
     }
   }
 
+  /**
+   * Generate the `PageInfo`, `<Node>Edge` and `<Node>Connection` types backing a
+   * `@Connection` field, and return the connection's type node.
+   *
+   * The generated types inherit the node's bounded context and boundary flag, so
+   * paginating a type does not become a way to smuggle it across a context edge.
+   */
+  private ensureConnection(node: ResolvedObjectType, connectionName: string): TypeNode {
+    const existing = this.objectsByName.get(connectionName);
+    if (existing) return nonNull({ kind: 'object', name: connectionName, target: existing.target });
+
+    const pageInfo = this.ensurePageInfo();
+    const edgeName = `${node.name}Edge`;
+
+    const edge =
+      this.objectsByName.get(edgeName) ??
+      this.addSynthetic({
+        name: edgeName,
+        description: `An edge in a ${connectionName}.`,
+        context: node.context,
+        boundary: node.boundary,
+        fields: [
+          { name: 'node', type: nonNull({ kind: 'object', name: node.name, target: node.target }) },
+          { name: 'cursor', type: nonNull({ kind: 'scalar', name: 'String' }) },
+        ],
+      });
+
+    const connection = this.addSynthetic({
+      name: connectionName,
+      description: `A Relay connection over ${node.name}.`,
+      context: node.context,
+      boundary: node.boundary,
+      fields: [
+        {
+          name: 'edges',
+          type: nonNull({
+            kind: 'list',
+            of: nonNull({ kind: 'object', name: edge.name, target: edge.target }),
+          }),
+        },
+        {
+          name: 'pageInfo',
+          type: nonNull({ kind: 'object', name: pageInfo.name, target: pageInfo.target }),
+        },
+        {
+          name: 'totalCount',
+          type: { kind: 'scalar', name: 'Int' },
+          description: 'Size of the full result set, before slicing.',
+        },
+      ],
+    });
+
+    return nonNull({ kind: 'object', name: connection.name, target: connection.target });
+  }
+
+  /** Resolve a `@Connection` declaration into its type, its paging args and its runtime options. */
+  private planConnection(
+    declaration: { node: TypeRef; options: ConnectionOptions },
+    path: string,
+  ): {
+    type: TypeNode;
+    args: ResolvedArg[];
+    source: { defaultPageSize?: number; maxPageSize?: number };
+  } {
+    const nodeType = this.fromTypeInput(unwrapThunk(declaration.node, this.registry), {}, path);
+    if (nodeType.kind !== 'object') {
+      throw new SemanticSchemaError(
+        `${path}: @Connection needs a @SemanticType to paginate over, got '${nodeType.kind}'.`,
+      );
+    }
+    const node = this.objects.get(nodeType.target as Ctor);
+    if (!node) {
+      throw new SemanticSchemaError(`${path}: '${nodeType.name}' is not in the selected contexts.`);
+    }
+
+    const connectionName = declaration.options.connectionName ?? `${node.name}Connection`;
+
+    return {
+      type: this.ensureConnection(node, connectionName),
+      args: [
+        {
+          name: 'first',
+          description: 'Take this many from the start of the slice.',
+          type: { kind: 'scalar', name: 'Int' },
+        },
+        {
+          name: 'after',
+          description: 'Return items after this cursor.',
+          type: { kind: 'scalar', name: 'String' },
+        },
+        {
+          name: 'last',
+          description: 'Take this many from the end of the slice.',
+          type: { kind: 'scalar', name: 'Int' },
+        },
+        {
+          name: 'before',
+          description: 'Return items before this cursor.',
+          type: { kind: 'scalar', name: 'String' },
+        },
+      ],
+      source: {
+        defaultPageSize: declaration.options.defaultPageSize,
+        maxPageSize: declaration.options.maxPageSize,
+      },
+    };
+  }
+
+  private ensurePageInfo(): ResolvedObjectType {
+    const existing = this.objectsByName.get('PageInfo');
+    if (existing) return existing;
+    return this.addSynthetic({
+      name: 'PageInfo',
+      description: 'Relay pagination metadata for the current slice.',
+      context: undefined,
+      boundary: false,
+      fields: [
+        { name: 'hasNextPage', type: nonNull({ kind: 'scalar', name: 'Boolean' }) },
+        { name: 'hasPreviousPage', type: nonNull({ kind: 'scalar', name: 'Boolean' }) },
+        { name: 'startCursor', type: { kind: 'scalar', name: 'String' } },
+        { name: 'endCursor', type: { kind: 'scalar', name: 'String' } },
+      ],
+    });
+  }
+
+  /**
+   * Register a type that has no class of its own.
+   *
+   * Its fields are plain property reads, so the synthesized carrier object the
+   * connection helpers build resolves through the normal hydration path.
+   */
+  private addSynthetic(spec: {
+    name: string;
+    description?: string;
+    context: string | undefined;
+    boundary: boolean;
+    fields: Array<{ name: string; type: TypeNode; description?: string }>;
+  }): ResolvedObjectType {
+    const target = class {} as Ctor;
+    Object.defineProperty(target, 'name', { value: spec.name });
+
+    const resolved: ResolvedObjectType = {
+      name: spec.name,
+      description: spec.description,
+      target,
+      context: spec.context,
+      boundary: spec.boundary,
+      portal: false,
+      interfaces: [],
+      fields: spec.fields.map((field) => ({
+        name: field.name,
+        description: field.description,
+        type: field.type,
+        args: [],
+        context: spec.context,
+        source: {
+          target,
+          propertyKey: field.name,
+          member: 'property' as const,
+          holder: 'parent' as const,
+          params: [],
+        },
+      })),
+    };
+
+    this.objects.set(target, resolved);
+    this.objectsByName.set(resolved.name, resolved);
+    return resolved;
+  }
+
   private ensureUnion(ref: UnionRef, path: string): ResolvedUnionType {
     const existing = this.unions.get(ref);
     if (existing) return existing;
@@ -407,9 +580,19 @@ class GraphBuilder {
   ): ResolvedField {
     const name = declaration.options.name ?? declaration.propertyKey;
     const path = `${ownerName}.${name}`;
-    const type = this.resolveTypeRef(declaration.options.type, declaration.options, path);
+    const connection = declaration.connection
+      ? this.planConnection(declaration.connection, path)
+      : undefined;
+    const type =
+      connection?.type ?? this.resolveTypeRef(declaration.options.type, declaration.options, path);
     const { params, args } = this.planParams(target, declaration, holder, path);
     const requirements = getRequirements(target, declaration.propertyKey);
+
+    // A method may declare its own `first`/`after` params to read them; keep the
+    // author's version rather than emitting the argument twice.
+    if (connection) {
+      args.push(...connection.args.filter((arg) => !args.some((own) => own.name === arg.name)));
+    }
 
     this.fieldContexts.set(path, context);
 
@@ -429,6 +612,7 @@ class GraphBuilder {
         batch: declaration.options.batch,
         middleware: declaration.options.middleware,
         requirements: requirements.length > 0 ? requirements : undefined,
+        connection: connection?.source,
         subscription: declaration.event
           ? {
               event: declaration.event,

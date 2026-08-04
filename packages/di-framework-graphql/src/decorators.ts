@@ -20,11 +20,12 @@ import {
   defineTypeRequirements,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
-import { ScalarRef, scalarNameForConstructor } from './scalars.ts';
+import { ScalarRef } from './scalars.ts';
 import {
   type AbstractCtor,
   type ActionOptions,
   type ArgOptions,
+  type ConnectionOptions,
   type Ctor,
   type EnumObject,
   type EnumOptions,
@@ -35,7 +36,6 @@ import {
   type PortalOptions,
   type SemanticTypeOptions,
   type SubscriptionOptions,
-  type TypeInput,
   type TypeRef,
   type TypeThunk,
   type UnionOptions,
@@ -318,6 +318,45 @@ export function Field(type?: TypeRef, options?: FieldOptions): PropertyDecorator
 export function Field(typeOrOptions?: TypeRef | FieldOptions, maybeOptions?: FieldOptions): any {
   const { type, options } = normalizeArgs(typeOrOptions, maybeOptions);
   return declareMember('field', type, options);
+}
+
+/**
+ * Exposes a member as a Relay cursor connection over `node`.
+ *
+ * The `<Node>Connection`, `<Node>Edge` and shared `PageInfo` types are
+ * generated, and `first`/`after`/`last`/`before` are added to the field. The
+ * method may return a plain array — sliced against those arguments — or a
+ * connection built with `connectionFromSlice()` when the repository pages
+ * natively.
+ *
+ * @example
+ * ```ts
+ * @Connection(() => Review, { defaultPageSize: 20, maxPageSize: 100 })
+ * reviews(): Review[] { return this.repo.forBook(this.id); }
+ * ```
+ */
+export function Connection(
+  node: TypeRef,
+  options: ConnectionOptions = {},
+): PropertyDecorator & MethodDecorator {
+  return ((target: any, propertyKey: string, descriptor?: PropertyDescriptor): void => {
+    if (typeof target === 'function') {
+      throw new SemanticSchemaError(
+        `${target.name}.${propertyKey}: @Connection is not supported on static members`,
+      );
+    }
+    const member: 'method' | 'property' =
+      descriptor && typeof descriptor.value === 'function' ? 'method' : 'property';
+
+    defineFieldDeclaration(target, {
+      propertyKey,
+      kind: 'field',
+      member,
+      options: options as FieldOptions,
+      params: [],
+      connection: { node, options },
+    });
+  }) as PropertyDecorator & MethodDecorator;
 }
 
 /**
