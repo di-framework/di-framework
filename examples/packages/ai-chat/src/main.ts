@@ -1,9 +1,9 @@
-import { Container } from '@di-framework/core/decorators';
 import {
   AiService,
   configureAi,
   FakeEmbeddingModel,
   IndexedDocument,
+  resolveAiService,
   ScriptedChatModel,
   SimpleVectorStore,
   Tool,
@@ -12,8 +12,8 @@ import {
   toolCallResponse,
   UserMessageAnn,
   WithRag,
-  resolveAiService,
 } from '@di-framework/ai';
+import { Container } from '@di-framework/core/decorators';
 
 @ToolSet()
 @Container()
@@ -58,7 +58,8 @@ export async function runExample(): Promise<string> {
 
   const model = new ScriptedChatModel([
     {
-      respond: () => toolCallResponse([toolCall('support-1', 'supportPolicy', { product: 'Acme Widget' })]),
+      respond: () =>
+        toolCallResponse([toolCall('support-1', 'supportPolicy', { product: 'Acme Widget' })]),
     },
     { respond: 'The Acme Widget has a two-year warranty and weekday support.' },
   ]);

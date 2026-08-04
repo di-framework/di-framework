@@ -33,6 +33,18 @@
         "@di-framework/core": "workspace:*",
       },
     },
+    "examples/packages/ai-chat": {
+      "name": "@di-framework/ai-chat-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@di-framework/ai": "workspace:*",
+        "@di-framework/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "examples/packages/auth": {
       "name": "di-auth-example",
       "version": "0.0.0",
@@ -308,6 +320,8 @@
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
     "@di-framework/ai": ["@di-framework/ai@workspace:packages/di-framework-ai"],
+
+    "@di-framework/ai-chat-example": ["@di-framework/ai-chat-example@workspace:examples/packages/ai-chat"],
 
     "@di-framework/auth": ["@di-framework/auth@workspace:packages/di-framework-auth"],
 
