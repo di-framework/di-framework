@@ -58,6 +58,11 @@ export class EvaluatorOptimizerWorkflow {
     this.chatClient = chatClient;
   }
 
+  /** Factory alias (same as {@link evaluatorOptimizerWorkflow}). */
+  static of(chatClient: ChatClient): EvaluatorOptimizerWorkflow {
+    return new EvaluatorOptimizerWorkflow(chatClient);
+  }
+
   async loop(task: string, options?: EvaluatorOptimizerWorkflowOptions): Promise<RefinedResponse> {
     const maxIterations = Math.max(1, options?.maxIterations ?? 5);
     const chainOfThought: GenerationRecord[] = [];
@@ -123,5 +128,5 @@ export class EvaluatorOptimizerWorkflow {
 }
 
 export function evaluatorOptimizerWorkflow(chatClient: ChatClient): EvaluatorOptimizerWorkflow {
-  return new EvaluatorOptimizerWorkflow(chatClient);
+  return EvaluatorOptimizerWorkflow.of(chatClient);
 }

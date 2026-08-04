@@ -38,6 +38,11 @@ export class ChainWorkflow {
     this.systemPrompts = systemPrompts;
   }
 
+  /** Factory alias (same as {@link chainWorkflow}). */
+  static of(chatClient: ChatClient, systemPrompts: readonly string[]): ChainWorkflow {
+    return new ChainWorkflow(chatClient, systemPrompts);
+  }
+
   /** Run the chain; return only the final string. */
   async chain(userInput: string, options?: WorkflowCallOptions): Promise<string> {
     const detailed = await this.chainDetailed(userInput, options);
@@ -72,5 +77,5 @@ export function chainWorkflow(
   chatClient: ChatClient,
   systemPrompts: readonly string[],
 ): ChainWorkflow {
-  return new ChainWorkflow(chatClient, systemPrompts);
+  return ChainWorkflow.of(chatClient, systemPrompts);
 }

@@ -62,6 +62,11 @@ export class RoutingWorkflow {
     this.chatClient = chatClient;
   }
 
+  /** Factory alias (same as {@link routingWorkflow}). */
+  static of(chatClient: ChatClient): RoutingWorkflow {
+    return new RoutingWorkflow(chatClient);
+  }
+
   async route(input: string, routes: RouteMap, options?: RoutingWorkflowOptions): Promise<string> {
     const detailed = await this.routeDetailed(input, routes, options);
     return detailed.result;
@@ -148,5 +153,5 @@ async function invokeRoute(
 }
 
 export function routingWorkflow(chatClient: ChatClient): RoutingWorkflow {
-  return new RoutingWorkflow(chatClient);
+  return RoutingWorkflow.of(chatClient);
 }

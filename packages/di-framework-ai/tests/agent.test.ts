@@ -66,6 +66,13 @@ describe('ChainWorkflow', () => {
       /at least one/,
     );
   });
+
+  test('static of matches constructor factory', async () => {
+    const model = new ScriptedChatModel([{ respond: 'ok' }]);
+    const client = ChatClient.create(model);
+    const viaOf = ChainWorkflow.of(client, ['step']);
+    expect(await viaOf.chain('in')).toBe('ok');
+  });
 });
 
 class ConcurrentFakeModel {
