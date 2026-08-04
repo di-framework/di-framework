@@ -84,6 +84,11 @@ describe('Filter expressions', () => {
     ).toBe(false);
   });
 
+  test('text parser rejects excessive nesting depth', () => {
+    const deep = `${'('.repeat(70)}country == 'UK'${')'.repeat(70)}`;
+    expect(() => parseFilterExpression(deep, 16)).toThrow(/max depth/);
+  });
+
   test('text parser OR and grouping', () => {
     const exp = parseFilterExpression("(country == 'BG' || country == 'UK') AND year > 2000");
     expect(evaluateFilterExpression(exp, { country: 'BG', year: 2001 })).toBe(true);

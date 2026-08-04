@@ -97,6 +97,18 @@ describe('JSON schema validator', () => {
     const result = validateAgainstJsonSchema({ name: 'Ada', age: 'old' }, personSchema);
     expect(result.success).toBe(false);
   });
+
+  test('rejects excessive nesting depth', () => {
+    let schema: Record<string, unknown> = { type: 'number' };
+    let value: unknown = 1;
+    for (let i = 0; i < 8; i++) {
+      schema = { type: 'object', properties: { c: schema } };
+      value = { c: value };
+    }
+    const result = validateAgainstJsonSchema(value, schema, 5);
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toContain('max validation depth');
+  });
 });
 
 describe('ChatClient.entity', () => {

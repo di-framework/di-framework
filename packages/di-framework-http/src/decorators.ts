@@ -39,12 +39,22 @@ export function Controller(options: { singleton?: boolean; container?: any } = {
   };
 }
 
-/** Extract all `#/components/schemas/<Name>` references from a metadata tree. */
-function extractSchemaRefs(obj: unknown, out: Set<string>): void {
+const EXTRACT_SCHEMA_REFS_MAX_DEPTH = 64;
+
+/** Extract all `#/components/schemas/<Name>` references from a metadata tree (depth-bounded). */
+function extractSchemaRefs(
+  obj: unknown,
+  out: Set<string>,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet(),
+): void {
+  if (depth > EXTRACT_SCHEMA_REFS_MAX_DEPTH) return;
   if (typeof obj !== 'object' || obj === null) return;
+  if (seen.has(obj as object)) return;
+  seen.add(obj as object);
 
   if (Array.isArray(obj)) {
-    for (const item of obj) extractSchemaRefs(item, out);
+    for (const item of obj) extractSchemaRefs(item, out, depth + 1, seen);
     return;
   }
 
@@ -53,7 +63,7 @@ function extractSchemaRefs(obj: unknown, out: Set<string>): void {
       const match = /^#\/components\/schemas\/(.+)$/.exec(value);
       if (match?.[1]) out.add(match[1]);
     } else {
-      extractSchemaRefs(value, out);
+      extractSchemaRefs(value, out, depth + 1, seen);
     }
   }
 }

@@ -4,6 +4,9 @@
  * pulling a full draft-2020 validator dependency.
  */
 
+/** Nesting limit for value/schema walks (untrusted model output trees). */
+export const DEFAULT_JSON_SCHEMA_MAX_DEPTH = 64;
+
 export interface SchemaValidationResult {
   readonly success: boolean;
   readonly errorMessage: string;
@@ -23,6 +26,7 @@ export function schemaValidationFailed(errorMessage: string): SchemaValidationRe
 export function validateAgainstJsonSchema(
   value: unknown,
   schema: string | Record<string, unknown>,
+  maxDepth: number = DEFAULT_JSON_SCHEMA_MAX_DEPTH,
 ): SchemaValidationResult {
   let schemaObj: Record<string, unknown>;
   try {
@@ -35,7 +39,7 @@ export function validateAgainstJsonSchema(
   }
 
   const errors: string[] = [];
-  validateNode(value, schemaObj, '$', errors);
+  validateNode(value, schemaObj, '$', errors, 0, maxDepth);
   if (errors.length === 0) return schemaValidationOk();
   return schemaValidationFailed(errors.join('; '));
 }
@@ -45,7 +49,14 @@ function validateNode(
   schema: Record<string, unknown>,
   path: string,
   errors: string[],
+  depth: number,
+  maxDepth: number,
 ): void {
+  if (depth > maxDepth) {
+    errors.push(`${path}: exceeded max validation depth of ${maxDepth}`);
+    return;
+  }
+
   const type = schema.type;
   if (typeof type === 'string') {
     if (!matchesType(value, type)) {
@@ -86,7 +97,14 @@ function validateNode(
     if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
       for (const [key, propSchema] of Object.entries(properties as Record<string, unknown>)) {
         if (key in obj && propSchema && typeof propSchema === 'object') {
-          validateNode(obj[key], propSchema as Record<string, unknown>, `${path}.${key}`, errors);
+          validateNode(
+            obj[key],
+            propSchema as Record<string, unknown>,
+            `${path}.${key}`,
+            errors,
+            depth + 1,
+            maxDepth,
+          );
         }
       }
     }
@@ -97,7 +115,14 @@ function validateNode(
     const items = schema.items;
     if (items && typeof items === 'object' && !Array.isArray(items)) {
       value.forEach((item, i) => {
-        validateNode(item, items as Record<string, unknown>, `${path}[${i}]`, errors);
+        validateNode(
+          item,
+          items as Record<string, unknown>,
+          `${path}[${i}]`,
+          errors,
+          depth + 1,
+          maxDepth,
+        );
       });
     }
   }

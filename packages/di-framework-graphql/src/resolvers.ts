@@ -79,13 +79,26 @@ export function hydrate<T>(target: Ctor<T>, value: unknown, state?: RequestState
   return instance;
 }
 
-function stableStringify(value: unknown): string {
+/** Nesting limit for request-time value walks (batch keys / input trees). */
+const STABLE_STRINGIFY_MAX_DEPTH = 64;
+
+function stableStringify(value: unknown, depth = 0, seen?: WeakSet<object>): string {
+  if (depth > STABLE_STRINGIFY_MAX_DEPTH) {
+    throw new Error(`stableStringify exceeded max depth of ${STABLE_STRINGIFY_MAX_DEPTH}`);
+  }
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const visited = seen ?? new WeakSet<object>();
+  if (visited.has(value as object)) {
+    throw new Error('stableStringify detected a cyclic value');
+  }
+  visited.add(value as object);
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item, depth + 1, visited)).join(',')}]`;
+  }
   const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
     a.localeCompare(b),
   );
-  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(',')}}`;
+  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item, depth + 1, visited)}`).join(',')}}`;
 }
 
 export class ResolverFactory {
@@ -347,12 +360,18 @@ export class ResolverFactory {
   }
 
   /** Rebuild `@InputType` classes from the plain objects GraphQL hands us. */
-  private coerceInput(value: any, type: TypeNode): any {
+  private coerceInput(value: any, type: TypeNode, depth = 0): any {
+    const maxDepth = 64;
+    if (depth > maxDepth) {
+      throw new Error(`coerceInput exceeded max type/value depth of ${maxDepth}`);
+    }
     if (value === null || value === undefined) return value;
 
-    if (type.kind === 'nonNull') return this.coerceInput(value, type.of);
+    if (type.kind === 'nonNull') return this.coerceInput(value, type.of, depth + 1);
     if (type.kind === 'list') {
-      return Array.isArray(value) ? value.map((item) => this.coerceInput(item, type.of)) : value;
+      return Array.isArray(value)
+        ? value.map((item) => this.coerceInput(item, type.of, depth + 1))
+        : value;
     }
     if (type.kind !== 'input') return value;
 
@@ -365,6 +384,7 @@ export class ResolverFactory {
       instance[fieldDefinition.propertyKey] = this.coerceInput(
         value[fieldDefinition.name],
         fieldDefinition.type,
+        depth + 1,
       );
     }
     return instance;

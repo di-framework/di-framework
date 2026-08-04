@@ -34,6 +34,25 @@ describe('path helpers', () => {
     expect(entries).toContainEqual(['b', { c: 2 }]);
     expect(entries).toContainEqual(['b.c', 2]);
   });
+
+  it('deepMerge rejects excessive depth', () => {
+    let nested: Record<string, unknown> = { v: 1 };
+    for (let i = 0; i < 10; i++) nested = { child: nested };
+    expect(() => deepMerge({}, nested, 5)).toThrow(/max object depth/);
+  });
+
+  it('deepMerge rejects cyclic graphs', () => {
+    const a: Record<string, unknown> = { x: 1 };
+    const b: Record<string, unknown> = { y: a };
+    a.b = b;
+    expect(() => deepMerge({}, a)).toThrow(/cyclic/);
+  });
+
+  it('flattenEntries rejects excessive depth', () => {
+    let nested: Record<string, unknown> = { v: 1 };
+    for (let i = 0; i < 10; i++) nested = { child: nested };
+    expect(() => flattenEntries(nested, '', 5)).toThrow(/max object depth/);
+  });
 });
 
 describe('coerce', () => {

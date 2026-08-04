@@ -13,12 +13,22 @@ export type OpenAPIOptions = {
   security?: Array<Record<string, string[]>>;
 };
 
-/** Recursively extract `$ref` schema names from a value. */
-function collectRefs(obj: unknown, out: Set<string>): void {
+const COLLECT_REFS_MAX_DEPTH = 64;
+
+/** Recursively extract `$ref` schema names from a value (depth-bounded). */
+function collectRefs(
+  obj: unknown,
+  out: Set<string>,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet(),
+): void {
+  if (depth > COLLECT_REFS_MAX_DEPTH) return;
   if (typeof obj !== 'object' || obj === null) return;
+  if (seen.has(obj as object)) return;
+  seen.add(obj as object);
 
   if (Array.isArray(obj)) {
-    for (const item of obj) collectRefs(item, out);
+    for (const item of obj) collectRefs(item, out, depth + 1, seen);
     return;
   }
 
@@ -27,7 +37,7 @@ function collectRefs(obj: unknown, out: Set<string>): void {
       const match = /^#\/components\/schemas\/(.+)$/.exec(value);
       if (match?.[1]) out.add(match[1]);
     } else {
-      collectRefs(value, out);
+      collectRefs(value, out, depth + 1, seen);
     }
   }
 }

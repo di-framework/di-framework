@@ -1,5 +1,8 @@
 import type { FilterExpression, FilterOperand } from './filter.ts';
 
+/** Max nesting for filter AST evaluation (query-shaped trees). */
+export const DEFAULT_FILTER_EVAL_MAX_DEPTH = 64;
+
 /**
  * Evaluate a portable filter expression against document metadata.
  * Spring AI: {@code SimpleVectorStoreFilterExpressionEvaluator}.
@@ -7,19 +10,25 @@ import type { FilterExpression, FilterOperand } from './filter.ts';
 export function evaluateFilterExpression(
   expression: FilterExpression,
   metadata: Readonly<Record<string, unknown>>,
+  maxDepth: number = DEFAULT_FILTER_EVAL_MAX_DEPTH,
 ): boolean {
-  return evaluateExpression(expression, metadata);
+  return evaluateExpression(expression, metadata, 0, maxDepth);
 }
 
 function evaluateOperand(
   operand: FilterOperand,
   metadata: Readonly<Record<string, unknown>>,
+  depth: number,
+  maxDepth: number,
 ): boolean {
+  if (depth > maxDepth) {
+    throw new Error(`Filter evaluation exceeded max depth of ${maxDepth}`);
+  }
   if (operand.kind === 'group') {
-    return evaluateOperand(operand.content, metadata);
+    return evaluateOperand(operand.content, metadata, depth + 1, maxDepth);
   }
   if (operand.kind === 'expression') {
-    return evaluateExpression(operand, metadata);
+    return evaluateExpression(operand, metadata, depth + 1, maxDepth);
   }
   throw new Error(`Unsupported boolean operand: ${operand.kind}`);
 }
@@ -27,21 +36,25 @@ function evaluateOperand(
 function evaluateExpression(
   expression: FilterExpression,
   metadata: Readonly<Record<string, unknown>>,
+  depth: number,
+  maxDepth: number,
 ): boolean {
+  if (depth > maxDepth) {
+    throw new Error(`Filter evaluation exceeded max depth of ${maxDepth}`);
+  }
   switch (expression.type) {
     case 'AND':
       return (
-        evaluateOperand(requireLeft(expression), metadata) &&
-        evaluateOperand(requireRight(expression), metadata)
+        evaluateOperand(requireLeft(expression), metadata, depth + 1, maxDepth) &&
+        evaluateOperand(requireRight(expression), metadata, depth + 1, maxDepth)
       );
     case 'OR':
       return (
-        evaluateOperand(requireLeft(expression), metadata) ||
-        evaluateOperand(requireRight(expression), metadata)
+        evaluateOperand(requireLeft(expression), metadata, depth + 1, maxDepth) ||
+        evaluateOperand(requireRight(expression), metadata, depth + 1, maxDepth)
       );
     case 'NOT':
-      return !evaluateOperand(requireLeft(expression), metadata);
-    case 'EQ':
+      return !evaluateOperand(requireLeft(expression), metadata, depth + 1, maxDepth);    case 'EQ':
       return (
         compare(
           metadataValue(requireLeft(expression), metadata),
