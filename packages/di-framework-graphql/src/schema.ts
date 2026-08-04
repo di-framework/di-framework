@@ -14,6 +14,7 @@ import {
   execute,
   GraphQLBoolean,
   GraphQLEnumType,
+  GraphQLError,
   type GraphQLFieldConfigArgumentMap,
   type GraphQLFieldConfigMap,
   GraphQLFloat,
@@ -28,7 +29,6 @@ import {
   type GraphQLOutputType,
   GraphQLScalarType,
   GraphQLSchema,
-  GraphQLError,
   GraphQLString,
   type GraphQLType,
   Kind,
@@ -329,9 +329,14 @@ class SchemaAssembler {
 function queryCost(document: DocumentNode): { depth: number; complexity: number } {
   const fragments = new Map<string, any>();
   for (const definition of document.definitions) {
-    if (definition.kind === Kind.FRAGMENT_DEFINITION) fragments.set(definition.name.value, definition);
+    if (definition.kind === Kind.FRAGMENT_DEFINITION)
+      fragments.set(definition.name.value, definition);
   }
-  const walk = (selectionSet: any, active: Set<string>, level: number): { depth: number; complexity: number } => {
+  const walk = (
+    selectionSet: any,
+    active: Set<string>,
+    level: number,
+  ): { depth: number; complexity: number } => {
     let depth = level;
     let complexity = 0;
     for (const selection of selectionSet?.selections ?? []) {
@@ -339,7 +344,9 @@ function queryCost(document: DocumentNode): { depth: number; complexity: number 
         if (active.has(selection.name.value)) continue;
         const next = new Set(active).add(selection.name.value);
         const fragment = fragments.get(selection.name.value);
-        const nested = fragment ? walk(fragment.selectionSet, next, level) : { depth: level, complexity: 0 };
+        const nested = fragment
+          ? walk(fragment.selectionSet, next, level)
+          : { depth: level, complexity: 0 };
         depth = Math.max(depth, nested.depth);
         complexity += nested.complexity;
         continue;
@@ -361,7 +368,10 @@ function queryCost(document: DocumentNode): { depth: number; complexity: number 
   for (const definition of document.definitions) {
     if (definition.kind !== Kind.OPERATION_DEFINITION) continue;
     const current = walk(definition.selectionSet, new Set(), 0);
-    result = { depth: Math.max(result.depth, current.depth), complexity: Math.max(result.complexity, current.complexity) };
+    result = {
+      depth: Math.max(result.depth, current.depth),
+      complexity: Math.max(result.complexity, current.complexity),
+    };
   }
   return result;
 }
@@ -386,10 +396,20 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
     if (errors.length === 0) {
       const cost = queryCost(document);
       if (options.maxDepth !== undefined && cost.depth > options.maxDepth) {
-        errors.push(new GraphQLError(`Query depth ${cost.depth} exceeds the configured maximum of ${options.maxDepth}.`, { extensions: { code: 'QUERY_DEPTH_LIMIT' } }));
+        errors.push(
+          new GraphQLError(
+            `Query depth ${cost.depth} exceeds the configured maximum of ${options.maxDepth}.`,
+            { extensions: { code: 'QUERY_DEPTH_LIMIT' } },
+          ),
+        );
       }
       if (options.maxComplexity !== undefined && cost.complexity > options.maxComplexity) {
-        errors.push(new GraphQLError(`Query complexity ${cost.complexity} exceeds the configured maximum of ${options.maxComplexity}.`, { extensions: { code: 'QUERY_COMPLEXITY_LIMIT' } }));
+        errors.push(
+          new GraphQLError(
+            `Query complexity ${cost.complexity} exceeds the configured maximum of ${options.maxComplexity}.`,
+            { extensions: { code: 'QUERY_COMPLEXITY_LIMIT' } },
+          ),
+        );
       }
     }
     return { document, errors };
