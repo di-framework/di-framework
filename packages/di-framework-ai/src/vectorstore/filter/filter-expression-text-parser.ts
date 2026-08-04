@@ -18,8 +18,14 @@ import {
  * - Grouping with parentheses
  * - String (`'…'` / `"…"`), number, boolean literals
  */
-export function parseFilterExpression(text: string): FilterExpression {
-  const parser = new Parser(text);
+/** Cap nested NOT / parentheses depth for untrusted filter text. */
+export const DEFAULT_FILTER_PARSE_MAX_DEPTH = 64;
+
+export function parseFilterExpression(
+  text: string,
+  maxDepth: number = DEFAULT_FILTER_PARSE_MAX_DEPTH,
+): FilterExpression {
+  const parser = new Parser(text, maxDepth);
   const exp = parser.parseExpression();
   parser.expectEof();
   return exp;
@@ -28,9 +34,23 @@ export function parseFilterExpression(text: string): FilterExpression {
 class Parser {
   private readonly tokens: Token[];
   private i = 0;
+  private depth = 0;
+  private readonly maxDepth: number;
 
-  constructor(input: string) {
+  constructor(input: string, maxDepth: number) {
     this.tokens = tokenize(input);
+    this.maxDepth = maxDepth;
+  }
+
+  private enter(): void {
+    this.depth += 1;
+    if (this.depth > this.maxDepth) {
+      throw new Error(`Filter parse exceeded max depth of ${this.maxDepth}`);
+    }
+  }
+
+  private leave(): void {
+    this.depth -= 1;
   }
 
   parseExpression(): FilterExpression {
@@ -57,16 +77,26 @@ class Parser {
 
   private parseNot(): FilterExpression {
     if (this.matchKeyword('NOT') || this.matchSymbol('!')) {
-      return filterExpression('NOT', this.parseNot());
+      this.enter();
+      try {
+        return filterExpression('NOT', this.parseNot());
+      } finally {
+        this.leave();
+      }
     }
     return this.parsePrimary();
   }
 
   private parsePrimary(): FilterExpression {
     if (this.matchSymbol('(')) {
-      const inner = this.parseExpression();
-      this.expectSymbol(')');
-      return filterGroup(inner).content;
+      this.enter();
+      try {
+        const inner = this.parseExpression();
+        this.expectSymbol(')');
+        return filterGroup(inner).content;
+      } finally {
+        this.leave();
+      }
     }
 
     const keyTok = this.expectIdent();

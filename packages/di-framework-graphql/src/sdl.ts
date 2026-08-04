@@ -79,14 +79,26 @@ function printDescription(
   return `${indent}"""\n${body}\n${indent}"""\n`;
 }
 
-function printLiteral(value: unknown): string {
+const PRINT_LITERAL_MAX_DEPTH = 64;
+
+function printLiteral(value: unknown, depth = 0, seen?: WeakSet<object>): string {
+  if (depth > PRINT_LITERAL_MAX_DEPTH) {
+    throw new Error(`printLiteral exceeded max depth of ${PRINT_LITERAL_MAX_DEPTH}`);
+  }
   if (value === null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return `[${value.map(printLiteral).join(', ')}]`;
   if (typeof value === 'object') {
+    const visited = seen ?? new WeakSet<object>();
+    if (visited.has(value as object)) {
+      throw new Error('printLiteral detected a cyclic value');
+    }
+    visited.add(value as object);
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => printLiteral(item, depth + 1, visited)).join(', ')}]`;
+    }
     const entries = Object.entries(value as Record<string, unknown>).map(
-      ([key, item]) => `${key}: ${printLiteral(item)}`,
+      ([key, item]) => `${key}: ${printLiteral(item, depth + 1, visited)}`,
     );
     return `{${entries.join(', ')}}`;
   }
