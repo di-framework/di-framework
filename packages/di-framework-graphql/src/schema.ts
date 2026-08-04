@@ -22,6 +22,7 @@ import {
   GraphQLInputObjectType,
   type GraphQLInputType,
   GraphQLInt,
+  GraphQLInterfaceType,
   GraphQLList,
   type GraphQLNamedType,
   GraphQLNonNull,
@@ -31,6 +32,7 @@ import {
   GraphQLSchema,
   GraphQLString,
   type GraphQLType,
+  GraphQLUnionType,
   Kind,
   parse,
   subscribe,
@@ -48,6 +50,7 @@ import type {
   ResolvedField,
   TypeGraph,
   TypeNode,
+  TypeResolver,
 } from './types.ts';
 
 /* -------------------------------------------------------------------------- */
@@ -215,6 +218,31 @@ class SchemaAssembler {
       );
     }
 
+    for (const resolved of this.graph.interfaces) {
+      this.named.set(
+        resolved.name,
+        new GraphQLInterfaceType({
+          name: resolved.name,
+          description: resolved.description,
+          extensions: { diFramework: { context: resolved.context } },
+          fields: () => this.toFieldConfigMap(resolved.fields),
+          resolveType: this.createTypeResolver(resolved.implementations, resolved.resolveType),
+        }),
+      );
+    }
+
+    for (const union of this.graph.unions) {
+      this.named.set(
+        union.name,
+        new GraphQLUnionType({
+          name: union.name,
+          description: union.description,
+          types: () => union.members.map((name) => this.named.get(name) as GraphQLObjectType),
+          resolveType: this.createTypeResolver(union.members, union.resolveType),
+        }),
+      );
+    }
+
     for (const object of this.graph.objects) {
       this.named.set(
         object.name,
@@ -228,6 +256,8 @@ class SchemaAssembler {
               key: object.key,
             },
           },
+          interfaces: () =>
+            object.interfaces.map((name) => this.named.get(name) as GraphQLInterfaceType),
           fields: () => this.toFieldConfigMap(object.fields),
         }),
       );
@@ -258,6 +288,44 @@ class SchemaAssembler {
       subscription,
       types: Array.from(this.named.values()),
     });
+  }
+
+  /**
+   * Decide which concrete type backs a value for an interface or union.
+   *
+   * Explicit `resolveType` wins; otherwise the value is matched against each
+   * candidate class with `instanceof` — which is what hydration produces — and
+   * finally against a `__typename` carried by plain data.
+   */
+  private createTypeResolver(
+    candidates: string[],
+    explicit: TypeResolver | undefined,
+  ): (
+    value: any,
+    ctx: GraphQLContext,
+    info: any,
+  ) => string | undefined | Promise<string | undefined> {
+    const targets = candidates
+      .map((name) => this.graph.objects.find((object) => object.name === name))
+      .filter((object): object is (typeof this.graph.objects)[number] => object !== undefined);
+
+    const match = (value: any): string | undefined => {
+      for (const object of targets) {
+        if (value instanceof object.target) return object.name;
+      }
+      const declared = value?.__typename;
+      if (typeof declared === 'string' && candidates.includes(declared)) return declared;
+      return undefined;
+    };
+
+    return (value, ctx, info) => {
+      if (!explicit) return match(value);
+      const resolved = explicit(value, ctx, info);
+      if (resolved && typeof (resolved as Promise<string>).then === 'function') {
+        return (resolved as Promise<string | undefined>).then((name) => name ?? match(value));
+      }
+      return (resolved as string | undefined) ?? match(value);
+    };
   }
 
   private toFieldConfigMap(

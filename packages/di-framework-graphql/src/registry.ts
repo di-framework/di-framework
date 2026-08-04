@@ -12,13 +12,18 @@ import type {
   EnumObject,
   ExtensionDeclaration,
   InputTypeDeclaration,
+  InterfaceTypeDeclaration,
   SemanticTypeDeclaration,
+  UnionDeclaration,
+  UnionRef,
 } from './types.ts';
 
 export class SemanticRegistry {
   private types = new Map<Ctor, SemanticTypeDeclaration>();
   private inputs = new Map<Ctor, InputTypeDeclaration>();
   private enums = new Map<EnumObject, EnumDeclaration>();
+  private interfaces = new Map<Ctor, InterfaceTypeDeclaration>();
+  private unions = new Map<UnionRef, UnionDeclaration>();
   private extensions: ExtensionDeclaration[] = [];
 
   registerType(declaration: SemanticTypeDeclaration): void {
@@ -35,6 +40,30 @@ export class SemanticRegistry {
 
   registerExtension(declaration: ExtensionDeclaration): void {
     this.extensions.push(declaration);
+  }
+
+  registerInterface(declaration: InterfaceTypeDeclaration): void {
+    this.interfaces.set(declaration.target, declaration);
+  }
+
+  registerUnion(declaration: UnionDeclaration): void {
+    this.unions.set(declaration.ref, declaration);
+  }
+
+  getInterface(target: Ctor): InterfaceTypeDeclaration | undefined {
+    return this.interfaces.get(target);
+  }
+
+  getUnion(ref: UnionRef): UnionDeclaration | undefined {
+    return this.unions.get(ref);
+  }
+
+  getInterfaces(): InterfaceTypeDeclaration[] {
+    return Array.from(this.interfaces.values());
+  }
+
+  getUnions(): UnionDeclaration[] {
+    return Array.from(this.unions.values());
   }
 
   getType(target: Ctor): SemanticTypeDeclaration | undefined {
@@ -83,6 +112,8 @@ export class SemanticRegistry {
     for (const [key, value] of this.types) clone.types.set(key, value);
     for (const [key, value] of this.inputs) clone.inputs.set(key, value);
     for (const [key, value] of this.enums) clone.enums.set(key, value);
+    for (const [key, value] of this.interfaces) clone.interfaces.set(key, value);
+    for (const [key, value] of this.unions) clone.unions.set(key, value);
     clone.extensions = [...this.extensions];
     return clone;
   }
@@ -91,6 +122,8 @@ export class SemanticRegistry {
     this.types.clear();
     this.inputs.clear();
     this.enums.clear();
+    this.interfaces.clear();
+    this.unions.clear();
     this.extensions = [];
   }
 }

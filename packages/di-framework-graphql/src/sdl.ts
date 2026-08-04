@@ -10,6 +10,7 @@ import { CUSTOM_SCALARS } from './scalars.ts';
 import type {
   ResolvedArg,
   ResolvedField,
+  ResolvedInterfaceType,
   ResolvedObjectType,
   TypeGraph,
   TypeNode,
@@ -102,9 +103,21 @@ function printObject(object: ResolvedObjectType, options: PrintOptions): string 
       directives.push(`@key(fields: ${JSON.stringify(object.key)})`);
     if (object.context) directives.push(`@context(name: ${JSON.stringify(object.context)})`);
   }
+  const implemented =
+    object.interfaces.length > 0 ? ` implements ${object.interfaces.join(' & ')}` : '';
   const suffix = directives.length > 0 ? ` ${directives.join(' ')}` : '';
   const fields = object.fields.map((field) => printField(field, options)).join('\n');
-  return `${description}type ${object.name}${suffix} {\n${fields}\n}`;
+  return `${description}type ${object.name}${implemented}${suffix} {\n${fields}\n}`;
+}
+
+function printInterface(resolved: ResolvedInterfaceType, options: PrintOptions): string {
+  const description = printDescription(resolved.description, '', options);
+  const context =
+    options.directives && resolved.context
+      ? ` @context(name: ${JSON.stringify(resolved.context)})`
+      : '';
+  const fields = resolved.fields.map((field) => printField(field, options)).join('\n');
+  return `${description}interface ${resolved.name}${context} {\n${fields}\n}`;
 }
 
 /** Print the semantic schema as SDL. */
@@ -137,6 +150,15 @@ export function printSDL(graph: TypeGraph, options: PrintOptions = {}): string {
       )
       .join('\n');
     blocks.push(`${description}input ${input.name} {\n${fields}\n}`);
+  }
+
+  for (const resolved of graph.interfaces) {
+    blocks.push(printInterface(resolved, options));
+  }
+
+  for (const union of graph.unions) {
+    const description = printDescription(union.description, '', options);
+    blocks.push(`${description}union ${union.name} = ${union.members.join(' | ')}`);
   }
 
   for (const object of graph.objects) {

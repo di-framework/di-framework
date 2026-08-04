@@ -19,4 +19,5 @@ export { getRegistry, SemanticRegistry, setRegistry } from './src/registry.ts';
 export * from './src/scalars.ts';
 export { type PrintOptions, printSDL, printTypeNode } from './src/sdl.ts';
 export { buildTypeGraph, namedTypeNode } from './src/type-graph.ts';
+export { UnionRef } from './src/types.ts';
 export type * from './src/types.ts';

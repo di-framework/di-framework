@@ -12,29 +12,33 @@ import { SemanticBoundaryError, SemanticSchemaError } from './errors.ts';
 import {
   collectFieldDeclarations,
   getBoundedContext,
+  getImplements,
   getLookup,
   getParamNames,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
 import { CUSTOM_SCALARS, ScalarRef, scalarNameForConstructor } from './scalars.ts';
-import type {
-  ArgOptions,
-  BuildOptions,
-  Ctor,
-  EnumObject,
-  FieldDeclaration,
-  ParamDeclaration,
-  ResolvedArg,
-  ResolvedEnumType,
-  ResolvedField,
-  ResolvedInputType,
-  ResolvedObjectType,
-  ResolvedRootType,
-  TypeGraph,
-  TypeInput,
-  TypeNode,
-  TypeRef,
-  TypeThunk,
+import {
+  type ArgOptions,
+  type BuildOptions,
+  type Ctor,
+  type EnumObject,
+  type FieldDeclaration,
+  type ParamDeclaration,
+  type ResolvedArg,
+  type ResolvedEnumType,
+  type ResolvedField,
+  type ResolvedInputType,
+  type ResolvedInterfaceType,
+  type ResolvedObjectType,
+  type ResolvedRootType,
+  type ResolvedUnionType,
+  type TypeGraph,
+  type TypeInput,
+  type TypeNode,
+  type TypeRef,
+  type TypeThunk,
+  UnionRef,
 } from './types.ts';
 
 const CONTEXT_PARAM_NAMES = new Set(['ctx', 'context', '_ctx', '_context']);
@@ -67,6 +71,9 @@ class GraphBuilder {
   private readonly objectsByName = new Map<string, ResolvedObjectType>();
   private readonly inputs = new Map<Ctor, ResolvedInputType>();
   private readonly enums = new Map<EnumObject, ResolvedEnumType>();
+  /** Interfaces included in this build, by class. */
+  private readonly interfaces = new Map<Ctor, ResolvedInterfaceType>();
+  private readonly unions = new Map<UnionRef, ResolvedUnionType>();
   private readonly usedScalars = new Set<string>();
   /** Context that declared each field, keyed by `TypeName.fieldName`. */
   private readonly fieldContexts = new Map<string, string | undefined>();
@@ -95,6 +102,7 @@ class GraphBuilder {
         key: declaration.options.key,
         portal: false,
         fields: [],
+        interfaces: [],
       };
       const existing = this.objectsByName.get(shell.name);
       if (existing && existing.target !== shell.target) {
@@ -106,15 +114,36 @@ class GraphBuilder {
       this.objectsByName.set(shell.name, shell);
     }
 
-    // Pass 2: own fields.
+    // Pass 2: interface shells, so a type can implement an interface that
+    // references it back.
+    for (const declaration of this.registry.getInterfaces()) {
+      this.interfaces.set(declaration.target, {
+        name: declaration.name,
+        description: declaration.options.description,
+        target: declaration.target,
+        context: getBoundedContext(declaration.target),
+        fields: [],
+        implementations: [],
+        resolveType: declaration.options.resolveType,
+      });
+    }
+
+    // Pass 3: own fields.
     for (const object of this.objects.values()) {
       object.fields = this.resolveOwnFields(object);
     }
+    for (const [target, resolved] of this.interfaces) {
+      resolved.fields = this.resolveInterfaceFields(target, resolved);
+    }
 
-    // Pass 3: cross-context extensions of boundary types.
+    // Pass 4: wire implementations to their interfaces and inherit any fields
+    // the concrete type did not redeclare.
+    this.applyInterfaces();
+
+    // Pass 5: cross-context extensions of boundary types.
     this.applyExtensions();
 
-    // Pass 4: roots.
+    // Pass 6: roots.
     const rootQuery: ResolvedField[] = [];
     const rootMutation: ResolvedField[] = [];
     const rootSubscription: ResolvedField[] = [];
@@ -157,6 +186,8 @@ class GraphBuilder {
           ? { name: 'Subscription', fields: rootSubscription }
           : undefined,
       objects: Array.from(this.objects.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      interfaces: [],
+      unions: [],
       inputs: [],
       enums: [],
       scalars: [],
@@ -170,6 +201,15 @@ class GraphBuilder {
     graph.inputs = reachable.inputs;
     graph.enums = reachable.enums;
     graph.scalars = Array.from(this.usedScalars).sort();
+
+    // An interface is emitted when something implements it or a field returns
+    // it; an orphan interface would make the schema invalid.
+    graph.interfaces = Array.from(this.interfaces.values())
+      .filter(
+        (resolved) => resolved.implementations.length > 0 || reachable.abstracts.has(resolved.name),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    graph.unions = Array.from(this.unions.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     return graph;
   }
@@ -235,6 +275,117 @@ class GraphBuilder {
 
     assertUniqueFieldNames(object.name, fields);
     return fields;
+  }
+
+  private resolveInterfaceFields(target: Ctor, resolved: ResolvedInterfaceType): ResolvedField[] {
+    const fields = collectFieldDeclarations(target).map((declaration) => {
+      if (declaration.kind !== 'field') {
+        throw new SemanticSchemaError(
+          `${resolved.name}.${declaration.propertyKey}: interfaces may only declare @Field members.`,
+        );
+      }
+      return this.resolveField(target, resolved.name, declaration, 'parent', resolved.context);
+    });
+
+    if (fields.length === 0) {
+      throw new SemanticSchemaError(
+        `${resolved.name}: interfaces need at least one @Field. GraphQL has no empty interfaces.`,
+      );
+    }
+
+    assertUniqueFieldNames(resolved.name, fields);
+    return fields;
+  }
+
+  /**
+   * Attach each object to the interfaces it declares, copying down any field it
+   * did not redeclare so the concrete type structurally satisfies the contract.
+   */
+  private applyInterfaces(): void {
+    for (const object of this.objects.values()) {
+      const thunks = [
+        ...getImplements(object.target),
+        ...normalizeThunks(this.registry.getType(object.target)?.options.implements),
+      ];
+      if (thunks.length === 0) continue;
+
+      const names = new Set<string>();
+      for (const thunk of thunks) {
+        const interfaceTarget = thunk() as Ctor;
+        const resolved = this.interfaces.get(interfaceTarget);
+        if (!resolved) {
+          throw new SemanticSchemaError(
+            `${object.name} implements '${interfaceTarget?.name}', which is not an @InterfaceType.`,
+          );
+        }
+        if (names.has(resolved.name)) continue;
+        names.add(resolved.name);
+
+        for (const field of resolved.fields) {
+          const own = object.fields.find((existing) => existing.name === field.name);
+          if (!own) {
+            // Re-target the inherited field at the concrete class so an override
+            // on the implementation wins over the interface's own member.
+            object.fields.push({
+              ...field,
+              context: object.context,
+              source: { ...field.source, target: object.target },
+            });
+            continue;
+          }
+          if (printableType(own.type) !== printableType(field.type)) {
+            throw new SemanticBoundaryError(
+              `${object.name}.${own.name} is '${printableType(own.type)}' but interface '${resolved.name}' declares '${printableType(field.type)}'.`,
+            );
+          }
+        }
+
+        resolved.implementations.push(object.name);
+      }
+
+      object.interfaces = Array.from(names).sort();
+      assertUniqueFieldNames(object.name, object.fields);
+    }
+
+    for (const resolved of this.interfaces.values()) {
+      resolved.implementations = Array.from(new Set(resolved.implementations)).sort();
+    }
+  }
+
+  private ensureUnion(ref: UnionRef, path: string): ResolvedUnionType {
+    const existing = this.unions.get(ref);
+    if (existing) return existing;
+
+    const declaration = this.registry.getUnion(ref);
+    if (!declaration) {
+      throw new SemanticSchemaError(
+        `${path}: union '${ref.unionName}' was never registered with registerUnion().`,
+      );
+    }
+
+    const resolved: ResolvedUnionType = {
+      name: declaration.name,
+      description: declaration.options.description,
+      members: [],
+      resolveType: declaration.options.resolveType,
+    };
+    this.unions.set(ref, resolved);
+
+    const members = ref.members();
+    if (members.length === 0) {
+      throw new SemanticSchemaError(`${path}: union '${ref.unionName}' has no members.`);
+    }
+    for (const member of members) {
+      const object = this.objects.get(member);
+      if (!object) {
+        throw new SemanticSchemaError(
+          `${path}: union '${ref.unionName}' includes '${member?.name}', which is not a @SemanticType in this schema.`,
+        );
+      }
+      resolved.members.push(object.name);
+    }
+    resolved.members.sort();
+    return resolved;
   }
 
   private exposedMembers(object: ResolvedObjectType): Record<string, any> {
@@ -505,6 +656,11 @@ class GraphBuilder {
       return { kind: 'scalar', name: input.scalarName };
     }
 
+    if (input instanceof UnionRef) {
+      const union = this.ensureUnion(input, path);
+      return { kind: 'union', name: union.name, target: input };
+    }
+
     if (typeof input === 'function') {
       const scalarName = scalarNameForConstructor(input);
       if (scalarName) {
@@ -514,6 +670,11 @@ class GraphBuilder {
 
       const objectType = this.objects.get(input as Ctor);
       if (objectType) return { kind: 'object', name: objectType.name, target: input as Ctor };
+
+      const interfaceType = this.interfaces.get(input as Ctor);
+      if (interfaceType) {
+        return { kind: 'interface', name: interfaceType.name, target: input as Ctor };
+      }
 
       const inputDeclaration = this.registry.getInput(input as Ctor);
       if (inputDeclaration) {
@@ -643,20 +804,38 @@ class GraphBuilder {
   private validateBoundaries(graph: TypeGraph): void {
     if (!this.enforceBoundaries) return;
 
+    const checkObject = (ownerName: string, fieldName: string, from: string | undefined) => {
+      return (referenced: ResolvedObjectType | undefined) => {
+        if (!referenced) return;
+        const to = referenced.context;
+        if (!from || !to || from === to) return;
+        if (referenced.boundary) return;
+
+        throw new SemanticBoundaryError(
+          `${ownerName}.${fieldName} (context '${from}') references '${referenced.name}', which is owned by context '${to}' and is not a boundary type. Declare it with @SemanticType({ boundary: true, key: '...' }) or keep the reference inside '${to}'.`,
+        );
+      };
+    };
+
     const check = (ownerName: string, field: ResolvedField) => {
       const named = namedTypeNode(field.type);
-      if (named.kind !== 'object') return;
-      const referenced = this.objects.get(named.target as Ctor);
-      if (!referenced) return;
+      const verify = checkObject(ownerName, field.name, field.context);
 
-      const from = field.context;
-      const to = referenced.context;
-      if (!from || !to || from === to) return;
-      if (referenced.boundary) return;
-
-      throw new SemanticBoundaryError(
-        `${ownerName}.${field.name} (context '${from}') references '${referenced.name}', which is owned by context '${to}' and is not a boundary type. Declare it with @SemanticType({ boundary: true, key: '...' }) or keep the reference inside '${to}'.`,
-      );
+      if (named.kind === 'object') {
+        verify(this.objects.get(named.target as Ctor));
+        return;
+      }
+      // A union or interface is only as closed as its widest member: crossing a
+      // context edge through one has to obey the same rule.
+      if (named.kind === 'union') {
+        const union = this.unions.get(named.target as UnionRef);
+        for (const member of union?.members ?? []) verify(this.objectsByName.get(member));
+        return;
+      }
+      if (named.kind === 'interface') {
+        const resolved = this.interfaces.get(named.target as Ctor);
+        for (const name of resolved?.implementations ?? []) verify(this.objectsByName.get(name));
+      }
     };
 
     for (const object of this.objects.values()) {
@@ -688,12 +867,17 @@ class GraphBuilder {
   private collectReachable(graph: TypeGraph): {
     inputs: ResolvedInputType[];
     enums: ResolvedEnumType[];
+    abstracts: Set<string>;
   } {
     const inputs = new Map<string, ResolvedInputType>();
     const enums = new Map<string, ResolvedEnumType>();
+    const abstracts = new Set<string>();
 
     const visitNode = (node: TypeNode) => {
       const named = namedTypeNode(node);
+      if (named.kind === 'interface' || named.kind === 'union') {
+        abstracts.add(named.name);
+      }
       if (named.kind === 'input') {
         const resolved = this.inputs.get(named.target as Ctor);
         if (resolved && !inputs.has(resolved.name)) {
@@ -714,6 +898,7 @@ class GraphBuilder {
     };
 
     for (const object of graph.objects) object.fields.forEach(visitField);
+    for (const resolved of this.interfaces.values()) resolved.fields.forEach(visitField);
     for (const root of [graph.query, graph.mutation, graph.subscription]) {
       if (root) root.fields.forEach(visitField);
     }
@@ -721,6 +906,7 @@ class GraphBuilder {
     return {
       inputs: Array.from(inputs.values()).sort((a, b) => a.name.localeCompare(b.name)),
       enums: Array.from(enums.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      abstracts,
     };
   }
 }
@@ -751,12 +937,29 @@ function isArgOptions(value: unknown): value is ArgOptions {
   return isFieldOptions(value);
 }
 
+/** Render a resolved type expression the way SDL would, for error messages. */
+function printableType(node: TypeNode): string {
+  if (node.kind === 'nonNull') return `${printableType(node.of)}!`;
+  if (node.kind === 'list') return `[${printableType(node.of)}]`;
+  return node.name;
+}
+
+function normalizeThunks(value: TypeThunk | readonly TypeThunk[] | undefined): TypeThunk[] {
+  if (!value) return [];
+  return Array.isArray(value) ? [...value] : [value as TypeThunk];
+}
+
 /** Call a type thunk, leaving classes, scalars and lists untouched. */
 function unwrapThunk(ref: TypeRef, registry: ReturnType<typeof getRegistry>): TypeInput {
   if (typeof ref !== 'function') return ref as TypeInput;
   if (ref instanceof ScalarRef) return ref;
   if (scalarNameForConstructor(ref)) return ref as TypeInput;
-  if (registry.getType(ref as Ctor) || registry.getInput(ref as Ctor)) return ref as TypeInput;
+  if (
+    registry.getType(ref as Ctor) ||
+    registry.getInput(ref as Ctor) ||
+    registry.getInterface(ref as Ctor)
+  )
+    return ref as TypeInput;
   if (/^class[\s{]/.test(Function.prototype.toString.call(ref))) return ref as TypeInput;
   return (ref as TypeThunk)();
 }

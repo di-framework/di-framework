@@ -6,12 +6,13 @@
  */
 
 import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
-import type { Ctor, FieldDeclaration, ParamDeclaration } from './types.ts';
+import type { Ctor, FieldDeclaration, ParamDeclaration, TypeThunk } from './types.ts';
 
 export const FIELDS_METADATA_KEY = 'graphql:fields';
 export const PARAMS_METADATA_KEY = 'graphql:params';
 export const LOOKUP_METADATA_KEY = 'graphql:lookup';
 export const CONTEXT_METADATA_KEY = 'graphql:bounded-context';
+export const IMPLEMENTS_METADATA_KEY = 'graphql:implements';
 
 type FieldMap = Record<string, FieldDeclaration>;
 type ParamMap = Record<string, Record<number, ParamDeclaration>>;
@@ -83,6 +84,27 @@ export function getLookup(target: Ctor): string | undefined {
     current = Object.getPrototypeOf(current);
   }
   return undefined;
+}
+
+/** Record an interface implemented by a class (`@Implements`). */
+export function defineImplements(target: Ctor, interfaces: readonly TypeThunk[]): void {
+  const own: TypeThunk[] = getOwnMetadata(IMPLEMENTS_METADATA_KEY, target) || [];
+  defineMetadata(IMPLEMENTS_METADATA_KEY, [...own, ...interfaces], target);
+}
+
+/**
+ * Every interface a class implements, including those inherited from base
+ * classes — subclassing a type that implements `Node` implements it too.
+ */
+export function getImplements(target: Ctor): TypeThunk[] {
+  const collected: TypeThunk[] = [];
+  let current: any = target;
+  while (current && current !== Function.prototype) {
+    const own: TypeThunk[] | undefined = getOwnMetadata(IMPLEMENTS_METADATA_KEY, current);
+    if (own) collected.push(...own);
+    current = Object.getPrototypeOf(current);
+  }
+  return collected;
 }
 
 /** Record the bounded context a class belongs to (`@BoundedContext`). */

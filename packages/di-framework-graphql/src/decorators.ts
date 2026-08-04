@@ -12,26 +12,31 @@ import { SemanticSchemaError } from './errors.ts';
 import {
   defineBoundedContext,
   defineFieldDeclaration,
+  defineImplements,
   defineLookup,
   defineParamDeclaration,
 } from './metadata.ts';
 import { getRegistry } from './registry.ts';
 import { ScalarRef, scalarNameForConstructor } from './scalars.ts';
-import type {
-  ActionOptions,
-  ArgOptions,
-  Ctor,
-  EnumObject,
-  EnumOptions,
-  ExtendsOptions,
-  FieldOptions,
-  InputTypeOptions,
-  PortalOptions,
-  SemanticTypeOptions,
-  SubscriptionOptions,
-  TypeInput,
-  TypeRef,
-  TypeThunk,
+import {
+  type AbstractCtor,
+  type ActionOptions,
+  type ArgOptions,
+  type Ctor,
+  type EnumObject,
+  type EnumOptions,
+  type ExtendsOptions,
+  type FieldOptions,
+  type InputTypeOptions,
+  type InterfaceTypeOptions,
+  type PortalOptions,
+  type SemanticTypeOptions,
+  type SubscriptionOptions,
+  type TypeInput,
+  type TypeRef,
+  type TypeThunk,
+  type UnionOptions,
+  UnionRef,
 } from './types.ts';
 
 /* -------------------------------------------------------------------------- */
@@ -40,6 +45,7 @@ import type {
 
 function isTypeReference(value: unknown): boolean {
   if (value instanceof ScalarRef) return true;
+  if (value instanceof UnionRef) return true;
   if (Array.isArray(value)) return true;
   if (typeof value !== 'function') return false;
   // A thunk (`() => User`) is a type reference too; so is a class passed directly.
@@ -118,6 +124,72 @@ export function Portal(options: PortalOptions & { singleton?: boolean } = {}) {
     ContainerDecorator({ singleton })(target as any);
     return target;
   };
+}
+
+/**
+ * Declares a class as a GraphQL interface — a shared contract that concrete
+ * `@SemanticType`s implement.
+ *
+ * The class itself is never instantiated by the schema; it exists so the shared
+ * fields have somewhere to live and so implementations can inherit them by
+ * extending it.
+ *
+ * @example
+ * ```ts
+ * @InterfaceType({ description: 'Anything addressable by a global id.' })
+ * abstract class Node {
+ *   @Field(() => ID) id!: string;
+ * }
+ *
+ * @Implements(() => Node)
+ * @SemanticType()
+ * class User extends Node {}
+ * ```
+ */
+export function InterfaceType(options: InterfaceTypeOptions = {}) {
+  return <T extends AbstractCtor>(target: T): T => {
+    getRegistry().registerInterface({
+      target: target as unknown as Ctor,
+      name: options.name ?? (target as unknown as Ctor).name,
+      options,
+    });
+    return target;
+  };
+}
+
+/**
+ * Declares that a semantic type implements one or more interfaces.
+ *
+ * Interface fields the class does not redeclare are inherited, so a type only
+ * has to write down what it adds.
+ */
+export function Implements(...interfaces: TypeThunk[]) {
+  return <T extends Ctor>(target: T): T => {
+    defineImplements(target, interfaces);
+    return target;
+  };
+}
+
+/**
+ * Registers a union over concrete `@SemanticType`s and returns a reference
+ * usable anywhere a type is expected.
+ *
+ * @example
+ * ```ts
+ * const SearchResult = registerUnion('SearchResult', () => [User, Order]);
+ *
+ * @Field(() => [SearchResult])
+ * search(@Arg('q', () => String) q: string) { ... }
+ * ```
+ */
+export function registerUnion(
+  name: string,
+  members: () => readonly Ctor[],
+  options: UnionOptions = {},
+): UnionRef {
+  const ref = new UnionRef(name, members, options);
+  getRegistry().registerUnion({ ref, name, options });
+  return ref;
 }
 
 /** Declares a GraphQL input object. Its `@Field`s become input fields. */

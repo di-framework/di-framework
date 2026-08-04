@@ -10,15 +10,35 @@ import type { ScalarRef } from './scalars.ts';
 
 export type Ctor<T = any> = new (...args: any[]) => T;
 
+/**
+ * A class that may be `abstract` — interfaces are declared as abstract classes,
+ * and those cannot be assigned to {@link Ctor}.
+ */
+export type AbstractCtor<T = any> = abstract new (...args: any[]) => T;
+
 /** An enum declared with `registerEnum()`. */
 export type EnumObject = Record<string, string | number>;
 
 /**
+ * A named union over concrete `@SemanticType`s.
+ *
+ * Unions have no class of their own — `registerUnion()` returns one of these and
+ * it is used directly as a type reference: `@Field(() => SearchResult)`.
+ */
+export class UnionRef {
+  constructor(
+    readonly unionName: string,
+    readonly members: () => readonly Ctor[],
+    readonly options: UnionOptions = {},
+  ) {}
+}
+
+/**
  * Anything usable as a type reference in a decorator:
  * a scalar marker (`ID`, `Int`), a decorated class, a registered enum object,
- * or a single-element array denoting a list (`[Order]`).
+ * a union marker, or a single-element array denoting a list (`[Order]`).
  */
-export type TypeInput = ScalarRef | Ctor | EnumObject | readonly TypeInput[];
+export type TypeInput = ScalarRef | UnionRef | AbstractCtor | EnumObject | readonly TypeInput[];
 
 /** Lazy type reference — required for types that are declared later in the file. */
 export type TypeThunk = () => TypeInput;
@@ -29,6 +49,8 @@ export type TypeRef = TypeInput | TypeThunk;
 export type TypeNode =
   | { kind: 'scalar'; name: string }
   | { kind: 'object'; name: string; target: Ctor }
+  | { kind: 'interface'; name: string; target: Ctor }
+  | { kind: 'union'; name: string; target: UnionRef }
   | { kind: 'input'; name: string; target: Ctor }
   | { kind: 'enum'; name: string; target: EnumObject }
   | { kind: 'list'; of: TypeNode }
@@ -47,6 +69,11 @@ export interface SemanticTypeOptions {
   /** Schema name. Defaults to the class name. */
   name?: string;
   description?: string;
+  /**
+   * Interfaces this type implements. Usually declared with `@Implements`;
+   * listing them here is equivalent.
+   */
+  implements?: TypeThunk | readonly TypeThunk[];
   /**
    * Marks the type as a *boundary type*: other bounded contexts are allowed to
    * reference it and to extend it with `@Extends`. Requires `key`.
@@ -71,6 +98,31 @@ export interface InputTypeOptions {
   name?: string;
   description?: string;
 }
+
+export interface InterfaceTypeOptions {
+  /** Schema name. Defaults to the class name. */
+  name?: string;
+  description?: string;
+  /**
+   * Decide the concrete type for a value. Defaults to matching the value
+   * against each implementing class with `instanceof`, then falling back to a
+   * `__typename` property.
+   */
+  resolveType?: TypeResolver;
+}
+
+export interface UnionOptions {
+  description?: string;
+  /** Same fallback chain as {@link InterfaceTypeOptions.resolveType}. */
+  resolveType?: TypeResolver;
+}
+
+/** Returns the schema name of the concrete type backing a value. */
+export type TypeResolver = (
+  value: any,
+  ctx: GraphQLContext,
+  info: any,
+) => string | undefined | Promise<string | undefined>;
 
 export interface EnumOptions {
   name: string;
@@ -200,6 +252,18 @@ export interface EnumDeclaration {
   description?: string;
 }
 
+export interface InterfaceTypeDeclaration {
+  target: Ctor;
+  name: string;
+  options: InterfaceTypeOptions;
+}
+
+export interface UnionDeclaration {
+  ref: UnionRef;
+  name: string;
+  options: UnionOptions;
+}
+
 export interface ExtensionDeclaration {
   target: Ctor;
   /** Thunk to the boundary type being extended. */
@@ -266,6 +330,27 @@ export interface ResolvedObjectType {
   key?: string;
   portal: boolean;
   fields: ResolvedField[];
+  /** Names of the interfaces this type implements. */
+  interfaces: string[];
+}
+
+export interface ResolvedInterfaceType {
+  name: string;
+  description?: string;
+  target: Ctor;
+  context?: string;
+  fields: ResolvedField[];
+  /** Schema names of the object types implementing this interface. */
+  implementations: string[];
+  resolveType?: TypeResolver;
+}
+
+export interface ResolvedUnionType {
+  name: string;
+  description?: string;
+  /** Schema names of the union's members. */
+  members: string[];
+  resolveType?: TypeResolver;
 }
 
 export interface ResolvedInputField {
@@ -299,6 +384,8 @@ export interface TypeGraph {
   mutation?: ResolvedRootType;
   subscription?: ResolvedRootType;
   objects: ResolvedObjectType[];
+  interfaces: ResolvedInterfaceType[];
+  unions: ResolvedUnionType[];
   inputs: ResolvedInputType[];
   enums: ResolvedEnumType[];
   /** Custom scalars actually referenced by the schema. */
