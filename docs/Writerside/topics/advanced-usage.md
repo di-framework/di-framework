@@ -204,7 +204,7 @@ export class NotificationService {
 }
 ```
 
-To publish those same events to Kafka or NATS (or consume remote topics back onto the bus), use [`@di-framework/events`](events.md).
+To publish those same events to Kafka or NATS (or consume remote topics back onto the bus), use [`@di-framework/events`](events.md). For WebSocket, TCP, or UDP peers (including a secure channel and Cloudflare Workers / Durable Objects), use [`@di-framework/socket`](socket.md).
 
 ## Telemetry and Monitoring
 

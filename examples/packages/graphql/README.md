@@ -53,7 +53,7 @@ trade-off is that the playground — and only the playground — needs a network
 | Authorization as domain | `@Requires({ roles: ['librarian'] })` on `addBook` | Declared on the action it protects, next to the invariant — not a guard clause or transport middleware. `schema.ts` wires the readers that find the member and roles on `LibraryContext`; denials surface as `FORBIDDEN` / `UNAUTHENTICATED` with no internal detail. |
 | Resolve info | `@Info()` in `CatalogPortal.books` | Feeds a `QueryStats` component. |
 | Subscriptions | `@Publisher('loan.checkedOut')` → `@Subscription(...)` | The service publishes on the container and knows nothing about GraphQL. `filter` sees the raw publisher envelope. |
-| Subscriptions over the wire | `sockets` in `server.ts` | ~60 lines of `graphql-transport-ws` so GraphiQL can stream them; the round trip is asserted in `index.test.ts`. |
+| Subscriptions over the wire | `server.ts` + `@di-framework/socket/graphql` | `createGraphqlTransportWs` drives `graphql-transport-ws` for GraphiQL; the round trip is asserted in `index.test.ts`. |
 | Contexts as a deployment seam | `publicCatalog` in `schema.ts` | Built from `['Catalog', 'Reviews']`: no `Loan`, and no `onLoan` on `Book`. |
 | SDL as an artifact | `emit-sdl.ts` | `printSDL` comes from `@di-framework/graphql/core`, which never imports `graphql`. |
 | Owning your registry | `domain/registry.ts` | Decorators write to whichever registry is current at import time; this app uses its own, so nothing else in the process can leak into its schema. |

@@ -16,6 +16,7 @@
     },
     "examples": {
       "name": "examples",
+      "version": "0.0.0",
       "devDependencies": {
         "@di-framework/core": "workspace:*",
         "@di-framework/graphql": "workspace:*",
@@ -107,6 +108,7 @@
       "devDependencies": {
         "@di-framework/core": "workspace:*",
         "@di-framework/graphql": "workspace:*",
+        "@di-framework/socket": "workspace:*",
         "graphql": "^17.0.2",
       },
     },
@@ -283,6 +285,22 @@
         "typescript": "^5",
       },
     },
+    "packages/di-framework-socket": {
+      "name": "@di-framework/socket",
+      "version": "0.1.0",
+      "dependencies": {
+        "ws": "^8.18.3",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/ws": "^8.18.1",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/core": "workspace:^",
+        "typescript": "^5",
+      },
+    },
   },
   "packages": {
     "@biomejs/biome": ["@biomejs/biome@2.5.6", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.6", "@biomejs/cli-darwin-x64": "2.5.6", "@biomejs/cli-linux-arm64": "2.5.6", "@biomejs/cli-linux-arm64-musl": "2.5.6", "@biomejs/cli-linux-x64": "2.5.6", "@biomejs/cli-linux-x64-musl": "2.5.6", "@biomejs/cli-win32-arm64": "2.5.6", "@biomejs/cli-win32-x64": "2.5.6" }, "bin": { "biome": "bin/biome" } }, "sha512-lxVNjv7UF6KfhMJfL9gaUHbWdJdHbsAj6OSmwSYNdhRuG67NxNQ4Xdvh3TUxsSK9sBzJBQhEJj3AopmmNJ5pSA=="],
@@ -342,6 +360,8 @@
     "@di-framework/http": ["@di-framework/http@workspace:packages/di-framework-http"],
 
     "@di-framework/repo": ["@di-framework/repo@workspace:packages/di-framework-repo"],
+
+    "@di-framework/socket": ["@di-framework/socket@workspace:packages/di-framework-socket"],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
