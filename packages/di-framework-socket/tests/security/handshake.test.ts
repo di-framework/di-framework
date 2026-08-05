@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   AeadChannel,
+  base64UrlDecode,
+  base64UrlEncode,
   HandshakeError,
   PROTOCOL_VERSION,
   runHandshakePair,
@@ -70,10 +72,17 @@ describe('Secure handshake', () => {
     const confReq = await provider.handleResponse(response);
     const conf = await consumer.handleConfirmationRequest(confReq);
 
+    // Flip a payload byte (not a base64 character). Mutating the last base64
+    // char can produce non-canonical trailing bits and fail at decode instead
+    // of the MAC check — that flake is what broke Linux CI.
+    const mac = base64UrlDecode(conf.confirmationMac);
+    mac[0] = (mac[0]! ^ 0xff) & 0xff;
+    const tamperedMac = base64UrlEncode(mac);
+
     await expect(
       provider.handleConfirmation({
         ...conf,
-        confirmationMac: conf.confirmationMac.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')),
+        confirmationMac: tamperedMac,
       }),
     ).rejects.toMatchObject({ code: 'confirmation_failed' });
 
