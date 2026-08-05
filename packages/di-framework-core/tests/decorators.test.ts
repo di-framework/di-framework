@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { Container as DIContainer, useContainer } from '../container';
 import {
   Bootstrap,
+  Builder,
   Component,
   getInjectionContainer,
   Container as Injectable,
@@ -159,5 +160,24 @@ describe('Decorators - @Bootstrap', () => {
     expect(constructed).toBe(1);
     expect(c.has(StartupTask)).toBe(true);
     expect(c.resolve(StartupTask)).toBeInstanceOf(StartupTask);
+  });
+});
+
+describe('@Builder decorator', () => {
+  it('attaches a fluent builder() factory that sets properties and builds', () => {
+    @Builder
+    class Config {
+      host = '';
+      port = 0;
+    }
+
+    const cfg = (Config as any).builder().host('localhost').port(8080).build();
+    expect(cfg).toBeInstanceOf(Config);
+    expect(cfg.host).toBe('localhost');
+    expect(cfg.port).toBe(8080);
+
+    const empty = (Config as any).builder().build();
+    expect(empty.host).toBe('');
+    expect(empty.port).toBe(0);
   });
 });

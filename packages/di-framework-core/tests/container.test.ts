@@ -112,6 +112,20 @@ describe('Container - observer pattern hooks', () => {
     expect(events.find((e) => e.type === 'cleared')).toBeTruthy();
   });
 
+  it('off() removes a previously registered listener', () => {
+    const c = new Container();
+    let count = 0;
+    const listener = () => {
+      count++;
+    };
+    c.on('registered', listener);
+    c.register(Foo);
+    expect(count).toBe(1);
+    c.off('registered', listener);
+    c.register(Bar);
+    expect(count).toBe(1);
+  });
+
   it('clear() removes listeners after emitting cleared', () => {
     const c = new Container();
     let clearedCount = 0;

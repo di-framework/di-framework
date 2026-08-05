@@ -5,22 +5,32 @@ import {
   type AiChatResponseEvent,
   AiEvents,
   AiTokens,
+  ChatAgent,
   ChatClient,
   type ChatModel,
   configureAi,
+  EnableAi,
+  enableAi,
   FakeChatModel,
+  FakeEmbeddingModel,
   functionToolCallback,
   MessageWindowChatMemory,
   observationAdvisor,
+  registerChatAgent,
   registerChatClient,
   registerChatModel,
+  resolveChatAgent,
   resolveChatClient,
   resolveChatModel,
   ScriptedChatModel,
+  SimpleVectorStore,
   Tool,
   toolCall,
+  toolCallbackProviderFromBeans,
   toolCallbacksFromBean,
+  toolCallbacksFromBeans,
   toolCallResponse,
+  hasToolMethods,
 } from '../src/index.ts';
 
 beforeEach(() => {
@@ -184,6 +194,71 @@ describe('@Tool decorator', () => {
     const result = await callbacks[0]!.call(JSON.stringify({ a: 2, b: 3 }));
     expect(JSON.parse(result)).toBe(5);
   });
+
+  test('toolCallbacksFromBean throws for a null/non-object instance', () => {
+    expect(() => toolCallbacksFromBean(null as unknown as object)).toThrow(
+      'toolCallbacksFromBean requires a bean instance',
+    );
+    expect(() => toolCallbacksFromBean('nope' as unknown as object)).toThrow(
+      'toolCallbacksFromBean requires a bean instance',
+    );
+  });
+
+  test('toolCallbacksFromBean throws when the @Tool method is missing on the instance', () => {
+    class BrokenTools {
+      @Tool()
+      missing() {
+        return 'x';
+      }
+    }
+    const instance = new BrokenTools();
+    // Shadow the prototype method with `undefined` on the instance itself to
+    // hit the "method missing" guard (deleting an inherited method is a no-op).
+    (instance as Record<string, unknown>).missing = undefined;
+    expect(() => toolCallbacksFromBean(instance)).toThrow(/is missing on/);
+  });
+
+  test('toolCallbacksFromBeans flattens tools across multiple bean instances', () => {
+    class ToolsA {
+      @Tool({ name: 'a' })
+      a() {
+        return 'a';
+      }
+    }
+    class ToolsB {
+      @Tool({ name: 'b' })
+      b() {
+        return 'b';
+      }
+    }
+    const callbacks = toolCallbacksFromBeans(new ToolsA(), new ToolsB());
+    expect(callbacks.map((c) => c.toolDefinition.name)).toEqual(['a', 'b']);
+  });
+
+  test('toolCallbackProviderFromBeans builds a provider over multiple bean instances', async () => {
+    class ToolsC {
+      @Tool({ name: 'c' })
+      c() {
+        return 'c-result';
+      }
+    }
+    const provider = toolCallbackProviderFromBeans(new ToolsC());
+    const callbacks = provider.getToolCallbacks();
+    expect(callbacks).toHaveLength(1);
+    expect(await callbacks[0]!.call('{}')).toContain('c-result');
+  });
+
+  test('hasToolMethods reflects presence/absence of @Tool methods', () => {
+    class WithTool {
+      @Tool()
+      go() {
+        return 'go';
+      }
+    }
+    class WithoutTool {}
+    expect(hasToolMethods(WithTool)).toBe(true);
+    expect(hasToolMethods(WithoutTool)).toBe(false);
+  });
 });
 
 describe('ObservationAdvisor + @Subscriber', () => {
@@ -242,6 +317,173 @@ describe('ObservationAdvisor + @Subscriber', () => {
     await resolveChatClient().prompt().user('q').call().content();
     expect(seen).toEqual([AiEvents.CHAT_RESPONSE]);
   });
+
+  test('includePromptText/includeResponseText attach truncated text', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class TextAudit {
+      @Subscriber(AiEvents.CHAT_REQUEST)
+      onRequest(payload: unknown) {
+        events.push(payload);
+      }
+
+      @Subscriber(AiEvents.CHAT_RESPONSE)
+      onResponse(payload: unknown) {
+        events.push(payload);
+      }
+    }
+
+    useContainer().resolve(TextAudit);
+
+    const longText = 'x'.repeat(20);
+    const model = new FakeChatModel(longText);
+    const client = ChatClient.builder(model)
+      .defaultAdvisors(
+        observationAdvisor({ includePromptText: true, includeResponseText: true, maxTextLength: 5 }),
+      )
+      .build();
+
+    await client.prompt().user('a long prompt text here').call().content();
+
+    const req = events[0] as { promptText?: string };
+    const res = events[1] as AiChatResponseEvent;
+    expect(req.promptText?.length).toBe(6); // 5 chars + ellipsis
+    expect(req.promptText?.endsWith('\u2026')).toBe(true);
+    expect(res.responseText?.length).toBe(6);
+    expect(res.responseText?.endsWith('\u2026')).toBe(true);
+  });
+
+  test('does not truncate text shorter than maxTextLength', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class ShortTextAudit {
+      @Subscriber(AiEvents.CHAT_REQUEST)
+      onRequest(payload: unknown) {
+        events.push(payload);
+      }
+    }
+    useContainer().resolve(ShortTextAudit);
+
+    const model = new FakeChatModel('hi');
+    const client = ChatClient.builder(model)
+      .defaultAdvisors(observationAdvisor({ includePromptText: true, maxTextLength: 500 }))
+      .build();
+
+    await client.prompt().user('short').call().content();
+    const req = events[0] as { promptText?: string };
+    expect(req.promptText).toBe('short');
+  });
+
+  test('emits AiEvents.CHAT_ERROR and rethrows when the chain fails', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class ErrorAudit {
+      @Subscriber(AiEvents.CHAT_ERROR)
+      onError(payload: unknown) {
+        events.push(payload);
+      }
+    }
+    useContainer().resolve(ErrorAudit);
+
+    const model = new FakeChatModel(() => {
+      throw new Error('boom');
+    });
+    const client = ChatClient.builder(model).defaultAdvisors(observationAdvisor()).build();
+
+    await expect(client.prompt().user('q').call().content()).rejects.toThrow('boom');
+    expect(events).toHaveLength(1);
+    const err = events[0] as { type: string; errorMessage: string; errorName: string };
+    expect(err.type).toBe(AiEvents.CHAT_ERROR);
+    expect(err.errorMessage).toBe('boom');
+    expect(err.errorName).toBe('Error');
+  });
+
+  test('emits CHAT_ERROR for non-Error thrown values', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class ErrorAudit2 {
+      @Subscriber(AiEvents.CHAT_ERROR)
+      onError(payload: unknown) {
+        events.push(payload);
+      }
+    }
+    useContainer().resolve(ErrorAudit2);
+
+    const model = new FakeChatModel(() => {
+      // eslint-disable-next-line @typescript-eslint/no-throw-literal
+      throw 'plain string failure';
+    });
+    const client = ChatClient.builder(model).defaultAdvisors(observationAdvisor()).build();
+
+    await expect(client.prompt().user('q').call().content()).rejects.toBeDefined();
+    expect(events).toHaveLength(1);
+    const err = events[0] as { errorMessage: string };
+    expect(err.errorMessage).toBe('plain string failure');
+  });
+
+  test('adviseStream emits request/response events around a streamed call', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class StreamAudit {
+      @Subscriber(AiEvents.CHAT_REQUEST)
+      onRequest(payload: unknown) {
+        events.push(payload);
+      }
+
+      @Subscriber(AiEvents.CHAT_RESPONSE)
+      onResponse(payload: unknown) {
+        events.push(payload);
+      }
+    }
+    useContainer().resolve(StreamAudit);
+
+    const model = new FakeChatModel('a b c');
+    const client = ChatClient.builder(model).defaultAdvisors(observationAdvisor()).build();
+
+    const chunks: string[] = [];
+    for await (const part of client.prompt().user('q').stream().content()) {
+      chunks.push(part);
+    }
+
+    expect(chunks.at(-1)).toBe('a b c');
+    expect(events).toHaveLength(2);
+    expect((events[0] as { type: string }).type).toBe(AiEvents.CHAT_REQUEST);
+    expect((events[1] as { type: string }).type).toBe(AiEvents.CHAT_RESPONSE);
+  });
+
+  test('emitRequest reports tool names when tools are present', async () => {
+    const events: unknown[] = [];
+
+    @Injectable()
+    class ToolAudit {
+      @Subscriber(AiEvents.CHAT_REQUEST)
+      onRequest(payload: unknown) {
+        events.push(payload);
+      }
+    }
+    useContainer().resolve(ToolAudit);
+
+    const model = new FakeChatModel('ok');
+    const client = ChatClient.builder(model).defaultAdvisors(observationAdvisor()).build();
+    const tool = functionToolCallback({ name: 'noop', call: () => 'ok' });
+
+    await client.prompt().user('q').tools(tool).call().content();
+
+    const req = events[0] as { hasTools: boolean; toolNames: string[] };
+    expect(req.hasTools).toBe(true);
+    expect(req.toolNames).toEqual(['noop']);
+  });
+
+  test('observationAdvisor accepts an explicit container and tolerates missing emit()', () => {
+    const noEmitContainer = {} as never;
+    const advisor = observationAdvisor({ container: noEmitContainer });
+    expect(advisor.name).toBe('AI Observation Advisor');
+  });
 });
 
 describe('registerChatClient manual', () => {
@@ -265,5 +507,74 @@ describe('registerChatClient manual', () => {
       AiTokens.TOOL_CALLBACKS,
     );
     expect(registered[0]!.toolDefinition.name).toBe('getWeather');
+  });
+});
+
+describe('resolveChatAgent / registerChatAgent', () => {
+  test('resolveChatAgent resolves the agent registered by configureAi({ agent: true })', async () => {
+    configureAi({
+      chatModel: new FakeChatModel('agent-reply'),
+      agent: true,
+      scanAnnotations: false,
+    });
+    const agent = resolveChatAgent();
+    expect((await agent.chat('hi')).content).toBe('agent-reply');
+  });
+
+  test('registerChatAgent supports a custom token/aliases and a direct (non-factory) agent', async () => {
+    const model = new FakeChatModel('direct-agent');
+    const agent = ChatAgent.create({ chatModel: model });
+    registerChatAgent(agent, { token: 'custom.agent', aliases: ['custom.agent.alias'] });
+    expect(useContainer().resolve('custom.agent')).toBe(agent);
+    expect(useContainer().resolve('custom.agent.alias')).toBe(agent);
+  });
+});
+
+describe('configureAi embeddingModel / vectorStore registration', () => {
+  test('registers an embeddingModel and vectorStore under their AiTokens', () => {
+    const embeddingModel = new FakeEmbeddingModel();
+    const vectorStore = SimpleVectorStore.of(embeddingModel);
+    configureAi({
+      chatModel: new FakeChatModel('x'),
+      embeddingModel,
+      vectorStore,
+      scanAnnotations: false,
+    });
+    expect(useContainer().resolve(AiTokens.EMBEDDING_MODEL)).toBe(embeddingModel);
+    expect(useContainer().resolve(AiTokens.VECTOR_STORE)).toBe(vectorStore);
+  });
+});
+
+describe('configureAi defaultOptions', () => {
+  test('applies defaultOptions to the built ChatClient', async () => {
+    let seenTemperature: number | undefined;
+    const model = new ScriptedChatModel([
+      {
+        respond: (p) => {
+          seenTemperature = p.options?.temperature;
+          return 'ok';
+        },
+      },
+    ]);
+    configureAi({
+      chatModel: model,
+      defaultOptions: { temperature: 0.42 },
+      scanAnnotations: false,
+    });
+    await resolveChatClient().prompt().user('hi').call().content();
+    expect(seenTemperature).toBe(0.42);
+  });
+});
+
+describe('enableAi', () => {
+  test('merges @EnableAi options from the app class with explicit overrides', async () => {
+    @EnableAi({ chatModel: new FakeChatModel('from-annotation') })
+    class App {}
+
+    const result = enableAi(App, { scanAnnotations: false });
+    const client = result.chatClientToken
+      ? useContainer().resolve<ChatClient>(result.chatClientToken)
+      : undefined;
+    expect(await client?.prompt().user('q').call().content()).toBe('from-annotation');
   });
 });

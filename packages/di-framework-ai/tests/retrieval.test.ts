@@ -1,12 +1,18 @@
 import { describe, expect, test } from 'bun:test';
+import { mutateQuery } from '../src/rag/query.ts';
 import {
   ChatClient,
+  ConcatenationDocumentJoiner,
   ContextualQueryAugmenter,
   cosineSimilarity,
   evaluateFilterExpression,
   FakeChatModel,
   FakeEmbeddingModel,
+  filterExpression,
   FilterExpressionBuilder,
+  filterKey,
+  filterValue,
+  isFilterExpression,
   parseFilterExpression,
   query,
   RAG_DOCUMENT_CONTEXT,
@@ -17,6 +23,42 @@ import {
   textDocument,
   VectorStoreDocumentRetriever,
 } from '../src/index.ts';
+
+describe('ConcatenationDocumentJoiner', () => {
+  test('concatenates and de-duplicates documents by id (first wins)', () => {
+    const joiner = new ConcatenationDocumentJoiner();
+    const d1 = textDocument('doc one', {}, 'd1');
+    const d1Dup = textDocument('doc one duplicate', {}, 'd1');
+    const d2 = textDocument('doc two', {}, 'd2');
+    const q1 = query('q1');
+    const q2 = query('q2');
+
+    const result = joiner.join(
+      new Map([
+        [q1, [[d1], [d2]]],
+        [q2, [[d1Dup]]],
+      ]),
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(d1);
+    expect(result.map((d) => d.id)).toEqual(['d1', 'd2']);
+  });
+});
+
+describe('query / mutateQuery', () => {
+  test('object form defaults history/context and throws when text is missing', () => {
+    const q = query({ text: 'hi' });
+    expect(q).toEqual({ text: 'hi', history: [], context: {} });
+    expect(() => query({ text: null as never })).toThrow('text cannot be null');
+  });
+
+  test('mutateQuery overrides only the provided fields', () => {
+    const original = query({ text: 'original', context: { a: 1 } });
+    const mutated = mutateQuery(original, { text: 'changed' });
+    expect(mutated).toEqual({ text: 'changed', history: [], context: { a: 1 } });
+  });
+});
 
 describe('SearchRequest', () => {
   test('requires a positive topK', () => {
@@ -33,6 +75,15 @@ describe('FakeEmbeddingModel / cosine', () => {
     const b = model.embed('Yorktown is a town in Virginia');
     const c = model.embed('quantum chromodynamics lattice');
     expect(cosineSimilarity(a, b)).toBeGreaterThan(cosineSimilarity(a, c));
+  });
+
+  test('embedBatch embeds each text independently', () => {
+    const model = new FakeEmbeddingModel({ dimensions: 16 });
+    const [a, b] = model.embedBatch(['hello world', 'goodbye world']);
+    expect(a).toHaveLength(16);
+    expect(b).toHaveLength(16);
+    expect(a).not.toEqual(b);
+    expect(model.embed('hello world')).toEqual(a!);
   });
 });
 
@@ -56,6 +107,20 @@ describe('Filter expressions', () => {
     expect(evaluateFilterExpression(ninExp, { city: 'Sofia' })).toBe(false);
   });
 
+  test('NE / GT / LT / OR / group', () => {
+    expect(evaluateFilterExpression(b.ne('country', 'UK').build(), { country: 'US' })).toBe(true);
+    expect(evaluateFilterExpression(b.ne('country', 'UK').build(), { country: 'UK' })).toBe(false);
+    expect(evaluateFilterExpression(b.gt('year', 2020).build(), { year: 2021 })).toBe(true);
+    expect(evaluateFilterExpression(b.gt('year', 2020).build(), { year: 2019 })).toBe(false);
+    expect(evaluateFilterExpression(b.lt('year', 2020).build(), { year: 2019 })).toBe(true);
+    expect(evaluateFilterExpression(b.lt('year', 2020).build(), { year: 2021 })).toBe(false);
+    const orExp = b.or(b.eq('country', 'UK'), b.eq('country', 'US')).build();
+    expect(evaluateFilterExpression(orExp, { country: 'US' })).toBe(true);
+    expect(evaluateFilterExpression(orExp, { country: 'FR' })).toBe(false);
+    const grouped = b.group(b.eq('active', true)).build();
+    expect(evaluateFilterExpression(grouped, { active: true })).toBe(true);
+  });
+
   test('ISNULL / NOT', () => {
     expect(evaluateFilterExpression(b.isNull('x').build(), {})).toBe(true);
     expect(evaluateFilterExpression(b.isNotNull('x').build(), { x: 1 })).toBe(true);
@@ -64,6 +129,92 @@ describe('Filter expressions', () => {
         active: false,
       }),
     ).toBe(true);
+  });
+
+  test('LTE and grouped operand nested under AND', () => {
+    expect(evaluateFilterExpression(b.lte('year', 2020).build(), { year: 2020 })).toBe(true);
+    expect(evaluateFilterExpression(b.lte('year', 2020).build(), { year: 2021 })).toBe(false);
+    const nested = b.and(b.group(b.eq('active', true)), b.eq('country', 'UK')).build();
+    expect(evaluateFilterExpression(nested, { active: true, country: 'UK' })).toBe(true);
+    expect(evaluateFilterExpression(nested, { active: false, country: 'UK' })).toBe(false);
+  });
+
+  test('numeric-looking strings compare numerically', () => {
+    const exp = b.gt('year', '5').build();
+    expect(evaluateFilterExpression(exp, { year: '10' })).toBe(true);
+    expect(evaluateFilterExpression(exp, { year: '2' })).toBe(false);
+  });
+
+  test('IN coerces a non-array filter value into a single-element list', () => {
+    const exp = filterExpression('IN', filterKey('genre'), filterValue('drama'));
+    expect(evaluateFilterExpression(exp, { genre: 'drama' })).toBe(true);
+    expect(evaluateFilterExpression(exp, { genre: 'comedy' })).toBe(false);
+  });
+
+  test('quoted metadata keys are unwrapped before lookup', () => {
+    const exp = filterExpression('EQ', filterKey(`'country'`), filterValue('UK'));
+    expect(evaluateFilterExpression(exp, { country: 'UK' })).toBe(true);
+  });
+
+  test('max evaluation depth is enforced', () => {
+    const andExp = b.and(b.eq('a', 1), b.eq('b', 2)).build();
+    expect(() => evaluateFilterExpression(andExp, { a: 1, b: 2 }, 0)).toThrow(/max depth/);
+    expect(() => evaluateFilterExpression(andExp, { a: 1, b: 2 }, -1)).toThrow(/max depth/);
+  });
+
+  test('rejects unknown expression types', () => {
+    expect(() =>
+      evaluateFilterExpression({ type: 'NOPE' } as never, {}),
+    ).toThrow(/Unsupported expression type/);
+  });
+
+  test('malformed AST nodes raise descriptive errors', () => {
+    expect(() =>
+      evaluateFilterExpression(
+        filterExpression('EQ', null as unknown as ReturnType<typeof filterKey>, filterValue(1)),
+        {},
+      ),
+    ).toThrow(/requires a left operand/);
+
+    expect(() =>
+      evaluateFilterExpression(filterExpression('EQ', filterKey('x')), {}),
+    ).toThrow(/requires a right operand/);
+
+    expect(() =>
+      evaluateFilterExpression(
+        filterExpression('EQ', filterValue(1) as unknown as ReturnType<typeof filterKey>, filterValue(1)),
+        {},
+      ),
+    ).toThrow(/Expected filter key operand/);
+
+    expect(() =>
+      evaluateFilterExpression(
+        filterExpression('EQ', filterKey('x'), filterKey('y') as unknown as ReturnType<typeof filterValue>),
+        { x: 1 },
+      ),
+    ).toThrow(/Expected filter value operand/);
+
+    expect(() =>
+      evaluateFilterExpression(
+        filterExpression(
+          'AND',
+          { kind: 'bogus' } as unknown as ReturnType<typeof filterKey>,
+          filterValue(1),
+        ),
+        {},
+      ),
+    ).toThrow(/Unsupported boolean operand/);
+
+    expect(() =>
+      evaluateFilterExpression(
+        filterExpression(
+          'BOGUS' as unknown as Parameters<typeof filterExpression>[0],
+          filterKey('x'),
+          filterValue(1),
+        ),
+        { x: 1 },
+      ),
+    ).toThrow(/Unsupported expression type/);
   });
 
   test('text parser', () => {
@@ -94,6 +245,61 @@ describe('Filter expressions', () => {
     expect(evaluateFilterExpression(exp, { country: 'BG', year: 2001 })).toBe(true);
     expect(evaluateFilterExpression(exp, { country: 'US', year: 2001 })).toBe(false);
   });
+
+  test('text parser IN / NOT IN with populated and empty lists', () => {
+    const inExp = parseFilterExpression("genre IN ['comedy', 'drama']");
+    expect(evaluateFilterExpression(inExp, { genre: 'drama' })).toBe(true);
+    expect(evaluateFilterExpression(inExp, { genre: 'horror' })).toBe(false);
+
+    const ninExp = parseFilterExpression("city NIN ['Sofia', 'Plovdiv']");
+    expect(evaluateFilterExpression(ninExp, { city: 'Varna' })).toBe(true);
+
+    const notInExp = parseFilterExpression("city NOT IN ['Sofia']");
+    expect(evaluateFilterExpression(notInExp, { city: 'Varna' })).toBe(true);
+    expect(evaluateFilterExpression(notInExp, { city: 'Sofia' })).toBe(false);
+
+    const emptyListExp = parseFilterExpression('tag IN []');
+    expect(evaluateFilterExpression(emptyListExp, { tag: 'anything' })).toBe(false);
+  });
+
+  test('text parser IS NOT NULL, NE/LT/LTE operators, and null/false/number literals', () => {
+    expect(evaluateFilterExpression(parseFilterExpression('x IS NOT NULL'), { x: 1 })).toBe(true);
+    expect(evaluateFilterExpression(parseFilterExpression('x IS NOT NULL'), {})).toBe(false);
+    expect(evaluateFilterExpression(parseFilterExpression('year != 2020'), { year: 2021 })).toBe(
+      true,
+    );
+    expect(evaluateFilterExpression(parseFilterExpression('year < 2020'), { year: 2019 })).toBe(
+      true,
+    );
+    expect(evaluateFilterExpression(parseFilterExpression('year <= 2020'), { year: 2020 })).toBe(
+      true,
+    );
+    expect(evaluateFilterExpression(parseFilterExpression('flag == null'), { flag: null })).toBe(
+      true,
+    );
+    expect(evaluateFilterExpression(parseFilterExpression('flag == false'), { flag: false })).toBe(
+      true,
+    );
+    expect(evaluateFilterExpression(parseFilterExpression('score == -1.5'), { score: -1.5 })).toBe(
+      true,
+    );
+  });
+
+  test('isFilterExpression distinguishes expressions from other operands', () => {
+    expect(isFilterExpression(filterExpression('EQ', filterKey('x'), filterValue(1)))).toBe(true);
+    expect(isFilterExpression(filterKey('x'))).toBe(false);
+    expect(isFilterExpression(filterValue(1))).toBe(false);
+    expect(isFilterExpression(null)).toBe(false);
+    expect(isFilterExpression(undefined)).toBe(false);
+  });
+
+  test('text parser surfaces syntax errors for malformed input', () => {
+    expect(() => parseFilterExpression('country ===')).toThrow();
+    expect(() => parseFilterExpression("country == 'UK' extra")).toThrow(/trailing/);
+    expect(() => parseFilterExpression('country IS')).toThrow(/Expected keyword/);
+    expect(() => parseFilterExpression('(country == 1')).toThrow(/Expected/);
+    expect(() => parseFilterExpression('123')).toThrow(/Expected identifier/);
+  });
 });
 
 describe('SimpleVectorStore', () => {
@@ -118,6 +324,13 @@ describe('SimpleVectorStore', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0]?.id).toBe('d1');
     expect(hits[0]?.score).toBeGreaterThan(0);
+  });
+
+  test('builder() supports a custom name via the fluent SimpleVectorStoreBuilder', async () => {
+    const store = SimpleVectorStore.builder(new FakeEmbeddingModel()).name('custom-store').build();
+    expect(store.name).toBe('custom-store');
+    await store.add([textDocument('hello', {}, 'a')]);
+    expect(store.size).toBe(1);
   });
 
   test('metadata filter restricts results', async () => {
@@ -228,6 +441,34 @@ describe('RetrievalAugmentationAdvisor', () => {
     expect(promptText).toContain('Where is Yorktown?');
   });
 
+  test('stream() path augments the request and re-attaches document context on every chunk', async () => {
+    const store = SimpleVectorStore.of(new FakeEmbeddingModel());
+    await store.add([textDocument('Yorktown is a historic town in Virginia.', {}, 'd1')]);
+
+    const model = new FakeChatModel('Yorktown is in Virginia.');
+    const rag = RetrievalAugmentationAdvisor.builder({
+      documentRetriever: VectorStoreDocumentRetriever.builder({
+        vectorStore: store,
+        topK: 1,
+      }),
+    });
+
+    const client = ChatClient.builder(model).defaultAdvisors(rag).build();
+
+    const chunks: string[] = [];
+    let lastResponse;
+    for await (const response of client.prompt().user('Where is Yorktown?').stream().chatClientResponse()) {
+      lastResponse = response;
+      if (response.chatResponse?.content) chunks.push(response.chatResponse.content);
+    }
+
+    expect(chunks.at(-1)).toBe('Yorktown is in Virginia.');
+    expect(lastResponse?.context.get(RAG_DOCUMENT_CONTEXT)).toBeDefined();
+    expect(model.calls[0]!.getUserMessage().text ?? '').toContain(
+      'Yorktown is a historic town in Virginia.',
+    );
+  });
+
   test('stores documents in context under RAG_DOCUMENT_CONTEXT', async () => {
     const store = SimpleVectorStore.of(new FakeEmbeddingModel());
     await store.add([textDocument('Ada Lovelace wrote early programs.', {}, 'd1')]);
@@ -285,5 +526,59 @@ describe('RetrievalAugmentationAdvisor', () => {
     const user = model.calls[0]!.getUserMessage().text ?? '';
     // Augmentation still uses original query text in template, with retrieved docs
     expect(user).toContain('The capital of France is Paris.');
+  });
+});
+
+describe('VectorStoreDocumentRetriever filter expressions', () => {
+  test('a fixed (non-function) filterExpression option is applied on every retrieve', async () => {
+    const store = SimpleVectorStore.of(new FakeEmbeddingModel());
+    await store.add([
+      textDocument('Yorktown wiki doc', { source: 'wiki' }, 'd1'),
+      textDocument('Yorktown blog doc', { source: 'blog' }, 'd2'),
+    ]);
+
+    const retriever = VectorStoreDocumentRetriever.builder({
+      vectorStore: store,
+      topK: 5,
+      filterExpression: filterExpression('EQ', filterKey('source'), filterValue('wiki')),
+    });
+
+    const results = await retriever.retrieve(query('Yorktown'));
+    expect(results.map((d) => d.id)).toEqual(['d1']);
+  });
+
+  test('a per-query context filter expression overrides the default filter', async () => {
+    const store = SimpleVectorStore.of(new FakeEmbeddingModel());
+    await store.add([
+      textDocument('Yorktown wiki doc', { source: 'wiki' }, 'd1'),
+      textDocument('Yorktown blog doc', { source: 'blog' }, 'd2'),
+    ]);
+
+    const retriever = VectorStoreDocumentRetriever.builder({
+      vectorStore: store,
+      topK: 5,
+    });
+
+    const withObjectFilter = await retriever.retrieve(
+      query({
+        text: 'Yorktown',
+        context: {
+          vector_store_filter_expression: filterExpression(
+            'EQ',
+            filterKey('source'),
+            filterValue('blog'),
+          ),
+        },
+      }),
+    );
+    expect(withObjectFilter.map((d) => d.id)).toEqual(['d2']);
+
+    const withTextFilter = await retriever.retrieve(
+      query({
+        text: 'Yorktown',
+        context: { vector_store_filter_expression: "source == 'wiki'" },
+      }),
+    );
+    expect(withTextFilter.map((d) => d.id)).toEqual(['d1']);
   });
 });

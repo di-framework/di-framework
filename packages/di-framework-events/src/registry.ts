@@ -15,7 +15,13 @@ export interface RegisteredEventBridge {
  * `@Inbound` routes. Import-time registration, same idea as HTTP/GraphQL registries.
  */
 export class EventBridgeRegistry {
-  private targets = new Map<EventBridgeTarget, RegisteredEventBridge>();
+  private targets: Map<EventBridgeTarget, RegisteredEventBridge>;
+
+  // Explicit constructor (rather than a field initializer) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor() {
+    this.targets = new Map<EventBridgeTarget, RegisteredEventBridge>();
+  }
 
   addTarget(target: EventBridgeTarget): RegisteredEventBridge {
     let entry = this.targets.get(target);

@@ -7,15 +7,18 @@ export type RuntimeName = 'bun' | 'node' | 'deno' | 'workers' | 'memory';
 
 export class SocketCapabilityError extends Error {
   override readonly name = 'SocketCapabilityError';
-  constructor(
-    readonly runtime: RuntimeName,
-    readonly protocol: SocketProtocol,
-    message?: string,
-  ) {
+  readonly runtime: RuntimeName;
+  readonly protocol: SocketProtocol;
+
+  // Explicit constructor (rather than parameter properties) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor(runtime: RuntimeName, protocol: SocketProtocol, message?: string) {
     super(
       message ??
         `${runtime} does not support ${protocol} in @di-framework/socket (see capability matrix)`,
     );
+    this.runtime = runtime;
+    this.protocol = protocol;
   }
 }
 

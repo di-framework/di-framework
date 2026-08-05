@@ -118,6 +118,7 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-config');
       expect(PACKAGES).toContain('packages/di-framework-auth');
       expect(PACKAGES).toContain('packages/di-framework-socket');
+      expect(PACKAGES).toContain('packages/di-framework-rpc');
       expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-cli');
     });
@@ -185,6 +186,46 @@ describe('publish command', () => {
       expect(stdout).toContain('Published');
       expect(stderr).not.toContain('Failed to publish');
     }, 60_000);
+
+    it('covers publish() catch and success branches via injected shell', async () => {
+      const root = await makePublishWorkspace();
+      temps.push(root);
+      const prevCwd = process.cwd();
+
+      let publishCalls = 0;
+      const fakeShell = ((strings: TemplateStringsArray, ...exprs: unknown[]) => {
+        const cmd = strings.reduce((acc, s, i) => acc + s + (exprs[i] ?? ''), '');
+        return {
+          then(resolve: (v: unknown) => void, reject?: (e: unknown) => void) {
+            if (cmd.includes('bun publish')) {
+              publishCalls++;
+              if (publishCalls === 1) {
+                reject?.(new Error('publish denied'));
+                return;
+              }
+            }
+            resolve({ exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() });
+          },
+        };
+      }) as import('../cmd/publish').PublishShell;
+
+      try {
+        process.chdir(root);
+        const log = spyOn(console, 'log').mockImplementation(() => {});
+        const err = spyOn(console, 'error').mockImplementation(() => {});
+        const { publish } = await import('../cmd/publish');
+        await publish(fakeShell);
+        expect(err.mock.calls.some((c) => String(c[0]).includes('Failed to publish'))).toBe(true);
+        expect(log.mock.calls.some((c) => String(c[0]).includes('Published'))).toBe(true);
+        expect(log.mock.calls.some((c) => String(c[0]).includes('Publish process finished'))).toBe(
+          true,
+        );
+        log.mockRestore();
+        err.mockRestore();
+      } finally {
+        process.chdir(prevCwd);
+      }
+    });
   });
 
   describe('CLI entrypoint', () => {
@@ -205,6 +246,18 @@ describe('publish command', () => {
         process.exit = originalExit;
         err.mockRestore();
       }
+    });
+
+    it('runPublishMain invokes start only when isMain is true', async () => {
+      const { runPublishMain } = await import('../cmd/publish');
+      let calls = 0;
+      const start = async () => {
+        calls++;
+      };
+      runPublishMain(false, start);
+      expect(calls).toBe(0);
+      runPublishMain(true, start);
+      expect(calls).toBe(1);
     });
 
     it('exits with code 1 when publish fails under import.meta.main', async () => {

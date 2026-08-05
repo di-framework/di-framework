@@ -92,10 +92,10 @@ function resolveListen(
   if (server) {
     // Lazy import so Workers / edge consumers of decorators don't load node:net/ws
     // until a process actually starts a gateway.
-    return (hooks) =>
-      import('./adapters/node-listen.ts').then(({ createNodeListen }) =>
-        createNodeListen(server, securityMode, options.maxMessageBytes)(hooks),
-      );
+    return async (hooks) => {
+      const { createNodeListen } = await import('./adapters/node-listen.ts');
+      return createNodeListen(server, securityMode, options.maxMessageBytes)(hooks);
+    };
   }
 
   throw new Error(
@@ -286,11 +286,12 @@ export function SocketGateway(options: SocketGatewayDecoratorOptions = {}) {
         host[GATEWAY_OPTIONS] = options;
         // Handler metadata lives on the original class; methods are inherited.
         host[GATEWAY_HANDLE] = createHandle(this, target, options);
-        queueMicrotask(() => {
+        const autoStartGateway = () => {
           void host.$startGateway?.().catch((err: unknown) => {
             console.error(`[SocketGateway] failed to start ${target.name}`, err);
           });
-        });
+        };
+        queueMicrotask(autoStartGateway);
       }
     } as T;
 

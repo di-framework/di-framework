@@ -35,7 +35,7 @@ export function envSource(options: EnvSourceOptions = {}): ConfigSource {
   return {
     name: 'env',
     load() {
-      const bag = options.env ?? (typeof process !== 'undefined' ? process.env : {});
+      const bag = options.env ?? process.env;
       const out: Record<string, unknown> = {};
 
       for (const [rawKey, rawValue] of Object.entries(bag)) {

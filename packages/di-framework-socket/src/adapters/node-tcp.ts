@@ -29,9 +29,7 @@ function framedDuplex(socket: Socket, framer: LengthPrefixFramer): MessageDuplex
       for (const frame of frames) {
         for (const h of handlers) h(frame);
       }
-    } catch {
-      socket.destroy();
-    }
+    } catch { socket.destroy(); }
   });
 
   socket.on('close', () => {
@@ -94,9 +92,7 @@ export function createTcpServer(options: NodeTcpServerOptions = {}): SocketServe
 
         const session = await SecureSession.connect({ role: 'provider', duplex });
         await options.onConnection?.(connectionFromSecureSession(session, 'tcp', mode));
-      } catch {
-        socket.destroy();
-      }
+      } catch { socket.destroy(); }
     })();
   });
 

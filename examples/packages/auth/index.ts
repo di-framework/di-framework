@@ -203,8 +203,13 @@ async function main(): Promise<void> {
   useContainer().clear();
 }
 
-if (import.meta.main) {
-  await main();
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export async function runAuthMain(isMain = import.meta.main): Promise<void> {
+  if (isMain) {
+    await main();
+  }
 }
+
+await runAuthMain();
 
 export { auth, main, NotesController, router };

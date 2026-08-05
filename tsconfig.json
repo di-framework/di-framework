@@ -46,6 +46,8 @@
       "@di-framework/config/*": ["packages/di-framework-config/*"],
       "@di-framework/auth": ["packages/di-framework-auth/index.ts"],
       "@di-framework/auth/*": ["packages/di-framework-auth/*"],
+      "@di-framework/rpc": ["packages/di-framework-rpc/index.ts"],
+      "@di-framework/rpc/*": ["packages/di-framework-rpc/*"],
       "@di-framework/ai": ["packages/di-framework-ai/src/index.ts"],
       "@di-framework/ai/*": ["packages/di-framework-ai/src/*"]
     }

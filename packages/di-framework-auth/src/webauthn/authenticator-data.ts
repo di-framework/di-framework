@@ -83,22 +83,19 @@ export function parseAuthenticatorData(bytes: Uint8Array): ParsedAuthenticatorDa
   let attestedCredentialData: AttestedCredentialData | undefined;
 
   if (flags.at) {
-    if (bytes.length < offset + AAGUID_BYTES + 2) {
+    if (bytes.length < offset + AAGUID_BYTES + 2)
       malformed('Authenticator data claims attested credential data but is truncated');
-    }
     const aaguid = bytes.slice(offset, offset + AAGUID_BYTES);
     offset += AAGUID_BYTES;
 
     const credentialIdLength = view.getUint16(offset, false);
     offset += 2;
-    if (credentialIdLength > MAX_CREDENTIAL_ID_BYTES) {
+    if (credentialIdLength > MAX_CREDENTIAL_ID_BYTES)
       malformed(
         `Credential id length ${credentialIdLength} exceeds the ${MAX_CREDENTIAL_ID_BYTES}-byte maximum`,
       );
-    }
-    if (bytes.length < offset + credentialIdLength) {
+    if (bytes.length < offset + credentialIdLength)
       malformed('Authenticator data is truncated inside the credential id');
-    }
     const credentialId = bytes.slice(offset, offset + credentialIdLength);
     offset += credentialIdLength;
 

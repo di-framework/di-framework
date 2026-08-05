@@ -1,12 +1,19 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { InMemoryRepository } from '@di-framework/repo';
 import {
   inMemoryAuthStores,
+  memoryCredentialStore,
+  memoryKeyStore,
   memoryLoginThrottle,
+  memoryRefreshTokenStore,
+  memorySessionStore,
   memoryStateStore,
+  memoryUserStore,
 } from '../src/providers/memory.ts';
 import {
   type AtomicOps,
+  repoCredentialStore,
+  repoKeyStore,
   repoRefreshTokenStore,
   repoSessionStore,
   repoStateStore,
@@ -14,12 +21,16 @@ import {
   type StorageAdapterLike,
 } from '../src/providers/repo.ts';
 import type {
+  ApiKeyCredential,
+  PasswordCredential,
   RefreshTokenRecord,
   SessionRecord,
   SessionStore,
+  SigningKeyRecord,
   StateStore,
   UserRecord,
   UserStore,
+  WebAuthnCredential,
 } from '../src/providers/types.ts';
 
 /**
@@ -295,5 +306,480 @@ describe('login throttle', () => {
     await throttle.fail('u1');
     clock += 61;
     expect((await throttle.check('u1')).allowed).toBe(true);
+  });
+});
+
+describe('field mapping (repo bridge)', () => {
+  it('maps and reverse-maps fields when a custom schema is supplied', async () => {
+    const adapter = mapAdapter<{ id: string; login: string; login_key?: string }>();
+    const store = repoUserStore({
+      adapter: adapter as unknown as StorageAdapterLike<UserRecord>,
+      fields: { identifier: 'login', identifierKey: 'login_key' },
+    });
+
+    const created = await store.create(userFixture('u1', 'Ada@Example.com'));
+    expect(created.identifier).toBe('Ada@Example.com');
+    // Stored under the mapped field name, not the auth package's own name.
+    expect(adapter.data.get('u1')).toMatchObject({ login: 'Ada@Example.com' });
+    expect((adapter.data.get('u1') as Record<string, unknown>)['identifier']).toBeUndefined();
+
+    expect((await store.findByIdentifier('ada@example.com'))?.id).toBe('u1');
+  });
+
+  it('is the identity mapping when fields is omitted or maps a field to itself', async () => {
+    const adapter = mapAdapter<UserRecord>();
+    const store = repoUserStore({
+      adapter,
+      fields: { identifier: 'identifier' },
+    });
+    await store.create(userFixture('u1', 'ada@example.com'));
+    expect((await store.findById('u1'))?.identifier).toBe('ada@example.com');
+  });
+
+  it('is also the identity mapping when fields has no string-valued entries', async () => {
+    const adapter = mapAdapter<UserRecord>();
+    const store = repoUserStore({
+      adapter,
+      // No usable renames — every entry is filtered out, exercising the
+      // "no-op" branch of both the mapper and its reverse.
+      fields: {},
+    });
+    await store.create(userFixture('u1', 'ada@example.com'));
+    expect((await store.findById('u1'))?.identifier).toBe('ada@example.com');
+  });
+});
+
+describe('listAll pagination', () => {
+  it('walks every page until the adapter reports no more', async () => {
+    const adapter = mapAdapter<SessionRecord>();
+    const store = repoSessionStore({ adapter, pageSize: 1 });
+    await store.create(sessionFixture('s1', 'shared'));
+    await store.create(sessionFixture('s2', 'shared'));
+    await store.create(sessionFixture('s3', 'shared'));
+
+    expect(await store.deleteBySubject('shared')).toBe(3);
+    expect(await store.get('s1')).toBeNull();
+    expect(await store.get('s2')).toBeNull();
+    expect(await store.get('s3')).toBeNull();
+  });
+});
+
+describe('repoCredentialStore', () => {
+  const build = () => {
+    const passwords = mapAdapter<PasswordCredential>();
+    const webauthn = mapAdapter<WebAuthnCredential>();
+    const apiKeys = mapAdapter<ApiKeyCredential>();
+    const atomic: AtomicOps<WebAuthnCredential> = {
+      async compareAndSwap(id, mutate) {
+        const next = mutate(webauthn.data.get(id) ?? null);
+        if (!next) return false;
+        webauthn.data.set(id, next);
+        return true;
+      },
+    };
+    return {
+      passwords,
+      webauthn,
+      apiKeys,
+      store: repoCredentialStore({ passwords, webauthn, apiKeys, atomic }),
+    };
+  };
+
+  it('covers the full password credential lifecycle', async () => {
+    const { store } = build();
+    expect(await store.findPassword('u1')).toBeNull();
+    const saved = await store.savePassword({
+      kind: 'password',
+      id: 'ignored',
+      userId: 'u1',
+      hash: 'h',
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    expect(saved.userId).toBe('u1');
+    expect((await store.findPassword('u1'))?.hash).toBe('h');
+    expect(await store.deletePassword('u1')).toBe(true);
+    expect(await store.findPassword('u1')).toBeNull();
+  });
+
+  it('covers the full WebAuthn credential lifecycle, including a failed sign-count CAS', async () => {
+    const { store } = build();
+    const credential: WebAuthnCredential = {
+      kind: 'webauthn',
+      id: 'cred-1',
+      userId: 'u1',
+      publicKeyCose: 'AQ',
+      algorithm: -7,
+      signCount: 0,
+      backupEligible: false,
+      backupState: false,
+      uvInitialized: true,
+      createdAt: 0,
+      version: 1,
+    };
+    await store.saveWebAuthn(credential);
+    expect((await store.findWebAuthn('cred-1'))?.id).toBe('cred-1');
+    expect(await store.listWebAuthn('u1')).toHaveLength(1);
+    expect(await store.listWebAuthn('u2')).toEqual([]);
+
+    expect(await store.updateSignCount('cred-1', 5, 999, 10)).toBe(false);
+    expect(await store.updateSignCount('cred-1', 5, 1, 10, true)).toBe(true);
+    expect((await store.findWebAuthn('cred-1'))?.signCount).toBe(5);
+
+    expect(await store.deleteWebAuthn('cred-1')).toBe(true);
+    expect(await store.findWebAuthn('cred-1')).toBeNull();
+  });
+
+  it('covers the full API-key credential lifecycle', async () => {
+    const { store } = build();
+    const credential: ApiKeyCredential = {
+      kind: 'api-key',
+      id: 'hashed',
+      userId: 'u1',
+      createdAt: 0,
+    };
+    await store.saveApiKey(credential);
+    expect((await store.findApiKey('hashed'))?.userId).toBe('u1');
+    expect(await store.listApiKeys('u1')).toHaveLength(1);
+    expect(await store.listApiKeys('u2')).toEqual([]);
+    expect(await store.deleteApiKey('hashed')).toBe(true);
+    expect(await store.findApiKey('hashed')).toBeNull();
+  });
+});
+
+describe('repoRefreshTokenStore direct operations', () => {
+  const record = (id: string, familyId: string, subject: string) => ({
+    id,
+    subject,
+    familyId,
+    createdAt: 0,
+    expiresAt: Math.floor(Date.now() / 1000) + 600,
+    authTime: 0,
+  });
+
+  it('revokes an entire family across pages', async () => {
+    const adapter = mapAdapter<RefreshTokenRecord>();
+    const store = repoRefreshTokenStore({ adapter, atomic: atomicOps(adapter), pageSize: 1 });
+    await store.issue(record('r1', 'f1', 'u1'));
+    await store.issue(record('r2', 'f1', 'u1'));
+    await store.issue(record('r3', 'f2', 'u1'));
+
+    expect(await store.revokeFamily('f1')).toBe(2);
+    expect(await store.find('r1')).toBeNull();
+    expect(await store.find('r3')).not.toBeNull();
+  });
+
+  it('revokes every token for a subject', async () => {
+    const adapter = mapAdapter<RefreshTokenRecord>();
+    const store = repoRefreshTokenStore({ adapter, atomic: atomicOps(adapter) });
+    await store.issue(record('r1', 'f1', 'u1'));
+    await store.issue(record('r2', 'f2', 'u1'));
+    await store.issue(record('r3', 'f3', 'u2'));
+
+    expect(await store.revokeBySubject('u1')).toBe(2);
+    expect(await store.find('r3')).not.toBeNull();
+  });
+
+  it('reports not-found and expired outcomes', async () => {
+    const adapter = mapAdapter<RefreshTokenRecord>();
+    const store = repoRefreshTokenStore({ adapter, atomic: atomicOps(adapter) });
+    expect((await store.rotate('ghost', record('r2', 'f1', 'u1'), 0)).outcome).toBe('not-found');
+
+    const expired = { ...record('r1', 'f1', 'u1'), expiresAt: 1 };
+    await store.issue(expired);
+    expect((await store.rotate('r1', record('r2', 'f1', 'u1'), 100)).outcome).toBe('expired');
+  });
+});
+
+describe('repoKeyStore', () => {
+  const key = (kid: string): SigningKeyRecord => ({
+    kid,
+    algorithm: 'ES256',
+    privateJwk: {},
+    publicJwk: {},
+    createdAt: 0,
+  });
+
+  it('tracks a single current key, demoting the previous one', async () => {
+    const adapter = mapAdapter<{ id: string } & SigningKeyRecord & { current?: boolean }>();
+    const store = repoKeyStore({ adapter });
+
+    await expect(store.current()).rejects.toThrow(/No current signing key/);
+
+    await store.save(key('k1'));
+    expect((await store.current()).kid).toBe('k1');
+
+    await store.save(key('k2'));
+    expect((await store.current()).kid).toBe('k2');
+    expect((await adapter.findById('k1'))?.['current']).toBe(false);
+
+    expect((await store.find('k1'))?.kid).toBe('k1');
+    expect(await store.find('ghost')).toBeNull();
+
+    expect(await store.delete('k1')).toBe(true);
+  });
+
+  it('filters expired keys out of all(), current first', async () => {
+    const adapter = mapAdapter<{ id: string } & SigningKeyRecord & { current?: boolean }>();
+    const store = repoKeyStore({ adapter, pageSize: 1 });
+
+    await store.save({ ...key('expired'), notAfter: 5, expiresAt: 5 });
+    // At least two live-but-not-current keys, so the sort comparator's
+    // `createdAt` tie-break actually runs (a single surviving key never
+    // invokes the comparator at all).
+    await store.save({ ...key('retired-1'), notAfter: 1, createdAt: 10 });
+    await store.save({ ...key('retired-2'), notAfter: 1, createdAt: 20 });
+    await store.save(key('new'));
+
+    const all = await store.all();
+    const kids = all.map((record) => record.kid);
+    expect(kids).not.toContain('expired');
+    expect(kids[0]).toBe('new');
+    expect(kids).toContain('retired-1');
+    expect(kids).toContain('retired-2');
+    // Among the non-current keys, newest createdAt sorts first.
+    expect(kids.indexOf('retired-2')).toBeLessThan(kids.indexOf('retired-1'));
+  });
+
+  it('a key past notAfter does not become current', async () => {
+    const adapter = mapAdapter<{ id: string } & SigningKeyRecord & { current?: boolean }>();
+    const store = repoKeyStore({ adapter });
+    await store.save(key('k1'));
+    await store.save({ ...key('k2'), notAfter: 1 });
+    expect((await store.current()).kid).toBe('k1');
+  });
+});
+
+describe('memoryUserStore direct operations', () => {
+  it('refuses a duplicate id or identifier', async () => {
+    const users = memoryUserStore();
+    await users.create(userFixture('u1', 'ada@example.com'));
+    await expect(users.create(userFixture('u1', 'someone-else@example.com'))).rejects.toThrow(
+      /already exists/,
+    );
+    await expect(users.create(userFixture('u2', 'Ada@Example.com'))).rejects.toThrow(
+      /already registered/,
+    );
+  });
+
+  it('re-indexes the identifier when it changes, and drops WebAuthn handle index on delete', async () => {
+    const users = memoryUserStore();
+    await users.create({ ...userFixture('u1', 'old@example.com'), webauthnUserHandle: 'h1' });
+
+    await users.update('u1', { identifier: 'new@example.com' });
+    expect(await users.findByIdentifier('old@example.com')).toBeNull();
+    expect((await users.findByIdentifier('new@example.com'))?.id).toBe('u1');
+
+    await users.delete('u1');
+    expect(await users.findByWebAuthnHandle('h1')).toBeNull();
+  });
+});
+
+describe('memorySessionStore direct operations', () => {
+  it('purges only sessions past their absolute expiry, from every subject bucket', async () => {
+    const sessions = memorySessionStore();
+    await sessions.create(sessionFixture('s1', 'u1'));
+    await sessions.create({ ...sessionFixture('s2', 'u2'), absoluteExpiresAt: 5 });
+
+    expect(await sessions.purgeExpired(10)).toBe(1);
+    expect(await sessions.get('s1')).not.toBeNull();
+    expect(await sessions.get('s2')).toBeNull();
+    // Purging again removes nothing further.
+    expect(await sessions.purgeExpired(10)).toBe(0);
+  });
+
+  it('touch() is a no-op for a session that no longer exists', async () => {
+    const sessions = memorySessionStore();
+    await expect(sessions.touch('nope', 100)).resolves.toBeUndefined();
+  });
+
+  it('deleteBySubject() returns 0 for an unknown subject', async () => {
+    const sessions = memorySessionStore();
+    expect(await sessions.deleteBySubject('ghost')).toBe(0);
+  });
+});
+
+describe('memoryCredentialStore direct operations', () => {
+  it('covers the full password credential lifecycle', async () => {
+    const credentials = memoryCredentialStore();
+    expect(await credentials.findPassword('u1')).toBeNull();
+    const saved = await credentials.savePassword({
+      kind: 'password',
+      id: 'c1',
+      userId: 'u1',
+      hash: 'hash',
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    expect(await credentials.findPassword('u1')).toEqual(saved);
+    expect(await credentials.deletePassword('u1')).toBe(true);
+    expect(await credentials.deletePassword('u1')).toBe(false);
+  });
+
+  it('covers the full WebAuthn credential lifecycle, including a failed sign-count CAS', async () => {
+    const credentials = memoryCredentialStore();
+    const credential = await credentials.saveWebAuthn({
+      kind: 'webauthn',
+      id: 'cred-1',
+      userId: 'u1',
+      publicKeyCose: 'AQ',
+      algorithm: -7,
+      signCount: 0,
+      backupEligible: false,
+      backupState: false,
+      uvInitialized: true,
+      createdAt: 0,
+      version: 1,
+    });
+    expect(await credentials.findWebAuthn('cred-1')).toEqual(credential);
+    expect(await credentials.listWebAuthn('u1')).toEqual([credential]);
+    expect(await credentials.listWebAuthn('u2')).toEqual([]);
+
+    // Wrong expected version: the CAS must refuse rather than overwrite.
+    expect(await credentials.updateSignCount('cred-1', 5, 999, 10)).toBe(false);
+    expect(await credentials.updateSignCount('cred-1', 5, 1, 10, true)).toBe(true);
+    const updated = await credentials.findWebAuthn('cred-1');
+    expect(updated?.signCount).toBe(5);
+    expect(updated?.version).toBe(2);
+    expect(updated?.backupState).toBe(true);
+
+    expect(await credentials.deleteWebAuthn('cred-1')).toBe(true);
+    expect(await credentials.findWebAuthn('cred-1')).toBeNull();
+  });
+
+  it('covers the full API-key credential lifecycle', async () => {
+    const credentials = memoryCredentialStore();
+    const credential = await credentials.saveApiKey({
+      kind: 'api-key',
+      id: 'hashed-key',
+      userId: 'u1',
+      createdAt: 0,
+    });
+    expect(await credentials.findApiKey('hashed-key')).toEqual(credential);
+    expect(await credentials.listApiKeys('u1')).toEqual([credential]);
+    expect(await credentials.listApiKeys('u2')).toEqual([]);
+    expect(await credentials.deleteApiKey('hashed-key')).toBe(true);
+    expect(await credentials.findApiKey('hashed-key')).toBeNull();
+  });
+});
+
+describe('memoryStateStore direct operations', () => {
+  it('purges only entries past their expiry', async () => {
+    const future = Math.floor(Date.now() / 1000) + 3_600;
+    const state = memoryStateStore();
+    await state.put({ purpose: 'oauth-state', key: 'k1', data: {}, expiresAt: 5 });
+    await state.put({ purpose: 'oauth-state', key: 'k2', data: {}, expiresAt: future });
+    expect(await state.purgeExpired(10)).toBe(1);
+    expect(await state.consume('oauth-state', 'k2')).not.toBeNull();
+  });
+});
+
+describe('memoryRefreshTokenStore direct operations', () => {
+  const record = (id: string, familyId: string, subject: string, expiresAt = 500) => ({
+    id,
+    subject,
+    familyId,
+    createdAt: 0,
+    expiresAt,
+    authTime: 0,
+  });
+
+  it('revokes an entire family', async () => {
+    const store = memoryRefreshTokenStore();
+    await store.issue(record('r1', 'f1', 'u1'));
+    await store.issue(record('r2', 'f1', 'u1'));
+    await store.issue(record('r3', 'f2', 'u1'));
+
+    expect(await store.revokeFamily('f1')).toBe(2);
+    expect(await store.find('r1')).toBeNull();
+    expect(await store.find('r3')).not.toBeNull();
+    // Revoking an unknown family is a no-op.
+    expect(await store.revokeFamily('ghost')).toBe(0);
+  });
+
+  it('revokes every token for a subject', async () => {
+    const store = memoryRefreshTokenStore();
+    await store.issue(record('r1', 'f1', 'u1'));
+    await store.issue(record('r2', 'f2', 'u1'));
+    await store.issue(record('r3', 'f3', 'u2'));
+
+    expect(await store.revokeBySubject('u1')).toBe(2);
+    expect(await store.find('r3')).not.toBeNull();
+    expect(await store.revokeBySubject('ghost')).toBe(0);
+  });
+
+  it('purges only tokens past their expiry', async () => {
+    const store = memoryRefreshTokenStore();
+    await store.issue(record('r1', 'f1', 'u1', 5));
+    await store.issue(record('r2', 'f2', 'u1', 500));
+    expect(await store.purgeExpired(10)).toBe(1);
+    expect(await store.find('r1')).toBeNull();
+    expect(await store.find('r2')).not.toBeNull();
+  });
+});
+
+describe('memoryKeyStore direct operations', () => {
+  const signingKey = (kid: string) => ({
+    kid,
+    algorithm: 'ES256' as const,
+    privateJwk: {},
+    publicJwk: {},
+    createdAt: 0,
+  });
+
+  it('clears the current pointer when the current key is deleted', async () => {
+    const keys = memoryKeyStore();
+    await keys.save(signingKey('k1'));
+    expect((await keys.current()).kid).toBe('k1');
+
+    expect(await keys.delete('k1')).toBe(true);
+    await expect(keys.current()).rejects.toThrow(/No signing key registered/);
+    // Deleting an unknown kid is simply false, and does not disturb `current`.
+    await keys.save(signingKey('k2'));
+    expect(await keys.delete('ghost')).toBe(false);
+    expect((await keys.current()).kid).toBe('k2');
+  });
+
+  it('filters out expired keys from all(), preferring the current key first', async () => {
+    const keys = memoryKeyStore();
+    await keys.save({ ...signingKey('old'), notAfter: 5, expiresAt: 5 });
+    await keys.save(signingKey('new'));
+    const all = await keys.all();
+    expect(all.map((key) => key.kid)).not.toContain('old');
+    expect(all[0]?.kid).toBe('new');
+  });
+});
+
+describe('inMemoryAuthStores() production warning', () => {
+  it('warns exactly once when NODE_ENV=production and silent is not set', () => {
+    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } })
+      .process;
+    const original = proc?.env.NODE_ENV;
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      if (proc) proc.env.NODE_ENV = 'production';
+      inMemoryAuthStores();
+      inMemoryAuthStores();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('NODE_ENV=production');
+    } finally {
+      if (proc) proc.env.NODE_ENV = original;
+      warn.mockRestore();
+    }
+  });
+
+  it('never warns when silent is set, regardless of NODE_ENV', () => {
+    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } })
+      .process;
+    const original = proc?.env.NODE_ENV;
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      if (proc) proc.env.NODE_ENV = 'production';
+      inMemoryAuthStores({ silent: true });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      if (proc) proc.env.NODE_ENV = original;
+      warn.mockRestore();
+    }
   });
 });

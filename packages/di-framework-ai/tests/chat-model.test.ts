@@ -99,4 +99,21 @@ describe('RecordingChatModel', () => {
     expect(model.calls).toHaveLength(2);
     expect(inner.calls).toHaveLength(2);
   });
+
+  test('stream() delegates to the wrapped model and records the prompt', async () => {
+    const inner = new FakeChatModel('a b');
+    const model = new RecordingChatModel(inner);
+    const chunks: string[] = [];
+    for await (const response of model.stream(new Prompt('go'))) {
+      if (response.content) chunks.push(response.content);
+    }
+    expect(chunks.at(-1)).toBe('a b');
+    expect(model.calls).toHaveLength(1);
+  });
+
+  test('stream() throws when the delegate does not support streaming', () => {
+    const inner = { call: async () => textResponse('ok') };
+    const model = new RecordingChatModel(inner);
+    expect(() => model.stream(new Prompt('go'))).toThrow(/does not support streaming/);
+  });
 });

@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { messagesEqual } from '../src/chat/memory/message-window-chat-memory.ts';
+import { addMessage as addMessageStandalone } from '../src/chat/memory/chat-memory.ts';
 import {
   assistantMessage,
   CHAT_MEMORY_CONVERSATION_ID,
@@ -19,6 +21,15 @@ import {
   toolResponseMessage,
   userMessage,
 } from '../src/index.ts';
+
+describe('addMessage (chat-memory.ts standalone helper)', () => {
+  test('throws when the message is null', () => {
+    const memory = MessageWindowChatMemory.of();
+    expect(() => addMessageStandalone(memory, 'c1', null as never)).toThrow(
+      /message cannot be null/,
+    );
+  });
+});
 
 describe('InMemoryChatMemoryRepository', () => {
   test('save, find, list ids, delete', () => {
@@ -130,6 +141,13 @@ describe('MessageWindowChatMemory', () => {
     memory.add(id, [systemMessage('System instruction 1'), systemMessage('System instruction 2')]);
     memory.add(id, [systemMessage('System instruction 3')]);
     expect(memory.get(id).map((m) => m.text)).toEqual(['System instruction 3']);
+  });
+
+  test('builder chatMemoryRepository() sets a custom repository', () => {
+    const repo = new InMemoryChatMemoryRepository();
+    const memory = MessageWindowChatMemory.builder().chatMemoryRepository(repo).build();
+    memory.addMessage('c1', userMessage('hi'));
+    expect(repo.findByConversationId('c1')).toHaveLength(1);
   });
 
   test('processWindow export matches turn snap semantics', () => {
@@ -312,6 +330,80 @@ describe('MessageChatMemoryAdvisor', () => {
     const processed = advisor.before(request);
     expect(processed.prompt.messages[0]?.messageType).toBe('system');
     expect(processed.prompt.messages[0]?.text).toBe('Be brief.');
+  });
+
+  test('adviseStream persists the assistant reply after the stream completes', async () => {
+    const memory = MessageWindowChatMemory.of();
+    const advisor = MessageChatMemoryAdvisor.builder(memory).build();
+    const model = new FakeChatModel('a b');
+    const client = ChatClient.builder(model).defaultAdvisors(advisor).build();
+    const ctx = { [CHAT_MEMORY_CONVERSATION_ID]: 'stream-session' };
+
+    const chunks: string[] = [];
+    for await (const part of client.prompt().user('hello').advisorContext(ctx).stream().content()) {
+      chunks.push(part);
+    }
+
+    expect(chunks.at(-1)).toBe('a b');
+    const stored = memory.get('stream-session');
+    expect(stored[0]?.messageType).toBe('user');
+    expect(stored[1]?.messageType).toBe('assistant');
+    expect(stored[1]?.text).toBe('a b');
+  });
+});
+
+describe('messagesEqual', () => {
+  test('returns true for the identical reference without deep comparison', () => {
+    const m = userMessage('hi');
+    expect(messagesEqual(m, m)).toBe(true);
+  });
+
+  test('returns false for different message types or text', () => {
+    expect(messagesEqual(userMessage('hi'), systemMessage('hi'))).toBe(false);
+    expect(messagesEqual(userMessage('hi'), userMessage('bye'))).toBe(false);
+  });
+
+  test('returns false when metadata differs (extra key or different value)', () => {
+    expect(
+      messagesEqual(userMessage('hi', { metadata: { a: 1 } }), userMessage('hi', { metadata: {} })),
+    ).toBe(false);
+    expect(
+      messagesEqual(
+        userMessage('hi', { metadata: { a: 1 } }),
+        userMessage('hi', { metadata: { a: 2 } }),
+      ),
+    ).toBe(false);
+    expect(
+      messagesEqual(
+        userMessage('hi', { metadata: { a: 1 } }),
+        userMessage('hi', { metadata: { a: 1 } }),
+      ),
+    ).toBe(true);
+  });
+
+  test('compares user messages by media', () => {
+    const withMedia = userMessage('hi', { media: [{ mimeType: 'text/plain', data: 'aGk=' }] });
+    const withoutMedia = userMessage('hi');
+    expect(messagesEqual(withMedia, withoutMedia)).toBe(false);
+    expect(messagesEqual(withoutMedia, userMessage('hi'))).toBe(true);
+  });
+
+  test('compares assistant messages by toolCalls and media', () => {
+    const a1 = assistantMessage('hi', {
+      toolCalls: [{ id: '1', type: 'function', name: 'f', arguments: '{}' }],
+    });
+    const a2 = assistantMessage('hi', {
+      toolCalls: [{ id: '2', type: 'function', name: 'f', arguments: '{}' }],
+    });
+    expect(messagesEqual(a1, a2)).toBe(false);
+    expect(messagesEqual(a1, assistantMessage('hi', { toolCalls: a1.toolCalls }))).toBe(true);
+  });
+
+  test('compares tool response messages by responses', () => {
+    const t1 = toolResponseMessage([toolResponse('1', 'f', 'a')]);
+    const t2 = toolResponseMessage([toolResponse('1', 'f', 'b')]);
+    expect(messagesEqual(t1, t2)).toBe(false);
+    expect(messagesEqual(t1, toolResponseMessage([toolResponse('1', 'f', 'a')]))).toBe(true);
   });
 });
 

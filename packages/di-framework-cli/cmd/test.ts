@@ -21,6 +21,14 @@ export function handleTestFailure(err: unknown): never {
   process.exit(1);
 }
 
-if (import.meta.main) {
-  test().catch(handleTestFailure);
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export function runTestMain(
+  isMain = import.meta.main,
+  start: () => Promise<void> = () => test().catch(handleTestFailure),
+): void {
+  if (isMain) {
+    void start();
+  }
 }
+
+runTestMain();

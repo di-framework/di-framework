@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { handleTestFailure, test } from '../cmd/test';
+import { handleTestFailure, runTestMain, test } from '../cmd/test';
 
 const SCRIPT_PATH = join(import.meta.dir, '..', 'scripts', 'e2e-test.sh');
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
@@ -75,6 +75,17 @@ describe('test command', () => {
         process.exit = originalExit;
         err.mockRestore();
       }
+    });
+
+    it('runTestMain invokes start only when isMain is true', () => {
+      let calls = 0;
+      const start = async () => {
+        calls++;
+      };
+      runTestMain(false, start);
+      expect(calls).toBe(0);
+      runTestMain(true, start);
+      expect(calls).toBe(1);
     });
 
     it('exits with code 1 when the e2e script fails under import.meta.main', async () => {

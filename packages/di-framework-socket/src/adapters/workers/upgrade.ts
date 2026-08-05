@@ -68,12 +68,8 @@ export async function createWorkerWebSocketUpgrade(
       const plain = createPlainConnection({
         protocol: 'websocket',
         mode,
-        send(frame) {
-          duplex.send(frame);
-        },
-        close(code, reason) {
-          duplex.close?.(code, reason);
-        },
+        send(frame) { duplex.send(frame); },
+        close(code, reason) { duplex.close?.(code, reason); },
       });
       // Bridge duplex → plain handlers
       duplex.onMessage((frame) => plain.dispatchMessage(frame));

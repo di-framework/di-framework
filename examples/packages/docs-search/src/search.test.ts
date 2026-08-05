@@ -114,3 +114,145 @@ describe('incremental Vectorize sync', () => {
     expect(full.skipped).toBe(0);
   });
 });
+
+describe('DocumentRepository.replaceCorpus', () => {
+  beforeEach(() => {
+    useContainer().clear();
+  });
+
+  test('drops existing pages and seeds the replacement corpus', async () => {
+    const root = useContainer();
+    root.register(DocumentRepository);
+    const repo = root.resolve(DocumentRepository);
+
+    await repo.seed([page('old-1', 'Old One', 'stale content'), page('old-2', 'Old Two', 'stale')]);
+    expect(await repo.count()).toBe(2);
+
+    const replaced = await repo.replaceCorpus([
+      {
+        objectID: 'new-1',
+        url: 'https://example.test/new-1.html',
+        pageTitle: 'New One',
+        mainTitle: 'New One',
+        breadcrumbs: 'Docs|New One',
+        content: 'fresh content',
+        product: 'd',
+        version: 'latest',
+      },
+    ]);
+
+    expect(replaced).toBe(1);
+    const all = await repo.findAll();
+    expect(all.map((p) => p.id)).toEqual(['new-1']);
+  });
+});
+
+describe('EmbeddingService with a Workers AI binding', () => {
+  beforeEach(() => {
+    useContainer().clear();
+  });
+
+  function wireWithAi(ai: Ai) {
+    const root = useContainer();
+    root.register(EmbeddingService);
+    root.registerFactory('Env', () => () => ({ AI: ai, EMBEDDING_MODEL: '' }) as unknown as never, {
+      singleton: true,
+    });
+    return root.resolve(EmbeddingService);
+  }
+
+  test('embeds through the AI binding when present', async () => {
+    const ai = { run: async () => ({ data: [[1, 2, 3]] }) } as unknown as Ai;
+    const service = wireWithAi(ai);
+    const [vector] = await service.embed('hello world');
+    expect(vector).toEqual([1, 2, 3]);
+  });
+
+  test('throws when the AI binding returns a mismatched number of vectors', async () => {
+    const ai = { run: async () => ({ data: [[1, 2, 3]] }) } as unknown as Ai;
+    const service = wireWithAi(ai);
+    await expect(service.embed(['a', 'b'])).rejects.toThrow('missing data[]');
+  });
+});
+
+describe('VectorIndexService.query with a Vectorize binding', () => {
+  beforeEach(() => {
+    useContainer().clear();
+  });
+
+  test('maps Vectorize matches into VectorMatch results', async () => {
+    const root = useContainer();
+    root.register(EmbeddingService);
+    root.register(VectorIndexService);
+    const vectorize = {
+      query: async () => ({
+        matches: [{ id: 'a', score: 0.9, metadata: { product: 'd' } }],
+      }),
+    } as unknown as VectorizeIndex;
+    root.registerFactory(
+      'Env',
+      () => () => ({ VECTORIZE: vectorize, EMBEDDING_MODEL: '' }) as unknown as never,
+      { singleton: true },
+    );
+    const vectors = root.resolve(VectorIndexService);
+    const matches = await vectors.query('hello', { topK: 5 });
+    expect(matches).toEqual([{ id: 'a', score: 0.9, metadata: { product: 'd' } }]);
+  });
+});
+
+describe('SearchService.search with populated Vectorize matches', () => {
+  beforeEach(() => {
+    useContainer().clear();
+  });
+
+  function wireWithVectorize(matches: Array<{ id: string; score: number }>) {
+    const root = useContainer();
+    root.register(DocumentRepository);
+    root.register(EmbeddingService);
+    root.register(VectorIndexService);
+    root.register(SearchService);
+    const vectorize = { query: async () => ({ matches }) } as unknown as VectorizeIndex;
+    root.registerFactory(
+      'Env',
+      () => () => ({ VECTORIZE: vectorize, EMBEDDING_MODEL: '' }) as unknown as never,
+      { singleton: true },
+    );
+    return root;
+  }
+
+  test('scores matched pages, drops unknown ids, and skips low-relevance hits', async () => {
+    const root = wireWithVectorize([
+      { id: 'known', score: 0.9 },
+      { id: 'missing-from-repo', score: 0.8 },
+      { id: 'low-score', score: 0.01 },
+    ]);
+    const repo = root.resolve(DocumentRepository);
+    await repo.seed([
+      page('known', 'Known Page', 'repository content about DI'),
+      page('low-score', 'Low Score Page', 'irrelevant unrelated text'),
+    ]);
+
+    const search = root.resolve(SearchService);
+    const result = await search.search({ query: 'repository', maxHits: 10 });
+
+    expect(result.hits.some((h) => h.objectID === 'known')).toBe(true);
+    expect(result.hits.some((h) => h.objectID === 'missing-from-repo')).toBe(false);
+  });
+
+  test('exact search skips hits whose title/content does not contain the exact token', async () => {
+    const root = wireWithVectorize([{ id: 'known', score: 0.9 }]);
+    const repo = root.resolve(DocumentRepository);
+    await repo.seed([page('known', 'Known Page', 'nothing relevant here')]);
+
+    const search = root.resolve(SearchService);
+    const result = await search.search({ query: 'repository', maxHits: 10, isExactSearch: true });
+    expect(result.hits).toHaveLength(0);
+  });
+
+  test('returns an empty response for a blank query', async () => {
+    const root = wireWithVectorize([]);
+    const search = root.resolve(SearchService);
+    const result = await search.search({ query: '   ' });
+    expect(result).toMatchObject({ hits: [], nbHits: 0, nbPages: 0 });
+  });
+});

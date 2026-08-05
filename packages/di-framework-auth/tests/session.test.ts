@@ -180,6 +180,16 @@ describe('CSRF', () => {
       expect(checkRequestOrigin(build({}))).toBe(true);
       expect(checkRequestOrigin(build({}), { requireOriginHeader: true })).toBe(false);
     });
+
+    it('rejects rather than throwing on a malformed Origin header', () => {
+      expect(checkRequestOrigin(build({ origin: 'not-a-url' }))).toBe(false);
+      // Also unparseable through an explicit allowlist entry.
+      expect(
+        checkRequestOrigin(build({ origin: 'https://app.example.com' }), {
+          allowedOrigins: ['not-a-url'],
+        }),
+      ).toBe(false);
+    });
   });
 });
 
@@ -305,6 +315,12 @@ describe('sessionManager', () => {
   it('defaults to the AAL2 policy', () => {
     expect(build().policy).toEqual(AAL2_POLICY);
     expect(() => resolveSessionPolicy({ absoluteTimeoutSeconds: 0 })).toThrow(RangeError);
+  });
+
+  it('refuses a negative inactivity timeout', () => {
+    expect(() => resolveSessionPolicy({ inactivityTimeoutSeconds: -1 })).toThrow(RangeError);
+    // 0 disables the check and must remain valid.
+    expect(resolveSessionPolicy({ inactivityTimeoutSeconds: 0 }).inactivityTimeoutSeconds).toBe(0);
   });
 });
 
@@ -479,5 +495,44 @@ describe('passwordService', () => {
     );
     await passwords.changePassword(user.id, 'correct horse battery', 'new passphrase here');
     await expect(passwords.login('ada@example.com', 'new passphrase here')).resolves.toBeDefined();
+  });
+
+  it('rejects a password over the maxBytes cap even when the character count is fine', async () => {
+    const { passwords } = build({ maxBytes: 20 });
+    // Four-byte-per-codepoint emoji: 8 code points clears minLength but their
+    // 32-byte UTF-8 encoding blows past a small byte cap.
+    await expect(passwords.validate('🙂'.repeat(8))).rejects.toThrow(/at most 20 bytes/);
+  });
+
+  it('register() validates before storing, independent of login/createUser', async () => {
+    const { passwords, credentials } = build();
+    await expect(passwords.register('user-1', 'short')).rejects.toThrow(/at least 8 characters/);
+    const credential = await passwords.register('user-1', 'a fine passphrase');
+    expect(credential.userId).toBe('user-1');
+    expect(await credentials.findPassword('user-1')).toEqual(credential);
+  });
+
+  it('verify() burns the dummy path when there is no credential, and checks the real hash otherwise', async () => {
+    const { passwords } = build();
+    expect(await passwords.verify('nobody', 'whatever')).toBe(false);
+
+    await passwords.register('user-1', 'a fine passphrase');
+    expect(await passwords.verify('user-1', 'a fine passphrase')).toBe(true);
+    expect(await passwords.verify('user-1', 'wrong passphrase')).toBe(false);
+  });
+
+  it('rejects login for a disabled user with the same error as a bad password', async () => {
+    const { passwords, users } = build();
+    const user = await passwords.createUser({
+      identifier: 'ada@example.com',
+      password: 'correct horse battery',
+    });
+    await users.update(user.id, { disabled: true });
+
+    const error = await passwords
+      .login('ada@example.com', 'correct horse battery')
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(AuthError);
+    expect(error.code).toBe('invalid_credentials');
   });
 });

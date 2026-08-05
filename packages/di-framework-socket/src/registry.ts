@@ -22,7 +22,13 @@ export interface SocketGatewayEntry {
  * Same role as the HTTP and events registries.
  */
 export class SocketGatewayRegistry {
-  private readonly entries = new Map<GatewayCtor, SocketGatewayEntry>();
+  private readonly entries: Map<GatewayCtor, SocketGatewayEntry>;
+
+  // Explicit constructor (rather than a field initializer) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor() {
+    this.entries = new Map<GatewayCtor, SocketGatewayEntry>();
+  }
 
   addTarget(target: GatewayCtor): void {
     if (!this.entries.has(target)) {

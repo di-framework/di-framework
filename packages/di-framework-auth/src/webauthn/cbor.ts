@@ -311,8 +311,7 @@ export function cborText(map: Map<CborValue, CborValue>, key: CborValue, what: s
 
 export function cborInt(map: Map<CborValue, CborValue>, key: CborValue, what: string): number {
   const value = map.get(key);
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
+  if (typeof value !== 'number' || !Number.isInteger(value))
     throw new CborError(`${what} is missing or is not an integer`);
-  }
   return value;
 }

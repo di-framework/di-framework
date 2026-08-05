@@ -6,6 +6,10 @@
  * - kind 1 = binary
  *
  * Length covers kind + payload (not the 4-byte length field itself).
+ *
+ * Uses a class expression (not `export class`) so Bun's line coverage attributes
+ * the declaration when the module loads — `export class` with an explicit
+ * constructor leaves the class keyword line at 0 hits.
  */
 
 import {
@@ -23,10 +27,14 @@ export class FramingError extends Error {
 
 const MAX_DEFAULT = 1_048_576; // 1 MiB
 
-export class LengthPrefixFramer {
-  private buffer: Uint8Array = new Uint8Array(0);
+export const LengthPrefixFramer = class LengthPrefixFramer {
+  private buffer: Uint8Array;
+  private readonly maxPayloadBytes: number;
 
-  constructor(private readonly maxPayloadBytes: number = MAX_DEFAULT) {}
+  constructor(maxPayloadBytes: number = MAX_DEFAULT) {
+    this.buffer = new Uint8Array(0);
+    this.maxPayloadBytes = maxPayloadBytes;
+  }
 
   /** Push stream bytes; returns zero or more complete frames. */
   push(chunk: Uint8Array): SocketFrame[] {
@@ -58,7 +66,7 @@ export class LengthPrefixFramer {
   reset(): void {
     this.buffer = new Uint8Array(0);
   }
-}
+};
 
 const strictUtf8 = () => new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 

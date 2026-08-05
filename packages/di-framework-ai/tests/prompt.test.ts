@@ -32,6 +32,37 @@ describe('Prompt', () => {
     expect(prompt.getUserMessage().text).toBe('new');
   });
 
+  test('getSystemMessages / getUserMessages return all matching messages', () => {
+    const prompt = Prompt.fromMessages([
+      systemMessage('s1'),
+      userMessage('u1'),
+      assistantMessage('a1'),
+      userMessage('u2'),
+    ]);
+    expect(prompt.getSystemMessages().map((m) => m.text)).toEqual(['s1']);
+    expect(prompt.getUserMessages().map((m) => m.text)).toEqual(['u1', 'u2']);
+  });
+
+  test('copy() clones messages/options into a new independent Prompt', () => {
+    const original = new Prompt('hi', { temperature: 0.3 });
+    const copy = original.copy();
+    expect(copy.messages).toEqual(original.messages);
+    expect(copy.messages).not.toBe(original.messages);
+    expect(copy.options).toEqual(original.options);
+    expect(copy.options).not.toBe(original.options);
+  });
+
+  test('copy() with no options stays undefined', () => {
+    const copy = new Prompt('hi').copy();
+    expect(copy.options).toBeUndefined();
+  });
+
+  test('Prompt.of() builds a user-message prompt with options', () => {
+    const prompt = Prompt.of('hello', { temperature: 0.4 });
+    expect(prompt.getUserMessage().text).toBe('hello');
+    expect(prompt.options?.temperature).toBe(0.4);
+  });
+
   test('withOptions merges provider options', () => {
     const prompt = new Prompt('x', {
       temperature: 0.2,

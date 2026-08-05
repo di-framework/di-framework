@@ -37,6 +37,19 @@ describe('LengthPrefixFramer', () => {
     const invalid = new Uint8Array([0xff, 0xfe, 0xfd]);
     expect(() => encodeLengthPrefix(invalid, undefined, 'text')).toThrow();
   });
+
+  it('reset() clears any partially-buffered bytes', () => {
+    const framer = new LengthPrefixFramer();
+    const wire = encodeLengthPrefix(textFrame('hello'));
+    // Push only part of the frame, leaving bytes buffered.
+    expect(framer.push(wire.subarray(0, 3))).toEqual([]);
+    framer.reset();
+    // Pushing the *complete* frame after reset should decode exactly once,
+    // proving the earlier partial bytes were discarded (not prepended).
+    const frames = framer.push(wire);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]!.text).toBe('hello');
+  });
 });
 
 describe('UDP envelope', () => {
