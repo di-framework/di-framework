@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import type { SocketConnection } from '../index.ts';
 import { connectBunWebSocketClient, createBunWebSocketServer } from '../bun.ts';
+import type { SocketConnection } from '../index.ts';
 
 const servers: Array<{ stop(): void }> = [];
 

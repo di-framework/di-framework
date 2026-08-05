@@ -13,10 +13,7 @@ describe('LengthPrefixFramer', () => {
   it('preserves text vs binary kind across chunk boundaries', () => {
     const text = textFrame('hello');
     const bin = binaryFrame(new Uint8Array([1, 2, 3, 4]));
-    const wire = new Uint8Array([
-      ...encodeLengthPrefix(text),
-      ...encodeLengthPrefix(bin),
-    ]);
+    const wire = new Uint8Array([...encodeLengthPrefix(text), ...encodeLengthPrefix(bin)]);
     const framer = new LengthPrefixFramer();
 
     const a = wire.subarray(0, 3);

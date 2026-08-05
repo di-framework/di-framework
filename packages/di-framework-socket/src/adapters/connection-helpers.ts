@@ -1,9 +1,4 @@
-import {
-  toFrame,
-  type SendInput,
-  type SendOptions,
-  type SocketFrame,
-} from '../core/frame.ts';
+import { type SendInput, type SendOptions, type SocketFrame, toFrame } from '../core/frame.ts';
 import type { MessageHandler, SocketConnection, SocketProtocol } from '../core/types.ts';
 import type { SecurityMode } from '../security/protocol.ts';
 import type { SecureSession } from '../security/session.ts';

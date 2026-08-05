@@ -10,11 +10,11 @@
 
 import {
   binaryFrame,
+  type FrameKind,
   kindFromByte,
   kindToByte,
-  textFrame,
-  type FrameKind,
   type SocketFrame,
+  textFrame,
 } from './frame.ts';
 
 export class FramingError extends Error {
@@ -91,9 +91,7 @@ function decodeFramedBody(body: Uint8Array): SocketFrame {
   const kind = kindFromByte(body[0]!);
   const payload = body.subarray(1);
   if (kind === 'text') {
-    return textFrame(
-      new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(payload),
-    );
+    return textFrame(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(payload));
   }
   return binaryFrame(payload);
 }

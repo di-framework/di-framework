@@ -1,5 +1,5 @@
-import type { FrameKind, SendInput, SendOptions, SocketFrame } from './frame.ts';
 import type { SecurityMode } from '../security/protocol.ts';
+import type { FrameKind, SendInput, SendOptions, SocketFrame } from './frame.ts';
 
 export type SocketProtocol = 'websocket' | 'tcp' | 'udp';
 
@@ -34,10 +34,7 @@ export interface MessageMeta {
  * Receives a {@link SocketFrame} — never a bare string/bytes without kind.
  * On WebSocket, `frame.kind` is the opcode (text vs binary).
  */
-export type MessageHandler = (
-  frame: SocketFrame,
-  meta?: MessageMeta,
-) => void | Promise<void>;
+export type MessageHandler = (frame: SocketFrame, meta?: MessageMeta) => void | Promise<void>;
 
 export interface SocketConnection {
   readonly id: string;

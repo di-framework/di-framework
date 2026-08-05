@@ -1,5 +1,5 @@
-import type { SocketFrame } from './frame.ts';
 import type { MessageDuplex } from '../security/session.ts';
+import type { SocketFrame } from './frame.ts';
 
 /**
  * In-process bidirectional duplex pair that preserves frame kind.

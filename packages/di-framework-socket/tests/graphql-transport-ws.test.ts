@@ -51,10 +51,7 @@ describe('createGraphqlTransportWs', () => {
     });
     stoppers.push(() => server.stop(true));
 
-    const socket = new WebSocket(
-      `ws://127.0.0.1:${server.port}`,
-      'graphql-transport-ws',
-    );
+    const socket = new WebSocket(`ws://127.0.0.1:${server.port}`, 'graphql-transport-ws');
     const inbox: any[] = [];
 
     await new Promise<void>((resolve, reject) => {

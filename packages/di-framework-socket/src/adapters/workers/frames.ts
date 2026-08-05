@@ -1,4 +1,4 @@
-import { binaryFrame, textFrame, type SocketFrame } from '../../core/frame.ts';
+import { binaryFrame, type SocketFrame, textFrame } from '../../core/frame.ts';
 
 /**
  * Map a Cloudflare Workers / DO WebSocket message to a {@link SocketFrame}.

@@ -53,11 +53,17 @@ export type GraphqlWsSend = (message: unknown) => void;
 
 export interface GraphqlTransportWsHandlers<TContext = unknown> {
   /** Create per-connection state for Bun `server.upgrade({ data })`. */
-  createData(seed?: Partial<GraphqlTransportWsSocketData<TContext>>): GraphqlTransportWsSocketData<TContext>;
+  createData(
+    seed?: Partial<GraphqlTransportWsSocketData<TContext>>,
+  ): GraphqlTransportWsSocketData<TContext>;
   /** Bun `WebSocketHandler` (message + close). */
   websocket: {
     message(
-      socket: { data: GraphqlTransportWsSocketData<TContext>; send: (data: string) => void; close: (code?: number, reason?: string) => void },
+      socket: {
+        data: GraphqlTransportWsSocketData<TContext>;
+        send: (data: string) => void;
+        close: (code?: number, reason?: string) => void;
+      },
       raw: string | ArrayBuffer | Uint8Array,
     ): void;
     close(socket: { data: GraphqlTransportWsSocketData<TContext> }): void;
@@ -81,7 +87,9 @@ function defaultIsSubscription(query: string, operationName?: string | null): bo
     .replace(/"(?:\\.|[^"\\])*"/g, '""');
 
   if (operationName) {
-    const re = new RegExp(String.raw`\b(query|mutation|subscription)\s+${escapeRegExp(operationName)}\b`);
+    const re = new RegExp(
+      String.raw`\b(query|mutation|subscription)\s+${escapeRegExp(operationName)}\b`,
+    );
     const m = stripped.match(re);
     if (m) return m[1] === 'subscription';
   }
@@ -232,11 +240,16 @@ export function createGraphqlTransportWs<TContext = unknown>(
           close?.(4401, 'Unauthorized');
           return;
         }
-        void startOperation(send, data, String(message.id), (message.payload ?? {}) as {
-          query?: string;
-          variables?: Record<string, unknown>;
-          operationName?: string | null;
-        }).catch((error) => {
+        void startOperation(
+          send,
+          data,
+          String(message.id),
+          (message.payload ?? {}) as {
+            query?: string;
+            variables?: Record<string, unknown>;
+            operationName?: string | null;
+          },
+        ).catch((error) => {
           send({ id: message.id, type: 'error', payload: [{ message: String(error) }] });
         });
         return;
@@ -270,11 +283,7 @@ export function createGraphqlTransportWs<TContext = unknown>(
         handleMessage(
           (msg) => socket.send(typeof msg === 'string' ? msg : JSON.stringify(msg)),
           socket.data,
-          typeof raw === 'string'
-            ? raw
-            : raw instanceof ArrayBuffer
-              ? new Uint8Array(raw)
-              : raw,
+          typeof raw === 'string' ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw,
           (code, reason) => socket.close(code, reason),
         );
       },

@@ -2,7 +2,7 @@ import type { SocketFrame } from '../core/frame.ts';
 import { encodeLengthPrefix, LengthPrefixFramer } from '../core/framing.ts';
 import type { CreateServerOptions, SocketConnection, SocketServer } from '../core/types.ts';
 import type { SecurityMode } from '../security/protocol.ts';
-import { SecureSession, type MessageDuplex } from '../security/session.ts';
+import { type MessageDuplex, SecureSession } from '../security/session.ts';
 import { connectionFromSecureSession, createPlainConnection } from './connection-helpers.ts';
 
 export interface BunTcpServerOptions extends CreateServerOptions {
@@ -25,7 +25,10 @@ type TcpSocketData = {
 };
 
 function framedDuplex(
-  socket: { write: (data: Uint8Array | string) => number; end: (data?: string | Uint8Array) => void },
+  socket: {
+    write: (data: Uint8Array | string) => number;
+    end: (data?: string | Uint8Array) => void;
+  },
   data: TcpSocketData,
 ): MessageDuplex {
   return {
@@ -139,9 +142,7 @@ export function createBunTcpServer(options: BunTcpServerOptions = {}): SocketSer
   };
 }
 
-export async function connectBunTcpClient(
-  options: BunTcpClientOptions,
-): Promise<SocketConnection> {
+export async function connectBunTcpClient(options: BunTcpClientOptions): Promise<SocketConnection> {
   const mode: SecurityMode = options.security?.mode ?? 'secure';
   const maxMessageBytes = options.maxMessageBytes ?? 1_048_576;
 

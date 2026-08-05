@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
 import { Component, Container } from '@di-framework/core/decorators';
+import { connectBunWebSocketClient } from '../bun.ts';
+import type { SocketConnection } from '../src/core/types.ts';
 import {
   OnClose,
   OnConnect,
@@ -8,9 +10,7 @@ import {
   SocketGateway,
   stopSocketGateways,
 } from '../src/decorators.ts';
-import type { SocketConnection } from '../src/core/types.ts';
 import registry from '../src/registry.ts';
-import { connectBunWebSocketClient } from '../bun.ts';
 
 afterEach(async () => {
   await stopSocketGateways();

@@ -1,12 +1,9 @@
-import {
-  connectionFromSecureSession,
-  createPlainConnection,
-} from '../connection-helpers.ts';
 import type { SocketConnection } from '../../core/types.ts';
 import type { SecurityMode } from '../../security/protocol.ts';
 import { SecureSession } from '../../security/session.ts';
-import { duplexFromWebSocket } from './duplex.ts';
+import { connectionFromSecureSession, createPlainConnection } from '../connection-helpers.ts';
 import type { CfWebSocketLike } from './duplex.ts';
+import { duplexFromWebSocket } from './duplex.ts';
 
 /** Subset of the Workers WebSocketPair API. */
 export interface WebSocketPairLike {

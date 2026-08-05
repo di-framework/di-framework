@@ -26,9 +26,7 @@ export interface PushableDuplex extends MessageDuplex {
   readonly closed: boolean;
 }
 
-export function createPushableDuplex(
-  ws: CfWebSocketLike,
-): PushableDuplex {
+export function createPushableDuplex(ws: CfWebSocketLike): PushableDuplex {
   const handlers = new Set<(frame: SocketFrame) => void>();
   let closed = false;
 

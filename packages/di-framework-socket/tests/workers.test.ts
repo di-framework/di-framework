@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  createMemoryDuplexPair,
-  SecureSession,
-  textFrame,
-  binaryFrame,
-} from '../index.ts';
+import { binaryFrame, createMemoryDuplexPair, SecureSession, textFrame } from '../index.ts';
 import {
   cfMessageToFrame,
   createPushableDuplex,
-  HibernatableSocketHub,
-  sendFrame,
-  type HibernatableWebSocket,
   type DurableObjectStateLike,
+  HibernatableSocketHub,
+  type HibernatableWebSocket,
+  sendFrame,
 } from '../workers.ts';
 
 describe('cfMessageToFrame / sendFrame', () => {
@@ -83,12 +78,10 @@ describe('PushableDuplex', () => {
 
     const ws: HibernatableWebSocket = {
       send(data) {
-        if (typeof data === 'string') sent.push({ kind: 'text', text: data, data: new TextEncoder().encode(data) });
+        if (typeof data === 'string')
+          sent.push({ kind: 'text', text: data, data: new TextEncoder().encode(data) });
         else {
-          const u8 =
-            data instanceof Uint8Array
-              ? data
-              : new Uint8Array(data as ArrayBuffer);
+          const u8 = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
           sent.push({ kind: 'binary', data: u8 });
         }
       },

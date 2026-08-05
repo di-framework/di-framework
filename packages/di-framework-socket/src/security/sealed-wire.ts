@@ -16,7 +16,14 @@
  * Binary-vs-text is preserved end-to-end and authenticated in AEAD AAD.
  */
 
-import { binaryFrame, kindFromByte, kindToByte, textFrame, type FrameKind, type SocketFrame } from '../core/frame.ts';
+import {
+  binaryFrame,
+  type FrameKind,
+  kindFromByte,
+  kindToByte,
+  type SocketFrame,
+  textFrame,
+} from '../core/frame.ts';
 import { base64UrlDecode, base64UrlEncode, concatBytes, u64Be } from './bytes.ts';
 
 export const SEALED_MAGIC = new Uint8Array([0xdf, 0x53]);
@@ -103,7 +110,11 @@ export function tryParseSealedJson(text: string): {
     counter?: string;
     payload?: string;
   };
-  if (typeof p.sessionId !== 'string' || typeof p.counter !== 'string' || typeof p.payload !== 'string') {
+  if (
+    typeof p.sessionId !== 'string' ||
+    typeof p.counter !== 'string' ||
+    typeof p.payload !== 'string'
+  ) {
     return null;
   }
   const kind: FrameKind = p.kind === 'text' ? 'text' : 'binary';

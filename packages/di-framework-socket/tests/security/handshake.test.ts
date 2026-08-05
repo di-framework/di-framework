@@ -3,10 +3,10 @@ import {
   AeadChannel,
   HandshakeError,
   PROTOCOL_VERSION,
+  runHandshakePair,
   SecureHandshakeConsumer,
   SecureHandshakeProvider,
   SUITE_V1,
-  runHandshakePair,
   timingSafeEqual,
 } from '../../index.ts';
 
@@ -43,9 +43,9 @@ describe('Secure handshake', () => {
     const provider = await SecureHandshakeProvider.create();
     const consumer = await SecureHandshakeConsumer.create();
     const init = provider.start();
-    await expect(
-      consumer.handleInit({ ...init, supportedSuites: ['none'] }),
-    ).rejects.toMatchObject({ code: 'suite_mismatch' });
+    await expect(consumer.handleInit({ ...init, supportedSuites: ['none'] })).rejects.toMatchObject(
+      { code: 'suite_mismatch' },
+    );
     provider.destroy();
     consumer.destroy();
   });
@@ -55,9 +55,9 @@ describe('Secure handshake', () => {
     const consumer = await SecureHandshakeConsumer.create();
     const init = provider.start();
     const response = await consumer.handleInit(init);
-    await expect(
-      provider.handleResponse({ ...response, sessionId: 'AAAA' }),
-    ).rejects.toMatchObject({ code: 'session_mismatch' });
+    await expect(provider.handleResponse({ ...response, sessionId: 'AAAA' })).rejects.toMatchObject(
+      { code: 'session_mismatch' },
+    );
     provider.destroy();
     consumer.destroy();
   });

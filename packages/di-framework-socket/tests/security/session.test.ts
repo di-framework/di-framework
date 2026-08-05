@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  binaryFrame,
-  createMemoryDuplexPair,
-  SecureSession,
-  textFrame,
-} from '../../index.ts';
+import { binaryFrame, createMemoryDuplexPair, SecureSession, textFrame } from '../../index.ts';
 
 describe('SecureSession over memory duplex', () => {
   it('handshakes and preserves text vs binary application frames', async () => {

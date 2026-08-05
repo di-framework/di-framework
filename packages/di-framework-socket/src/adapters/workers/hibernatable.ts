@@ -9,21 +9,11 @@
  * Never call `ws.accept()` when using this API — only `state.acceptWebSocket(ws)`.
  */
 
-import {
-  connectionFromSecureSession,
-  createPlainConnection,
-} from '../connection-helpers.ts';
 import type { SocketConnection } from '../../core/types.ts';
 import type { SecurityMode } from '../../security/protocol.ts';
-import {
-  SecureSession,
-  type SecureSessionSnapshot,
-} from '../../security/session.ts';
-import {
-  createPushableDuplex,
-  type CfWebSocketLike,
-  type PushableDuplex,
-} from './duplex.ts';
+import { SecureSession, type SecureSessionSnapshot } from '../../security/session.ts';
+import { connectionFromSecureSession, createPlainConnection } from '../connection-helpers.ts';
+import { type CfWebSocketLike, createPushableDuplex, type PushableDuplex } from './duplex.ts';
 import { cfMessageToFrame } from './frames.ts';
 
 /** Attachment blob stored via `serializeAttachment`. */
@@ -53,10 +43,7 @@ export interface HibernatableHubOptions {
   /**
    * Called when a connection is ready (after handshake / rehydrate / plain accept).
    */
-  onConnection?: (
-    connection: SocketConnection,
-    ws: HibernatableWebSocket,
-  ) => void | Promise<void>;
+  onConnection?: (connection: SocketConnection, ws: HibernatableWebSocket) => void | Promise<void>;
   /**
    * Invoked when attachment is about to be written (add app meta).
    */

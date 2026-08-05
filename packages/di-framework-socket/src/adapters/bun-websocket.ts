@@ -1,14 +1,14 @@
 import {
   binaryFrame,
-  textFrame,
-  toFrame,
   type SendInput,
   type SendOptions,
   type SocketFrame,
+  textFrame,
+  toFrame,
 } from '../core/frame.ts';
 import type { CreateServerOptions, SocketConnection, SocketServer } from '../core/types.ts';
 import type { SecurityMode } from '../security/protocol.ts';
-import { SecureSession, type MessageDuplex } from '../security/session.ts';
+import { type MessageDuplex, SecureSession } from '../security/session.ts';
 import { connectionFromSecureSession, createPlainConnection } from './connection-helpers.ts';
 
 export interface BunWebSocketServerOptions extends CreateServerOptions {

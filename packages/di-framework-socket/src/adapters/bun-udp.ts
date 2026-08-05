@@ -2,7 +2,7 @@ import { binaryFrame, type SocketFrame } from '../core/frame.ts';
 import { decodeUdpEnvelope, encodeUdpEnvelope } from '../core/framing.ts';
 import type { CreateServerOptions, SocketConnection, SocketServer } from '../core/types.ts';
 import type { SecurityMode } from '../security/protocol.ts';
-import { SecureSession, type MessageDuplex } from '../security/session.ts';
+import { type MessageDuplex, SecureSession } from '../security/session.ts';
 import { connectionFromSecureSession, createPlainConnection } from './connection-helpers.ts';
 
 export interface BunUdpSocketOptions extends CreateServerOptions {
@@ -23,7 +23,12 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
   SocketServer & {
     readonly port: number;
     readonly hostname: string;
-    sendTo(payload: SocketFrame | Uint8Array | string, port: number, address: string, sessionId?: string): void;
+    sendTo(
+      payload: SocketFrame | Uint8Array | string,
+      port: number,
+      address: string,
+      sessionId?: string,
+    ): void;
   }
 > {
   const mode: SecurityMode = options.security?.mode ?? 'secure';

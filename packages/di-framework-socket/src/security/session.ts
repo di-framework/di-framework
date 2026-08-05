@@ -1,24 +1,16 @@
 import {
   binaryFrame,
   isSocketFrame,
-  textFrame,
-  toFrame,
   type SendInput,
   type SendOptions,
   type SocketFrame,
+  textFrame,
+  toFrame,
 } from '../core/frame.ts';
 import { AeadChannel } from './aead.ts';
 import { base64UrlDecode, base64UrlEncode } from './bytes.ts';
-import {
-  HandshakeError,
-  SecureHandshakeConsumer,
-  SecureHandshakeProvider,
-} from './handshake.ts';
-import {
-  encodeProtocolMessage,
-  parseProtocolMessage,
-  type ProtocolMessage,
-} from './protocol.ts';
+import { HandshakeError, SecureHandshakeConsumer, SecureHandshakeProvider } from './handshake.ts';
+import { encodeProtocolMessage, type ProtocolMessage, parseProtocolMessage } from './protocol.ts';
 import {
   decodeSealedBinary,
   encodeSealedBinary,
@@ -344,4 +336,3 @@ export class SecureSession {
     this.unsub?.();
   }
 }
-

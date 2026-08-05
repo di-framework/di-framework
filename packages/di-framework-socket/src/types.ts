@@ -1,7 +1,7 @@
 import type { SocketConnection, SocketProtocol, SocketServer } from './core/types.ts';
 import type { SecurityMode } from './security/protocol.ts';
 
-export type { SocketConnection, SocketProtocol, SocketServer, SecurityMode };
+export type { SecurityMode, SocketConnection, SocketProtocol, SocketServer };
 
 /** How the gateway obtains a listening server. */
 export type SocketListenFactory = (hooks: {

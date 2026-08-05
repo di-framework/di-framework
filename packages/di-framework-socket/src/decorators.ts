@@ -1,11 +1,8 @@
-import {
-  defineMetadata,
-  getOwnMetadata,
-  useContainer,
-} from '@di-framework/core/container';
+import { defineMetadata, getOwnMetadata, useContainer } from '@di-framework/core/container';
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 
 const INJECT_METADATA_KEY = 'di:inject';
+
 import {
   connectBunTcpClient,
   connectBunUdpClient,
@@ -168,11 +165,7 @@ function wireConnection(
             } catch {
               continue;
             }
-            if (
-              !json ||
-              typeof json !== 'object' ||
-              (json as { type?: unknown }).type !== h.type
-            ) {
+            if (!json || typeof json !== 'object' || (json as { type?: unknown }).type !== h.type) {
               continue;
             }
             await (method as Function).call(instance, args[0], frame, json);
@@ -308,10 +301,12 @@ export function SocketGateway(options: SocketGatewayDecoratorOptions = {}) {
 
     const register = (ctor: Ctor) => {
       // Container decorator accepts concrete constructors; gateway classes are concrete at runtime.
-      (ContainerDecorator({
-        singleton: options.singleton,
-        container: options.container as never,
-      }) as (c: Ctor) => Ctor)(ctor);
+      (
+        ContainerDecorator({
+          singleton: options.singleton,
+          container: options.container as never,
+        }) as (c: Ctor) => Ctor
+      )(ctor);
     };
 
     if (!autoStart) {
@@ -367,9 +362,7 @@ export function SocketGateway(options: SocketGatewayDecoratorOptions = {}) {
  * Start every registered `@SocketGateway` (or only those listed).
  * Prefer autoStart, or call `$startGateway()` on a resolved instance.
  */
-export async function startSocketGateways(
-  targets?: Ctor[],
-): Promise<SocketServer[]> {
+export async function startSocketGateways(targets?: Ctor[]): Promise<SocketServer[]> {
   const container = useContainer();
   const list = (targets ?? registry.all().map((e) => e.target)) as Ctor[];
   const servers: SocketServer[] = [];

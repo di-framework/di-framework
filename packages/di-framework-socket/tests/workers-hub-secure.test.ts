@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  SecureSession,
   createMemoryDuplexPair,
-  textFrame,
+  SecureSession,
   type SecureSessionSnapshot,
+  textFrame,
 } from '../index.ts';
 import {
-  HibernatableSocketHub,
   type DurableObjectStateLike,
   type HibernatableAttachment,
+  HibernatableSocketHub,
   type HibernatableWebSocket,
 } from '../workers.ts';
 
@@ -68,8 +68,9 @@ describe('HibernatableSocketHub secure rehydrate', () => {
     // exportSnapshot after restore should match counters from serverSnap.
     const conn = hub.getConnection(ws)!;
     // Send via connection — needs duplex linked. Instead verify live session export.
-    const live = (hub as unknown as { live: Map<HibernatableWebSocket, { session?: SecureSession }> })
-      .live.get(ws);
+    const live = (
+      hub as unknown as { live: Map<HibernatableWebSocket, { session?: SecureSession }> }
+    ).live.get(ws);
     expect(live?.session).toBeTruthy();
     const again: SecureSessionSnapshot = live!.session!.exportSnapshot();
     expect(again.sessionId).toBe(serverSnap.sessionId);
