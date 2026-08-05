@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import {
-  connectBunTcpClient,
-  connectBunUdpClient,
-  createBunTcpServer,
-  createBunUdpSocket,
-} from '../bun.ts';
 import type { SocketConnection } from '../index.ts';
+import {
+  connectTcpClient,
+  connectUdpClient,
+  createTcpServer,
+  createUdpSocket,
+} from '../node.ts';
 
 const stoppers: Array<() => void> = [];
 
@@ -13,14 +13,14 @@ afterEach(() => {
   for (const stop of stoppers.splice(0)) stop();
 });
 
-describe('Bun TCP adapter', () => {
+describe('Node TCP adapter (node:net)', () => {
   it('exchanges sealed messages over secure TCP', async () => {
     let serverReady!: (c: SocketConnection) => void;
     const serverConnP = new Promise<SocketConnection>((r) => {
       serverReady = r;
     });
 
-    const server = createBunTcpServer({
+    const server = createTcpServer({
       security: { mode: 'secure' },
       onConnection(conn) {
         serverReady(conn);
@@ -32,7 +32,7 @@ describe('Bun TCP adapter', () => {
     });
     stoppers.push(() => server.stop());
 
-    const client = await connectBunTcpClient({
+    const client = await connectTcpClient({
       hostname: server.hostname,
       port: server.port,
       security: { mode: 'secure' },
@@ -53,7 +53,7 @@ describe('Bun TCP adapter', () => {
       serverReady = r;
     });
 
-    const server = createBunTcpServer({
+    const server = createTcpServer({
       security: { mode: 'plain' },
       onConnection(conn) {
         serverReady(conn);
@@ -64,7 +64,7 @@ describe('Bun TCP adapter', () => {
     });
     stoppers.push(() => server.stop());
 
-    const client = await connectBunTcpClient({
+    const client = await connectTcpClient({
       hostname: server.hostname,
       port: server.port,
       security: { mode: 'plain' },
@@ -80,14 +80,14 @@ describe('Bun TCP adapter', () => {
   });
 });
 
-describe('Bun UDP adapter', () => {
+describe('Node UDP adapter (node:dgram)', () => {
   it('exchanges sealed messages over secure UDP', async () => {
     let serverReady!: (c: SocketConnection) => void;
     const serverConnP = new Promise<SocketConnection>((r) => {
       serverReady = r;
     });
 
-    const server = await createBunUdpSocket({
+    const server = await createUdpSocket({
       security: { mode: 'secure' },
       onConnection(conn) {
         serverReady(conn);
@@ -99,7 +99,7 @@ describe('Bun UDP adapter', () => {
     });
     stoppers.push(() => server.stop());
 
-    const clientP = connectBunUdpClient({
+    const clientP = connectUdpClient({
       hostname: '127.0.0.1',
       port: server.port,
       security: { mode: 'secure' },
@@ -120,7 +120,7 @@ describe('Bun UDP adapter', () => {
       serverReady = r;
     });
 
-    const server = await createBunUdpSocket({
+    const server = await createUdpSocket({
       security: { mode: 'plain' },
       onConnection(conn) {
         serverReady(conn);
@@ -131,7 +131,7 @@ describe('Bun UDP adapter', () => {
     });
     stoppers.push(() => server.stop());
 
-    const clientP = connectBunUdpClient({
+    const clientP = connectUdpClient({
       hostname: '127.0.0.1',
       port: server.port,
       security: { mode: 'plain' },

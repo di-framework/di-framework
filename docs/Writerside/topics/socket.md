@@ -10,7 +10,7 @@ Decorator-driven **WebSocket**, **TCP**, and **UDP** for network peers, with a *
 - **Frame kind**: WebSocket text (opcode 1) vs binary (opcode 2) preserved end-to-end; never silently coerced.
 - **Secure channel**: Ephemeral ECDH P-256, HKDF-SHA-256, mutual confirmation, AES-256-GCM (kind authenticated in AAD).
 - **Modes**: `secure` (default) or explicit `plain`.
-- **Bun adapters**: WebSocket, TCP (length-prefix + kind), UDP (envelope + kind).
+- **Node primitives**: WebSocket (`node:http`+`ws`), TCP (`node:net`), UDP (`node:dgram`) — works on Node and Bun via Node compatibility (no Bun.serve / Bun.listen).
 - **Cloudflare**: `@di-framework/socket/workers` for Workers and hibernatable Durable Objects.
 - **GraphQL**: `@di-framework/socket/graphql` — `graphql-transport-ws` helper for subscriptions.
 
@@ -59,7 +59,8 @@ class LoggerService {
 }
 
 @SocketGateway({
-  bun: { protocol: 'websocket', path: '/ws', port: 3000 },
+  // node:http+ws / net / dgram — works on Node and Bun
+  server: { protocol: 'websocket', path: '/ws', port: 3000 },
   security: { mode: 'secure' }, // default
 })
 class ChatGateway {
@@ -95,8 +96,8 @@ useContainer().resolve(ChatGateway);
 
 | Option | Meaning |
 | --- | --- |
-| `bun: { protocol, path?, port?, hostname? }` | Built-in Bun listener (`websocket` \| `tcp` \| `udp`) |
-| `listen` | Custom factory for other runtimes |
+| `server: { protocol, path?, port?, hostname? }` | Built-in listener via **Node primitives** (`websocket` \| `tcp` \| `udp`) |
+| `listen` | Custom factory (e.g. Cloudflare Workers) |
 | `security.mode` | `'secure'` (default) or `'plain'` |
 | `autoStart` | Listen on resolve (default `true`) |
 | `singleton` | DI lifecycle |
@@ -158,17 +159,17 @@ interface SocketFrame {
 
 Limitations (v0.1): no mid-session rekey; replay protection is per-session; Node/Deno listeners are custom-`listen` only.
 
-## Bun TCP and UDP
+## TCP and UDP (Node primitives)
 
 ```typescript
 import {
-  createBunTcpServer,
-  connectBunTcpClient,
-  createBunUdpSocket,
-  connectBunUdpClient,
-} from '@di-framework/socket/bun';
+  createTcpServer,
+  connectTcpClient,
+  createUdpSocket,
+  connectUdpClient,
+} from '@di-framework/socket/node';
 
-const tcp = createBunTcpServer({
+const tcp = createTcpServer({
   security: { mode: 'secure' },
   onConnection(conn) {
     conn.onMessage(async (frame) => {
@@ -177,13 +178,15 @@ const tcp = createBunTcpServer({
   },
 });
 
-const client = await connectBunTcpClient({
+const client = await connectTcpClient({
   hostname: tcp.hostname,
   port: tcp.port,
 });
 ```
 
-UDP is connectionless: clients send a **knock** datagram so the server can open a per-peer session. Prefer `@SocketGateway({ bun: { protocol: 'tcp' | 'udp' } })` when you want DI handlers.
+UDP is connectionless: clients send a **knock** datagram so the server can open a per-peer session. Prefer `@SocketGateway({ server: { protocol: 'tcp' | 'udp' } })` when you want DI handlers.
+
+These adapters use `node:net` and `node:dgram` only — the same code path on Node and Bun.
 
 ## GraphQL subscriptions (`graphql-transport-ws`)
 
@@ -320,20 +323,21 @@ export default {
 
 Useful for tests and custom `listen` factories:
 
-- `@di-framework/socket/bun` — `createBunWebSocketServer`, TCP/UDP clients and servers
+- `@di-framework/socket/node` — `createWebSocketServer` (`node:http`+`ws`), TCP (`node:net`), UDP (`node:dgram`)
+- `@di-framework/socket/bun` — deprecated alias of `/node`
 - `SecureSession`, `SecureHandshakeProvider` / `SecureHandshakeConsumer`, `AeadChannel`
 - Framing: `encodeLengthPrefix`, `LengthPrefixFramer`, UDP envelope helpers
 
-Prefer `@SocketGateway` in application code on Bun. On Cloudflare, prefer the workers helpers (there is no long-lived port listener).
+Prefer `@SocketGateway({ server: … })` for process servers. On Cloudflare, prefer the workers helpers (no long-lived port listener).
 
 ## Capability matrix
 
-| | Bun | Node | Deno | Workers / DO |
+| | Node | Bun | Deno | Workers / DO |
 | --- | --- | --- | --- | --- |
-| Decorators + secure channel | yes | custom `listen` | custom `listen` | via workers hub |
-| Built-in listener | `bun:` option | — | — | `@di-framework/socket/workers` |
+| Decorators + secure channel | yes | yes (Node compat) | custom `listen` | via workers hub |
+| Built-in listener | `server:` / `/node` | same Node APIs | — | `@di-framework/socket/workers` |
 | Hibernatable WebSockets | — | — | — | `HibernatableSocketHub` |
-| TCP / UDP | yes | planned | planned | n/a (no server sockets) |
+| TCP / UDP | `node:net` / `dgram` | same | planned | n/a (no server sockets) |
 | `graphql-transport-ws` | yes | yes | yes | yes (WS text) |
 
 ## Related

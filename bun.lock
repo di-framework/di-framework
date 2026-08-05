@@ -288,17 +288,18 @@
     "packages/di-framework-socket": {
       "name": "@di-framework/socket",
       "version": "0.1.0",
+      "dependencies": {
+        "ws": "^8.18.3",
+      },
       "devDependencies": {
         "@types/bun": "latest",
+        "@types/ws": "^8.18.1",
         "typescript": "^5",
       },
       "peerDependencies": {
         "@di-framework/core": "workspace:^",
         "typescript": "^5",
       },
-      "optionalPeers": [
-        "@di-framework/core",
-      ],
     },
   },
   "packages": {

@@ -11,8 +11,17 @@ export type SocketListenFactory = (hooks: {
 
 export interface SocketGatewayDecoratorOptions {
   /**
-   * Built-in Bun listener. Prefer this for the common path; use `listen` for
-   * custom runtimes.
+   * Built-in listener using Node primitives (`node:http`+`ws`, `node:net`, `node:dgram`).
+   * Works on Node and Bun (Node compatibility). Prefer this over runtime-specific APIs.
+   */
+  server?: {
+    protocol: SocketProtocol;
+    path?: string;
+    port?: number;
+    hostname?: string;
+  };
+  /**
+   * @deprecated Use {@link server} — Bun-specific APIs are not used; this is an alias.
    */
   bun?: {
     protocol: SocketProtocol;
@@ -21,8 +30,8 @@ export interface SocketGatewayDecoratorOptions {
     hostname?: string;
   };
   /**
-   * Custom listen factory (any runtime). Receives connection hooks from the
-   * decorated handlers.
+   * Custom listen factory (e.g. Cloudflare Workers). Receives connection hooks
+   * from the decorated handlers.
    */
   listen?: SocketListenFactory;
   security?: { mode?: SecurityMode };

@@ -1,3 +1,4 @@
+import { createSocket, type RemoteInfo, type Socket as UdpSocket } from 'node:dgram';
 import { binaryFrame, type SocketFrame } from '../core/frame.ts';
 import { decodeUdpEnvelope, encodeUdpEnvelope } from '../core/framing.ts';
 import type { CreateServerOptions, SocketConnection, SocketServer } from '../core/types.ts';
@@ -5,9 +6,17 @@ import type { SecurityMode } from '../security/protocol.ts';
 import { type MessageDuplex, SecureSession } from '../security/session.ts';
 import { connectionFromSecureSession, createPlainConnection } from './connection-helpers.ts';
 
-export interface BunUdpSocketOptions extends CreateServerOptions {
+export interface NodeUdpSocketOptions extends CreateServerOptions {
   port?: number;
   hostname?: string;
+}
+
+export interface NodeUdpClientOptions {
+  hostname: string;
+  port: number;
+  security?: { mode?: SecurityMode };
+  localHostname?: string;
+  localPort?: number;
 }
 
 function peerKey(address: string, port: number): string {
@@ -17,9 +26,10 @@ function peerKey(address: string, port: number): string {
 const KNOCK_SESSION = 'knock';
 
 /**
- * Bun UDP socket. Frame kind is carried in the envelope header.
+ * UDP socket on `node:dgram` with kind-preserving envelopes.
+ * Works on Node and Bun via Node compatibility.
  */
-export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Promise<
+export async function createUdpSocket(options: NodeUdpSocketOptions = {}): Promise<
   SocketServer & {
     readonly port: number;
     readonly hostname: string;
@@ -45,14 +55,14 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
   const peers = new Map<string, PeerState>();
   let seq = 0n;
 
-  const udp = await Bun.udpSocket({
-    hostname,
-    port: options.port ?? 0,
-    socket: {
-      data(_socket, data, port, address) {
-        void handleDatagram(new Uint8Array(data), port, address);
-      },
-    },
+  const udp = createSocket('udp4');
+
+  await new Promise<void>((resolve, reject) => {
+    udp.once('error', reject);
+    udp.bind(options.port ?? 0, hostname, () => {
+      udp.off('error', reject);
+      resolve();
+    });
   });
 
   async function ensurePeer(port: number, address: string): Promise<PeerState> {
@@ -70,7 +80,7 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
         id: key,
         send(frame) {
           const wire = encodeUdpEnvelope('plain', ++seq, frame);
-          udp.send(wire, port, address);
+          udp.send(Buffer.from(wire), port, address);
         },
         close() {
           peers.delete(key);
@@ -85,7 +95,7 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
     const duplex: MessageDuplex = {
       send(frame) {
         const wire = encodeUdpEnvelope('handshake', ++peer.seq, frame);
-        udp.send(wire, port, address);
+        udp.send(Buffer.from(wire), port, address);
       },
       onMessage(handler) {
         peer.handlers.add(handler);
@@ -107,7 +117,8 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
     return peer;
   }
 
-  async function handleDatagram(raw: Uint8Array, port: number, address: string): Promise<void> {
+  async function handleDatagram(raw: Uint8Array, rinfo: RemoteInfo): Promise<void> {
+    const { port, address } = rinfo;
     let sessionId: string;
     let frame: SocketFrame;
     try {
@@ -147,12 +158,19 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
     for (const h of existing.handlers) h(frame);
   }
 
+  udp.on('message', (msg, rinfo) => {
+    void handleDatagram(new Uint8Array(msg), rinfo);
+  });
+
+  const address = udp.address();
+  const port = typeof address === 'object' ? address.port : (options.port ?? 0);
+
   return {
     protocol: 'udp',
     securityMode: mode,
-    port: udp.port,
+    port,
     hostname,
-    sendTo(payload, port, address, sessionId = 'plain') {
+    sendTo(payload, destPort, destAddress, sessionId = 'plain') {
       seq += 1n;
       const wire =
         typeof payload === 'object' && payload !== null && 'kind' in payload
@@ -164,7 +182,7 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
                 ? new TextEncoder().encode(payload)
                 : (payload as Uint8Array),
             );
-      udp.send(wire, port, address);
+      udp.send(Buffer.from(wire), destPort, destAddress);
     },
     stop() {
       peers.clear();
@@ -173,16 +191,8 @@ export async function createBunUdpSocket(options: BunUdpSocketOptions = {}): Pro
   };
 }
 
-export interface BunUdpClientOptions {
-  hostname: string;
-  port: number;
-  security?: { mode?: SecurityMode };
-  localHostname?: string;
-  localPort?: number;
-}
-
-export async function connectBunUdpClient(
-  options: BunUdpClientOptions,
+export async function connectUdpClient(
+  options: NodeUdpClientOptions,
 ): Promise<SocketConnection & { localPort: number }> {
   const mode: SecurityMode = options.security?.mode ?? 'secure';
   const handlers = new Set<(frame: SocketFrame) => void>();
@@ -191,49 +201,55 @@ export async function connectBunUdpClient(
   const remotePort = options.port;
   const remoteHost = options.hostname;
 
-  const udp = await Bun.udpSocket({
-    hostname: options.localHostname ?? '127.0.0.1',
-    port: options.localPort ?? 0,
-    socket: {
-      data(_socket, data) {
-        try {
-          const env = decodeUdpEnvelope(new Uint8Array(data));
-          for (const h of handlers) h(env.frame);
-        } catch {
-          for (const h of handlers) h(binaryFrame(new Uint8Array(data)));
-        }
-      },
-    },
+  const udp = createSocket('udp4');
+  await new Promise<void>((resolve, reject) => {
+    udp.once('error', reject);
+    udp.bind(options.localPort ?? 0, options.localHostname ?? '127.0.0.1', () => {
+      udp.off('error', reject);
+      resolve();
+    });
   });
+
+  udp.on('message', (msg) => {
+    try {
+      const env = decodeUdpEnvelope(new Uint8Array(msg));
+      for (const h of handlers) h(env.frame);
+    } catch {
+      for (const h of handlers) h(binaryFrame(new Uint8Array(msg)));
+    }
+  });
+
+  const local = udp.address();
+  const localPort = typeof local === 'object' ? local.port : 0;
 
   if (mode === 'plain') {
     udp.send(
-      encodeUdpEnvelope(KNOCK_SESSION, 0n, binaryFrame(new Uint8Array(0))),
+      Buffer.from(encodeUdpEnvelope(KNOCK_SESSION, 0n, binaryFrame(new Uint8Array(0)))),
       remotePort,
       remoteHost,
     );
-    await Bun.sleep(10);
+    await new Promise((r) => setTimeout(r, 10));
 
     const plain = createPlainConnection({
       protocol: 'udp',
       mode,
       send(frame) {
         const wire = encodeUdpEnvelope('plain', ++seq, frame);
-        udp.send(wire, remotePort, remoteHost);
+        udp.send(Buffer.from(wire), remotePort, remoteHost);
       },
       close() {
         udp.close();
       },
     });
     handlers.add((frame) => plain.dispatchMessage(frame));
-    return Object.assign(plain.connection, { localPort: udp.port });
+    return Object.assign(plain.connection, { localPort });
   }
 
   let knocked = false;
   const duplex: MessageDuplex = {
     send(frame) {
       const wire = encodeUdpEnvelope('handshake', ++seq, frame);
-      udp.send(wire, remotePort, remoteHost);
+      udp.send(Buffer.from(wire), remotePort, remoteHost);
     },
     onMessage(handler) {
       handlers.add(handler);
@@ -241,7 +257,7 @@ export async function connectBunUdpClient(
         knocked = true;
         queueMicrotask(() => {
           udp.send(
-            encodeUdpEnvelope(KNOCK_SESSION, 0n, binaryFrame(new Uint8Array(0))),
+            Buffer.from(encodeUdpEnvelope(KNOCK_SESSION, 0n, binaryFrame(new Uint8Array(0)))),
             remotePort,
             remoteHost,
           );
@@ -256,5 +272,12 @@ export async function connectBunUdpClient(
 
   const session = await SecureSession.connect({ role: 'consumer', duplex });
   const connection = connectionFromSecureSession(session, 'udp', mode);
-  return Object.assign(connection, { localPort: udp.port });
+  return Object.assign(connection, { localPort });
 }
+
+/** @deprecated Use {@link createUdpSocket} */
+export const createBunUdpSocket = createUdpSocket;
+/** @deprecated Use {@link connectUdpClient} */
+export const connectBunUdpClient = connectUdpClient;
+
+export type { UdpSocket };

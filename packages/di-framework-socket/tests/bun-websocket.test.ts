@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { connectBunWebSocketClient, createBunWebSocketServer } from '../bun.ts';
 import type { SocketConnection } from '../index.ts';
+import { connectWebSocketClient, createWebSocketServer } from '../node.ts';
 
 const servers: Array<{ stop(): void }> = [];
 
@@ -8,14 +8,14 @@ afterEach(() => {
   for (const s of servers.splice(0)) s.stop();
 });
 
-describe('Bun WebSocket secure adapter', () => {
+describe('Node WebSocket adapter (node:http + ws)', () => {
   it('completes secure handshake and exchanges messages', async () => {
     let serverConnReady!: (c: SocketConnection) => void;
     const serverConnP = new Promise<SocketConnection>((r) => {
       serverConnReady = r;
     });
 
-    const server = createBunWebSocketServer({
+    const server = createWebSocketServer({
       path: '/ws',
       security: { mode: 'secure' },
       onConnection(conn) {
@@ -28,7 +28,7 @@ describe('Bun WebSocket secure adapter', () => {
     });
     servers.push(server);
 
-    const client = await connectBunWebSocketClient(`ws://${server.hostname}:${server.port}/ws`, {
+    const client = await connectWebSocketClient(`ws://${server.hostname}:${server.port}/ws`, {
       security: { mode: 'secure' },
     });
     await serverConnP;
@@ -49,7 +49,7 @@ describe('Bun WebSocket secure adapter', () => {
       serverConnReady = r;
     });
 
-    const server = createBunWebSocketServer({
+    const server = createWebSocketServer({
       path: '/plain',
       security: { mode: 'plain' },
       onConnection(conn) {
@@ -61,7 +61,7 @@ describe('Bun WebSocket secure adapter', () => {
     });
     servers.push(server);
 
-    const client = await connectBunWebSocketClient(`ws://${server.hostname}:${server.port}/plain`, {
+    const client = await connectWebSocketClient(`ws://${server.hostname}:${server.port}/plain`, {
       security: { mode: 'plain' },
     });
     await serverConnP;

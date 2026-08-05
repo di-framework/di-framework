@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { connectBunWebSocketClient, createBunWebSocketServer } from '../bun.ts';
 import { binaryFrame, textFrame, toFrame } from '../index.ts';
+import { connectWebSocketClient, createWebSocketServer } from '../node.ts';
 
 const stoppers: Array<() => void> = [];
 afterEach(() => {
@@ -24,7 +24,7 @@ describe('WebSocket text vs binary opcodes', () => {
       ready = r;
     });
 
-    const server = createBunWebSocketServer({
+    const server = createWebSocketServer({
       path: '/f',
       security: { mode: 'plain' },
       onConnection(conn) {
@@ -42,7 +42,7 @@ describe('WebSocket text vs binary opcodes', () => {
     });
     stoppers.push(() => server.stop());
 
-    const client = await connectBunWebSocketClient(`ws://${server.hostname}:${server.port}/f`, {
+    const client = await connectWebSocketClient(`ws://${server.hostname}:${server.port}/f`, {
       security: { mode: 'plain' },
     });
     await readyP;
@@ -81,7 +81,7 @@ describe('WebSocket text vs binary opcodes', () => {
       ready = r;
     });
 
-    const server = createBunWebSocketServer({
+    const server = createWebSocketServer({
       path: '/s',
       security: { mode: 'secure' },
       onConnection(conn) {
@@ -93,7 +93,7 @@ describe('WebSocket text vs binary opcodes', () => {
     });
     stoppers.push(() => server.stop());
 
-    const client = await connectBunWebSocketClient(`ws://${server.hostname}:${server.port}/s`, {
+    const client = await connectWebSocketClient(`ws://${server.hostname}:${server.port}/s`, {
       security: { mode: 'secure' },
     });
     await readyP;

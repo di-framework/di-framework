@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
 import { Component, Container } from '@di-framework/core/decorators';
-import { connectBunWebSocketClient } from '../bun.ts';
+import { connectWebSocketClient } from '../node.ts';
 import type { SocketConnection } from '../src/core/types.ts';
 import {
   OnClose,
@@ -31,7 +31,7 @@ describe('@SocketGateway decorators', () => {
     const seen: string[] = [];
 
     @SocketGateway({
-      bun: { protocol: 'websocket', path: '/chat', port: 0 },
+      server: { protocol: 'websocket', path: '/chat', port: 0 },
       security: { mode: 'secure' },
       autoStart: true,
     })
@@ -78,7 +78,7 @@ describe('@SocketGateway decorators', () => {
     const port = (server as { port: number }).port;
     const hostname = (server as { hostname: string }).hostname;
 
-    const client = await connectBunWebSocketClient(`ws://${hostname}:${port}/chat`, {
+    const client = await connectWebSocketClient(`ws://${hostname}:${port}/chat`, {
       security: { mode: 'secure' },
     });
 
@@ -103,7 +103,7 @@ describe('@SocketGateway decorators', () => {
     const messages: string[] = [];
 
     @SocketGateway({
-      bun: { protocol: 'websocket', path: '/p', port: 0 },
+      server: { protocol: 'websocket', path: '/p', port: 0 },
       security: { mode: 'plain' },
     })
     class EchoGateway {
@@ -120,7 +120,7 @@ describe('@SocketGateway decorators', () => {
     };
     await Bun.sleep(20);
     const server = await gateway.$startGateway();
-    const client = await connectBunWebSocketClient(
+    const client = await connectWebSocketClient(
       `ws://${(server as { hostname: string }).hostname}:${(server as { port: number }).port}/p`,
       { security: { mode: 'plain' } },
     );

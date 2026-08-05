@@ -1,15 +1,5 @@
 import { defineMetadata, getOwnMetadata, useContainer } from '@di-framework/core/container';
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
-
-const INJECT_METADATA_KEY = 'di:inject';
-
-import {
-  connectBunTcpClient,
-  connectBunUdpClient,
-  createBunTcpServer,
-  createBunUdpSocket,
-  createBunWebSocketServer,
-} from '../bun.ts';
 import type { SocketConnection, SocketServer } from './core/types.ts';
 import registry from './registry.ts';
 import type { SecurityMode } from './security/protocol.ts';
@@ -19,6 +9,8 @@ import type {
   SocketGatewayHandle,
   SocketListenFactory,
 } from './types.ts';
+
+const INJECT_METADATA_KEY = 'di:inject';
 
 // biome-ignore lint/suspicious/noExplicitAny: decorator targets are heterogeneous
 type Ctor = new (...args: any[]) => any;
@@ -89,55 +81,25 @@ export function OnError() {
   return methodDecorator('error');
 }
 
-function defaultBunListen(
-  bun: NonNullable<SocketGatewayDecoratorOptions['bun']>,
-  securityMode: SecurityMode,
-  maxMessageBytes: number | undefined,
-): SocketListenFactory {
-  return ({ onConnection }) => {
-    const security = { mode: securityMode };
-    switch (bun.protocol) {
-      case 'websocket':
-        return createBunWebSocketServer({
-          path: bun.path,
-          port: bun.port,
-          hostname: bun.hostname,
-          security,
-          maxMessageBytes,
-          onConnection,
-        });
-      case 'tcp':
-        return createBunTcpServer({
-          port: bun.port,
-          hostname: bun.hostname,
-          security,
-          maxMessageBytes,
-          onConnection,
-        });
-      case 'udp':
-        return createBunUdpSocket({
-          port: bun.port,
-          hostname: bun.hostname,
-          security,
-          maxMessageBytes,
-          onConnection,
-        });
-      default:
-        throw new Error(`Unsupported bun protocol: ${String(bun.protocol)}`);
-    }
-  };
-}
-
 function resolveListen(
   options: SocketGatewayDecoratorOptions,
   securityMode: SecurityMode,
 ): SocketListenFactory {
   if (options.listen) return options.listen;
-  if (options.bun) {
-    return defaultBunListen(options.bun, securityMode, options.maxMessageBytes);
+
+  // `server` is the preferred name; `bun` is a deprecated alias (Node primitives either way).
+  const server = options.server ?? options.bun;
+  if (server) {
+    // Lazy import so Workers / edge consumers of decorators don't load node:net/ws
+    // until a process actually starts a gateway.
+    return (hooks) =>
+      import('./adapters/node-listen.ts').then(({ createNodeListen }) =>
+        createNodeListen(server, securityMode, options.maxMessageBytes)(hooks),
+      );
   }
+
   throw new Error(
-    '@SocketGateway requires either `bun: { protocol, … }` or a custom `listen` factory',
+    '@SocketGateway requires either `server: { protocol, … }` or a custom `listen` factory',
   );
 }
 
@@ -259,12 +221,12 @@ function attachGatewayMethods(ctor: Ctor, options: SocketGatewayDecoratorOptions
  * Marks a class as a socket gateway and registers it with the DI container.
  *
  * Collect `@OnConnect` / `@OnMessage` / `@OnClose` / `@OnError` handlers, then
- * listen via Bun (`bun: { protocol }`) or a custom `listen` factory.
+ * listen via Node primitives (`server: { protocol }`) or a custom `listen` factory.
  *
  * @example
  * ```ts
  * @SocketGateway({
- *   bun: { protocol: 'websocket', path: '/ws', port: 3000 },
+ *   server: { protocol: 'websocket', path: '/ws', port: 3000 },
  *   security: { mode: 'secure' }, // default
  * })
  * class ChatGateway {
@@ -276,8 +238,8 @@ function attachGatewayMethods(ctor: Ctor, options: SocketGatewayDecoratorOptions
  *     this.logger.log(`connected ${conn.id}`);
  *   }
  *
- *   @OnMessage({ type: 'chat' })
- *   onChat(conn: SocketConnection, _raw: Uint8Array, msg: { text: string }) {
+ *   @OnMessage({ frame: 'text', type: 'chat' })
+ *   onChat(conn: SocketConnection, _frame: SocketFrame, msg: { text: string }) {
  *     void conn.send(JSON.stringify({ type: 'chat', text: msg.text }));
  *   }
  *
@@ -389,5 +351,3 @@ export async function stopSocketGateways(targets?: Ctor[]): Promise<void> {
   }
 }
 
-// Re-export client helpers for non-decorator call sites (tests, scripts).
-export { connectBunTcpClient, connectBunUdpClient, createBunWebSocketServer };

@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./node": {
+      "bun": "./node.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
     "./bun": {
       "bun": "./bun.ts",
       "import": "./dist/bun.js",
@@ -55,18 +60,23 @@
     "dist",
     "README.md",
     "index.ts",
+    "node.ts",
     "bun.ts",
     "graphql.ts",
     "workers.ts",
     "src"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./bun.ts ./graphql.ts ./workers.ts --outdir ./dist --target node --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./node.ts ./bun.ts ./graphql.ts ./workers.ts --outdir ./dist --target node --external @di-framework/core --external ws && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "bun run build",
     "test": "bun test"
   },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/ws": "^8.18.1",
     "typescript": "^5"
   },
   "peerDependencies": {

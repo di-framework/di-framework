@@ -31,7 +31,8 @@ class LoggerService {
 }
 
 @SocketGateway({
-  bun: { protocol: 'websocket', path: '/ws', port: 3000 },
+  // Node primitives (node:http+ws / net / dgram) — works on Node and Bun
+  server: { protocol: 'websocket', path: '/ws', port: 3000 },
   security: { mode: 'secure' }, // default — ECDH + AES-GCM session
 })
 class ChatGateway {
@@ -83,8 +84,8 @@ useContainer().resolve(ChatGateway);
 
 | Option | Meaning |
 | --- | --- |
-| `bun: { protocol, path?, port?, hostname? }` | Built-in Bun listener (`websocket` \| `tcp` \| `udp`) |
-| `listen` | Custom factory for other runtimes |
+| `server: { protocol, path?, port?, hostname? }` | Built-in listener via **Node primitives** (`websocket` \| `tcp` \| `udp`) |
+| `listen` | Custom factory (e.g. Cloudflare Workers) |
 | `security.mode` | `'secure'` (default) or `'plain'` |
 | `autoStart` | Listen on resolve (default `true`) |
 | `singleton` | DI lifecycle (default container behaviour) |
@@ -139,6 +140,33 @@ import { createGraphqlTransportWs } from '@di-framework/socket/graphql';
 | Modes | `secure` default; `plain` is opt-in and obvious in review |
 
 Auth identity (who) stays in `@di-framework/auth`. This package owns wire confidentiality.
+
+## TCP / UDP / WebSocket servers (Node primitives)
+
+Adapters use **`node:http` + `ws`**, **`node:net`**, and **`node:dgram`** — not Bun.serve / Bun.listen. The same code runs on Node and on Bun’s Node compatibility layer.
+
+```typescript
+import {
+  createWebSocketServer,
+  connectWebSocketClient,
+  createTcpServer,
+  connectTcpClient,
+  createUdpSocket,
+  connectUdpClient,
+} from '@di-framework/socket/node';
+
+const ws = createWebSocketServer({
+  path: '/ws',
+  onConnection(conn) {
+    conn.onMessage(async (frame) => {
+      await conn.send(frame);
+    });
+  },
+});
+
+const tcp = createTcpServer({ /* length-prefix + kind */ });
+const udp = await createUdpSocket({ /* envelope + kind; client knocks */ });
+```
 
 ## Cloudflare Workers & Durable Objects
 
@@ -231,20 +259,21 @@ export default {
 
 ## Low-level / adapters
 
-- `@di-framework/socket/bun` — Bun WebSocket / TCP / UDP  
-- `@di-framework/socket/workers` — Workers + hibernatable DO hub  
+- `@di-framework/socket/node` — `node:http`+`ws`, `node:net`, `node:dgram`  
+- `@di-framework/socket/bun` — **deprecated alias** of `/node`  
+- `@di-framework/socket/workers` — Workers + hibernatable DO hub (edge-only APIs)  
 - `SecureSession` / `exportSnapshot` / `rehydrate` — portable secure channel  
 
-Prefer `@SocketGateway` on Bun; on CF use the workers helpers above (port listeners don’t apply).
+Prefer `@SocketGateway({ server: … })` for process servers; on CF use the workers helpers (no long-lived ports).
 
 ## Capability matrix (v0.1)
 
-| | Bun | Node | Deno | Workers / DO |
+| | Node | Bun | Deno | Workers / DO |
 | --- | --- | --- | --- | --- |
-| Decorators + secure channel | yes | custom `listen` | custom `listen` | via workers hub |
-| Built-in listener | `bun:` | — | — | `./workers` |
+| Decorators + secure channel | yes | yes (Node compat) | custom `listen` | via workers hub |
+| Built-in listener | `server:` / `/node` | same Node APIs | — | `./workers` |
 | Hibernatable WebSockets | — | — | — | `HibernatableSocketHub` |
-| TCP / UDP | yes | planned | planned | n/a |
+| TCP / UDP | `node:net` / `dgram` | same | planned | n/a |
 
 ## License
 

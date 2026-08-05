@@ -1,24 +1,30 @@
+/**
+ * @deprecated Use `@di-framework/socket/node` — adapters are Node primitives
+ * (`node:net`, `node:dgram`, `node:http`+`ws`) and work on Bun via Node compat.
+ * This entry re-exports the same APIs for existing imports.
+ */
 export {
-  type BunTcpClientOptions,
-  type BunTcpServerOptions,
+  type NodeTcpClientOptions as BunTcpClientOptions,
+  type NodeTcpServerOptions as BunTcpServerOptions,
+  type NodeUdpClientOptions as BunUdpClientOptions,
+  type NodeUdpSocketOptions as BunUdpSocketOptions,
+  type NodeWebSocketServerOptions as BunWebSocketServerOptions,
   connectBunTcpClient,
-  createBunTcpServer,
-} from './src/adapters/bun-tcp.ts';
-export {
-  type BunUdpClientOptions,
-  type BunUdpSocketOptions,
   connectBunUdpClient,
-  createBunUdpSocket,
-} from './src/adapters/bun-udp.ts';
-export {
-  type BunWebSocketServerOptions,
   connectBunWebSocketClient,
+  connectTcpClient,
+  connectUdpClient,
+  connectWebSocketClient,
+  createBunTcpServer,
+  createBunUdpSocket,
   createBunWebSocketServer,
-} from './src/adapters/bun-websocket.ts';
-export {
+  createNodeListen,
+  createTcpServer,
+  createUdpSocket,
+  createWebSocketServer,
   binaryFrame,
   type FrameKind,
   type SocketFrame,
   textFrame,
   toFrame,
-} from './src/core/frame.ts';
+} from './node.ts';
