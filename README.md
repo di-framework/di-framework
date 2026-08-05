@@ -13,6 +13,7 @@ npm i @di-framework/core
 - `packages/di-framework-events` - bridge container events to Kafka / NATS / memory
 - `packages/di-framework-config` - typed config from env/files, validated and injected via DI
 - `packages/di-framework-auth` - authentication: sessions, JWT, OAuth2/OIDC, WebAuthn (WebCrypto, zero deps)
+- `packages/di-framework-socket` - security-first WebSocket / TCP / UDP (WebCrypto secure channel)
 - `packages/di-framework-ai` - Spring AI–aligned chat, tools, RAG, MCP, and agents
 - `packages/di-framework-cli` - `di-framework-core` cli (build, test, typecheck, publish)
 - `examples` - usage examples

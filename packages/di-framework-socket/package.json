@@ -1,0 +1,76 @@
+{
+  "name": "@di-framework/socket",
+  "version": "0.1.0",
+  "description": "Decorator-driven WebSocket, TCP, and UDP for di-framework — @SocketGateway / @OnMessage with a WebCrypto secure channel",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./bun": {
+      "bun": "./bun.ts",
+      "import": "./dist/bun.js",
+      "default": "./dist/bun.js"
+    },
+    "./graphql": {
+      "bun": "./graphql.ts",
+      "import": "./dist/graphql.js",
+      "default": "./dist/graphql.js"
+    },
+    "./workers": {
+      "bun": "./workers.ts",
+      "import": "./dist/workers.js",
+      "default": "./dist/workers.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-socket"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "websocket",
+    "tcp",
+    "udp",
+    "socket",
+    "encryption",
+    "ecdh",
+    "aead",
+    "dependency-injection",
+    "typescript"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "bun.ts",
+    "graphql.ts",
+    "workers.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./bun.ts ./graphql.ts ./workers.ts --outdir ./dist --target node --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@di-framework/core": "workspace:^",
+    "typescript": "^5"
+  }
+}

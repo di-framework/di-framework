@@ -317,7 +317,7 @@ export const handler = createGraphQLHandler(api, {
 Bun.serve({ port: 4000, fetch: handler });
 ```
 
-`GET` reads `query` / `variables` / `operationName` from the query string, `POST` from a JSON body. Subscriptions need a connection — drive `api.subscribe()` from your own WebSocket or SSE endpoint.
+`GET` reads `query` / `variables` / `operationName` from the query string, `POST` from a JSON body. Subscriptions need a connection — drive `api.subscribe()` from a WebSocket or SSE endpoint. Prefer `createGraphqlTransportWs` from `@di-framework/socket/graphql` (see [Sockets](socket.md)); the GraphQL example uses this helper.
 
 ## SDL as a Build Artifact
 
