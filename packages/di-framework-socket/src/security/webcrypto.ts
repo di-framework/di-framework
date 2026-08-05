@@ -23,6 +23,34 @@ export interface Algorithm {
 
 export type AlgorithmIdentifier = string | Algorithm;
 
+/** Mirrors the DOM lib's `BufferSource`, which `lib: ["ESNext"]` does not supply. */
+export type BufferSource = ArrayBufferView | ArrayBuffer;
+
+/**
+ * Mirrors the DOM lib's `JsonWebKey` (RFC 7517), which `lib: ["ESNext"]` does not
+ * supply. Structurally compatible, so a consumer whose tsconfig includes `DOM`
+ * can pass its own `JsonWebKey` here.
+ */
+export interface JsonWebKey {
+  alg?: string;
+  crv?: string;
+  d?: string;
+  dp?: string;
+  dq?: string;
+  e?: string;
+  ext?: boolean;
+  k?: string;
+  key_ops?: string[];
+  kty?: string;
+  n?: string;
+  p?: string;
+  q?: string;
+  qi?: string;
+  use?: string;
+  x?: string;
+  y?: string;
+}
+
 export interface SubtleLike {
   digest(algorithm: AlgorithmIdentifier, data: BufferSource): Promise<ArrayBuffer>;
   importKey(
