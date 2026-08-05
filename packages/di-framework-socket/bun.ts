@@ -4,11 +4,7 @@
  * This entry re-exports the same APIs for existing imports.
  */
 export {
-  type NodeTcpClientOptions as BunTcpClientOptions,
-  type NodeTcpServerOptions as BunTcpServerOptions,
-  type NodeUdpClientOptions as BunUdpClientOptions,
-  type NodeUdpSocketOptions as BunUdpSocketOptions,
-  type NodeWebSocketServerOptions as BunWebSocketServerOptions,
+  binaryFrame,
   connectBunTcpClient,
   connectBunUdpClient,
   connectBunWebSocketClient,
@@ -22,8 +18,12 @@ export {
   createTcpServer,
   createUdpSocket,
   createWebSocketServer,
-  binaryFrame,
   type FrameKind,
+  type NodeTcpClientOptions as BunTcpClientOptions,
+  type NodeTcpServerOptions as BunTcpServerOptions,
+  type NodeUdpClientOptions as BunUdpClientOptions,
+  type NodeUdpSocketOptions as BunUdpSocketOptions,
+  type NodeWebSocketServerOptions as BunWebSocketServerOptions,
   type SocketFrame,
   textFrame,
   toFrame,

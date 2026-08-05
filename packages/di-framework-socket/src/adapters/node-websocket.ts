@@ -1,6 +1,6 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 import { type RawData, WebSocketServer, WebSocket as WsWebSocket } from 'ws';
-import { binaryFrame, textFrame, type SocketFrame } from '../core/frame.ts';
+import { binaryFrame, type SocketFrame, textFrame } from '../core/frame.ts';
 import type { CreateServerOptions, SocketConnection, SocketServer } from '../core/types.ts';
 import type { SecurityMode } from '../security/protocol.ts';
 import { type MessageDuplex, SecureSession } from '../security/session.ts';
@@ -142,8 +142,7 @@ export function createWebSocketServer(options: NodeWebSocketServerOptions = {}):
   httpServer.listen(options.port ?? 0, hostname);
 
   const address = httpServer.address();
-  const port =
-    typeof address === 'object' && address !== null ? address.port : (options.port ?? 0);
+  const port = typeof address === 'object' && address !== null ? address.port : (options.port ?? 0);
 
   return {
     protocol: 'websocket',

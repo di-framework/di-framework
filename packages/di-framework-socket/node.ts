@@ -3,31 +3,32 @@
  * Prefer this entry (or the main package `server:` option) over runtime-specific APIs.
  * Runs on Node and on Bun via Node compatibility.
  */
+
+export { createNodeListen } from './src/adapters/node-listen.ts';
 export {
-  type NodeTcpClientOptions,
-  type NodeTcpServerOptions,
-  connectTcpClient,
-  createTcpServer,
   // deprecated aliases
   connectBunTcpClient,
+  connectTcpClient,
   createBunTcpServer,
+  createTcpServer,
+  type NodeTcpClientOptions,
+  type NodeTcpServerOptions,
 } from './src/adapters/node-tcp.ts';
 export {
+  connectBunUdpClient,
+  connectUdpClient,
+  createBunUdpSocket,
+  createUdpSocket,
   type NodeUdpClientOptions,
   type NodeUdpSocketOptions,
-  connectUdpClient,
-  createUdpSocket,
-  connectBunUdpClient,
-  createBunUdpSocket,
 } from './src/adapters/node-udp.ts';
 export {
-  type NodeWebSocketServerOptions,
-  connectWebSocketClient,
-  createWebSocketServer,
   connectBunWebSocketClient,
+  connectWebSocketClient,
   createBunWebSocketServer,
+  createWebSocketServer,
+  type NodeWebSocketServerOptions,
 } from './src/adapters/node-websocket.ts';
-export { createNodeListen } from './src/adapters/node-listen.ts';
 export {
   binaryFrame,
   type FrameKind,

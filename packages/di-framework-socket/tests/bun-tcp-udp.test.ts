@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { SocketConnection } from '../index.ts';
-import {
-  connectTcpClient,
-  connectUdpClient,
-  createTcpServer,
-  createUdpSocket,
-} from '../node.ts';
+import { connectTcpClient, connectUdpClient, createTcpServer, createUdpSocket } from '../node.ts';
 
 const stoppers: Array<() => void> = [];
 

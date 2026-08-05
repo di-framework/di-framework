@@ -44,7 +44,9 @@ export function createNodeListen(
           onConnection,
         });
       default:
-        throw new Error(`Unsupported protocol: ${String((server as { protocol: string }).protocol)}`);
+        throw new Error(
+          `Unsupported protocol: ${String((server as { protocol: string }).protocol)}`,
+        );
     }
   };
 }

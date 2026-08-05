@@ -103,8 +103,7 @@ export function createTcpServer(options: NodeTcpServerOptions = {}): SocketServe
   netServer.listen(options.port ?? 0, hostname);
 
   const address = netServer.address();
-  const port =
-    typeof address === 'object' && address !== null ? address.port : (options.port ?? 0);
+  const port = typeof address === 'object' && address !== null ? address.port : (options.port ?? 0);
 
   return {
     protocol: 'tcp',
@@ -123,10 +122,7 @@ export async function connectTcpClient(options: NodeTcpClientOptions): Promise<S
   const maxMessageBytes = options.maxMessageBytes ?? 1_048_576;
 
   const socket = await new Promise<Socket>((resolve, reject) => {
-    const s = createConnection(
-      { host: options.hostname, port: options.port },
-      () => resolve(s),
-    );
+    const s = createConnection({ host: options.hostname, port: options.port }, () => resolve(s));
     s.once('error', reject);
   });
 
