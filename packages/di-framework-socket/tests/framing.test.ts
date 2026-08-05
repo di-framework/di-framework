@@ -32,6 +32,11 @@ describe('LengthPrefixFramer', () => {
     const big = encodeLengthPrefix(binaryFrame(new Uint8Array(8)), 1_000_000);
     expect(() => framer.push(big)).toThrow(FramingError);
   });
+
+  it('rejects invalid UTF-8 when encoding Uint8Array as text', () => {
+    const invalid = new Uint8Array([0xff, 0xfe, 0xfd]);
+    expect(() => encodeLengthPrefix(invalid, undefined, 'text')).toThrow();
+  });
 });
 
 describe('UDP envelope', () => {

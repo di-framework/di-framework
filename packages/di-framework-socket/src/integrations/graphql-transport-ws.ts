@@ -105,6 +105,20 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Protocol requires a non-empty operation id on subscribe/complete.
+ * Missing ids must not coerce to the string `"undefined"` (which collides).
+ */
+function requireOperationId(
+  id: unknown,
+  close?: (code?: number, reason?: string) => void,
+): string | null {
+  if (typeof id === 'string' && id.length > 0) return id;
+  if (typeof id === 'number' && Number.isFinite(id)) return String(id);
+  close?.(4400, 'Invalid message: operation id is required');
+  return null;
+}
+
 function resolveInitialContext<TContext>(
   initial: GraphqlTransportWsOptions<TContext>['initialContext'],
 ): TContext {
@@ -240,24 +254,28 @@ export function createGraphqlTransportWs<TContext = unknown>(
           close?.(4401, 'Unauthorized');
           return;
         }
+        const opId = requireOperationId(message.id, close);
+        if (opId === null) return;
         void startOperation(
           send,
           data,
-          String(message.id),
+          opId,
           (message.payload ?? {}) as {
             query?: string;
             variables?: Record<string, unknown>;
             operationName?: string | null;
           },
         ).catch((error) => {
-          send({ id: message.id, type: 'error', payload: [{ message: String(error) }] });
+          send({ id: opId, type: 'error', payload: [{ message: String(error) }] });
         });
         return;
       }
 
       case 'complete': {
-        const iterator = data.operations.get(String(message.id));
-        data.operations.delete(String(message.id));
+        const opId = requireOperationId(message.id, close);
+        if (opId === null) return;
+        const iterator = data.operations.get(opId);
+        data.operations.delete(opId);
         void iterator?.return?.();
         return;
       }

@@ -119,6 +119,27 @@ describe('createGraphqlTransportWs', () => {
     socket.send('not-json');
     expect(await closed).toBe(4400);
   });
+
+  it('closes subscribe without id with 4400 (no "undefined" collision)', async () => {
+    const gtw = createGraphqlTransportWs({
+      execute: async () => ({ data: { ok: true } }),
+      subscribe: async () => ({ errors: [{ message: 'nope' }] }),
+    });
+
+    const data = gtw.createData({ acknowledged: true });
+    let closed: { code?: number; reason?: string } | undefined;
+    gtw.handleMessage(
+      () => {},
+      data,
+      JSON.stringify({ type: 'subscribe', payload: { query: 'query { hello }' } }),
+      (code, reason) => {
+        closed = { code, reason };
+      },
+    );
+    expect(closed?.code).toBe(4400);
+    expect(data.operations.has('undefined')).toBe(false);
+    expect(data.operations.size).toBe(0);
+  });
 });
 
 async function waitFor(pred: () => boolean, timeoutMs = 2000): Promise<void> {

@@ -341,7 +341,8 @@ export async function stopSocketGateways(targets?: Ctor[]): Promise<void> {
   const container = useContainer();
   const list = (targets ?? registry.all().map((e) => e.target)) as Ctor[];
   for (const target of list) {
-    if (!container.has?.(target) && typeof container.has === 'function') continue;
+    // Skip targets the container does not know about (avoid constructing them just to stop).
+    if (typeof container.has === 'function' && !container.has(target)) continue;
     try {
       const instance = container.resolve(target) as GatewayHost;
       await instance.$stopGateway?.();

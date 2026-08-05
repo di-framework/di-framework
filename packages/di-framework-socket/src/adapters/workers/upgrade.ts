@@ -53,10 +53,12 @@ export async function createWorkerWebSocketUpgrade(
   const client = pair[0];
   const server = pair[1];
 
-  // Non-hibernating accept
-  if (typeof server.accept === 'function') server.accept();
-  else if (typeof (client as { accept?: () => void }).accept === 'function') {
-    // Some runtimes put accept on the other end — try both
+  // Non-hibernating accept: Workers put accept() on the server end; some
+  // polyfills/runtimes only expose it on the client end of the pair.
+  if (typeof server.accept === 'function') {
+    server.accept();
+  } else if (typeof client.accept === 'function') {
+    client.accept();
   }
 
   const duplex = duplexFromWebSocket(server);

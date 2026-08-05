@@ -60,6 +60,8 @@ export class LengthPrefixFramer {
   }
 }
 
+const strictUtf8 = () => new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
+
 /** Encode a single length-prefixed frame with kind byte. */
 export function encodeLengthPrefix(
   frame: SocketFrame | Uint8Array,
@@ -69,7 +71,7 @@ export function encodeLengthPrefix(
   const f: SocketFrame =
     frame instanceof Uint8Array
       ? kind === 'text'
-        ? textFrame(new TextDecoder().decode(frame))
+        ? textFrame(strictUtf8().decode(frame))
         : { kind, data: frame }
       : frame;
 
@@ -91,7 +93,7 @@ function decodeFramedBody(body: Uint8Array): SocketFrame {
   const kind = kindFromByte(body[0]!);
   const payload = body.subarray(1);
   if (kind === 'text') {
-    return textFrame(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(payload));
+    return textFrame(strictUtf8().decode(payload));
   }
   return binaryFrame(payload);
 }
@@ -114,7 +116,7 @@ export function encodeUdpEnvelope(
   const f: SocketFrame =
     frame instanceof Uint8Array
       ? kind === 'text'
-        ? textFrame(new TextDecoder().decode(frame))
+        ? textFrame(strictUtf8().decode(frame))
         : binaryFrame(frame)
       : frame;
 
@@ -160,9 +162,7 @@ export function decodeUdpEnvelope(datagram: Uint8Array): {
   for (let i = 0; i < 8; i++) seq = (seq << 8n) | BigInt(datagram[seqOff + i]!);
   const payload = datagram.subarray(seqOff + 8);
   const frame =
-    kind === 'text'
-      ? textFrame(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(payload))
-      : binaryFrame(payload);
+    kind === 'text' ? textFrame(strictUtf8().decode(payload)) : binaryFrame(payload);
   return { sessionId, seq, frame };
 }
 
