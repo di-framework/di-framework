@@ -10,6 +10,7 @@ export const PACKAGES = [
   'packages/di-framework-config',
   'packages/di-framework-auth',
   'packages/di-framework-socket',
+  'packages/di-framework-rpc',
   'packages/di-framework-ai',
   'packages/di-framework-cli',
 ];
