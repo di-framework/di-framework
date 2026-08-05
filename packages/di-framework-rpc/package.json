@@ -1,0 +1,88 @@
+{
+  "name": "@di-framework/rpc",
+  "version": "0.1.0",
+  "description": "Decorator-centric JSON-RPC and per-method gRPC for di-framework",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./memory": {
+      "bun": "./memory.ts",
+      "import": "./dist/memory.js",
+      "default": "./dist/memory.js"
+    },
+    "./http": {
+      "bun": "./http.ts",
+      "import": "./dist/http.js",
+      "default": "./dist/http.js"
+    },
+    "./socket": {
+      "bun": "./socket.ts",
+      "import": "./dist/socket.js",
+      "default": "./dist/socket.js"
+    },
+    "./grpc": {
+      "bun": "./grpc.ts",
+      "import": "./dist/grpc.js",
+      "default": "./dist/grpc.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-rpc"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "memory.ts",
+    "http.ts",
+    "socket.ts",
+    "grpc.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./memory.ts ./http.ts ./socket.ts ./grpc.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/socket --external @connectrpc/connect --external @connectrpc/connect-node --external @bufbuild/protobuf && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
+    "@di-framework/core": "workspace:^",
+    "@di-framework/socket": "workspace:^",
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@bufbuild/protobuf": {
+      "optional": true
+    },
+    "@connectrpc/connect": {
+      "optional": true
+    },
+    "@connectrpc/connect-node": {
+      "optional": true
+    },
+    "@di-framework/socket": {
+      "optional": true
+    }
+  }
+}

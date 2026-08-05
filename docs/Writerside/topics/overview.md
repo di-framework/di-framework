@@ -20,6 +20,7 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 - **Configuration**: Typed, validated config from env/files injected via DI with `@di-framework/config`.
 - **Authentication**: Sessions, JWT, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with `@di-framework/auth` — zero runtime dependencies.
 - **Sockets**: Security-first WebSocket, TCP, and UDP with a WebCrypto secure channel via `@di-framework/socket` (network I/O — distinct from the in-process event bus).
+- **RPC**: Decorator-generated JSON-RPC and per-method gRPC with a typed client via `@di-framework/rpc` — the same service over memory, HTTP, sockets, and Connect / gRPC.
 - **AI**: Annotation-driven chat, tools, RAG, MCP, and agents with `@di-framework/ai` (OpenAI-compatible and Anthropic HTTP adapters).
 
 ## Why Use This Framework?
@@ -114,6 +115,7 @@ userService.getUser('123');
 - [GraphQL](graphql.md) - Domain classes as a GraphQL schema
 - [Events](events.md) - Bridge container events to Kafka / NATS / memory
 - [Sockets](socket.md) - WebSocket, TCP, UDP with a secure channel (`@di-framework/socket`)
+- [RPC](rpc.md) - JSON-RPC and per-method gRPC with a typed client (`@di-framework/rpc`)
 - [Configuration](config.md) - Typed config from env/files via DI
 - [Authentication](auth.md) - Sessions, JWT, OAuth2/OIDC, and passkeys
 - [AI](ai.md) - Chat, tools, RAG, MCP, and agents with `@di-framework/ai`
