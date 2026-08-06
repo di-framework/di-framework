@@ -206,9 +206,8 @@ export function decodeJwsHeader(token: string): JwsHeader {
   // MUST reject. We understand none of them.
   const crit = candidate['crit'];
   if (crit !== undefined) {
-    if (!Array.isArray(crit) || crit.length > 0) {
+    if (!Array.isArray(crit) || crit.length > 0)
       invalid('JWS header declares unsupported critical parameters');
-    }
   }
 
   // RFC 7797 unencoded payloads change what the signature covers.

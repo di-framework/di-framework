@@ -61,17 +61,30 @@ export interface SecureSessionSnapshot {
  * while preserving text vs binary frame kind.
  */
 export class SecureSession {
-  private state: SecureSessionState = 'handshaking';
-  private channel: AeadChannel | null = null;
-  private provider: SecureHandshakeProvider | null = null;
-  private consumer: SecureHandshakeConsumer | null = null;
-  private unsub: (() => void) | null = null;
-  private readonly dataHandlers = new Set<(frame: SocketFrame) => void>();
-  private openResolve: ((session: SecureSession) => void) | null = null;
-  private openReject: ((err: Error) => void) | null = null;
+  private state: SecureSessionState;
+  private channel: AeadChannel | null;
+  private provider: SecureHandshakeProvider | null;
+  private consumer: SecureHandshakeConsumer | null;
+  private unsub: (() => void) | null;
+  private readonly dataHandlers: Set<(frame: SocketFrame) => void>;
+  private openResolve: ((session: SecureSession) => void) | null;
+  private openReject: ((err: Error) => void) | null;
   private openPromise: Promise<SecureSession>;
+  private readonly options: SecureSessionOptions;
 
-  private constructor(private readonly options: SecureSessionOptions) {
+  // Explicit constructor (rather than field initializers/parameter properties)
+  // so Bun's function coverage instrumentation attributes construction to a
+  // visible, coverable frame.
+  private constructor(options: SecureSessionOptions) {
+    this.state = 'handshaking';
+    this.channel = null;
+    this.provider = null;
+    this.consumer = null;
+    this.unsub = null;
+    this.dataHandlers = new Set<(frame: SocketFrame) => void>();
+    this.openResolve = null;
+    this.openReject = null;
+    this.options = options;
     this.openPromise = new Promise<SecureSession>((resolve, reject) => {
       this.openResolve = resolve;
       this.openReject = reject;

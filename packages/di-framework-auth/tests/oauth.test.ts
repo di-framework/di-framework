@@ -3,19 +3,35 @@ import { base64UrlEncode } from '../src/crypto/base64url.ts';
 import { sha256 } from '../src/crypto/hash.ts';
 import { AuthError } from '../src/errors.ts';
 import { oauthClient } from '../src/oauth/client.ts';
-import { validateMetadata, wellKnownUrl } from '../src/oauth/discovery.ts';
-import { computeTokenHash } from '../src/oauth/id-token.ts';
+import { discovery, validateMetadata, wellKnownUrl } from '../src/oauth/discovery.ts';
+import { computeTokenHash, validateIdToken } from '../src/oauth/id-token.ts';
 import {
   computeS256Challenge,
   generateCodeVerifier,
   generatePkce,
   isValidCodeVerifier,
 } from '../src/oauth/pkce.ts';
-import { githubProvider, googleProvider, microsoftEntraProvider } from '../src/oauth/presets.ts';
+import {
+  genericOidcProvider,
+  githubProvider,
+  googleProvider,
+  microsoftEntraProvider,
+} from '../src/oauth/presets.ts';
 import type { OAuthProvider } from '../src/oauth/types.ts';
 import { memoryStateStore } from '../src/providers/memory.ts';
+import type { JwkSet } from '../src/tokens/jwk.ts';
 import { generateKeyPair, importJwk } from '../src/tokens/jwk.ts';
+import type { RemoteJwks } from '../src/tokens/jwks.ts';
 import { signJwt } from '../src/tokens/jwt.ts';
+
+function stubJwks(getKey: RemoteJwks['getKey']): RemoteJwks {
+  const empty: JwkSet = { keys: [] };
+  return {
+    getKey,
+    refresh: async () => empty,
+    get: async () => empty,
+  };
+}
 
 describe('PKCE', () => {
   // RFC 7636 Appendix B.
@@ -110,6 +126,83 @@ describe('discovery', () => {
   it('rejects a document missing required endpoints', () => {
     expect(() => validateMetadata({ issuer }, issuer)).toThrow(/authorization_endpoint/);
   });
+
+  it('rejects a non-object document', () => {
+    expect(() => validateMetadata(null, issuer)).toThrow(/not a JSON object/);
+    expect(() => validateMetadata([1, 2, 3], issuer)).toThrow(/not a JSON object/);
+  });
+
+  it('rejects an endpoint that is not a valid URL', () => {
+    expect(() =>
+      validateMetadata({ ...valid, token_endpoint: 'not a url at all::::' }, issuer),
+    ).toThrow(/is not a valid URL/);
+  });
+});
+
+describe('discovery()', () => {
+  const issuer = 'https://idp.example.com';
+  const metadataDoc = {
+    issuer,
+    authorization_endpoint: `${issuer}/authorize`,
+    token_endpoint: `${issuer}/token`,
+    jwks_uri: `${issuer}/keys`,
+    code_challenge_methods_supported: ['S256'],
+  };
+
+  function fetchStub(handler: () => Response) {
+    return (async () => handler()) as unknown as typeof fetch;
+  }
+
+  it('fetches, validates, and caches the document; refresh() forces a re-fetch', async () => {
+    let calls = 0;
+    const fetchImpl = fetchStub(() => {
+      calls++;
+      return new Response(JSON.stringify(metadataDoc), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const clock = 0;
+    const client = discovery(issuer, { fetch: fetchImpl, now: () => clock });
+
+    expect((await client.get()).issuer).toBe(issuer);
+    expect((await client.get()).issuer).toBe(issuer);
+    expect(calls).toBe(1); // second get() is served from cache
+
+    await client.refresh();
+    expect(calls).toBe(2);
+  });
+
+  it('serves the stale cached document when a refetch fails within maxStaleMs', async () => {
+    let succeed = true;
+    const fetchImpl = fetchStub(() => {
+      if (succeed) {
+        return new Response(JSON.stringify(metadataDoc), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('boom', { status: 500 });
+    });
+    let clock = 0;
+    const client = discovery(issuer, {
+      fetch: fetchImpl,
+      now: () => clock,
+      cacheTtlMs: 10,
+      maxStaleMs: 10_000,
+    });
+
+    expect((await client.get()).issuer).toBe(issuer);
+    succeed = false;
+    clock = 1_000; // past cacheTtlMs, forcing a refetch attempt
+    expect((await client.get()).issuer).toBe(issuer); // served stale, not thrown
+  });
+
+  it('throws when the refetch fails and there is no usable stale cache', async () => {
+    const fetchImpl = fetchStub(() => new Response('boom', { status: 500 }));
+    const client = discovery(issuer, { fetch: fetchImpl, now: () => 0 });
+    await expect(client.get()).rejects.toThrow();
+  });
 });
 
 describe('at_hash', () => {
@@ -126,6 +219,123 @@ describe('at_hash', () => {
   // rather than guess and reject valid tokens.
   it('returns null for EdDSA rather than guessing', async () => {
     expect(await computeTokenHash('token', 'EdDSA')).toBeNull();
+  });
+});
+
+describe('validateIdToken', () => {
+  const issuer = 'https://idp.example.com';
+  const clientId = 'client-123';
+
+  async function build() {
+    const pair = await generateKeyPair('ES256');
+    const key = await importJwk(pair.publicJwk, 'ES256', 'verify');
+    const signingKey = await importJwk(pair.privateJwk, 'ES256', 'sign');
+    const jwks = stubJwks(async () => key);
+    const sign = (claims: Record<string, unknown>, subject = 'u1') =>
+      signJwt(claims, {
+        algorithm: 'ES256',
+        key: signingKey,
+        issuer,
+        audience: clientId,
+        subject,
+        expiresInSeconds: 60,
+      });
+    return { jwks, sign };
+  }
+
+  it('rejects a token with no sub claim', async () => {
+    const { jwks, sign } = await build();
+    const noSub = await sign({}, '');
+    await expect(
+      validateIdToken(noSub, { issuer, clientId, nonce: null, algorithms: ['ES256'], jwks }),
+    ).rejects.toThrow(/no sub claim/);
+  });
+
+  it('rejects when azp is present and disagrees with the client', async () => {
+    const { jwks, sign } = await build();
+    const token = await sign({ azp: 'someone-else' });
+    await expect(
+      validateIdToken(token, { issuer, clientId, nonce: null, algorithms: ['ES256'], jwks }),
+    ).rejects.toThrow(/azp/);
+  });
+
+  it('accepts a matching azp with multiple audiences', async () => {
+    const { jwks, sign } = await build();
+    const token = await sign({ aud: [clientId, 'other-client'], azp: clientId });
+    await expect(
+      validateIdToken(token, { issuer, clientId, nonce: null, algorithms: ['ES256'], jwks }),
+    ).resolves.toMatchObject({ sub: 'u1' });
+  });
+
+  it('requires auth_time when max_age was requested, and enforces it', async () => {
+    const { jwks, sign } = await build();
+    const missingAuthTime = await sign({});
+    await expect(
+      validateIdToken(missingAuthTime, {
+        issuer,
+        clientId,
+        nonce: null,
+        algorithms: ['ES256'],
+        jwks,
+        maxAgeSeconds: 300,
+      }),
+    ).rejects.toThrow(/no auth_time/);
+
+    const stale = await sign({ auth_time: 0 });
+    await expect(
+      validateIdToken(stale, {
+        issuer,
+        clientId,
+        nonce: null,
+        algorithms: ['ES256'],
+        jwks,
+        maxAgeSeconds: 1,
+        now: () => 1_000,
+      }),
+    ).rejects.toThrow(/older than max_age/);
+
+    const fresh = await sign({ auth_time: 1_000 });
+    await expect(
+      validateIdToken(fresh, {
+        issuer,
+        clientId,
+        nonce: null,
+        algorithms: ['ES256'],
+        jwks,
+        maxAgeSeconds: 300,
+        now: () => 1_000,
+      }),
+    ).resolves.toMatchObject({ sub: 'u1' });
+  });
+
+  it('rejects an at_hash that does not match the access token', async () => {
+    const { jwks, sign } = await build();
+    const token = await sign({ at_hash: 'bogus' });
+    await expect(
+      validateIdToken(token, {
+        issuer,
+        clientId,
+        nonce: null,
+        algorithms: ['ES256'],
+        jwks,
+        accessToken: 'the-access-token',
+      }),
+    ).rejects.toThrow(/at_hash/);
+  });
+
+  it('rejects a c_hash that does not match the authorization code', async () => {
+    const { jwks, sign } = await build();
+    const token = await sign({ c_hash: 'bogus' });
+    await expect(
+      validateIdToken(token, {
+        issuer,
+        clientId,
+        nonce: null,
+        algorithms: ['ES256'],
+        jwks,
+        code: 'the-code',
+      }),
+    ).rejects.toThrow(/c_hash/);
   });
 });
 
@@ -149,6 +359,32 @@ describe('presets', () => {
     const profile = provider.profileMap!(null, { id: 42, login: 'ada', email: 'a@b.c' });
     expect(profile.subject).toBe('42');
     expect(profile.name).toBe('ada');
+  });
+
+  it('configures a generic OIDC provider by issuer, defaulting clientAuth from clientSecret', () => {
+    const noSecret = genericOidcProvider({ ...config, issuer: 'https://idp.example.com' });
+    expect(noSecret.id).toBe('oidc');
+    expect(noSecret.clientAuth).toBe('none');
+
+    const withSecret = genericOidcProvider({
+      ...config,
+      id: 'my-idp',
+      issuer: 'https://idp.example.com',
+      clientSecret: 's3cret',
+      extraAuthorizationParams: { prompt: 'consent' },
+    });
+    expect(withSecret.id).toBe('my-idp');
+    expect(withSecret.clientAuth).toBe('client_secret_basic');
+    expect(withSecret.clientSecret).toBe('s3cret');
+    expect(withSecret.extraAuthorizationParams).toEqual({ prompt: 'consent' });
+
+    const explicitAuth = genericOidcProvider({
+      ...config,
+      issuer: 'https://idp.example.com',
+      clientAuth: 'client_secret_post',
+      clientSecret: 's3cret',
+    });
+    expect(explicitAuth.clientAuth).toBe('client_secret_post');
   });
 });
 
@@ -220,7 +456,7 @@ async function stubIdp(options: { nonceOverride?: string; subOverride?: string }
     }
 
     return new Response('not found', { status: 404 });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   const provider: OAuthProvider = {
     id: 'idp',
@@ -266,6 +502,149 @@ async function startFlow(
     }),
   };
 }
+
+describe('oauthClient — token endpoint and userinfo mechanics', () => {
+  const provider = (overrides: Partial<OAuthProvider> = {}): OAuthProvider => ({
+    id: 'idp',
+    clientId: 'client-1',
+    redirectUri: 'https://app.example.com/cb',
+    authorizationEndpoint: 'https://idp.example.com/authorize',
+    tokenEndpoint: 'https://idp.example.com/token',
+    userinfoEndpoint: 'https://idp.example.com/userinfo',
+    oidc: false,
+    ...overrides,
+  });
+
+  const client = (fetchImpl: typeof fetch, overrides: Partial<OAuthProvider> = {}) =>
+    oauthClient(provider(overrides), { state: memoryStateStore(), fetch: fetchImpl });
+
+  it('fails requireEndpoint when neither an issuer nor an explicit endpoint is configured', async () => {
+    const bare = oauthClient(
+      { id: 'idp', clientId: 'c', redirectUri: 'https://app.example.com/cb' },
+      { state: memoryStateStore() },
+    );
+    await expect(bare.authorizationUrl()).rejects.toThrow(/has no authorization_endpoint/);
+  });
+
+  it('sends client_secret_post credentials in the token request body', async () => {
+    let capturedBody: URLSearchParams | undefined;
+    const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = new URLSearchParams(init?.body as string);
+      return new Response(JSON.stringify({ access_token: 'at', token_type: 'Bearer' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const tokens = await client(fetchImpl, {
+      clientAuth: 'client_secret_post',
+      clientSecret: 'shh',
+    }).refresh('rt');
+    expect(capturedBody?.get('client_secret')).toBe('shh');
+    expect(capturedBody?.get('grant_type')).toBe('refresh_token');
+    expect(tokens.accessToken).toBe('at');
+  });
+
+  it('rejects a non-JSON token response', async () => {
+    const fetchImpl = (async () =>
+      new Response('not json', { status: 200 })) as unknown as typeof fetch;
+    await expect(client(fetchImpl).refresh('rt')).rejects.toThrow(/non-JSON response/);
+  });
+
+  it('rejects a non-2xx token response without leaking error_description as the public message', async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ error: 'invalid_grant' }), {
+        status: 400,
+      })) as unknown as typeof fetch;
+    await expect(client(fetchImpl).refresh('rt')).rejects.toThrow(/HTTP 400/);
+  });
+
+  it('rejects a token response missing access_token or with a non-Bearer token_type', async () => {
+    const respond = (body: unknown) =>
+      (async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })) as unknown as typeof fetch;
+
+    await expect(client(respond({ token_type: 'Bearer' })).refresh('rt')).rejects.toThrow(
+      /no access_token/,
+    );
+    await expect(
+      client(respond({ access_token: 'at', token_type: 'Basic' })).refresh('rt'),
+    ).rejects.toThrow(/not Bearer/);
+  });
+
+  it('rejects a userinfo response that is not ok, or not a JSON object', async () => {
+    const notOk = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
+    await expect(client(notOk).userinfo('at')).rejects.toThrow(/HTTP 500/);
+
+    const notObject = (async () =>
+      new Response('[1,2,3]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as unknown as typeof fetch;
+    await expect(client(notObject).userinfo('at')).rejects.toThrow(/not a JSON object/);
+  });
+
+  it('endSessionUrl returns null without an end_session_endpoint', async () => {
+    const noDiscovery = client(
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
+    );
+    expect(await noDiscovery.endSessionUrl({})).toBeNull();
+  });
+
+  it('endSessionUrl builds a URL with the id token hint and post-logout redirect, via discovery', async () => {
+    const fetchImpl = (async (url: RequestInfo | URL) => {
+      const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+      if (href.endsWith('/.well-known/openid-configuration')) {
+        return new Response(
+          JSON.stringify({
+            issuer: 'https://idp.example.com',
+            authorization_endpoint: 'https://idp.example.com/authorize',
+            token_endpoint: 'https://idp.example.com/token',
+            jwks_uri: 'https://idp.example.com/keys',
+            end_session_endpoint: 'https://idp.example.com/logout',
+            code_challenge_methods_supported: ['S256'],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const withIssuer = client(fetchImpl, {
+      issuer: 'https://idp.example.com',
+      tokenEndpoint: undefined,
+    });
+    const url = await withIssuer.endSessionUrl({
+      idToken: 'the-id-token',
+      postLogoutRedirectUri: 'https://app.example.com/bye',
+    });
+    expect(url).not.toBeNull();
+    const parsed = new URL(url!);
+    expect(parsed.origin + parsed.pathname).toBe('https://idp.example.com/logout');
+    expect(parsed.searchParams.get('id_token_hint')).toBe('the-id-token');
+    expect(parsed.searchParams.get('post_logout_redirect_uri')).toBe('https://app.example.com/bye');
+  });
+
+  it('authorizationUrl carries max_age and extra authorization params', async () => {
+    const authorization = await client(
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
+    ).authorizationUrl({ maxAgeSeconds: 120 });
+    const url = new URL(authorization.url);
+    expect(url.searchParams.get('max_age')).toBe('120');
+  });
+
+  it('authorizationUrl copies extraAuthorizationParams onto the URL', async () => {
+    const authorization = await client(
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
+      { extraAuthorizationParams: { audience: 'https://api.example.com' } },
+    ).authorizationUrl();
+    const url = new URL(authorization.url);
+    expect(url.searchParams.get('audience')).toBe('https://api.example.com');
+  });
+});
 
 describe('authorization code flow', () => {
   it('builds an authorization URL with PKCE S256 and never a response_mode', async () => {

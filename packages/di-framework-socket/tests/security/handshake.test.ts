@@ -112,6 +112,18 @@ describe('Secure handshake', () => {
     b.consumer.destroy();
   });
 
+  it('exposes getSessionId() on both provider and consumer after the handshake', async () => {
+    const provider = await SecureHandshakeProvider.create();
+    const consumer = await SecureHandshakeConsumer.create();
+    expect(consumer.getSessionId()).toBeNull();
+    const init = provider.start();
+    const response = await consumer.handleInit(init);
+    expect(provider.getSessionId()).toBe(init.sessionId);
+    expect(consumer.getSessionId()).toBe(response.sessionId);
+    provider.destroy();
+    consumer.destroy();
+  });
+
   it('advertises the v1 suite', async () => {
     const provider = await SecureHandshakeProvider.create();
     const init = provider.start();
@@ -204,6 +216,20 @@ describe('AeadChannel', () => {
     );
     channel.destroy();
     await expect(channel.seal(new Uint8Array([1]), 'binary')).rejects.toThrow(/destroyed/);
+    provider.destroy();
+    consumer.destroy();
+  });
+
+  it('exposes sessionId and isDestroyed accessors', async () => {
+    const { providerMaterial, provider, consumer } = await runHandshakePair();
+    const channel = await AeadChannel.of(
+      providerMaterial.encryptionKeyBytes,
+      providerMaterial.sessionId,
+    );
+    expect(channel.sessionId).toBe(providerMaterial.sessionId);
+    expect(channel.isDestroyed).toBe(false);
+    channel.destroy();
+    expect(channel.isDestroyed).toBe(true);
     provider.destroy();
     consumer.destroy();
   });

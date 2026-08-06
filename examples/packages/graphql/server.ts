@@ -119,6 +119,11 @@ export function startFromMain(port = Number(process.env.PORT ?? 4000)) {
   return server;
 }
 
-if (import.meta.main) {
-  startFromMain();
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export function runGraphqlMain(isMain = import.meta.main, port?: number) {
+  if (isMain) {
+    return startFromMain(port);
+  }
 }
+
+runGraphqlMain();

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test';
-import { auth, opaAuthorizationManager, router } from './index.ts';
+import { describe, expect, it, spyOn } from 'bun:test';
+import { auth, opaAuthorizationManager, router, runAuthMain } from './index.ts';
 
 describe('auth example', () => {
   it('refuses an unauthenticated request', async () => {
@@ -108,5 +108,17 @@ describe('auth example', () => {
         metadata: { resource: 'notes', action: 'admin:read' },
       },
     });
+  });
+
+  // Runs the full walkthrough via the injectable CLI gate (covers `main()` and
+  // the `isMain` entry path). Run last since it clears the container as its
+  // final step.
+  it('runs the full walkthrough via the CLI main gate', async () => {
+    const log = spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runAuthMain(true);
+    } finally {
+      log.mockRestore();
+    }
   });
 });

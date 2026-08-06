@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { Arg, Field, Lookup, Portal, registerEnum, SemanticType } from '../src/decorators.ts';
+import { Arg, Connection, Field, Lookup, Portal, registerEnum, SemanticType } from '../src/decorators.ts';
 import { SemanticSchemaError } from '../src/errors.ts';
 import { withRegistry } from './helpers.ts';
 
@@ -15,6 +15,20 @@ describe('decorator guard branches', () => {
           }
         }
       }).toThrow(/not supported on static members/);
+    });
+  });
+
+  it('@Connection throws when applied to a static member', () => {
+    withRegistry((registry) => {
+      expect(() => {
+        @Portal()
+        class StaticConnectionPortal {
+          @Connection(() => String)
+          static staticMethod(): string[] {
+            return [];
+          }
+        }
+      }).toThrow(/@Connection is not supported on static members/);
     });
   });
 

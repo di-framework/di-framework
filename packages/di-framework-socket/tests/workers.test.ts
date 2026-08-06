@@ -209,4 +209,195 @@ describe('HibernatableSocketHub', () => {
     await hub.restoreFromHibernation();
     expect(closedCode).toBe(4001);
   });
+
+  it('handleUpgrade returns 426 without Upgrade and throws without WebSocketPair', async () => {
+    const { state } = mockDo();
+    const hub = new HibernatableSocketHub(state, { security: { mode: 'plain' } });
+    const bad = await hub.handleUpgrade(new Request('https://example.com/ws'));
+    expect(bad.status).toBe(426);
+
+    const prev = (globalThis as { WebSocketPair?: unknown }).WebSocketPair;
+    delete (globalThis as { WebSocketPair?: unknown }).WebSocketPair;
+    try {
+      await expect(
+        hub.handleUpgrade(
+          new Request('https://example.com/ws', { headers: { Upgrade: 'websocket' } }),
+        ),
+      ).rejects.toThrow(/WebSocketPair is not available/);
+    } finally {
+      if (prev !== undefined) (globalThis as { WebSocketPair?: unknown }).WebSocketPair = prev;
+    }
+  });
+
+  it('handleUpgrade returns 400 when attach fails and close throws', async () => {
+    const { state, makeWs } = mockDo();
+    const hub = new HibernatableSocketHub(state, {
+      security: { mode: 'plain' },
+      onConnection() {
+        throw new Error('attach-fail');
+      },
+    });
+    const client = makeWs();
+    const server = makeWs();
+    server.close = () => {
+      throw new Error('close-fail');
+    };
+    const res = await hub.handleUpgrade(
+      new Request('https://example.com/ws', { headers: { Upgrade: 'websocket' } }),
+      () => ({ 0: client, 1: server }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('webSocketClose / webSocketError tear down live entries', async () => {
+    const { state, makeWs } = mockDo();
+    const hub = new HibernatableSocketHub(state, { security: { mode: 'plain' } });
+    const client = makeWs();
+    const server = makeWs();
+    await hub.handleUpgrade(
+      new Request('https://example.com/ws', { headers: { Upgrade: 'websocket' } }),
+      () => ({ 0: client, 1: server }),
+    );
+    expect(hub.getConnection(server)).toBeTruthy();
+    hub.webSocketError(server);
+    expect(hub.getConnection(server)).toBeUndefined();
+    hub.webSocketClose(server);
+  });
+
+  it('webSocketMessage restores a plain socket that was not in the live map', async () => {
+    const sockets: HibernatableWebSocket[] = [];
+    const attachments = new WeakMap<HibernatableWebSocket, unknown>();
+    const state: DurableObjectStateLike = {
+      acceptWebSocket(ws) {
+        sockets.push(ws);
+      },
+      getWebSockets() {
+        return [...sockets];
+      },
+    };
+    const frames: string[] = [];
+    const hub = new HibernatableSocketHub(state, {
+      security: { mode: 'plain' },
+      onConnection(conn) {
+        conn.onMessage((f) => {
+          frames.push(f.text ?? '');
+        });
+      },
+    });
+    const ws: HibernatableWebSocket = {
+      send() {},
+      close() {},
+      serializeAttachment(v) {
+        attachments.set(ws, v);
+      },
+      deserializeAttachment: () => attachments.get(ws) ?? { v: 1, security: 'plain' },
+    };
+    sockets.push(ws);
+    await hub.webSocketMessage(ws, 'restored-hello');
+    expect(frames).toEqual(['restored-hello']);
+  });
+
+  it('plain restoreFromHibernation rebuilds connections', async () => {
+    const sockets: HibernatableWebSocket[] = [];
+    const attachments = new WeakMap<HibernatableWebSocket, unknown>();
+    const state: DurableObjectStateLike = {
+      acceptWebSocket(ws) {
+        sockets.push(ws);
+      },
+      getWebSockets() {
+        return [...sockets];
+      },
+    };
+    const ws: HibernatableWebSocket = {
+      send() {},
+      close() {},
+      serializeAttachment(v) {
+        attachments.set(ws, v);
+      },
+      deserializeAttachment: () => attachments.get(ws) ?? { v: 1, security: 'plain' },
+    };
+    sockets.push(ws);
+
+    const hub = new HibernatableSocketHub(state, {
+      security: { mode: 'plain' },
+      onConnection(conn) {
+        conn.close(1000, 'x');
+      },
+      onSerializeAttachment(current) {
+        return { ...current, meta: { room: 'r1' } };
+      },
+    });
+
+    await hub.restoreFromHibernation();
+    expect(hub.getConnection(ws)).toBeTruthy();
+    hub.getConnection(ws)?.close(1000, 'x');
+    await hub.restoreFromHibernation();
+  });
+
+  it('secure handleUpgrade completes handshake and persists session snapshots', async () => {
+    const { state, makeWs } = mockDo();
+    const hub = new HibernatableSocketHub(state, {
+      security: { mode: 'secure' },
+      onHibernate: 'rehydrate',
+      onSerializeAttachment(current) {
+        return { ...current, meta: { u: 1 } };
+      },
+    });
+
+    const client = makeWs();
+    const server = makeWs();
+    const clientDuplex = createPushableDuplex(client);
+    server.send = (data) => {
+      if (typeof data === 'string') clientDuplex.push(cfMessageToFrame(data));
+      else clientDuplex.push(cfMessageToFrame(data as ArrayBuffer));
+    };
+    const origClientSend = client.send.bind(client);
+    let upgradeStarted = false;
+    client.send = (data) => {
+      origClientSend(data);
+      if (upgradeStarted) {
+        void hub.webSocketMessage(server, data as string | ArrayBuffer);
+      }
+    };
+
+    upgradeStarted = true;
+    const upgradeP = hub.handleUpgrade(
+      new Request('https://example.com/ws', { headers: { Upgrade: 'websocket' } }),
+      () => ({ 0: client, 1: server }),
+    );
+    const consumerP = SecureSession.connect({ role: 'consumer', duplex: clientDuplex });
+    const [res] = await Promise.all([upgradeP, consumerP]);
+    expect(res.status).toBe(101);
+    expect(hub.getConnection(server)?.securityMode).toBe('secure');
+
+    // Touch pending stubs indirectly: send after handshake triggers persistSession
+    await hub.webSocketMessage(server, 'noop-after-handshake');
+    // Exercise pending connection methods if still pending (they shouldn't be)
+    const conn = hub.getConnection(server)!;
+    conn.onMessage(() => {});
+    conn.onClose(() => {});
+    hub.webSocketClose(server);
+  });
+
+  it('secure rehydrate closes when snapshot is missing', async () => {
+    let closed: number | undefined;
+    const ws: HibernatableWebSocket = {
+      send() {},
+      close(code) {
+        closed = code;
+      },
+      serializeAttachment() {},
+      deserializeAttachment: () => ({ v: 1, security: 'secure' }),
+    };
+    const state: DurableObjectStateLike = {
+      acceptWebSocket() {},
+      getWebSockets: () => [ws],
+    };
+    const hub = new HibernatableSocketHub(state, {
+      security: { mode: 'secure' },
+      onHibernate: 'rehydrate',
+    });
+    await hub.restoreFromHibernation();
+    expect(closed).toBe(4001);
+  });
 });

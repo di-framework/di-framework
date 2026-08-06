@@ -165,6 +165,40 @@ describe('GraphQL interfaces', () => {
     expect(result.data?.animal).toEqual({ legs: 4, __typename: 'Dog' });
   });
 
+  it('awaits an explicit resolveType that returns a promise, falling back to instanceof when it resolves undefined', async () => {
+    const api = withRegistry(() => {
+      @InterfaceType({ resolveType: async (value: any) => (value.legs === 4 ? 'Dog' : undefined) })
+      abstract class Animal {
+        @Field(() => Int) legs!: number;
+      }
+
+      @Implements(() => Animal)
+      @SemanticType()
+      class Dog extends Animal {}
+
+      @Implements(() => Animal)
+      @SemanticType()
+      class Bird extends Animal {}
+
+      @Portal()
+      class Query {
+        @Field(() => [Animal])
+        animals(): any[] {
+          return [{ legs: 4 }, Object.assign(new Bird(), { legs: 2 })];
+        }
+      }
+
+      return buildSemanticSchema({ container: new Container() });
+    });
+
+    const result = await api.execute({ query: '{ animals { legs __typename } }' });
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.animals).toEqual([
+      { legs: 4, __typename: 'Dog' },
+      { legs: 2, __typename: 'Bird' },
+    ]);
+  });
+
   it('rejects an implementation whose field type contradicts the interface', () => {
     expect(() =>
       withRegistry((registry) => {

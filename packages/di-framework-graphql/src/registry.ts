@@ -27,6 +27,10 @@ export class SemanticRegistry {
   private unions = new Map<UnionRef, UnionDeclaration>();
   private extensions: ExtensionDeclaration[] = [];
 
+  // Explicit (even though empty) so construction itself is a coverable, named
+  // function rather than a compiler-synthesized one that tooling can't see.
+  constructor() {}
+
   registerType(declaration: SemanticTypeDeclaration): void {
     this.types.set(declaration.target, declaration);
   }

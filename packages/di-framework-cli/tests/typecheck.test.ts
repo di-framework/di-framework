@@ -103,17 +103,36 @@ describe('typecheck command', () => {
 
   describe('typecheck()', () => {
     it(
-      'exits 0 against the repo root tsconfig',
+      'exits 0 against a minimal project tsconfig',
       async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'typecheck-ok-root-'));
+        temps.push(dir);
+        mkdirSync(join(dir, 'src'), { recursive: true });
+        await Bun.write(
+          join(dir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              noEmit: true,
+              module: 'esnext',
+              target: 'esnext',
+              skipLibCheck: true,
+            },
+            files: ['src/ok.ts'],
+          }) + '\n',
+        );
+        await Bun.write(join(dir, 'src', 'ok.ts'), 'export const ok: number = 1;\n');
+
         const { typecheck } = await import('../cmd/typecheck');
         const originalArgv = process.argv;
         const log = spyOn(console, 'log').mockImplementation(() => {});
         const err = spyOn(console, 'error').mockImplementation(() => {});
         try {
-          process.chdir(REPO_ROOT);
+          process.chdir(dir);
           process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
           expect(await withExitCapture(() => typecheck())).toBe(0);
         } finally {
+          process.chdir(REPO_ROOT);
           process.argv = originalArgv;
           log.mockRestore();
           err.mockRestore();
@@ -287,21 +306,37 @@ describe('typecheck command', () => {
     it(
       'respects --from=script when locating tsconfig',
       async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'typecheck-from-script-'));
+        temps.push(dir);
+        mkdirSync(join(dir, 'nested'), { recursive: true });
+        await Bun.write(
+          join(dir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              noEmit: true,
+              module: 'esnext',
+              target: 'esnext',
+              skipLibCheck: true,
+            },
+            files: ['ok.ts'],
+          }) + '\n',
+        );
+        await Bun.write(join(dir, 'ok.ts'), 'export const ok: number = 1;\n');
+        // Fake script path under dir so --from=script walks up to dir/tsconfig.json.
+        const fakeScript = join(dir, 'nested', 'typecheck.ts');
+        await Bun.write(fakeScript, '// placeholder\n');
+
         const { typecheck } = await import('../cmd/typecheck');
         const originalArgv = process.argv;
         const log = spyOn(console, 'log').mockImplementation(() => {});
         const err = spyOn(console, 'error').mockImplementation(() => {});
         try {
-          process.chdir(REPO_ROOT);
-          // argv[1] is the script path; --from=script walks from its directory.
-          process.argv = [
-            'bun',
-            join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
-            '--from=script',
-            '--pretty=0',
-          ];
+          process.chdir(join(dir, 'nested'));
+          process.argv = ['bun', fakeScript, '--from=script', '--pretty=0'];
           expect(await withExitCapture(() => typecheck())).toBe(0);
         } finally {
+          process.chdir(REPO_ROOT);
           process.argv = originalArgv;
           log.mockRestore();
           err.mockRestore();
@@ -329,6 +364,18 @@ describe('typecheck command', () => {
         process.exit = originalExit;
         err.mockRestore();
       }
+    });
+
+    it('runTypecheckMain invokes start only when isMain is true', async () => {
+      const { runTypecheckMain } = await import('../cmd/typecheck');
+      let calls = 0;
+      const start = async () => {
+        calls++;
+      };
+      runTypecheckMain(false, start);
+      expect(calls).toBe(0);
+      runTypecheckMain(true, start);
+      expect(calls).toBe(1);
     });
 
     it('exits with code 2 when the tsconfig path cannot be read under import.meta.main', async () => {

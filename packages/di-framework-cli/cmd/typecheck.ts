@@ -213,6 +213,14 @@ export function handleTypecheckFailure(err: unknown): never {
   process.exit(2);
 }
 
-if (import.meta.main) {
-  typecheck().catch(handleTypecheckFailure);
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export function runTypecheckMain(
+  isMain = import.meta.main,
+  start: () => Promise<void> = () => typecheck().catch(handleTypecheckFailure),
+): void {
+  if (isMain) {
+    void start();
+  }
 }
+
+runTypecheckMain();

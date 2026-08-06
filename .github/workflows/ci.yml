@@ -28,6 +28,9 @@ jobs:
       - name: Test
         run: bun test --coverage
 
+      - name: Enforce 100% line coverage
+        run: bun scripts/check-line-coverage.ts
+
       - name: Link CLI
         run: cd packages/di-framework-cli && bun link
 

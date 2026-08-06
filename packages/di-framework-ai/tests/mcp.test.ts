@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
+import { mcpToolCallback } from '../src/mcp/mcp-tool-callback.ts';
 import {
   adaptSdkClient,
   ChatClient,
@@ -27,6 +28,7 @@ import {
   toolCallbackAsMcpTool,
   toolCallResponse,
 } from '../src/index.ts';
+import { contentBlocksToString, emptyConnectionInfo } from '../src/mcp/mcp-tool-utils.ts';
 
 class FakeMcpSession implements McpClientSession {
   readonly connectionInfo;
@@ -76,6 +78,35 @@ describe('MCP tool utils', () => {
     const name = prefixedToolName('my-server', 'fs', 'read_file');
     expect(name).toContain('read_file');
     expect(name.length).toBeLessThanOrEqual(64);
+  });
+
+  test('prefixedToolName throws for empty prefix or toolName', () => {
+    expect(() => prefixedToolName('', undefined, 'tool')).toThrow(/cannot be null or empty/);
+    expect(() => prefixedToolName('prefix', undefined, '   ')).toThrow(/cannot be null or empty/);
+  });
+
+  test('prefixedToolName keeps the last 64 chars when the combined name overflows', () => {
+    const longToolName = 'a'.repeat(80);
+    const name = prefixedToolName('server', undefined, longToolName);
+    expect(name.length).toBe(64);
+    expect(name).toBe(`server_${longToolName}`.slice(-64));
+  });
+
+  test('emptyConnectionInfo returns an empty object', () => {
+    expect(emptyConnectionInfo()).toEqual({});
+  });
+
+  test('contentBlocksToString serializes multiple blocks and non-text blocks', () => {
+    expect(contentBlocksToString([])).toBe('');
+    expect(
+      contentBlocksToString([
+        { type: 'text', text: 'a' },
+        { type: 'text', text: 'b' },
+      ]),
+    ).toBe('[{"type":"text","text":"a"},{"type":"text","text":"b"}]');
+    expect(contentBlocksToString([{ type: 'image', data: 'xyz' } as never])).toBe(
+      '{"type":"image","data":"xyz"}',
+    );
   });
 
   test('default prefix generator uses server name', () => {
@@ -191,6 +222,16 @@ describe('McpToolCallback', () => {
     });
     await expect(cb.call('not-json')).rejects.toBeInstanceOf(ToolExecutionException);
   });
+
+  test('mcpToolCallback() factory constructs an equivalent McpToolCallback', async () => {
+    const session = new FakeMcpSession({
+      tools: [{ name: 'echo' }],
+      handlers: { echo: () => ({ content: [{ type: 'text', text: 'ok' }] }) },
+    });
+    const cb = mcpToolCallback({ mcpClient: session, tool: { name: 'echo' } });
+    expect(cb).toBeInstanceOf(McpToolCallback);
+    expect(await cb.call('{}')).toBe('ok');
+  });
 });
 
 describe('McpToolCallbackProvider', () => {
@@ -220,6 +261,25 @@ describe('McpToolCallbackProvider', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0]!.toolDefinition.name).toBe('ping');
     expect(await tools[0]!.call('{}')).toBe('pong');
+  });
+
+  test('invalidate clears the cache and requires another refresh', async () => {
+    const session = new FakeMcpSession({
+      tools: [{ name: 'ping' }],
+      handlers: { ping: () => ({ content: [{ type: 'text', text: 'pong' }] }) },
+    });
+    const provider = new McpToolCallbackProvider({
+      mcpClients: [session],
+      toolNamePrefixGenerator: noPrefixMcpToolNameGenerator,
+    });
+    await provider.refresh();
+    expect(provider.getToolCallbacks()).toHaveLength(1);
+
+    provider.invalidate();
+    expect(() => provider.getToolCallbacks()).toThrow(/refresh/);
+
+    await provider.refresh();
+    expect(provider.getToolCallbacks()).toHaveLength(1);
   });
 
   test('tool filter excludes tools', async () => {
@@ -341,6 +401,11 @@ describe('adaptSdkClient', () => {
 
     expect(result.content).toEqual([]);
     expect(result.requestId).toBe('request-1');
+  });
+
+  test('throws when passed a client without a listTools function', () => {
+    expect(() => adaptSdkClient(undefined as never)).toThrow(/listTools\/callTool/);
+    expect(() => adaptSdkClient({} as never)).toThrow(/listTools\/callTool/);
   });
 });
 

@@ -834,33 +834,55 @@ export function createGraphQLSSEHandler(
     }
     const iterator = result as AsyncIterableIterator<ExecutionResult>;
     const encoder = new TextEncoder();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let closed = false;
+    const stopHeartbeat = () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = undefined;
+      }
+    };
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
-        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        const enqueue = (chunk: Uint8Array) => {
+          if (!closed) controller.enqueue(chunk);
+        };
+        const close = () => {
+          if (closed) return;
+          closed = true;
+          stopHeartbeat();
+          try {
+            controller.close();
+          } catch {
+            // Already closed by cancel() or a prior close.
+          }
+        };
         if (options.heartbeatMs && options.heartbeatMs > 0) {
           heartbeat = setInterval(
-            () => controller.enqueue(encoder.encode(': heartbeat\n\n')),
+            () => enqueue(encoder.encode(': heartbeat\n\n')),
             options.heartbeatMs,
           );
         }
         try {
           for await (const item of iterator) {
-            controller.enqueue(encoder.encode(`event: next\ndata: ${JSON.stringify(item)}\n\n`));
+            enqueue(encoder.encode(`event: next\ndata: ${JSON.stringify(item)}\n\n`));
           }
-          controller.enqueue(encoder.encode('event: complete\ndata: {}\n\n'));
-          controller.close();
+          enqueue(encoder.encode('event: complete\ndata: {}\n\n'));
+          close();
         } catch (error) {
-          controller.enqueue(
+          enqueue(
             encoder.encode(
               `event: error\ndata: ${JSON.stringify({ errors: [{ message: String(error) }] })}\n\n`,
             ),
           );
-          controller.close();
+          close();
         } finally {
-          if (heartbeat) clearInterval(heartbeat);
+          stopHeartbeat();
         }
       },
       async cancel() {
+        closed = true;
+        stopHeartbeat();
         await iterator.return?.();
       },
     });

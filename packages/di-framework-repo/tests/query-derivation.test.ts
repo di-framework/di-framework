@@ -380,3 +380,244 @@ describe('DerivedQuery shape smoke', () => {
     expect(q.orderBy).toHaveLength(1);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Remaining branch coverage                                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('parseQueryMethod - additional edge cases', () => {
+  test('throws when First/Top is given a limit below 1', () => {
+    expect(() => parseQueryMethod('findTop0ByActive')).toThrow(/Invalid limit/);
+  });
+
+  test('OrderBy with no Asc/Desc keyword defaults to ascending', () => {
+    const q = parseQueryMethod('findByActiveOrderByCity');
+    expect(q!.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
+  });
+
+  test('empty predicate with an OrderBy clause (findAllByOrderBy…)', () => {
+    const q = parseQueryMethod('findAllByOrderByCity');
+    expect(q).not.toBeNull();
+    expect(q!.predicate).toEqual({ conditions: [], combinators: [] });
+    expect(q!.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
+  });
+
+  test('IgnoringCase suffix (alternate spelling of IgnoreCase)', () => {
+    const one = parseQueryMethod('findByLastnameIgnoringCase');
+    expect(one!.predicate.conditions[0]?.ignoreCase).toBe(true);
+  });
+});
+
+describe('Derived annotation - remaining executed operators and branches', () => {
+  test('empty predicate with OrderBy executes as match-all, sorted', async () => {
+    const repo = await seeded();
+    const all = (await (repo as any).findAllByOrderByCity()) as User[];
+    expect(all.map((u) => u.city)).toEqual(['Bergen', 'Oslo', 'Oslo', 'Trondheim']);
+  });
+
+  test('bare-property OrderBy with tied keys falls through the comparator to a tie', async () => {
+    const repo = await seeded();
+    // id1 and id3 are both active and both in Oslo: a genuine tie on every sort key.
+    const ordered = (await (repo as any).findByActiveTrueOrderByCity()) as User[];
+    expect(ordered.map((u) => u.id)).toEqual(['1', '3', '4']);
+  });
+
+  test('Not (neq), GreaterThanEqual, LessThan, LessThanEqual execute correctly', async () => {
+    const repo = await seeded();
+    const notSmith = (await (repo as any).findByLastnameNot('Smith')) as User[];
+    expect(notSmith.map((u) => u.id).sort()).toEqual(['3', '4']);
+
+    const gte = (await (repo as any).findByAgeGreaterThanEqual(35)) as User[];
+    expect(gte.map((u) => u.id).sort()).toEqual(['3', '4']);
+
+    const lt = (await (repo as any).findByAgeLessThan(30)) as User[];
+    expect(lt.map((u) => u.id)).toEqual(['2']);
+
+    const lte = (await (repo as any).findByAgeLessThanEqual(30)) as User[];
+    expect(lte.map((u) => u.id).sort()).toEqual(['1', '2']);
+  });
+
+  test('In / NotIn execute against a list argument', async () => {
+    const repo = await seeded();
+    const inCities = (await (repo as any).findByCityIn(['Oslo', 'Bergen'])) as User[];
+    expect(inCities.map((u) => u.id).sort()).toEqual(['1', '2', '3']);
+
+    const notIn = (await (repo as any).findByCityNotIn(['Oslo', 'Bergen'])) as User[];
+    expect(notIn.map((u) => u.id)).toEqual(['4']);
+  });
+
+  test('NotContaining, StartingWith, EndingWith execute against string properties', async () => {
+    const repo = await seeded();
+    const notContaining = (await (repo as any).findByEmailNotContaining('a@')) as User[];
+    expect(notContaining.map((u) => u.id).sort()).toEqual(['2', '3', '4']);
+
+    const startingWith = (await (repo as any).findByEmailStartingWith('a@')) as User[];
+    expect(startingWith.map((u) => u.id)).toEqual(['1']);
+
+    const endingWith = (await (repo as any).findByEmailEndingWith('example.com')) as User[];
+    expect(endingWith).toHaveLength(4);
+  });
+
+  test('Like / NotLike execute SQL-style wildcard matching', async () => {
+    const repo = await seeded();
+    const like = (await (repo as any).findByEmailLike('a@%')) as User[];
+    expect(like.map((u) => u.id)).toEqual(['1']);
+
+    const notLike = (await (repo as any).findByEmailNotLike('a@%')) as User[];
+    expect(notLike.map((u) => u.id).sort()).toEqual(['2', '3', '4']);
+  });
+
+  test('NotNull, False, IsNotEmpty execute against nullable/boolean/string properties', async () => {
+    const repo = await seeded();
+    const notNull = (await (repo as any).findByTagNotNull()) as User[];
+    expect(notNull.map((u) => u.id).sort()).toEqual(['1', '3', '4']);
+
+    const isFalse = (await (repo as any).findByActiveFalse()) as User[];
+    expect(isFalse.map((u) => u.id)).toEqual(['2']);
+
+    const notEmpty = (await (repo as any).findByTagIsNotEmpty()) as User[];
+    expect(notEmpty.map((u) => u.id).sort()).toEqual(['1', '3']);
+  });
+
+  test('GreaterThan on a string property falls back to lexicographic comparison', async () => {
+    const repo = await seeded();
+    const cities = (await (repo as any).findByCityGreaterThan('Bergen')) as User[];
+    expect(cities.map((u) => u.id).sort()).toEqual(['1', '3', '4']);
+  });
+
+  test('a getter that shadows a derivable name is preferred over derivation', async () => {
+    class GetterRepo extends InMemoryRepository<User, string> {
+      get findByFoo(): string {
+        return 'via-getter';
+      }
+    }
+    const repo = new GetterRepo() as unknown as { findByFoo: string };
+    expect(repo.findByFoo).toBe('via-getter');
+  });
+
+  test('an unparseable derivable name resolves to undefined under both strategies', async () => {
+    const repo = await seeded();
+    expect((repo as any).findXyz).toBeUndefined();
+
+    // A bare (never-wrapped) target so the CREATE strategy actually applies
+    // instead of being short-circuited by the double-wrap guard.
+    const bare = { findAll: async () => [] as User[] };
+    const created = withDerivedQueries(bare, { queryLookupStrategy: 'CREATE' });
+    expect((created as any).findXyz).toBeUndefined();
+  });
+
+  test('symbol property access passes through to the wrapped target', async () => {
+    const repo = await seeded();
+    expect((repo as any)[Symbol.for('not-a-derived-query-marker')]).toBeUndefined();
+  });
+});
+
+describe('executeDerivedQuery - direct plan construction for defensive branches', () => {
+  function makeQuery(overrides: Partial<DerivedQuery> = {}): DerivedQuery {
+    return {
+      subject: 'query',
+      methodName: 'test',
+      distinct: false,
+      singleResult: false,
+      predicate: { conditions: [], combinators: [] },
+      orderBy: [],
+      ...overrides,
+    };
+  }
+
+  test('distinct removes duplicate entities (by full JSON equality)', async () => {
+    const dupe = { id: '1', name: 'Ada' };
+    const repo = { findAll: async () => [dupe, { ...dupe }, { id: '2', name: 'Bob' }] };
+    const result = (await executeDerivedQuery(
+      makeQuery({ distinct: true }),
+      repo,
+      [],
+    )) as unknown[];
+    expect(result).toHaveLength(2);
+  });
+
+  test('delete throws when a matched entity has no id and no getEntityId', async () => {
+    const repo = {
+      findAll: async () => [{ name: 'no-id' }],
+      delete: async () => true,
+    };
+    await expect(
+      executeDerivedQuery(makeQuery({ subject: 'delete', methodName: 'deleteByName' }), repo, []),
+    ).rejects.toThrow(/without id/);
+  });
+
+  test('an unrecognized subject falls back to returning the matched entities', async () => {
+    const repo = { findAll: async () => [{ id: '1' }] };
+    const result = await executeDerivedQuery(
+      makeQuery({ subject: 'bogus' as unknown as DerivedQuery['subject'] }),
+      repo,
+      [],
+    );
+    expect(result).toEqual([{ id: '1' }]);
+  });
+
+  test('an unrecognized predicate operator evaluates to false', async () => {
+    const repo = { findAll: async () => [{ id: '1', name: 'Ada' }] };
+    const query = makeQuery({
+      predicate: {
+        conditions: [
+          {
+            property: 'name',
+            operator: 'bogus' as unknown as PredicateOperator,
+            ignoreCase: false,
+            argCount: 1,
+          },
+        ],
+        combinators: [],
+      },
+    });
+    expect(await executeDerivedQuery(query, repo, ['Ada'])).toEqual([]);
+  });
+
+  test('isEmpty/isNotEmpty treat arrays and non-string/array values correctly', async () => {
+    const rows = [
+      { id: '1', tags: [] as string[] },
+      { id: '2', tags: ['a'] },
+      { id: '3', tags: 42 },
+    ];
+    const repo = { findAll: async () => rows };
+    const isEmptyQuery = makeQuery({
+      predicate: {
+        conditions: [{ property: 'tags', operator: 'isEmpty', ignoreCase: false, argCount: 0 }],
+        combinators: [],
+      },
+    });
+    // Empty array -> empty; non-empty array -> not empty; a bare number -> falls
+    // through isEmptyValue's final `return false` (neither string, array, nor nullish).
+    expect(
+      ((await executeDerivedQuery(isEmptyQuery, repo, [])) as { id: string }[]).map((r) => r.id),
+    ).toEqual(['1']);
+  });
+
+  test('eq and ordered comparisons against Date properties', async () => {
+    const when = new Date('2020-06-15T00:00:00.000Z');
+    const rows = [
+      { id: '1', when },
+      { id: '2', when: new Date('2021-01-01T00:00:00.000Z') },
+    ];
+    const repo = { findAll: async () => rows };
+
+    const eqQuery = makeQuery({
+      predicate: {
+        conditions: [{ property: 'when', operator: 'eq', ignoreCase: false, argCount: 1 }],
+        combinators: [],
+      },
+    });
+    expect(await executeDerivedQuery(eqQuery, repo, [when.toISOString()])).toEqual([rows[0]]);
+
+    const gtQuery = makeQuery({
+      predicate: {
+        conditions: [{ property: 'when', operator: 'gt', ignoreCase: false, argCount: 1 }],
+        combinators: [],
+      },
+    });
+    expect(
+      await executeDerivedQuery(gtQuery, repo, [new Date('2020-01-01T00:00:00.000Z')]),
+    ).toEqual(rows);
+  });
+});

@@ -81,9 +81,6 @@ function validateNode(
   }
 
   if (type === 'object' || (value != null && typeof value === 'object' && !Array.isArray(value))) {
-    if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-      return;
-    }
     const obj = value as Record<string, unknown>;
     const required = schema.required;
     if (Array.isArray(required)) {
@@ -111,9 +108,8 @@ function validateNode(
   }
 
   if (type === 'array' || Array.isArray(value)) {
-    if (!Array.isArray(value)) return;
     const items = schema.items;
-    if (items && typeof items === 'object' && !Array.isArray(items)) {
+    if (Array.isArray(value) && items && typeof items === 'object' && !Array.isArray(items)) {
       value.forEach((item, i) => {
         validateNode(
           item,

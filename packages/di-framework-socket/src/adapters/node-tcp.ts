@@ -18,7 +18,10 @@ export interface NodeTcpClientOptions {
   maxMessageBytes?: number;
 }
 
-function framedDuplex(socket: Socket, framer: LengthPrefixFramer): MessageDuplex {
+function framedDuplex(
+  socket: Socket,
+  framer: InstanceType<typeof LengthPrefixFramer>,
+): MessageDuplex {
   const handlers = new Set<(frame: SocketFrame) => void>();
   let closed = false;
 

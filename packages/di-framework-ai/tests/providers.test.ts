@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { openAiChatModel } from '../src/provider/openai/openai-chat-model.ts';
 import {
   AnthropicChatModel,
+  anthropicChatModel,
   assistantMessage,
   ChatClient,
   type FetchLike,
@@ -8,17 +10,76 @@ import {
   hasToolCalls,
   isAiError,
   joinUrl,
+  media,
   OpenAiChatModel,
+  parseJsonSchemaString,
   Prompt,
   ScriptedChatModel,
+  type ToolCallback,
   systemMessage,
   toAnthropicMessages,
+  toAnthropicTools,
   toOpenAiMessages,
+  toOpenAiTools,
   toolCall,
   toolResponse,
   toolResponseMessage,
   userMessage,
 } from '../src/index.ts';
+
+describe('API key resolution falls back to environment variables', () => {
+  test('OpenAiChatModel reads OPENAI_API_KEY when apiKey option is omitted', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'env-openai-key';
+    try {
+      let seenAuth = '';
+      const model = new OpenAiChatModel({
+        fetch: async (_url, init) => {
+          seenAuth = String((init?.headers as Record<string, string>)?.Authorization ?? '');
+          return jsonResponse({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] });
+        },
+      });
+      await model.call(new Prompt('hi'));
+      expect(seenAuth).toBe('Bearer env-openai-key');
+    } finally {
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+    }
+  });
+
+  test('AnthropicChatModel reads ANTHROPIC_API_KEY when apiKey option is omitted', async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = 'env-anthropic-key';
+    try {
+      let seenHeaders: Record<string, string> = {};
+      const model = new AnthropicChatModel({
+        fetch: async (_url, init) => {
+          seenHeaders = init?.headers as Record<string, string>;
+          return jsonResponse({
+            content: [{ type: 'text', text: 'hi' }],
+            stop_reason: 'end_turn',
+          });
+        },
+      });
+      await model.call(new Prompt('hi'));
+      expect(seenHeaders['x-api-key']).toBe('env-anthropic-key');
+    } finally {
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  test('AnthropicChatModel requires an API key when neither option nor env var is set', async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const model = new AnthropicChatModel({ fetch: async () => jsonResponse({}) });
+      await expect(model.call(new Prompt('hi'))).rejects.toMatchObject({ code: 'authentication' });
+    } finally {
+      if (previous !== undefined) process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+});
 
 describe('joinUrl', () => {
   test('removes trailing slashes without changing internal slash runs', () => {
@@ -109,6 +170,84 @@ describe('toOpenAiMessages', () => {
   });
 });
 
+describe('toAnthropicMessages edge cases', () => {
+  test('assistant text + tool calls both map to content blocks', () => {
+    const mapped = toAnthropicMessages([
+      assistantMessage('here is the result', {
+        toolCalls: [toolCall('t1', 'getWeather', { city: 'NYC' })],
+      }),
+    ]);
+    const content = mapped.messages[0]!.content;
+    expect(Array.isArray(content)).toBe(true);
+    const blocks = content as { type: string }[];
+    expect(blocks[0]?.type).toBe('text');
+    expect(blocks.some((b) => b.type === 'tool_use')).toBe(true);
+  });
+
+  test('malformed tool call arguments fall back to a _raw payload', () => {
+    const badMapped = toAnthropicMessages([
+      assistantMessage(null, { toolCalls: [toolCall('t2', 'x', 'not-json')] }),
+    ]);
+    const block = (badMapped.messages[0]!.content as { input?: unknown }[])[0];
+    expect(block?.input).toEqual({ _raw: 'not-json' });
+  });
+
+  test('assistant message with no text/media/tool calls maps to empty string content', () => {
+    const mapped = toAnthropicMessages([assistantMessage(null)]);
+    expect(mapped.messages[0]).toEqual({ role: 'assistant', content: '' });
+  });
+
+  test('media backed by a URL instance stringifies the URL into the base64 data slot', () => {
+    const mapped = toAnthropicMessages([
+      userMessage('look', { media: [media('image/png', new URL('https://example.test/a.png'))] }),
+    ]);
+    const content = mapped.messages[0]!.content as { type: string; source?: { data?: string } }[];
+    expect(content.at(-1)?.source?.data).toBe('https://example.test/a.png');
+  });
+
+  test('media backed by raw bytes is base64-encoded', () => {
+    const bytes = new Uint8Array([104, 105]); // "hi"
+    const mapped = toAnthropicMessages([
+      userMessage('look', { media: [media('image/png', bytes)] }),
+    ]);
+    const content = mapped.messages[0]!.content as { source?: { data?: string } }[];
+    expect(content.at(-1)?.source?.data).toBe(btoa('hi'));
+  });
+});
+
+describe('toAnthropicTools', () => {
+  test('returns undefined for empty/undefined callback lists', () => {
+    expect(toAnthropicTools(undefined)).toBeUndefined();
+    expect(toAnthropicTools([])).toBeUndefined();
+  });
+
+  test('maps tool definitions and parses their JSON input schema', () => {
+    const cb = functionToolCallback({
+      name: 'getWeather',
+      description: 'weather lookup',
+      inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+      call: () => ({}),
+    });
+    const tools = toAnthropicTools([cb]);
+    expect(tools).toHaveLength(1);
+    expect(tools?.[0]?.name).toBe('getWeather');
+    expect(tools?.[0]?.input_schema).toMatchObject({ type: 'object' });
+  });
+
+  test('falls back to a default object schema when inputSchema is not valid JSON', () => {
+    const cb = {
+      toolDefinition: {
+        name: 'broken',
+        description: 'broken schema',
+        inputSchema: 'not-json',
+      },
+      call: async () => 'x',
+    } as unknown as ToolCallback;
+    const tools = toAnthropicTools([cb]);
+    expect(tools?.[0]?.input_schema).toEqual({ type: 'object', properties: {} });
+  });
+});
+
 describe('toAnthropicMessages', () => {
   test('lifts system and maps tool results to user blocks', () => {
     const mapped = toAnthropicMessages([
@@ -139,7 +278,63 @@ describe('toAnthropicMessages', () => {
   });
 });
 
+describe('toOpenAiMessages media edge cases', () => {
+  test('media backed by a URL instance maps to the URL string directly', () => {
+    const mapped = toOpenAiMessages([
+      userMessage('look', { media: [media('image/png', new URL('https://example.test/a.png'))] }),
+    ]);
+    const content = mapped[0]!.content as { image_url: { url: string } }[];
+    expect(content.at(-1)?.image_url.url).toBe('https://example.test/a.png');
+  });
+
+  test('media backed by raw bytes is base64-encoded into a data URL', () => {
+    const bytes = new Uint8Array([104, 105]); // "hi"
+    const mapped = toOpenAiMessages([userMessage('look', { media: [media('image/png', bytes)] })]);
+    const content = mapped[0]!.content as { image_url: { url: string } }[];
+    expect(content.at(-1)?.image_url.url).toBe(`data:image/png;base64,${btoa('hi')}`);
+  });
+});
+
+describe('toOpenAiTools', () => {
+  test('falls back to a default object schema when inputSchema is not valid JSON', () => {
+    const cb = {
+      toolDefinition: { name: 'broken', description: 'broken schema', inputSchema: 'not-json' },
+      call: async () => 'x',
+    } as unknown as ToolCallback;
+    const tools = toOpenAiTools([cb]);
+    expect(tools?.[0]?.function.parameters).toEqual({ type: 'object', properties: {} });
+  });
+});
+
+describe('parseJsonSchemaString', () => {
+  test('returns undefined for blank/undefined input', () => {
+    expect(parseJsonSchemaString(undefined)).toBeUndefined();
+    expect(parseJsonSchemaString('   ')).toBeUndefined();
+  });
+
+  test('returns undefined for invalid JSON', () => {
+    expect(parseJsonSchemaString('not-json')).toBeUndefined();
+  });
+
+  test('parses valid JSON schema strings', () => {
+    expect(parseJsonSchemaString('{"type":"object"}')).toEqual({ type: 'object' });
+  });
+});
+
 describe('OpenAiChatModel', () => {
+  test('openAiChatModel() factory builds a working model', async () => {
+    const model = openAiChatModel({
+      apiKey: 'sk-test',
+      fetch: async () =>
+        jsonResponse({
+          choices: [{ message: { content: 'via factory' }, finish_reason: 'stop' }],
+        }),
+    });
+    expect(model).toBeInstanceOf(OpenAiChatModel);
+    const response = await model.call(new Prompt('hi'));
+    expect(response.content).toBe('via factory');
+  });
+
   test('sends chat completions request and maps response', async () => {
     let seenUrl = '';
     let seenAuth = '';
@@ -288,6 +483,48 @@ describe('OpenAiChatModel', () => {
     expect(chunks.at(-1)).toBe('Hello');
   });
 
+  test('streams tool_calls deltas and accumulates partial function arguments', async () => {
+    const fetchImpl: FetchLike = async () =>
+      sseResponse([
+        JSON.stringify({
+          id: 's1',
+          model: 'gpt-4o-mini',
+          choices: [
+            {
+              delta: {
+                tool_calls: [{ index: 0, id: 'call_1', function: { name: 'getWeather', arguments: '{"city":' } }],
+              },
+              index: 0,
+            },
+          ],
+        }),
+        JSON.stringify({
+          id: 's1',
+          choices: [
+            {
+              delta: { tool_calls: [{ index: 0, function: { arguments: '"Yorktown"}' } }] },
+              index: 0,
+            },
+          ],
+        }),
+        JSON.stringify({
+          id: 's1',
+          choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
+        }),
+        '[DONE]',
+      ]);
+
+    const model = new OpenAiChatModel({ apiKey: 'sk', fetch: fetchImpl });
+    let last: Awaited<ReturnType<typeof model.call>> | undefined;
+    for await (const chunk of model.stream!(new Prompt('weather?'))) {
+      last = chunk;
+    }
+    expect(last?.getResult()!.output.toolCalls).toEqual([
+      { id: 'call_1', type: 'function', name: 'getWeather', arguments: '{"city":"Yorktown"}' },
+    ]);
+    expect(last?.getResult()?.metadata.finishReason).toBe('tool_calls');
+  });
+
   test('honors AbortSignal', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -324,6 +561,20 @@ describe('OpenAiChatModel', () => {
 });
 
 describe('AnthropicChatModel', () => {
+  test('anthropicChatModel() factory builds a working model', async () => {
+    const model = anthropicChatModel({
+      apiKey: 'ant-key',
+      fetch: async () =>
+        jsonResponse({
+          content: [{ type: 'text', text: 'via factory' }],
+          stop_reason: 'end_turn',
+        }),
+    });
+    expect(model).toBeInstanceOf(AnthropicChatModel);
+    const response = await model.call(new Prompt('hi'));
+    expect(response.content).toBe('via factory');
+  });
+
   test('sends messages request and maps text response', async () => {
     let seenUrl = '';
     let seenHeaders: Record<string, string> = {};
@@ -421,6 +672,44 @@ describe('AnthropicChatModel', () => {
       last = chunk.content;
     }
     expect(last).toBe('Hey!');
+  });
+
+  test('streams tool_use blocks and accumulates partial JSON arguments', async () => {
+    const fetchImpl: FetchLike = async () =>
+      sseResponse([
+        JSON.stringify({ type: 'message_start', message: { id: 'm1', model: 'claude' } }),
+        JSON.stringify({
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: 'toolu_1', name: 'getWeather' },
+        }),
+        JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"city":' },
+        }),
+        JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '"Yorktown"}' },
+        }),
+        JSON.stringify({
+          type: 'message_delta',
+          delta: { stop_reason: 'tool_use' },
+          usage: { output_tokens: 3 },
+        }),
+        JSON.stringify({ type: 'message_stop' }),
+      ]);
+
+    const model = new AnthropicChatModel({ apiKey: 'k', fetch: fetchImpl });
+    let last: Awaited<ReturnType<typeof model.call>> | undefined;
+    for await (const chunk of model.stream!(new Prompt('weather?'))) {
+      last = chunk;
+    }
+    expect(last?.getResult()!.output.toolCalls).toEqual([
+      { id: 'toolu_1', type: 'function', name: 'getWeather', arguments: '{"city":"Yorktown"}' },
+    ]);
+    expect(last?.getResult()?.metadata.finishReason).toBe('tool_calls');
   });
 
   test('maps 429 rate limit', async () => {

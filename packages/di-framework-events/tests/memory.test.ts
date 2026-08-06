@@ -17,6 +17,82 @@ describe('memoryTransport', () => {
     expect(seen).toEqual([{ x: 1 }]);
     await transport.stop?.();
   });
+
+  it('queues publishes made before start() and flushes them in order on start()', async () => {
+    const transport = memoryTransport();
+    const seen: unknown[] = [];
+    await transport.subscribe('t', async (msg, ack) => {
+      seen.push(msg.payload);
+      ack.ack();
+    });
+
+    await transport.publish({ id: '1', topic: 't', payload: 'a' });
+    await transport.publish({ id: '2', topic: 't', payload: 'b' });
+    expect(seen).toEqual([]);
+
+    await transport.start?.();
+    expect(seen).toEqual(['a', 'b']);
+    await transport.stop?.();
+  });
+
+  it('nacks (without rethrowing) when a handler throws', async () => {
+    const transport = memoryTransport();
+    let handled = 0;
+    await transport.start?.();
+    await transport.subscribe('t', async () => {
+      handled += 1;
+      throw new Error('boom');
+    });
+
+    await expect(
+      transport.publish({ id: '1', topic: 't', payload: {} }),
+    ).resolves.toBeUndefined();
+    expect(handled).toBe(1);
+    await transport.stop?.();
+  });
+
+  it('delivers with a simulated delay when delayMs is set', async () => {
+    const transport = memoryTransport({ delayMs: 5 });
+    const seen: unknown[] = [];
+    await transport.start?.();
+    await transport.subscribe('t', async (msg, ack) => {
+      seen.push(msg.payload);
+      ack.ack();
+    });
+    const start = Date.now();
+    await transport.publish({ id: '1', topic: 't', payload: 'x' });
+    expect(Date.now() - start).toBeGreaterThanOrEqual(4);
+    expect(seen).toEqual(['x']);
+    await transport.stop?.();
+  });
+
+  it('clears subscribers and the queue on stop()', async () => {
+    const transport = memoryTransport();
+    const seen: unknown[] = [];
+    await transport.start?.();
+    await transport.subscribe('t', async (msg, ack) => {
+      seen.push(msg.payload);
+      ack.ack();
+    });
+    await transport.stop?.();
+
+    // After stop(), publishing queues again (started=false) rather than delivering.
+    await transport.publish({ id: '1', topic: 't', payload: 'queued' });
+    expect(seen).toEqual([]);
+  });
+
+  it('allows unsubscribing a handler', async () => {
+    const transport = memoryTransport();
+    const seen: unknown[] = [];
+    await transport.start?.();
+    const unsub = await transport.subscribe('t', async (msg, ack) => {
+      seen.push(msg.payload);
+      ack.ack();
+    });
+    await unsub();
+    await transport.publish({ id: '1', topic: 't', payload: 'gone' });
+    expect(seen).toEqual([]);
+  });
 });
 
 describe('kafkaTransport', () => {

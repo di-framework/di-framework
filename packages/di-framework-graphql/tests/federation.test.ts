@@ -214,6 +214,30 @@ describe('_entities', () => {
     expect(result.errors?.[0]?.message).toContain('has no @Lookup');
   });
 
+  it('resolves representations passed as a variable (coerced through the _Any scalar)', async () => {
+    loaded = [];
+    const api = withRegistry(catalogSubgraph());
+    const result = await api.execute({
+      query: `query Entities($representations: [_Any!]!) {
+        _entities(representations: $representations) { ... on Book { author } }
+      }`,
+      variables: { representations: [{ __typename: 'Book', id: 'b3' }] },
+    });
+    expect(result.errors).toBeUndefined();
+    expect(loaded).toEqual(['b3']);
+    expect((result.data as any)._entities).toEqual([{ author: 'Le Guin' }]);
+  });
+
+  it('gives the _Any scalar pass-through serialize/parseValue, even though it is never used in output position', () => {
+    const api = withRegistry(catalogSubgraph());
+    const anyScalar = api.schema.getType('_Any') as any;
+    expect(anyScalar.serialize({ __typename: 'Book', id: 'b1' })).toEqual({
+      __typename: 'Book',
+      id: 'b1',
+    });
+    expect(anyScalar.parseValue('literal')).toBe('literal');
+  });
+
   it('is absent from a subgraph with no entities at all', () => {
     const api = withRegistry(() => {
       @SemanticType()

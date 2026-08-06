@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
+import { getEnv } from './bootstrap';
 import type { Env } from './env';
 import worker from './index';
 import { DocPage } from './models/DocPage';
 import { DocumentRepository } from './repositories/DocumentRepository';
+
+// Must run before any `worker.fetch(...)` call in this file (the first such
+// call binds the module-level env for the rest of the process), so it proves
+// `getEnv()` really does throw when nothing has bound an `Env` yet.
+test('getEnv() throws before bindEnv() has ever run', () => {
+  expect(() => getEnv()).toThrow('Env not bound');
+});
 
 function page(id: string, title: string, content: string, product = 'd'): DocPage {
   return Object.assign(new DocPage(), {
@@ -103,6 +111,17 @@ describe('HTTP API (Controller → Service → Repo)', () => {
       {} as ExecutionContext,
     );
     expect(res.status).toBe(401);
+  });
+
+  test('OPTIONS preflight returns 204 with CORS headers', async () => {
+    const env = testEnv();
+    const res = await worker.fetch(
+      new Request('http://localhost/reindex', { method: 'OPTIONS' }),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBeTruthy();
   });
 
   test('unknown path returns 404 JSON', async () => {

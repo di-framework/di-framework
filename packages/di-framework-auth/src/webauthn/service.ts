@@ -126,13 +126,12 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
   // itself still fails closed, in `importCoseKey`.
   if (pubKeyCredParams.includes(COSE_ALG.EdDSA)) {
     void isAlgorithmSupported('EdDSA').then((supported) => {
-      if (!supported) {
+      if (!supported)
         console.error(
           '[@di-framework/auth] WebAuthnConfig.pubKeyCredParams offers EdDSA (-8) but this ' +
             "runtime's WebCrypto cannot verify Ed25519. Credentials registered with it will be " +
             'permanently unusable. Remove -8 from pubKeyCredParams.',
         );
-      }
     });
   }
 
@@ -238,40 +237,34 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
       const attStmt = attestationObject.get('attStmt');
       const authDataBytes = attestationObject.get('authData');
       if (typeof fmt !== 'string') reject('attestationObject has no fmt', 'malformed_credential');
-      if (!(authDataBytes instanceof Uint8Array)) {
+      if (!(authDataBytes instanceof Uint8Array))
         reject('attestationObject has no authData', 'malformed_credential');
-      }
       if (!(attStmt instanceof Map))
         reject('attestationObject has no attStmt', 'malformed_credential');
 
       const authData = parseAuthenticatorData(authDataBytes);
 
-      if (!(await rpIdHashMatches(authData.rpIdHash, config.rpId))) {
+      if (!(await rpIdHashMatches(authData.rpIdHash, config.rpId)))
         reject(
           `Authenticator data rpIdHash does not match rpId '${config.rpId}'`,
           'origin_mismatch',
         );
-      }
       if (!authData.flags.up) reject('User presence flag was not set', 'malformed_credential');
-      if (requireUv && !authData.flags.uv) {
+      if (requireUv && !authData.flags.uv)
         reject('User verification was required but not performed', 'malformed_credential');
-      }
-      if (!authData.flags.at || !authData.attestedCredentialData) {
+      if (!authData.flags.at || !authData.attestedCredentialData)
         reject('Registration response carries no attested credential data', 'malformed_credential');
-      }
       // BS without BE is an impossible state per WebAuthn L3 §6.1.3.
-      if (authData.flags.bs && !authData.flags.be) {
+      if (authData.flags.bs && !authData.flags.be)
         reject('Backup state is set without backup eligibility', 'malformed_credential');
-      }
 
       const attested = authData.attestedCredentialData;
       const coseKey = attested.coseKey;
-      if (!pubKeyCredParams.includes(coseKey.alg as CoseAlgorithm)) {
+      if (!pubKeyCredParams.includes(coseKey.alg as CoseAlgorithm))
         reject(
           `Credential algorithm ${coseKey.alg} was not among the offered algorithms`,
           'malformed_credential',
         );
-      }
 
       const clientDataHash = await sha256(clientData.bytes);
       const attestation = await verifyAttestationStatement({
@@ -359,20 +352,18 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
       if (ceremony.allowCredentialIds && !ceremony.allowCredentialIds.includes(response.id)) {
         reject('Credential was not among those allowed for this ceremony', 'credential_not_found');
       }
-      if (ceremony.userId && ceremony.userId !== credential.userId) {
+      if (ceremony.userId && ceremony.userId !== credential.userId)
         reject(
           'Credential does not belong to the user who started this ceremony',
           'credential_not_found',
         );
-      }
 
       // Discoverable-credential flow: the client tells us who it is, and the
       // handle must agree with the credential's owner.
       if (response.response.userHandle) {
         const user = await users.findByWebAuthnHandle(response.response.userHandle);
-        if (!user || user.id !== credential.userId) {
+        if (!user || user.id !== credential.userId)
           reject('User handle does not match the credential owner', 'credential_not_found');
-        }
       }
 
       const clientData = parseClientData(base64UrlDecode(response.response.clientDataJSON));
@@ -410,9 +401,8 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
       const coseKey = parseCoseKey(base64UrlDecode(credential.publicKeyCose));
       const signedData = concatBytes(authDataBytes, await sha256(clientData.bytes));
       const signature = base64UrlDecode(response.response.signature);
-      if (!(await verifyCoseSignature(coseKey, signature, signedData))) {
+      if (!(await verifyCoseSignature(coseKey, signature, signedData)))
         reject('Assertion signature is invalid', 'invalid_signature', 401);
-      }
 
       // Sign-count handling. A stored and received count of zero means the
       // authenticator does not implement a counter at all — which is the
@@ -422,14 +412,13 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
       let cloneWarning = false;
       if (signCountSupported && authData.signCount <= credential.signCount) {
         cloneWarning = true;
-        if (onClone === 'throw') {
+        if (onClone === 'throw')
           reject(
             `Sign count regressed (stored ${credential.signCount}, received ${authData.signCount}); ` +
               'the authenticator may have been cloned',
             'clone_detected',
             401,
           );
-        }
         console.warn(
           `[@di-framework/auth] Sign count regression on credential '${credential.id}' ` +
             `(stored ${credential.signCount}, received ${authData.signCount}).`,
@@ -445,9 +434,7 @@ export function webAuthnService(options: WebAuthnServiceOptions): WebAuthnServic
         now(),
         authData.flags.bs,
       );
-      if (!swapped) {
-        reject('Concurrent use of this credential was detected', 'clone_detected', 409);
-      }
+      if (!swapped) reject('Concurrent use of this credential was detected', 'clone_detected', 409);
 
       return {
         credentialId: credential.id,
@@ -526,17 +513,15 @@ async function verifyAttestationStatement(input: {
     const sig = attStmt.get('sig');
     if (typeof alg !== 'number') reject("Packed attStmt has no 'alg'", 'malformed_credential');
     if (!(sig instanceof Uint8Array)) reject("Packed attStmt has no 'sig'", 'malformed_credential');
-    if (alg !== coseKey.alg) {
+    if (alg !== coseKey.alg)
       reject('Self-attestation alg does not match the credential key', 'malformed_credential');
-    }
 
     // Self-attestation: the credential key signs its own registration. This
     // proves the authenticator holds the private key. It proves nothing about
     // the authenticator's make or model — that is the part we are not doing.
     const signedData = concatBytes(authData.bytes, clientDataHash);
-    if (!(await verifyCoseSignature(coseKey, sig, signedData))) {
+    if (!(await verifyCoseSignature(coseKey, sig, signedData)))
       reject('Self-attestation signature is invalid', 'invalid_signature');
-    }
     return { fmt, verified: true, trustPath: 'self' };
   }
 

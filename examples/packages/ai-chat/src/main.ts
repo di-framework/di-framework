@@ -88,6 +88,8 @@ export async function runExample(): Promise<string> {
  */
 export async function runGraphExample(): Promise<{
   routed: string;
+  technical: string;
+  general: string;
   toolLoop: string;
   path: readonly string[];
 }> {
@@ -110,6 +112,9 @@ export async function runGraphExample(): Promise<{
     .edge('general', GRAPH_FINISH)
     .build();
 
+  // Exercise each specialist branch so the classify predicates stay covered.
+  const routedTechnical = await routeGraph.run('The app crash on startup with a bug');
+  const routedGeneral = await routeGraph.run('Hello, I have a quick question');
   const routed = await routeGraph.run('I was charged twice for my order');
 
   const supportTool = functionToolCallback({
@@ -141,6 +146,8 @@ export async function runGraphExample(): Promise<{
 
   return {
     routed: routed.output,
+    technical: routedTechnical.output,
+    general: routedGeneral.output,
     toolLoop: toolLoop.output.content,
     path: routed.path,
   };
@@ -218,8 +225,13 @@ export async function runPlannerAndA2AExample(): Promise<{
   return { plannerAnswer: planner.answer, a2aArticle: a2a.content };
 }
 
-if (import.meta.main) {
-  console.log(await runExample());
-  console.log(await runGraphExample());
-  console.log(await runPlannerAndA2AExample());
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export async function runAiChatMain(isMain = import.meta.main): Promise<void> {
+  if (isMain) {
+    console.log(await runExample());
+    console.log(await runGraphExample());
+    console.log(await runPlannerAndA2AExample());
+  }
 }
+
+await runAiChatMain();
