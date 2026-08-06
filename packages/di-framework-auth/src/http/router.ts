@@ -8,6 +8,7 @@ import type {
   TypedRouterType,
 } from '@di-framework/http';
 import type { Principal } from '../principal.ts';
+import { type AuthorizationGuardOptions, authorize } from './authorization.ts';
 import { type AuthGuardOptions, runGuard } from './middleware.ts';
 import type { WithOptionalPrincipal, WithPrincipal } from './request.ts';
 
@@ -32,7 +33,14 @@ export type OptionalAuthedRequest<ReqSpec, P = Principal> = WithOptionalPrincipa
 export type AuthedRouteOptions = RouteOptions & {
   /** `false` leaves the route public; an options object overrides the defaults. */
   auth?: AuthGuardOptions | false;
+  /** Run the registered authorization manager after authentication. */
+  authorization?: AuthorizationGuardOptions | false;
 };
+
+export interface AuthedRouterDefaults extends AuthGuardOptions {
+  /** Default authorization rule for routes on this facade. */
+  authorization?: AuthorizationGuardOptions | false;
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: mirrors TypedRouter's own Args default.
 export type AuthedRoute<Args extends any[] = any[]> = <
@@ -125,7 +133,7 @@ export function optional<
 // biome-ignore lint/suspicious/noExplicitAny: mirrors TypedRouter's own Args default.
 export function withAuthRoutes<Args extends any[] = any[]>(
   router: TypedRouterType<Args>,
-  defaults: AuthGuardOptions = {},
+  defaults: AuthedRouterDefaults = {},
 ): AuthedRouter<Args> {
   // biome-ignore lint/suspicious/noExplicitAny: the facade mirrors the router's loose surface.
   const facade: any = {};
@@ -133,8 +141,13 @@ export function withAuthRoutes<Args extends any[] = any[]>(
   for (const method of METHODS) {
     // biome-ignore lint/suspicious/noExplicitAny: see above.
     facade[method] = (path: string, controller: any, options: AuthedRouteOptions = {}) => {
-      const { auth, ...routeOptions } = options;
-      const guarded = auth === false ? controller : protect(controller, { ...defaults, ...auth });
+      const { auth, authorization, ...routeOptions } = options;
+      const { authorization: defaultAuthorization, ...authDefaults } = defaults;
+      const authz = authorization === undefined ? defaultAuthorization : authorization;
+      const authorized =
+        authz === false || authz === undefined ? controller : authorize(controller, authz);
+      const guarded =
+        auth === false ? authorized : protect(authorized, { ...authDefaults, ...auth });
       // Returned verbatim: `@Endpoint` mutates this object in place and the
       // OpenAPI generator reads `.path` / `.method` off it.
       return router[method](path, guarded, routeOptions);

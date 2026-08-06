@@ -1,4 +1,5 @@
 import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
+import type { AuthorizationManager } from '../authorization.ts';
 
 /**
  * `@Authenticated()` for GraphQL types and fields.
@@ -13,6 +14,7 @@ import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
  */
 
 export const AUTHENTICATED_KEY = 'auth:authenticated';
+export const AUTHORIZATION_KEY = 'auth:authorization';
 export const PUBLIC_KEY = 'auth:public';
 /** Key under which a class-wide rule is stored. */
 export const TYPE_RULE = '$type';
@@ -29,6 +31,22 @@ export interface AuthenticatedOptions {
 }
 
 type RuleMap = Record<string, AuthenticatedOptions>;
+
+export interface AuthorizeRule<TMetadata = unknown> {
+  /** Opaque policy input interpreted only by the authorization manager. */
+  readonly metadata: TMetadata;
+  /** Pass an absent principal to the manager instead of rejecting with 401. */
+  readonly allowAnonymous: boolean;
+  /** Per-field manager override. */
+  readonly manager?: AuthorizationManager;
+}
+
+export interface AuthorizeOptions {
+  allowAnonymous?: boolean;
+  manager?: AuthorizationManager;
+}
+
+type AuthorizationRuleMap = Record<string, AuthorizeRule>;
 
 // biome-ignore lint/suspicious/noExplicitAny: decorators receive arbitrary targets.
 type DecoratorTarget = any;
@@ -49,6 +67,36 @@ export function Authenticated(options: AuthenticatedOptions = {}) {
     const owner = typeof target === 'function' ? target : target.constructor;
     const map = (getOwnMetadata(AUTHENTICATED_KEY, owner) as RuleMap | undefined) ?? {};
     defineMetadata(AUTHENTICATED_KEY, { ...map, [String(propertyKey)]: options }, owner);
+  };
+}
+
+/**
+ * Require a policy decision for a type, field, action, or subscription.
+ *
+ * The first argument is intentionally untyped framework data: applications
+ * define their own `{ action, resource, attributes }` vocabulary.
+ */
+export function Authorize<TMetadata = undefined>(
+  metadata?: TMetadata,
+  options: AuthorizeOptions = {},
+) {
+  const rule: AuthorizeRule<TMetadata | undefined> = {
+    metadata,
+    allowAnonymous: options.allowAnonymous ?? false,
+    ...(options.manager ? { manager: options.manager } : {}),
+  };
+
+  return (target: DecoratorTarget, propertyKey?: string | symbol): void => {
+    if (propertyKey === undefined) {
+      const map =
+        (getOwnMetadata(AUTHORIZATION_KEY, target) as AuthorizationRuleMap | undefined) ?? {};
+      defineMetadata(AUTHORIZATION_KEY, { ...map, [TYPE_RULE]: rule }, target);
+      return;
+    }
+    const owner = typeof target === 'function' ? target : target.constructor;
+    const map =
+      (getOwnMetadata(AUTHORIZATION_KEY, owner) as AuthorizationRuleMap | undefined) ?? {};
+    defineMetadata(AUTHORIZATION_KEY, { ...map, [String(propertyKey)]: rule }, owner);
   };
 }
 
@@ -93,4 +141,29 @@ export function authRuleFor(
   if (isPublic) return undefined;
   if (typeRule) return typeRule;
   return fallback === 'authenticated' ? {} : undefined;
+}
+
+/** Resolve the most-specific authorization declaration for a member. */
+export function authorizationRuleFor(
+  target: DecoratorTarget,
+  propertyKey: string,
+): AuthorizeRule | undefined {
+  let current: DecoratorTarget = target;
+  let typeRule: AuthorizeRule | undefined;
+  let isPublic = false;
+
+  while (current && current !== Function.prototype && current !== Object.prototype) {
+    const publicMap = getOwnMetadata(PUBLIC_KEY, current) as Record<string, true> | undefined;
+    if (publicMap?.[propertyKey]) isPublic = true;
+
+    const map = getOwnMetadata(AUTHORIZATION_KEY, current) as AuthorizationRuleMap | undefined;
+    if (map) {
+      const memberRule = map[propertyKey];
+      if (memberRule) return isPublic ? undefined : memberRule;
+      typeRule ??= map[TYPE_RULE];
+    }
+    current = Object.getPrototypeOf(current);
+  }
+
+  return isPublic ? undefined : typeRule;
 }

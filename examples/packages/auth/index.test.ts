@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { auth, router } from './index.ts';
+import { auth, opaAuthorizationManager, router } from './index.ts';
 
 describe('auth example', () => {
   it('refuses an unauthenticated request', async () => {
@@ -86,5 +86,27 @@ describe('auth example', () => {
       }),
     );
     expect(response.status).toBe(200);
+  });
+  it('shows an OPA-shaped remote authorization manager', async () => {
+    let body: unknown;
+    const manager = opaAuthorizationManager(
+      'https://opa.example/v1/data/library/allow',
+      async (_input, init) => {
+        body = JSON.parse(String(init?.body));
+        return Response.json({ result: true });
+      },
+    );
+
+    const decision = await manager.authorize(
+      { sub: 'u1', method: 'session', authTime: 1 },
+      { transport: 'http', metadata: { resource: 'notes', action: 'admin:read' } },
+    );
+    expect(decision).toEqual({ allowed: true });
+    expect(body).toMatchObject({
+      input: {
+        principal: { sub: 'u1' },
+        metadata: { resource: 'notes', action: 'admin:read' },
+      },
+    });
   });
 });

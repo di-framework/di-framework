@@ -69,6 +69,8 @@ export type AuthErrorCode =
   | 'nonce_mismatch'
   | 'issuer_mismatch'
   | 'discovery_failed'
+  // authorization
+  | 'access_denied'
   // configuration
   | 'unsupported_algorithm'
   | 'not_atomic';

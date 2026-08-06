@@ -15,6 +15,7 @@
  */
 
 export const AUTH_STRATEGY = 'auth.Strategy';
+export const AUTHORIZATION_MANAGER = 'auth.AuthorizationManager';
 export const AUTH_STORES = 'auth.Stores';
 export const AUTH_USERS = 'auth.UserStore';
 export const AUTH_SESSIONS = 'auth.SessionStore';
@@ -36,6 +37,7 @@ export const AUTH_RUNTIME = 'auth.Runtime';
 /** Every token this package registers, for diagnostics and teardown. */
 export const AUTH_TOKENS = [
   AUTH_STRATEGY,
+  AUTHORIZATION_MANAGER,
   AUTH_STORES,
   AUTH_USERS,
   AUTH_SESSIONS,

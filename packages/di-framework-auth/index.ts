@@ -14,6 +14,15 @@ export {
   nodeScryptHasher,
 } from './src/adapters/argon2.ts';
 export {
+  type AuthorizationContext,
+  type AuthorizationManager,
+  type AuthorizationManagerOptions,
+  type AuthorizationResult,
+  authorizationAllowed,
+  authorizationDenied,
+  resolveAuthorizationManager,
+} from './src/authorization.ts';
+export {
   authenticate,
   type ChainOptions,
   chain,
@@ -242,5 +251,6 @@ export {
   AUTH_TOKENS,
   AUTH_USERS,
   AUTH_WEBAUTHN,
+  AUTHORIZATION_MANAGER,
 } from './src/tokens.ts';
 export type { AuthContainer, AuthRequestContext, AuthStrategy } from './src/types.ts';

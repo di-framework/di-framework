@@ -51,6 +51,7 @@ const PUBLIC_MESSAGES: Partial<Record<AuthErrorCode, string>> = {
   nonce_mismatch: 'Sign-in failed',
   issuer_mismatch: 'Sign-in failed',
   discovery_failed: 'Sign-in temporarily unavailable',
+  access_denied: 'Access denied',
 };
 
 const DEFAULT_PUBLIC_MESSAGE = 'Authentication failed';
@@ -96,6 +97,15 @@ export class AuthError extends Error {
 
   static unauthenticated(message = 'No credential presented'): AuthError {
     return new AuthError(message, { code: 'no_credential' });
+  }
+
+  /** A policy denial. The detailed reason remains log-only. */
+  static forbidden(message = 'Authorization manager denied access', detail?: unknown): AuthError {
+    return new AuthError(message, {
+      code: 'access_denied',
+      status: 403,
+      ...(detail === undefined ? {} : { detail }),
+    });
   }
 
   /** Lift an {@link AuthFailure} from a strategy chain into a throwable error. */

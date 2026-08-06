@@ -12,6 +12,7 @@ Domain services stay on `@di-framework/core`; this package is the authentication
 - **WebAuthn passkeys**: W3C WebAuthn Level 3 registration and authentication, including a CTAP2-canonical CBOR decoder and COSE key handling, with no dependencies.
 - **Provider pattern throughout**: strategies and storage are plain interfaces with factory-function implementations. In-memory stores ship for development; a bridge over `@di-framework/repo`'s `StorageAdapter` covers real backends.
 - **First-class HTTP and GraphQL guards**: a typed `req.principal` for `@di-framework/http`, and an `@Authenticated()` decorator plus `protectSchema()` for `@di-framework/graphql`.
+- **Pluggable authorization**: an `AuthorizationManager` hook with opaque policy metadata, `requireAuthz()` for HTTP, and `@Authorize()` for GraphQL. Policies remain application-owned and can live in OPA, SpiceDB, SQL, or an in-process manager.
 
 ## Installation
 
@@ -96,13 +97,41 @@ interface Principal {
 }
 ```
 
+### Authorization managers
+
+`AuthorizationManager` is a policy decision point, not a role model. It receives the authenticated `Principal` (or `undefined` for an explicitly anonymous policy) and a transport context containing opaque metadata. Return `{ allowed: true }` or `{ allowed: false, reason }`; denial reasons are retained for logs and never sent to clients.
+
+```ts
+import type { AuthorizationManager } from '@di-framework/auth';
+
+const authorization: AuthorizationManager = {
+  async authorize(principal, context) {
+    const response = await fetch('https://opa.example/v1/data/app/allow', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        input: { subject: principal?.sub, metadata: context.metadata },
+      }),
+    });
+    const decision = await response.json() as { result?: boolean };
+    return decision.result === true
+      ? { allowed: true }
+      : { allowed: false, reason: 'remote policy denied the request' };
+  },
+};
+
+registerAuth({ secret, authorization });
+```
+
+Pass `manager` to a guard or `protectSchema()` for a per-call override. Without an explicit manager, both integrations resolve `auth.AuthorizationManager` from DI.
+
 ## HTTP
 
 ```ts
 import { TypedRouter, json } from '@di-framework/http';
 import {
   applyAuthHeaders, createAuthRoutes, mountAuthRoutes,
-  requireAuth, secured, securitySchemesFor, withAuthErrors, withAuthRoutes,
+  requireAuth, requireAuthz, secured, securitySchemesFor, withAuthErrors, withAuthRoutes,
 } from '@di-framework/auth/http';
 
 const router = TypedRouter({
@@ -128,6 +157,24 @@ export class MeController {
 ```
 
 Escape hatches: `{ auth: false }` for a public route, `{ auth: { mode: 'optional' } }` to attach a principal when present.
+
+Add authorization after authentication with a protected-router option:
+
+```ts
+secure.get('/admin', (req) => json({ subject: req.principal.sub }), {
+  authorization: { metadata: { resource: 'admin', action: 'read' } },
+});
+```
+
+For `RouteOptions.use`, preserve the same order explicitly:
+
+```ts
+router.get('/admin', handler, {
+  use: [requireAuth(), requireAuthz({ metadata: { action: 'admin:read' } })],
+});
+```
+
+By default, `requireAuthz()` rejects a missing principal with 401. Set `allowAnonymous: true` only when the manager intentionally evaluates public-policy requests. A policy denial is always a generic `403 { error: "Access denied", code: "access_denied" }` on the wire.
 
 ### Mountable auth routes
 
@@ -167,7 +214,7 @@ Handlers are static class properties invoked with itty's positional `(req, ...ar
 
 ```ts
 import { buildSemanticSchema, createGraphQLHandler } from '@di-framework/graphql';
-import { Authenticated, createAuthContext, protectSchema, requireSubject } from '@di-framework/auth/graphql';
+import { Authenticated, Authorize, createAuthContext, protectSchema, requireSubject } from '@di-framework/auth/graphql';
 
 @Portal()
 class Library {
@@ -175,6 +222,7 @@ class Library {
   catalogue(): Book[] { return books; }        // public
 
   @Authenticated()
+  @Authorize({ resource: 'loan', action: 'create' })
   @Action(() => Loan)
   borrow(@Arg('id') id: string, @Ctx() ctx: AuthGraphQLContext): Loan {
     return lend(id, requireSubject(ctx));
@@ -189,7 +237,9 @@ const handler = createGraphQLHandler(api, {
 
 `@Authenticated({ amr: ['mfa'], maxAge: 300 })` requires a stronger or more recent authentication — still authentication, not authorization.
 
-Rejections surface as `errors[0].extensions.code === 'UNAUTHENTICATED'`, and the message on the wire is always the generic public text.
+`@Authorize(metadata)` applies to types, fields, actions, and subscriptions. It invokes the registered manager after any `@Authenticated()` check. Use `@Authorize(metadata, { allowAnonymous: true })` only for a manager that deliberately makes decisions about anonymous callers. Policy denials use `extensions.code === 'FORBIDDEN'`; internal reasons remain redacted.
+
+Authentication rejections surface as `errors[0].extensions.code === 'UNAUTHENTICATED'`, and the message on the wire is always the generic public text.
 
 Note: `printSDL` renders from the type graph rather than the executable schema, so `@authenticated` does not appear in the printed SDL. The SDL describes the shape; the executable schema enforces access.
 
@@ -249,12 +299,14 @@ Stored hashes record their own parameters, and `login` re-hashes transparently w
 | `inMemoryAuthStores()` | Development and test storage. |
 | `repo*Store(options)` | `@di-framework/auth/repo` — `StorageAdapter` bridge. |
 | `withAuthRoutes` / `protect` / `requireAuth` | `@di-framework/auth/http` — guards. |
+| `AuthorizationManager` / `AUTHORIZATION_MANAGER` | Application-owned policy decision point and its DI token. |
+| `requireAuthz` / `authorize` | `@di-framework/auth/http` — authorization guards. |
 | `createAuthRoutes(options)` | `@di-framework/auth/http` — mountable protocol endpoints. |
-| `protectSchema` / `Authenticated` / `createAuthContext` | `@di-framework/auth/graphql`. |
+| `protectSchema` / `Authenticated` / `Authorize` / `createAuthContext` | `@di-framework/auth/graphql`. |
 
 ## Non-goals (v1)
 
-1. **Authorization.** No roles, permissions, policies, or `@Roles()`. This package establishes an authenticated `Principal` and rejects unauthenticated requests; every decision beyond "who is this" belongs in your domain code. `Principal.scope`, `amr`, `acr`, and `claims` are surfaced as data so that code has what it needs. The only scope handling inside the package is in the OAuth client, where reading the `scope` parameter is intrinsic to parsing a token response. The extension point is `getPrincipal(req)` / `requirePrincipal(ctx)`.
+1. **An authorization policy model.** The package supplies the `AuthorizationManager` extension point and transport plumbing, but no roles, permissions, RBAC/ABAC DSL, SpEL expressions, or `@Roles()`. Applications and remote policy agents define the metadata vocabulary and make every allow/deny decision.
 2. **Full WebAuthn attestation verification.** `none` and self-attested `packed` are verified; anything else needs FIDO Metadata Service integration. The extension point is `WebAuthnConfig.verifyAttestation`. Known gap: `fido-u2f`, which older security keys still emit.
 3. **Being an authorization server.** This is a relying party — no `/authorize`, no `/token`, no consent screen, no client registration.
 4. **Multi-factor orchestration** (TOTP, SMS, magic links, step-up state machines). `amr` and `acr` are recorded so you can build it.
