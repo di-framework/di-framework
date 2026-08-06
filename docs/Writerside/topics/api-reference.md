@@ -1,6 +1,6 @@
 # API Reference
 
-Reference for the container and decorators provided by `@di-framework/core`. For package-specific APIs, see [Repositories](repositories.md), [HTTP Router](http-router.md), [GraphQL](graphql.md), [Events](events.md), [Sockets](socket.md), [RPC](rpc.md), [Configuration](config.md), [Authentication](auth.md), and [AI](ai.md).
+Reference for the container and decorators provided by `@di-framework/core`. For package-specific APIs, see [Repositories](repositories.md), [HTTP Router](http-router.md), [GraphQL](graphql.md), [Events](events.md), [Sockets](socket.md), [RPC](rpc.md), [Configuration](config.md), [Authentication](auth.md), [Resource Authorization](authorization.md), and [AI](ai.md).
 
 ## Decorators
 

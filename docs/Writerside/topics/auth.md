@@ -13,6 +13,7 @@ Domain services stay on `@di-framework/core`; this package is the authentication
 - **Provider pattern throughout**: strategies and storage are plain interfaces with factory-function implementations. In-memory stores ship for development; a bridge over `@di-framework/repo`'s `StorageAdapter` covers real backends.
 - **First-class HTTP and GraphQL guards**: a typed `req.principal` for `@di-framework/http`, and an `@Authenticated()` decorator plus `protectSchema()` for `@di-framework/graphql`.
 - **Pluggable authorization**: an `AuthorizationManager` hook with opaque policy metadata, `requireAuthz()` for HTTP, and `@Authorize()` for GraphQL. Policies remain application-owned and can live in OPA, SpiceDB, SQL, or an in-process manager.
+- **Optional declarative policies**: [`@di-framework/authz`](authorization.md) builds on that generic boundary with resource policies and fail-closed controller binding; it is a separate companion package.
 
 ## Installation
 
@@ -322,7 +323,7 @@ Stored hashes record their own parameters, and `login` re-hashes transparently w
 
 ## Non-goals (v1)
 
-1. **An authorization policy model.** The package supplies the `AuthorizationManager` extension point and transport plumbing, but no roles, permissions, RBAC/ABAC DSL, SpEL expressions, or `@Roles()`. Applications and remote policy agents define the metadata vocabulary and make every allow/deny decision.
+1. **An authorization policy model.** The package supplies the `AuthorizationManager` extension point and transport plumbing. Applications and remote policy agents may define their own vocabulary, or opt into the separate [`@di-framework/authz`](authorization.md) companion.
 2. **Full WebAuthn attestation verification.** `none` and self-attested `packed` are verified; anything else needs FIDO Metadata Service integration. The extension point is `WebAuthnConfig.verifyAttestation`. Known gap: `fido-u2f`, which older security keys still emit.
 3. **Being an authorization server.** This is a relying party — no `/authorize`, no `/token`, no consent screen, no client registration.
 4. **Multi-factor orchestration** (TOTP, SMS, magic links, step-up state machines). `amr` and `acr` are recorded so you can build it.

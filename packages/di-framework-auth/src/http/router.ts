@@ -8,7 +8,11 @@ import type {
   TypedRouterType,
 } from '@di-framework/http';
 import type { Principal } from '../principal.ts';
-import { type AuthorizationGuardOptions, authorize } from './authorization.ts';
+import {
+  type AuthorizationGuardOptions,
+  authorize,
+  runAuthorizationGuard,
+} from './authorization.ts';
 import { type AuthGuardOptions, runGuard } from './middleware.ts';
 import type { WithOptionalPrincipal, WithPrincipal } from './request.ts';
 
@@ -67,6 +71,9 @@ export type AuthedRouter<Args extends any[] = any[]> = {
 };
 
 const METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'] as const;
+
+export const DEFERRED_AUTHORIZATION = Symbol.for('@di-framework/auth:deferred-authorization');
+export type DeferredAuthorizationBinder = (options: AuthorizationGuardOptions) => void;
 
 /**
  * Wrap a handler so it only runs for authenticated requests.
@@ -144,13 +151,32 @@ export function withAuthRoutes<Args extends any[] = any[]>(
       const { auth, authorization, ...routeOptions } = options;
       const { authorization: defaultAuthorization, ...authDefaults } = defaults;
       const authz = authorization === undefined ? defaultAuthorization : authorization;
+      let deferred: AuthorizationGuardOptions | undefined;
+      const lateAuthorized = async (...args: any[]) => {
+        if (deferred) {
+          const rejection = await runAuthorizationGuard(args[0] as Request, deferred);
+          if (rejection) return rejection;
+        }
+        return controller(...args);
+      };
       const authorized =
-        authz === false || authz === undefined ? controller : authorize(controller, authz);
+        authz === false || authz === undefined ? lateAuthorized : authorize(controller, authz);
       const guarded =
         auth === false ? authorized : protect(authorized, { ...authDefaults, ...auth });
       // Returned verbatim: `@Endpoint` mutates this object in place and the
       // OpenAPI generator reads `.path` / `.method` off it.
-      return router[method](path, guarded, routeOptions);
+      const handler = router[method](path, guarded, routeOptions);
+      Object.defineProperty(handler, DEFERRED_AUTHORIZATION, {
+        configurable: false,
+        enumerable: false,
+        value: (binding: AuthorizationGuardOptions) => {
+          if (authz !== undefined)
+            throw new Error('Route-level authorization conflicts with deferred authorization');
+          if (deferred) throw new Error('Authorization is already bound for this route');
+          deferred = binding;
+        },
+      });
+      return handler;
     };
   }
 

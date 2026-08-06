@@ -38,6 +38,8 @@ export {
   type AuthedRouteOptions,
   type AuthedRouter,
   type AuthedRouterDefaults,
+  DEFERRED_AUTHORIZATION,
+  type DeferredAuthorizationBinder,
   mountAuthRoutes,
   type OptionalAuthedRequest,
   optional,

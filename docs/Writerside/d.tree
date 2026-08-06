@@ -17,6 +17,7 @@
     <toc-element topic="rpc.md"/>
     <toc-element topic="config.md"/>
     <toc-element topic="auth.md"/>
+    <toc-element topic="authorization.md"/>
     <toc-element topic="ai.md"/>
     <toc-element topic="api-reference.md"/>
     <toc-element topic="advanced-usage.md"/>

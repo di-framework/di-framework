@@ -55,6 +55,16 @@
         "@di-framework/http": "workspace:*",
       },
     },
+    "examples/packages/authz": {
+      "name": "@di-framework/example-authz",
+      "version": "0.1.0",
+      "dependencies": {
+        "@di-framework/auth": "workspace:*",
+        "@di-framework/authz": "workspace:*",
+        "@di-framework/core": "workspace:*",
+        "@di-framework/http": "workspace:*",
+      },
+    },
     "examples/packages/basic": {
       "name": "di-basic-example",
       "version": "0.0.0",
@@ -177,6 +187,26 @@
         "@di-framework/http",
         "@di-framework/repo",
         "graphql",
+      ],
+    },
+    "packages/di-framework-authz": {
+      "name": "@di-framework/authz",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@di-framework/auth": "workspace:*",
+        "@di-framework/core": "workspace:*",
+        "@di-framework/http": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/auth": "workspace:^",
+        "@di-framework/core": "workspace:^",
+        "@di-framework/http": "workspace:^",
+        "typescript": "^5",
+      },
+      "optionalPeers": [
+        "@di-framework/http",
       ],
     },
     "packages/di-framework-cli": {
@@ -374,6 +404,8 @@
 
     "@di-framework/auth": ["@di-framework/auth@workspace:packages/di-framework-auth"],
 
+    "@di-framework/authz": ["@di-framework/authz@workspace:packages/di-framework-authz"],
+
     "@di-framework/cli": ["@di-framework/cli@workspace:packages/di-framework-cli"],
 
     "@di-framework/config": ["@di-framework/config@workspace:packages/di-framework-config"],
@@ -383,6 +415,8 @@
     "@di-framework/docs-search-example": ["@di-framework/docs-search-example@workspace:examples/packages/docs-search"],
 
     "@di-framework/events": ["@di-framework/events@workspace:packages/di-framework-events"],
+
+    "@di-framework/example-authz": ["@di-framework/example-authz@workspace:examples/packages/authz"],
 
     "@di-framework/graphql": ["@di-framework/graphql@workspace:packages/di-framework-graphql"],
 

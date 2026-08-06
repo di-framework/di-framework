@@ -52,7 +52,12 @@ export async function runAuthorizationGuard<TMetadata = unknown>(
 
   const error = AuthError.forbidden(
     result.reason ?? 'Authorization manager denied access',
-    result.reason === undefined ? undefined : { reason: result.reason },
+    result.reason === undefined && result.detail === undefined
+      ? undefined
+      : {
+          ...(result.reason === undefined ? {} : { reason: result.reason }),
+          detail: result.detail,
+        },
   );
   return options.onDenied ? options.onDenied(request, error) : error.toResponse();
 }

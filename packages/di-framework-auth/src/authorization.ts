@@ -5,8 +5,8 @@ import type { AuthContainer } from './types.ts';
 
 /** A policy decision returned by an {@link AuthorizationManager}. */
 export type AuthorizationResult =
-  | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason?: string };
+  | { readonly allowed: true; readonly detail?: unknown }
+  | { readonly allowed: false; readonly reason?: string; readonly detail?: unknown };
 
 /**
  * Common context shared by the HTTP and GraphQL integrations.
@@ -61,10 +61,14 @@ export function resolveAuthorizationManager<TContext = AuthorizationContext>(
   return resolved;
 }
 
-export function authorizationAllowed(): AuthorizationResult {
-  return { allowed: true };
+export function authorizationAllowed(detail?: unknown): AuthorizationResult {
+  return detail === undefined ? { allowed: true } : { allowed: true, detail };
 }
 
-export function authorizationDenied(reason?: string): AuthorizationResult {
-  return reason === undefined ? { allowed: false } : { allowed: false, reason };
+export function authorizationDenied(reason?: string, detail?: unknown): AuthorizationResult {
+  return {
+    allowed: false,
+    ...(reason === undefined ? {} : { reason }),
+    ...(detail === undefined ? {} : { detail }),
+  };
 }

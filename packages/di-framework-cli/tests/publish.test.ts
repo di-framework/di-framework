@@ -117,6 +117,7 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-events');
       expect(PACKAGES).toContain('packages/di-framework-config');
       expect(PACKAGES).toContain('packages/di-framework-auth');
+      expect(PACKAGES).toContain('packages/di-framework-authz');
       expect(PACKAGES).toContain('packages/di-framework-socket');
       expect(PACKAGES).toContain('packages/di-framework-rpc');
       expect(PACKAGES).toContain('packages/di-framework-ai');
@@ -196,6 +197,7 @@ describe('publish command', () => {
       const fakeShell = ((strings: TemplateStringsArray, ...exprs: unknown[]) => {
         const cmd = strings.reduce((acc, s, i) => acc + s + (exprs[i] ?? ''), '');
         return {
+          // biome-ignore lint/suspicious/noThenProperty: the injected shell deliberately returns a thenable.
           then(resolve: (v: unknown) => void, reject?: (e: unknown) => void) {
             if (cmd.includes('bun publish')) {
               publishCalls++;

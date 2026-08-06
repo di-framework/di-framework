@@ -1,0 +1,57 @@
+{
+  "name": "@di-framework/authz",
+  "version": "0.1.0",
+  "description": "Declarative resource authorization policies for di-framework",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./http": {
+      "bun": "./http.ts",
+      "import": "./dist/http.js",
+      "default": "./dist/http.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "index.ts",
+    "http.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts ./http.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@di-framework/auth": "workspace:^",
+    "@di-framework/core": "workspace:^",
+    "@di-framework/http": "workspace:^",
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@di-framework/auth": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@di-framework/http": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-authz"
+  },
+  "license": "MIT",
+  "private": false
+}

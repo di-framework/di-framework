@@ -195,7 +195,12 @@ export function protectSchema(
         if (!result.allowed) {
           const error = AuthError.forbidden(
             result.reason ?? 'Authorization manager denied GraphQL field access',
-            result.reason === undefined ? undefined : { reason: result.reason },
+            result.reason === undefined && result.detail === undefined
+              ? undefined
+              : {
+                  ...(result.reason === undefined ? {} : { reason: result.reason }),
+                  detail: result.detail,
+                },
           );
           if (options.onForbidden) options.onForbidden(field, ctx, authorizationRule, error);
           throw error.redacted();

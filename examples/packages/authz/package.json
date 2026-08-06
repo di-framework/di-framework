@@ -1,0 +1,15 @@
+{
+  "name": "@di-framework/example-authz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@di-framework/auth": "workspace:*",
+    "@di-framework/authz": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*"
+  }
+}
