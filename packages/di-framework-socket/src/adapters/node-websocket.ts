@@ -125,7 +125,11 @@ export function createWebSocketServer(options: NodeWebSocketServerOptions = {}):
         const session = await SecureSession.connect({ role: 'provider', duplex });
         await options.onConnection?.(connectionFromSecureSession(session, 'websocket', mode));
       } catch {
-        try { ws.close(1011, 'Handshake failed'); } catch { /* ignore */ }
+        try {
+          ws.close(1011, 'Handshake failed');
+        } catch {
+          /* ignore */
+        }
       }
     })();
   });

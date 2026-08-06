@@ -111,7 +111,9 @@ export async function createUdpSocket(options: NodeUdpSocketOptions = {}): Promi
       peer.session = session;
       peer.connection = connectionFromSecureSession(session, 'udp', mode);
       await options.onConnection?.(peer.connection);
-    } catch { peers.delete(key); }
+    } catch {
+      peers.delete(key);
+    }
     return peer;
   }
 

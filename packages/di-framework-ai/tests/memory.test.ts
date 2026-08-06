@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { messagesEqual } from '../src/chat/memory/message-window-chat-memory.ts';
 import { addMessage as addMessageStandalone } from '../src/chat/memory/chat-memory.ts';
+import { messagesEqual } from '../src/chat/memory/message-window-chat-memory.ts';
 import {
   assistantMessage,
   CHAT_MEMORY_CONVERSATION_ID,

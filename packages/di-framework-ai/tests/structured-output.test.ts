@@ -123,7 +123,10 @@ describe('JSON schema validator', () => {
   });
 
   test('accepts a schema passed as a JSON string', () => {
-    const result = validateAgainstJsonSchema({ name: 'Ada', age: 36 }, JSON.stringify(personSchema));
+    const result = validateAgainstJsonSchema(
+      { name: 'Ada', age: 36 },
+      JSON.stringify(personSchema),
+    );
     expect(result.success).toBe(true);
   });
 

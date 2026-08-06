@@ -14,6 +14,7 @@ import {
   policyAuthorizationManager,
   policyRegistry,
   printPolicies,
+  resourceForPolicy,
 } from '../index.ts';
 
 function buildDocument() {
@@ -64,6 +65,29 @@ describe('policy authoring and EBNF', () => {
     registry.rule(P, 'read', 'allow', ['read']);
     expect(registry.compile().policies).toHaveLength(1);
     expect(compilePolicies().policies).toHaveLength(0);
+  });
+
+  it('records static rule declarations against their policy class', () => {
+    class StaticPolicy {
+      @Allow('read')
+      static read() {}
+    }
+    Policy('static-document')(StaticPolicy);
+
+    expect(compilePolicies().policies[0]).toMatchObject({
+      resource: 'static-document',
+      rules: [{ actions: ['read'], effect: 'allow' }],
+    });
+  });
+
+  it('resolves policy resources by constructor identity', () => {
+    const First = class SameName {};
+    const Second = class SameName {};
+    Policy('first')(First);
+    Policy('second')(Second);
+
+    expect(resourceForPolicy(First)).toBe('first');
+    expect(resourceForPolicy(Second)).toBe('second');
   });
 });
 
@@ -141,5 +165,48 @@ describe('evaluation and providers', () => {
       metadata: { resource: 'document', action: 'list', collection: true },
     });
     expect(loads).toBe(1);
+  });
+
+  it('matches any listed role but requires every listed scope', () => {
+    class PredicatePolicy {
+      @Allow('role') @HasRole('admin', 'editor') role() {}
+      @Allow('scope') @HasScope('documents:read', 'documents:write') scope() {}
+    }
+    Policy('predicate')(PredicatePolicy);
+    const document = compilePolicies();
+    const input = { id: 'u1', roles: ['editor'], scopes: ['documents:read'], claims: {} };
+
+    expect(
+      evaluatePolicy(document, { resource: 'predicate', action: 'role', subject: input }).allowed,
+    ).toBeTrue();
+    expect(
+      evaluatePolicy(document, { resource: 'predicate', action: 'scope', subject: input }).allowed,
+    ).toBeFalse();
+    expect(
+      evaluatePolicy(document, {
+        resource: 'predicate',
+        action: 'scope',
+        subject: { ...input, scopes: ['documents:read', 'documents:write'] },
+      }).allowed,
+    ).toBeTrue();
+  });
+
+  it('snapshots the decorator registry when a manager is created', async () => {
+    const manager = policyAuthorizationManager({ providers: {} });
+    class LatePolicy {
+      @Allow('read') read() {}
+    }
+    Policy('late')(LatePolicy);
+
+    await expect(
+      manager.authorize(
+        { sub: 'u1', method: 'bearer', authTime: 1 },
+        {
+          transport: 'http',
+          request: new Request('https://example.test/late'),
+          metadata: { resource: 'late', action: 'read', collection: true },
+        },
+      ),
+    ).rejects.toThrow("No policy configured for resource 'late'");
   });
 });

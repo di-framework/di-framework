@@ -100,7 +100,10 @@ export function Authorize<TMetadata = undefined>(
   };
 }
 
-/** Opt one field out of a class-level `@Authenticated()`. */
+/**
+ * Make one field public by opting it out of both authentication and
+ * authorization declarations, including class-level inheritance.
+ */
 export function PublicField() {
   return (target: DecoratorTarget, propertyKey?: string | symbol): void => {
     if (propertyKey === undefined) return;

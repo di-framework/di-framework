@@ -18,7 +18,9 @@ class DocumentPolicy {
 }
 ```
 
-The methods are metadata containers and are never instantiated or invoked. Conditions on one method are ANDed. Separate allow methods form OR alternatives. Any matching deny wins, and no matching allow denies.
+The methods are instance-method metadata declarations and are never instantiated or invoked. Conditions on one method are ANDed. Separate allow methods form OR alternatives. Any matching deny wins, and no matching allow denies.
+
+Multi-argument role and scope predicates are intentionally different: `@HasRole('admin', 'editor')` matches when the subject has any listed role, while `@HasScope('documents:read', 'documents:write')` requires every listed scope. To require every role, stack one-role decorators on the same method so the conditions are ANDed. To accept any scope, declare separate allow methods with one `@HasScope` each so the methods are OR alternatives.
 
 `@Owner()` defaults to `subject.id === resource.ownerId`. `@Equals` structurally compares JSON values; missing attributes and unsafe paths never match. Declarations reject empty actions, mixed allow/deny methods, duplicate resources or rule IDs, unsafe paths, and unsupported predicates.
 
@@ -38,7 +40,7 @@ deny DocumentPolicy locked =
   ? equals "resource.locked" true ? ;
 ```
 
-`printPolicies(parsePolicies(text))` is canonical and stable. A manager accepts exactly one source: omitted `policies` uses the live decorator registry, a string is parsed, and a `PolicyDocument` is used directly. Sources are not merged.
+`printPolicies(parsePolicies(text))` is canonical and stable. A manager accepts exactly one source: omitted `policies` takes a one-time snapshot of the decorator registry when `policyAuthorizationManager()` is called, a string is parsed, and a `PolicyDocument` is used directly. Sources are not merged. Import all decorated policy classes before creating a manager so the snapshot is complete.
 
 ## Load trusted resources
 
@@ -66,7 +68,7 @@ class DocumentsController {
 }
 ```
 
-Decorator order is deliberate: `@ResourceAuthorization` must be stacked above `@Controller`. It scans direct static routes created by `withAuthRoutes`, and authentication runs before its deferred policy check. Plain router handlers, aliases, inherited or late routes, unsupported shapes, and any route-level `authorization` option (even `false`) fail during class definition. String resource references support remote-policy decoupling; class references are validated locally.
+Decorator order is deliberate: `@ResourceAuthorization` must be stacked above `@Controller`. It scans direct static routes created by `withAuthRoutes`, and authentication runs before its deferred policy check. Plain router handlers, aliases, inherited or late routes, unsupported shapes, and any route-level `authorization` option (even `false`) fail during class definition. String resource references support remote-policy decoupling; class references are resolved by constructor identity and require registration in the package's shared decorator registry.
 
 Actions infer fail-closed: GET collection/member becomes `list`/`read`, POST collection becomes `create`, PUT/PATCH member becomes `update`, and DELETE member becomes `delete`. Ambiguous routes require `@ResourceAction`. The default ID parameter is `id`. `@Endpoint` still owns OpenAPI documentation; resource authorization neither replaces it nor adds a vendor extension.
 

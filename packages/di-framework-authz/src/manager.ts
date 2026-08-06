@@ -19,6 +19,10 @@ export interface PolicyContainer {
   has?(token: string | ProviderClass): boolean;
 }
 export interface PolicyAuthorizationOptions {
+  /**
+   * Policy source. When omitted, the decorator registry is compiled once when
+   * the manager is created, after policy modules should have been imported.
+   */
   policies?: string | PolicyDocument;
   providers: Record<string, ResourceProvider | ProviderClass | string>;
   container?: PolicyContainer;

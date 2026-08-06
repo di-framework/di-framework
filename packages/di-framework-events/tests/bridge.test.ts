@@ -353,7 +353,7 @@ describe('createEventBridge - error handling & filters', () => {
 
     expect(errors).toHaveLength(1);
     expect(errors[0]?.direction).toBe('inbound');
-    expect((errors[0]?.error as Error).message).toBe('map exploded');
+    expect((errors[0]?.error as Error | undefined)?.message).toBe('map exploded');
 
     await bridge.stop();
   });
@@ -361,9 +361,7 @@ describe('createEventBridge - error handling & filters', () => {
   it('reports a second onError when ack.nack() itself throws during inbound error handling', async () => {
     const errors: Array<{ direction: string; error: unknown }> = [];
 
-    let subscribedHandler:
-      | ((msg: EventMessage, ack: Ack) => Promise<void>)
-      | undefined;
+    let subscribedHandler: ((msg: EventMessage, ack: Ack) => Promise<void>) | undefined;
     const transport = {
       async start() {},
       async stop() {},
@@ -397,14 +395,11 @@ describe('createEventBridge - error handling & filters', () => {
         throw new Error('nack failed too');
       },
     };
-    await subscribedHandler?.(
-      { id: '1', topic: 'boom-topic2', payload: {} },
-      failingAck,
-    );
+    await subscribedHandler?.({ id: '1', topic: 'boom-topic2', payload: {} }, failingAck);
 
     expect(errors).toHaveLength(2);
-    expect((errors[0]?.error as Error).message).toBe('map exploded');
-    expect((errors[1]?.error as Error).message).toBe('nack failed too');
+    expect((errors[0]?.error as Error | undefined)?.message).toBe('map exploded');
+    expect((errors[1]?.error as Error | undefined)?.message).toBe('nack failed too');
 
     await bridge.stop();
   });

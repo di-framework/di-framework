@@ -26,8 +26,9 @@
     "src"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./http.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "test": "bun test"
+    "build": "rm -rf dist && bun build ./index.ts ./http.ts --outdir ./dist --target node --splitting --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
     "@di-framework/auth": "workspace:^",

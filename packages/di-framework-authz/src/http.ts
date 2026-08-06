@@ -5,7 +5,7 @@ import {
   type HttpAuthorizationContext,
 } from '@di-framework/auth/http';
 import type { PolicyAuthorizationMetadata } from './manager.ts';
-import { compilePolicies } from './registry.ts';
+import { resourceForPolicy } from './registry.ts';
 
 const ACTION = Symbol.for('@di-framework/authz:resource-action');
 type Handler = Function & {
@@ -61,10 +61,7 @@ export function ResourceAuthorization(
   return (target: Function) => {
     if (!(target as Handler & { isController?: boolean }).isController)
       throw new Error('@ResourceAuthorization must be stacked above @Controller');
-    const resource =
-      typeof reference === 'string'
-        ? reference
-        : compilePolicies().policies.find((p) => p.name === reference.name)?.resource;
+    const resource = typeof reference === 'string' ? reference : resourceForPolicy(reference);
     if (!resource)
       throw new Error(
         `Policy class '${typeof reference === 'string' ? reference : reference.name}' is not registered`,

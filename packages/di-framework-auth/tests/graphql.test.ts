@@ -524,6 +524,53 @@ describe('GraphQL authorization', () => {
     expect(result.data).toEqual({ override: 'allowed' });
   });
 
+  it('treats @PublicField as an opt-out of type-level authn and authz', async () => {
+    @Authenticated()
+    @Authorize({ action: 'profile:read' })
+    @SemanticType()
+    class Profile {
+      @PublicField()
+      @Field(() => String)
+      label(): string {
+        return 'public';
+      }
+
+      @Field(() => String)
+      secret(): string {
+        return 'private';
+      }
+    }
+
+    @Portal()
+    class ProfilePortal {
+      @Field(() => Profile)
+      profile(): Profile {
+        return new Profile();
+      }
+    }
+
+    const calls: unknown[] = [];
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: {
+        authorize(_principal, context) {
+          calls.push(context);
+          return authorizationDenied('private rule');
+        },
+      },
+    });
+
+    const publicResult = await api.execute({ query: '{ profile { label } }', context: {} });
+    expect(publicResult.data).toEqual({ profile: { label: 'public' } });
+    expect(calls).toHaveLength(0);
+
+    const privateResult = await api.execute({
+      query: '{ profile { secret } }',
+      context: { principal },
+    });
+    expect(privateResult.errors?.[0]?.extensions).toMatchObject({ code: 'FORBIDDEN' });
+    expect(calls).toHaveLength(1);
+  });
+
   it('fails clearly when a decorated field has no manager', async () => {
     @Portal()
     class MissingManagerPortal {

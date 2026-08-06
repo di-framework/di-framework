@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { type AuthStrategy, authenticated } from '@di-framework/auth';
+import { type AuthStrategy, authenticated, noCredential } from '@di-framework/auth';
 import { withAuthRoutes } from '@di-framework/auth/http';
 import { Controller, TypedRouter } from '@di-framework/http';
 import { ResourceAuthorization } from '../http.ts';
-import { Allow, Policy, policyRegistry } from '../index.ts';
+import {
+  Allow,
+  Deny,
+  Equals,
+  Owner,
+  Policy,
+  policyAuthorizationManager,
+  policyRegistry,
+} from '../index.ts';
 
 describe('HTTP resource authorization', () => {
   beforeEach(() => policyRegistry.clear());
@@ -69,5 +77,82 @@ describe('HTTP resource authorization', () => {
     }
     Controller()(C);
     expect(() => ResourceAuthorization(P)(C)).toThrow(/conflicts/);
+  });
+
+  it('enforces real policies and redacts every deny path', async () => {
+    class DocumentPolicy {
+      @Allow('read') @Owner() owner() {}
+      @Deny('read') @Equals('resource.locked', true) locked() {}
+    }
+    Policy('document')(DocumentPolicy);
+
+    const records: Record<string, { ownerId: string; locked: boolean }> = {
+      owned: { ownerId: 'u1', locked: false },
+      locked: { ownerId: 'u1', locked: true },
+      other: { ownerId: 'u2', locked: false },
+    };
+    const manager = policyAuthorizationManager({
+      providers: { document: { load: async (id) => records[id] } },
+    });
+    const strategy: AuthStrategy = {
+      name: 'test',
+      authenticate: async () => authenticated({ sub: 'u1', method: 'bearer', authTime: 1 }),
+    };
+    const router = TypedRouter();
+    const secure = withAuthRoutes(router, { strategy });
+    class Documents {
+      static read = secure.get('/documents/:id', () => Response.json({ ok: true }) as never);
+    }
+    Controller()(Documents);
+    ResourceAuthorization(DocumentPolicy, { manager })(Documents);
+
+    const owned = await router.fetch(new Request('https://example.test/documents/owned'));
+    expect(owned.status).toBe(200);
+
+    for (const id of ['locked', 'other', 'missing']) {
+      const denied = await router.fetch(new Request(`https://example.test/documents/${id}`));
+      expect(denied.status).toBe(403);
+      expect((await denied.json()) as { error: string; code: string }).toEqual({
+        error: 'Access denied',
+        code: 'access_denied',
+      });
+    }
+
+    const invoke = Documents.read as unknown as (request: Request) => Promise<Response>;
+    const missingId = await invoke(new Request('https://example.test/documents'));
+    expect(missingId.status).toBe(403);
+    expect((await missingId.json()) as { error: string; code: string }).toEqual({
+      error: 'Access denied',
+      code: 'access_denied',
+    });
+  });
+
+  it('rejects unauthenticated requests before invoking a permissive manager', async () => {
+    class DocumentPolicy {
+      @Allow('read') read() {}
+    }
+    Policy('document')(DocumentPolicy);
+    const strategy: AuthStrategy = {
+      name: 'anonymous',
+      authenticate: async () => noCredential(),
+    };
+    let calls = 0;
+    const manager = {
+      authorize: () => {
+        calls++;
+        return { allowed: true as const };
+      },
+    };
+    const router = TypedRouter();
+    const secure = withAuthRoutes(router, { strategy });
+    class Documents {
+      static read = secure.get('/documents/:id', () => Response.json({ ok: true }) as never);
+    }
+    Controller()(Documents);
+    ResourceAuthorization(DocumentPolicy, { manager })(Documents);
+
+    const response = await router.fetch(new Request('https://example.test/documents/d1'));
+    expect(response.status).toBe(401);
+    expect(calls).toBe(0);
   });
 });

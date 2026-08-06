@@ -44,9 +44,7 @@ describe('memoryTransport', () => {
       throw new Error('boom');
     });
 
-    await expect(
-      transport.publish({ id: '1', topic: 't', payload: {} }),
-    ).resolves.toBeUndefined();
+    await expect(transport.publish({ id: '1', topic: 't', payload: {} })).resolves.toBeUndefined();
     expect(handled).toBe(1);
     await transport.stop?.();
   });

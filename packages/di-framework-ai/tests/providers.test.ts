@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { openAiChatModel } from '../src/provider/openai/openai-chat-model.ts';
 import {
   AnthropicChatModel,
   anthropicChatModel,
@@ -12,11 +11,11 @@ import {
   joinUrl,
   media,
   OpenAiChatModel,
-  parseJsonSchemaString,
   Prompt,
+  parseJsonSchemaString,
   ScriptedChatModel,
-  type ToolCallback,
   systemMessage,
+  type ToolCallback,
   toAnthropicMessages,
   toAnthropicTools,
   toOpenAiMessages,
@@ -26,6 +25,7 @@ import {
   toolResponseMessage,
   userMessage,
 } from '../src/index.ts';
+import { openAiChatModel } from '../src/provider/openai/openai-chat-model.ts';
 
 describe('API key resolution falls back to environment variables', () => {
   test('OpenAiChatModel reads OPENAI_API_KEY when apiKey option is omitted', async () => {
@@ -492,7 +492,13 @@ describe('OpenAiChatModel', () => {
           choices: [
             {
               delta: {
-                tool_calls: [{ index: 0, id: 'call_1', function: { name: 'getWeather', arguments: '{"city":' } }],
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    function: { name: 'getWeather', arguments: '{"city":' },
+                  },
+                ],
               },
               index: 0,
             },
@@ -519,7 +525,7 @@ describe('OpenAiChatModel', () => {
     for await (const chunk of model.stream!(new Prompt('weather?'))) {
       last = chunk;
     }
-    expect(last?.getResult()!.output.toolCalls).toEqual([
+    expect(last?.getResult()?.output.toolCalls).toEqual([
       { id: 'call_1', type: 'function', name: 'getWeather', arguments: '{"city":"Yorktown"}' },
     ]);
     expect(last?.getResult()?.metadata.finishReason).toBe('tool_calls');
@@ -706,7 +712,7 @@ describe('AnthropicChatModel', () => {
     for await (const chunk of model.stream!(new Prompt('weather?'))) {
       last = chunk;
     }
-    expect(last?.getResult()!.output.toolCalls).toEqual([
+    expect(last?.getResult()?.output.toolCalls).toEqual([
       { id: 'toolu_1', type: 'function', name: 'getWeather', arguments: '{"city":"Yorktown"}' },
     ]);
     expect(last?.getResult()?.metadata.finishReason).toBe('tool_calls');

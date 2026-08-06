@@ -92,6 +92,11 @@ export class PolicyRegistry {
   clear(): void {
     this.policies.clear();
   }
+
+  resourceFor(target: Function): string | undefined {
+    return this.policies.get(target)?.resource || undefined;
+  }
+
   private draft(target: Function, method: string): DraftRule {
     let policy = this.policies.get(target);
     if (!policy) {
@@ -111,7 +116,8 @@ export const policyRegistry = new PolicyRegistry();
 
 function location(target: object, propertyKey: string | symbol | undefined): [Function, string] {
   if (propertyKey === undefined) throw new Error('Rule decorators may only be used on methods');
-  return [target.constructor, String(propertyKey)];
+  const owner = typeof target === 'function' ? target : target.constructor;
+  return [owner, String(propertyKey)];
 }
 export const Policy = (resource: string) => (target: Function) =>
   policyRegistry.policy(target, resource);
@@ -137,7 +143,9 @@ export const Owner =
       resourcePath: options.resourcePath ?? 'resource.ownerId',
     });
   };
+/** Match when the subject has at least one of the listed roles. */
 export const HasRole = (...roles: string[]) => conditionDecorator({ type: 'has-role', roles });
+/** Match when the subject has every listed scope. */
 export const HasScope = (...scopes: string[]) => conditionDecorator({ type: 'has-scope', scopes });
 export const Equals = (path: string, value: JsonValue) =>
   conditionDecorator({ type: 'equals', path, value });
@@ -148,3 +156,8 @@ function conditionDecorator(condition: PolicyCondition) {
   };
 }
 export const compilePolicies = (registry: PolicyRegistry = policyRegistry) => registry.compile();
+/** Resolve a decorated policy by constructor identity. */
+export const resourceForPolicy = (
+  target: Function,
+  registry: PolicyRegistry = policyRegistry,
+): string | undefined => registry.resourceFor(target);

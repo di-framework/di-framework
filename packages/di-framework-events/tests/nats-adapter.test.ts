@@ -38,7 +38,13 @@ describe('natsTransport - module load failure', () => {
 
 describe('natsTransport - publish guards & headers', () => {
   it('throws when publishing before start()', async () => {
-    const transport = natsTransport({ nats: { async connect() { throw new Error('n/a'); } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          throw new Error('n/a');
+        },
+      },
+    });
     await expect(transport.publish({ id: '1', topic: 't', payload: {} })).rejects.toThrow(
       /not started/,
     );
@@ -60,7 +66,12 @@ describe('natsTransport - publish guards & headers', () => {
       },
     };
     const transport = natsTransport({
-      nats: { async connect() { return nc; }, headers: makeHeaders },
+      nats: {
+        async connect() {
+          return nc;
+        },
+        headers: makeHeaders,
+      },
     });
     await transport.start?.();
 
@@ -97,7 +108,13 @@ describe('natsTransport - publish guards & headers', () => {
         return false;
       },
     };
-    const transport = natsTransport({ nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
     await transport.publish({ id: '1', topic: 't', payload: null });
     expect(published[0]?.opts).toBeUndefined();
@@ -114,10 +131,9 @@ describe('natsTransport - jetstream publish', () => {
         return undefined;
       },
       async subscribe() {
-        return Object.assign(
-          (async function* () {})(),
-          { unsubscribe() {} },
-        ) as unknown as AsyncIterable<NatsMsgLike> & { unsubscribe(): void };
+        return Object.assign((async function* () {})(), {
+          unsubscribe() {},
+        }) as unknown as AsyncIterable<NatsMsgLike> & { unsubscribe(): void };
       },
     };
     const nc: NatsConnectionLike = {
@@ -136,7 +152,12 @@ describe('natsTransport - jetstream publish', () => {
     };
     const transport = natsTransport({
       jetstream: true,
-      nats: { async connect() { return nc; }, headers: makeHeaders },
+      nats: {
+        async connect() {
+          return nc;
+        },
+        headers: makeHeaders,
+      },
     });
     await transport.start?.();
     await transport.publish({ id: '1', topic: 'orders', payload: { x: 1 } });
@@ -157,18 +178,31 @@ describe('natsTransport - jetstream publish', () => {
         return false;
       },
     };
-    const transport = natsTransport({ jetstream: true, nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      jetstream: true,
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
-    await expect(
-      transport.publish({ id: '1', topic: 'orders', payload: {} }),
-    ).rejects.toThrow(/does not expose JetStream/);
+    await expect(transport.publish({ id: '1', topic: 'orders', payload: {} })).rejects.toThrow(
+      /does not expose JetStream/,
+    );
     await transport.stop?.();
   });
 });
 
 describe('natsTransport - core subscribe', () => {
   it('throws when subscribing before start()', async () => {
-    const transport = natsTransport({ nats: { async connect() { throw new Error('n/a'); } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          throw new Error('n/a');
+        },
+      },
+    });
     await expect(transport.subscribe('t', async () => {})).rejects.toThrow(/not started/);
   });
 
@@ -187,7 +221,13 @@ describe('natsTransport - core subscribe', () => {
         return false;
       },
     };
-    const transport = natsTransport({ nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
 
     const received: EventMessage[] = [];
@@ -248,7 +288,13 @@ describe('natsTransport - core subscribe', () => {
         return false;
       },
     };
-    const transport = natsTransport({ nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
 
     let nakMillis: number | undefined;
@@ -287,7 +333,13 @@ describe('natsTransport - core subscribe', () => {
         return false;
       },
     };
-    const transport = natsTransport({ nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
 
     let acked = false;
@@ -331,7 +383,13 @@ describe('natsTransport - core subscribe', () => {
         return false;
       },
     };
-    const transport = natsTransport({ nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
     await transport.subscribe('t', async () => {});
     await transport.stop?.();
@@ -393,7 +451,11 @@ describe('natsTransport - jetstream subscribe', () => {
     const transport = natsTransport({
       jetstream: true,
       durable: 'dur1',
-      nats: { async connect() { return nc; } },
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
     });
     await transport.start?.();
 
@@ -422,7 +484,14 @@ describe('natsTransport - jetstream subscribe', () => {
         return false;
       },
     };
-    const transport = natsTransport({ jetstream: true, nats: { async connect() { return nc; } } });
+    const transport = natsTransport({
+      jetstream: true,
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
     await transport.start?.();
     await expect(transport.subscribe('t', async () => {})).rejects.toThrow(
       /does not expose JetStream/,

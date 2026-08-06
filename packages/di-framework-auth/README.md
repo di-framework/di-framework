@@ -2,7 +2,7 @@
 
 Authentication for di-framework — server sessions, JWT/JWS bearer tokens, OAuth2/OIDC sign-in, and WebAuthn passkeys. Built entirely on the Web Cryptography API with **zero runtime dependencies**, so the same code runs on Bun, Node 20+, Deno, and Cloudflare Workers.
 
-Domain services stay on `@di-framework/core`; this package is the authentication layer.
+Domain services stay on `@di-framework/core`; this package is the authentication and authorization integration layer. It provides a policy-neutral manager boundary, while applications or the optional `@di-framework/authz` companion own the policy model.
 
 ## Features
 

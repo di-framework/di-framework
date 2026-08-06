@@ -107,7 +107,9 @@ describe('encodeSealedJson / tryParseSealedJson', () => {
       ),
     ).toBeNull();
     expect(
-      tryParseSealedJson(JSON.stringify({ type: 'di-socket/sealed', sessionId: 's', counter: '0' })),
+      tryParseSealedJson(
+        JSON.stringify({ type: 'di-socket/sealed', sessionId: 's', counter: '0' }),
+      ),
     ).toBeNull();
   });
 });

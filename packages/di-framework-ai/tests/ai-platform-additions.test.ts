@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { CallAdvisorChain, StreamAdvisorChain } from '../src/chat/client/advisor/advisor.ts';
-import { chatOptions, mergeChatOptions } from '../src/chat/prompt/chat-options.ts';
 import { chatClientRequest } from '../src/chat/client/chat-client-request.ts';
 import { chatClientResponse } from '../src/chat/client/chat-client-response.ts';
+import { chatOptions, mergeChatOptions } from '../src/chat/prompt/chat-options.ts';
 import { Prompt } from '../src/chat/prompt/prompt.ts';
+import { withDocumentScore } from '../src/document/document.ts';
 import {
   augmentWithFormatInstructions,
   ChatClientAttributes,
@@ -17,17 +18,16 @@ import {
   media,
   parseStandardSchema,
   pdfDocumentLoader,
-  retryAdvisor,
-  renderTemplate,
   RetryAdvisor,
-  standardSchemaOutputConverter,
+  renderTemplate,
+  retryAdvisor,
   StandardSchemaOutputConverter,
+  standardSchemaOutputConverter,
   textDocumentLoader,
   toAnthropicMessages,
   toOpenAiMessages,
   userMessage,
 } from '../src/index.ts';
-import { withDocumentScore } from '../src/document/document.ts';
 
 describe('renderTemplate', () => {
   test('substitutes known keys and leaves unknown placeholders untouched', () => {
@@ -68,10 +68,7 @@ describe('chatOptions / mergeChatOptions', () => {
   });
 
   test('mergeChatOptions merges tool context from both sides', () => {
-    const merged = mergeChatOptions(
-      { toolContext: { a: 1 } },
-      { toolContext: { b: 2 } },
-    );
+    const merged = mergeChatOptions({ toolContext: { a: 1 } }, { toolContext: { b: 2 } });
     expect(merged?.toolContext).toEqual({ a: 1, b: 2 });
   });
 
@@ -186,9 +183,7 @@ describe('AI platform additions', () => {
       },
     };
     const advisor = new RetryAdvisor({ maxAttempts: 2, backoffMs: 1, jitter: 0.5 });
-    await expect(
-      advisor.adviseCall(chatClientRequest({} as never), chain),
-    ).rejects.toBeDefined();
+    await expect(advisor.adviseCall(chatClientRequest({} as never), chain)).rejects.toBeDefined();
     expect(calls).toBe(2);
   });
 
@@ -219,8 +214,8 @@ describe('AI platform additions', () => {
   test('adviseStream throws once maxAttempts is exhausted', async () => {
     const chain: StreamAdvisorChain = {
       streamAdvisors: [],
-      // eslint-disable-next-line require-yield
       async *nextStream() {
+        yield undefined as never;
         throw { details: { retryable: true } };
       },
     };
@@ -270,9 +265,7 @@ describe('AI platform additions', () => {
       backoffMs: 10,
       signal: controller.signal,
     });
-    await expect(
-      advisor.adviseCall(chatClientRequest({} as never), chain),
-    ).rejects.toBeDefined();
+    await expect(advisor.adviseCall(chatClientRequest({} as never), chain)).rejects.toBeDefined();
     expect(calls).toBe(1);
   });
 
@@ -359,7 +352,10 @@ describe('AI platform additions', () => {
     });
     const result = await server.callTool('boom', {});
     expect(result.isError).toBe(true);
-    expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('kaboom') });
+    expect(result.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('kaboom'),
+    });
   });
 
   test('loads text, HTML, and injected PDF text', async () => {

@@ -14,9 +14,9 @@ import {
   MemoryId,
   MessageWindowChatMemory,
   OutputConverter,
-  processAiAnnotations,
   PromptTemplate,
   PromptVariable,
+  processAiAnnotations,
   resolveAiService,
   resolveAnnotatedAgent,
   resolveChatClientBuilder,
@@ -317,7 +317,9 @@ describe('@AiService userText resolution branches', () => {
     const model = new ScriptedChatModel([
       {
         respond: (p) => {
-          seenMessages.push(...p.messages.map((m) => ({ messageType: m.messageType, text: m.text })));
+          seenMessages.push(
+            ...p.messages.map((m) => ({ messageType: m.messageType, text: m.text })),
+          );
           return 'ahoy';
         },
       },
@@ -401,9 +403,9 @@ describe('registerFactoryForCtor container fallback', () => {
       },
     };
 
-    expect(() =>
-      processAiAnnotations({ container: bareContainer as never }),
-    ).toThrow('Container does not support registerFactory');
+    expect(() => processAiAnnotations({ container: bareContainer as never })).toThrow(
+      'Container does not support registerFactory',
+    );
   });
 
   test('an explicit AiServiceOptions.chatClient token resolves that ChatClient directly from the container', async () => {

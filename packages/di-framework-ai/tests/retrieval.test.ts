@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mutateQuery } from '../src/rag/query.ts';
+import type { ChatClientResponse } from '../src/chat/client/chat-client-response.ts';
 import {
   ChatClient,
   ConcatenationDocumentJoiner,
@@ -8,8 +8,8 @@ import {
   evaluateFilterExpression,
   FakeChatModel,
   FakeEmbeddingModel,
-  filterExpression,
   FilterExpressionBuilder,
+  filterExpression,
   filterKey,
   filterValue,
   isFilterExpression,
@@ -23,6 +23,7 @@ import {
   textDocument,
   VectorStoreDocumentRetriever,
 } from '../src/index.ts';
+import { mutateQuery } from '../src/rag/query.ts';
 
 describe('ConcatenationDocumentJoiner', () => {
   test('concatenates and de-duplicates documents by id (first wins)', () => {
@@ -163,9 +164,9 @@ describe('Filter expressions', () => {
   });
 
   test('rejects unknown expression types', () => {
-    expect(() =>
-      evaluateFilterExpression({ type: 'NOPE' } as never, {}),
-    ).toThrow(/Unsupported expression type/);
+    expect(() => evaluateFilterExpression({ type: 'NOPE' } as never, {})).toThrow(
+      /Unsupported expression type/,
+    );
   });
 
   test('malformed AST nodes raise descriptive errors', () => {
@@ -176,20 +177,28 @@ describe('Filter expressions', () => {
       ),
     ).toThrow(/requires a left operand/);
 
-    expect(() =>
-      evaluateFilterExpression(filterExpression('EQ', filterKey('x')), {}),
-    ).toThrow(/requires a right operand/);
+    expect(() => evaluateFilterExpression(filterExpression('EQ', filterKey('x')), {})).toThrow(
+      /requires a right operand/,
+    );
 
     expect(() =>
       evaluateFilterExpression(
-        filterExpression('EQ', filterValue(1) as unknown as ReturnType<typeof filterKey>, filterValue(1)),
+        filterExpression(
+          'EQ',
+          filterValue(1) as unknown as ReturnType<typeof filterKey>,
+          filterValue(1),
+        ),
         {},
       ),
     ).toThrow(/Expected filter key operand/);
 
     expect(() =>
       evaluateFilterExpression(
-        filterExpression('EQ', filterKey('x'), filterKey('y') as unknown as ReturnType<typeof filterValue>),
+        filterExpression(
+          'EQ',
+          filterKey('x'),
+          filterKey('y') as unknown as ReturnType<typeof filterValue>,
+        ),
         { x: 1 },
       ),
     ).toThrow(/Expected filter value operand/);
@@ -456,8 +465,12 @@ describe('RetrievalAugmentationAdvisor', () => {
     const client = ChatClient.builder(model).defaultAdvisors(rag).build();
 
     const chunks: string[] = [];
-    let lastResponse;
-    for await (const response of client.prompt().user('Where is Yorktown?').stream().chatClientResponse()) {
+    let lastResponse: ChatClientResponse | undefined;
+    for await (const response of client
+      .prompt()
+      .user('Where is Yorktown?')
+      .stream()
+      .chatClientResponse()) {
       lastResponse = response;
       if (response.chatResponse?.content) chunks.push(response.chatResponse.content);
     }

@@ -21,8 +21,7 @@ function makeMock(): {
   subscribedTopics: Array<{ topic: string; fromBeginning?: boolean }>;
   runConfigs: RunConfig[];
 } {
-  const sent: Array<{ topic: string; messages: Array<{ key: string | null; value: string }> }> =
-    [];
+  const sent: Array<{ topic: string; messages: Array<{ key: string | null; value: string }> }> = [];
   const subscribedTopics: Array<{ topic: string; fromBeginning?: boolean }> = [];
   const runConfigs: RunConfig[] = [];
 
@@ -281,8 +280,8 @@ describe('kafkaTransport - subscribe after start & publish guard', () => {
       kafkajs,
     });
 
-    await expect(
-      transport.publish({ id: '1', topic: 't', payload: {} }),
-    ).rejects.toThrow(/not started/);
+    await expect(transport.publish({ id: '1', topic: 't', payload: {} })).rejects.toThrow(
+      /not started/,
+    );
   });
 });

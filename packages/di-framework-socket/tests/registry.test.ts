@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { getRegistry, setRegistry, SocketGatewayRegistry } from '../src/registry.ts';
+import { getRegistry, SocketGatewayRegistry, setRegistry } from '../src/registry.ts';
 
 class FakeGateway {}
 class OtherGateway {}

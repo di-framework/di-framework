@@ -256,6 +256,8 @@ const handler = createGraphQLHandler(api, {
 
 `@Authorize(metadata)` applies to types, fields, actions, and subscriptions. It calls the manager after any `@Authenticated()` check. Use `@Authorize(metadata, { allowAnonymous: true })` only for deliberately anonymous policies. A denial uses `errors[0].extensions.code === 'FORBIDDEN'`, while the manager's reason remains private.
 
+`@PublicField()` is a complete public opt-out: it disables both authentication and authorization declarations for that field, including rules inherited from the containing type.
+
 Authentication rejections surface as `errors[0].extensions.code === 'UNAUTHENTICATED'`, and the message on the wire is always the generic public text.
 
 Note: `printSDL` renders from the type graph rather than the executable schema, so `@authenticated` does not appear in the printed SDL. The SDL describes the shape; the executable schema enforces access.

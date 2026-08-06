@@ -16,6 +16,7 @@ export {
   Policy,
   PolicyRegistry,
   policyRegistry,
+  resourceForPolicy,
 } from './src/registry.ts';
 export type {
   JsonValue,

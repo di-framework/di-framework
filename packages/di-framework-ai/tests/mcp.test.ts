@@ -3,7 +3,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
-import { mcpToolCallback } from '../src/mcp/mcp-tool-callback.ts';
 import {
   adaptSdkClient,
   ChatClient,
@@ -28,6 +27,7 @@ import {
   toolCallbackAsMcpTool,
   toolCallResponse,
 } from '../src/index.ts';
+import { mcpToolCallback } from '../src/mcp/mcp-tool-callback.ts';
 import { contentBlocksToString, emptyConnectionInfo } from '../src/mcp/mcp-tool-utils.ts';
 
 class FakeMcpSession implements McpClientSession {

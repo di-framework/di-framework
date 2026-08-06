@@ -169,8 +169,7 @@ export function decodeUdpEnvelope(datagram: Uint8Array): {
   const seqOff = 5 + sidLen;
   for (let i = 0; i < 8; i++) seq = (seq << 8n) | BigInt(datagram[seqOff + i]!);
   const payload = datagram.subarray(seqOff + 8);
-  const frame =
-    kind === 'text' ? textFrame(strictUtf8().decode(payload)) : binaryFrame(payload);
+  const frame = kind === 'text' ? textFrame(strictUtf8().decode(payload)) : binaryFrame(payload);
   return { sessionId, seq, frame };
 }
 
