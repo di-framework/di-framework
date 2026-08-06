@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'bun:test';
+import { base64UrlEncode } from '../../src/security/bytes.ts';
 import { generateEcdhKeyPair, importEcdhPublicKey } from '../../src/security/ecdh.ts';
 import { hkdf } from '../../src/security/kdf.ts';
-import { base64UrlEncode } from '../../src/security/bytes.ts';
-import { isProtocolMessage, parseProtocolMessage } from '../../src/security/protocol.ts';
+import {
+  isProtocolMessage,
+  type ProtocolMessage,
+  parseProtocolMessage,
+} from '../../src/security/protocol.ts';
 
 describe('importEcdhPublicKey', () => {
   it('imports a valid uncompressed P-256 public key', async () => {
@@ -52,7 +56,7 @@ describe('isProtocolMessage / parseProtocolMessage', () => {
   });
 
   it('parses a valid di-socket message from a string or bytes', () => {
-    const msg = { type: 'di-socket/handshake-init' };
+    const msg = { type: 'di-socket/handshake-init' } as ProtocolMessage;
     expect(parseProtocolMessage(JSON.stringify(msg))).toEqual(msg);
     expect(parseProtocolMessage(new TextEncoder().encode(JSON.stringify(msg)))).toEqual(msg);
   });

@@ -9,11 +9,13 @@ import {
   ChatClient,
   type ChatModel,
   configureAi,
+  type EmbeddingModel,
   EnableAi,
   enableAi,
   FakeChatModel,
   FakeEmbeddingModel,
   functionToolCallback,
+  hasToolMethods,
   MessageWindowChatMemory,
   observationAdvisor,
   registerChatAgent,
@@ -30,7 +32,7 @@ import {
   toolCallbacksFromBean,
   toolCallbacksFromBeans,
   toolCallResponse,
-  hasToolMethods,
+  type VectorStore,
 } from '../src/index.ts';
 
 beforeEach(() => {
@@ -214,7 +216,7 @@ describe('@Tool decorator', () => {
     const instance = new BrokenTools();
     // Shadow the prototype method with `undefined` on the instance itself to
     // hit the "method missing" guard (deleting an inherited method is a no-op).
-    (instance as Record<string, unknown>).missing = undefined;
+    (instance as unknown as Record<string, unknown>).missing = undefined;
     expect(() => toolCallbacksFromBean(instance)).toThrow(/is missing on/);
   });
 
@@ -340,7 +342,11 @@ describe('ObservationAdvisor + @Subscriber', () => {
     const model = new FakeChatModel(longText);
     const client = ChatClient.builder(model)
       .defaultAdvisors(
-        observationAdvisor({ includePromptText: true, includeResponseText: true, maxTextLength: 5 }),
+        observationAdvisor({
+          includePromptText: true,
+          includeResponseText: true,
+          maxTextLength: 5,
+        }),
       )
       .build();
 
@@ -525,8 +531,8 @@ describe('resolveChatAgent / registerChatAgent', () => {
     const model = new FakeChatModel('direct-agent');
     const agent = ChatAgent.create({ chatModel: model });
     registerChatAgent(agent, { token: 'custom.agent', aliases: ['custom.agent.alias'] });
-    expect(useContainer().resolve('custom.agent')).toBe(agent);
-    expect(useContainer().resolve('custom.agent.alias')).toBe(agent);
+    expect(useContainer().resolve<ChatAgent>('custom.agent')).toBe(agent);
+    expect(useContainer().resolve<ChatAgent>('custom.agent.alias')).toBe(agent);
   });
 });
 
@@ -540,8 +546,8 @@ describe('configureAi embeddingModel / vectorStore registration', () => {
       vectorStore,
       scanAnnotations: false,
     });
-    expect(useContainer().resolve(AiTokens.EMBEDDING_MODEL)).toBe(embeddingModel);
-    expect(useContainer().resolve(AiTokens.VECTOR_STORE)).toBe(vectorStore);
+    expect(useContainer().resolve<EmbeddingModel>(AiTokens.EMBEDDING_MODEL)).toBe(embeddingModel);
+    expect(useContainer().resolve<VectorStore>(AiTokens.VECTOR_STORE)).toBe(vectorStore);
   });
 });
 

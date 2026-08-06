@@ -155,9 +155,11 @@ describe('toConnection', () => {
     expect(toConnection(undefined, {})).toBeUndefined();
     const shaped = connectionFromArray(['a']);
     expect(toConnection(shaped, {})).toBe(shaped);
-    expect(toConnection(['a', 'b'], { first: 1 }).edges.map((e: { node: string }) => e.node)).toEqual([
-      'a',
-    ]);
+    expect(
+      (toConnection(['a', 'b'], { first: 1 }) as { edges: { node: string }[] }).edges.map(
+        (e) => e.node,
+      ),
+    ).toEqual(['a']);
     expect(toConnection(42, {})).toBe(42);
   });
 });

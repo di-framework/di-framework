@@ -31,6 +31,7 @@ import { generateKeyPair, importJwk } from '../src/tokens/jwk.ts';
 import { signJwt } from '../src/tokens/jwt.ts';
 import { AUTH_RUNTIME, AUTH_SESSIONS, AUTH_STRATEGY, AUTH_WEBAUTHN } from '../src/tokens.ts';
 import type { AuthContainer, AuthStrategy } from '../src/types.ts';
+import type { WebAuthnService } from '../src/webauthn/service.ts';
 
 const SECRET = 'z'.repeat(48);
 
@@ -169,9 +170,11 @@ describe('strategy chain', () => {
 
 describe('AuthResult type guards', () => {
   it('isAuthenticated, isNoCredential, and isFailure narrow correctly', async () => {
-    const { isAuthenticated: resultIsAuthenticated, isNoCredential, isFailure } = await import(
-      '../src/result.ts'
-    );
+    const {
+      isAuthenticated: resultIsAuthenticated,
+      isNoCredential,
+      isFailure,
+    } = await import('../src/result.ts');
     const principal = createPrincipal({ sub: 'u1', method: 'bearer' });
     const success = authenticated(principal);
     const empty = noCredential();
@@ -193,7 +196,10 @@ describe('AuthResult type guards', () => {
 
 describe('authenticate() and requireAuthentication() helpers', () => {
   const principal = createPrincipal({ sub: 'u1', method: 'bearer' });
-  const okStrategy: AuthStrategy = { name: 'ok', authenticate: async () => authenticated(principal) };
+  const okStrategy: AuthStrategy = {
+    name: 'ok',
+    authenticate: async () => authenticated(principal),
+  };
   const emptyStrategy: AuthStrategy = { name: 'empty', authenticate: async () => noCredential() };
   const failStrategy: AuthStrategy = {
     name: 'fail',
@@ -398,9 +404,7 @@ describe('session cookie strategy', () => {
 
     const token = await csrf.issue(issued.record.id);
     const ok = await strategy.authenticate(
-      makeContext(
-        post({ cookie: `__Host-sid=${issued.token}`, [csrf.headerName]: token }),
-      ),
+      makeContext(post({ cookie: `__Host-sid=${issued.token}`, [csrf.headerName]: token })),
     );
     expect(ok.state).toBe('authenticated');
   });
@@ -602,7 +606,7 @@ describe('registerAuth', () => {
       webauthn: { rpId: 'example.com', rpName: 'Example', origins: ['https://example.com'] },
     });
     expect(runtime.webauthn).toBeDefined();
-    expect(useContainer().resolve(AUTH_WEBAUTHN)).toBe(runtime.webauthn);
+    expect(useContainer().resolve<WebAuthnService>(AUTH_WEBAUTHN)).toBe(runtime.webauthn!);
   });
 
   it('uses explicit strategies verbatim instead of composing the defaults', () => {
@@ -787,9 +791,7 @@ describe('router integration', () => {
     const anon = await handler(get() as never);
     expect(await (anon as Response).json()).toEqual({ sub: null } as never);
 
-    const authed = await handler(
-      get(undefined, { cookie: `__Host-sid=${issued.token}` }) as never,
-    );
+    const authed = await handler(get(undefined, { cookie: `__Host-sid=${issued.token}` }) as never);
     expect(await (authed as Response).json()).toEqual({ sub: 'u1' } as never);
   });
 

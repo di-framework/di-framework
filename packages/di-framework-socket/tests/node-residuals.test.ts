@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createSocket } from 'node:dgram';
 import { connect } from 'node:net';
+import type { RawData } from 'ws';
 import type { SocketConnection } from '../index.ts';
 import { textFrame } from '../index.ts';
-import { rawToFrame } from '../src/adapters/node-websocket.ts';
 import {
   connectTcpClient,
   connectUdpClient,
@@ -12,6 +12,7 @@ import {
   createUdpSocket,
   createWebSocketServer,
 } from '../node.ts';
+import { rawToFrame } from '../src/adapters/node-websocket.ts';
 
 const stoppers: Array<() => void> = [];
 
@@ -208,15 +209,15 @@ describe('node-udp residual branches', () => {
 
 describe('node-websocket residual branches', () => {
   it('rawToFrame covers Buffer/ArrayBuffer/Buffer[] shapes', () => {
-    expect(rawToFrame('hi', false).text).toBe('hi');
-    expect(rawToFrame(Buffer.from('yo'), false).text).toBe('yo');
+    expect(rawToFrame('hi' as unknown as RawData, false).text).toBe('hi');
+    expect(rawToFrame(Buffer.from('yo') as RawData, false).text).toBe('yo');
     expect(rawToFrame([Buffer.from('a'), Buffer.from('b')], false).text).toBe('ab');
     expect(rawToFrame(new Uint8Array([65]).buffer, false).text).toBe('A');
 
     expect([...rawToFrame(Buffer.from([1, 2]), true).data]).toEqual([1, 2]);
     expect([...rawToFrame(new Uint8Array([3]).buffer, true).data]).toEqual([3]);
     expect([...rawToFrame([Buffer.from([4]), Buffer.from([5])], true).data]).toEqual([4, 5]);
-    expect([...rawToFrame(new Uint8Array([6]), true).data]).toEqual([6]);
+    expect([...rawToFrame(new Uint8Array([6]) as unknown as RawData, true).data]).toEqual([6]);
   });
 
   it('returns 404 on non-upgrade HTTP and rejects wrong path', async () => {

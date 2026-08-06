@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
 import { memoryPair } from '../src/adapters/memory.ts';
 import { createRpcClient } from '../src/client.ts';
-import { RpcField, RpcMessage, RpcMethod, RpcService } from '../src/decorators.ts';
+import { RpcField, RpcMessage, RpcMethod, RpcNotify, RpcService } from '../src/decorators.ts';
 import registry from '../src/registry.ts';
 import { createRpcServer } from '../src/server.ts';
 
@@ -80,9 +80,9 @@ describe('createRpcClient - abort signal merging', () => {
       signal: clientController.signal,
     });
 
-    await expect(
-      client.echo({ value: 'ok' }, { signal: callController.signal }),
-    ).resolves.toEqual({ value: 'ok' });
+    await expect(client.echo({ value: 'ok' }, { signal: callController.signal })).resolves.toEqual({
+      value: 'ok',
+    });
     await server.stop();
   });
 
@@ -182,7 +182,7 @@ describe('createRpcClient - $batch edge cases', () => {
       echo(request: PingRequest): PingRequest {
         return request;
       }
-      @RpcMethod({ input: () => PingRequest, notification: true })
+      @RpcNotify({ input: () => PingRequest })
       ping(_request: PingRequest): void {}
     }
 
@@ -211,7 +211,7 @@ describe('createRpcClient - $batch edge cases', () => {
     }
     @RpcService({ package: 'client-gaps.notify.v1' })
     class NotifyService {
-      @RpcMethod({ input: () => PingRequest, notification: true })
+      @RpcNotify({ input: () => PingRequest })
       ping(_request: PingRequest): void {}
     }
 
@@ -238,7 +238,7 @@ describe('createRpcClient - call-options-only args', () => {
     const client = createRpcClient(EchoService, pair.clientTransport);
 
     const result = await client.echo({ timeoutMs: 1000 } as unknown as { value: string });
-    expect(result).toEqual({ value: undefined });
+    expect(result).toEqual({ value: undefined } as unknown as { value: string });
     await server.stop();
   });
 });

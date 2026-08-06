@@ -308,7 +308,9 @@ describe('grpc.ts - error mapping, JSON-RPC code translation, and transport life
     );
 
     const responses: unknown[] = [];
-    transport.subscribe((payload) => responses.push(payload));
+    transport.subscribe((payload) => {
+      responses.push(payload);
+    });
     await transport.send({
       jsonrpc: '2.0',
       id: '9',

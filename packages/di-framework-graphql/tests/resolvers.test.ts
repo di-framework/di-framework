@@ -101,7 +101,10 @@ describe('batched field cache keys', () => {
         id!: string;
 
         @Field(() => String, { batch: 'labelsFor' })
-        label(@Arg('prefix', () => String) prefix: string, @Arg('suffix', () => String) suffix: string): string {
+        label(
+          @Arg('prefix', () => String) prefix: string,
+          @Arg('suffix', () => String) suffix: string,
+        ): string {
           return `${prefix}-${this.id}-${suffix}`;
         }
 
@@ -225,7 +228,10 @@ describe('@Subscription field resolver with arguments', () => {
       @Portal()
       class Query {
         @Subscription('resolvers-test.argged-event', () => String)
-        onEventShout(@Parent() payload: string, @Arg('suffix', () => String) suffix: string): string {
+        onEventShout(
+          @Parent() payload: string,
+          @Arg('suffix', () => String) suffix: string,
+        ): string {
           return `${payload}${suffix}`;
         }
       }
@@ -252,6 +258,7 @@ describe('@Subscription on a property field', () => {
     const api = withRegistry(() => {
       @Portal()
       class Query {
+        // @ts-expect-error - @Subscription is typed as MethodDecorator; property fields are supported at runtime.
         @Subscription('resolvers-test.property-event', () => String)
         declare onRaw: string;
       }
@@ -277,7 +284,7 @@ describe('containerEventIterator', () => {
     const container = new Container();
     const iterator = containerEventIterator(container, 'direct.event', (payload) => payload);
 
-    await expect(iterator.throw(new Error('kaboom'))).rejects.toThrow('kaboom');
+    await expect(iterator.throw!(new Error('kaboom'))).rejects.toThrow('kaboom');
     // Finishing unsubscribes and marks the iterator done for any further reads.
     expect(await iterator.next()).toEqual({ value: undefined, done: true });
   });
@@ -285,7 +292,7 @@ describe('containerEventIterator', () => {
   it('return() resolves done even with nothing pending', async () => {
     const container = new Container();
     const iterator = containerEventIterator(container, 'direct.event', (payload) => payload);
-    expect(await iterator.return()).toEqual({ value: undefined, done: true });
+    expect(await iterator.return!()).toEqual({ value: undefined, done: true });
   });
 
   it('is its own async iterator', () => {

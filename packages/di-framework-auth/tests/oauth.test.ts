@@ -19,8 +19,19 @@ import {
 } from '../src/oauth/presets.ts';
 import type { OAuthProvider } from '../src/oauth/types.ts';
 import { memoryStateStore } from '../src/providers/memory.ts';
+import type { JwkSet } from '../src/tokens/jwk.ts';
 import { generateKeyPair, importJwk } from '../src/tokens/jwk.ts';
+import type { RemoteJwks } from '../src/tokens/jwks.ts';
 import { signJwt } from '../src/tokens/jwt.ts';
+
+function stubJwks(getKey: RemoteJwks['getKey']): RemoteJwks {
+  const empty: JwkSet = { keys: [] };
+  return {
+    getKey,
+    refresh: async () => empty,
+    get: async () => empty,
+  };
+}
 
 describe('PKCE', () => {
   // RFC 7636 Appendix B.
@@ -139,7 +150,7 @@ describe('discovery()', () => {
   };
 
   function fetchStub(handler: () => Response) {
-    return (async () => handler()) as typeof fetch;
+    return (async () => handler()) as unknown as typeof fetch;
   }
 
   it('fetches, validates, and caches the document; refresh() forces a re-fetch', async () => {
@@ -151,7 +162,7 @@ describe('discovery()', () => {
         headers: { 'content-type': 'application/json' },
       });
     });
-    let clock = 0;
+    const clock = 0;
     const client = discovery(issuer, { fetch: fetchImpl, now: () => clock });
 
     expect((await client.get()).issuer).toBe(issuer);
@@ -219,7 +230,7 @@ describe('validateIdToken', () => {
     const pair = await generateKeyPair('ES256');
     const key = await importJwk(pair.publicJwk, 'ES256', 'verify');
     const signingKey = await importJwk(pair.privateJwk, 'ES256', 'sign');
-    const jwks = { getKey: async () => key };
+    const jwks = stubJwks(async () => key);
     const sign = (claims: Record<string, unknown>, subject = 'u1') =>
       signJwt(claims, {
         algorithm: 'ES256',
@@ -445,7 +456,7 @@ async function stubIdp(options: { nonceOverride?: string; subOverride?: string }
     }
 
     return new Response('not found', { status: 404 });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   const provider: OAuthProvider = {
     id: 'idp',
@@ -517,29 +528,34 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
 
   it('sends client_secret_post credentials in the token request body', async () => {
     let capturedBody: URLSearchParams | undefined;
-    const fetchImpl = (async (_url, init) => {
+    const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       capturedBody = new URLSearchParams(init?.body as string);
       return new Response(JSON.stringify({ access_token: 'at', token_type: 'Bearer' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
-    const tokens = await client(fetchImpl, { clientAuth: 'client_secret_post', clientSecret: 'shh' })
-      .refresh('rt');
+    const tokens = await client(fetchImpl, {
+      clientAuth: 'client_secret_post',
+      clientSecret: 'shh',
+    }).refresh('rt');
     expect(capturedBody?.get('client_secret')).toBe('shh');
     expect(capturedBody?.get('grant_type')).toBe('refresh_token');
     expect(tokens.accessToken).toBe('at');
   });
 
   it('rejects a non-JSON token response', async () => {
-    const fetchImpl = (async () => new Response('not json', { status: 200 })) as typeof fetch;
+    const fetchImpl = (async () =>
+      new Response('not json', { status: 200 })) as unknown as typeof fetch;
     await expect(client(fetchImpl).refresh('rt')).rejects.toThrow(/non-JSON response/);
   });
 
   it('rejects a non-2xx token response without leaking error_description as the public message', async () => {
     const fetchImpl = (async () =>
-      new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 })) as typeof fetch;
+      new Response(JSON.stringify({ error: 'invalid_grant' }), {
+        status: 400,
+      })) as unknown as typeof fetch;
     await expect(client(fetchImpl).refresh('rt')).rejects.toThrow(/HTTP 400/);
   });
 
@@ -549,7 +565,7 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
         new Response(JSON.stringify(body), {
           status: 200,
           headers: { 'content-type': 'application/json' },
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
     await expect(client(respond({ token_type: 'Bearer' })).refresh('rt')).rejects.toThrow(
       /no access_token/,
@@ -560,25 +576,27 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
   });
 
   it('rejects a userinfo response that is not ok, or not a JSON object', async () => {
-    const notOk = (async () => new Response('nope', { status: 500 })) as typeof fetch;
+    const notOk = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
     await expect(client(notOk).userinfo('at')).rejects.toThrow(/HTTP 500/);
 
     const notObject = (async () =>
       new Response('[1,2,3]', {
         status: 200,
         headers: { 'content-type': 'application/json' },
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
     await expect(client(notObject).userinfo('at')).rejects.toThrow(/not a JSON object/);
   });
 
   it('endSessionUrl returns null without an end_session_endpoint', async () => {
-    const noDiscovery = client((async () => new Response('not found', { status: 404 })) as typeof fetch);
+    const noDiscovery = client(
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
+    );
     expect(await noDiscovery.endSessionUrl({})).toBeNull();
   });
 
   it('endSessionUrl builds a URL with the id token hint and post-logout redirect, via discovery', async () => {
-    const fetchImpl = (async (url) => {
-      const href = typeof url === 'string' ? url : (url as URL).href ?? (url as Request).url;
+    const fetchImpl = (async (url: RequestInfo | URL) => {
+      const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
       if (href.endsWith('/.well-known/openid-configuration')) {
         return new Response(
           JSON.stringify({
@@ -593,9 +611,12 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
         );
       }
       return new Response('not found', { status: 404 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
-    const withIssuer = client(fetchImpl, { issuer: 'https://idp.example.com', tokenEndpoint: undefined });
+    const withIssuer = client(fetchImpl, {
+      issuer: 'https://idp.example.com',
+      tokenEndpoint: undefined,
+    });
     const url = await withIssuer.endSessionUrl({
       idToken: 'the-id-token',
       postLogoutRedirectUri: 'https://app.example.com/bye',
@@ -609,7 +630,7 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
 
   it('authorizationUrl carries max_age and extra authorization params', async () => {
     const authorization = await client(
-      (async () => new Response('not found', { status: 404 })) as typeof fetch,
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
     ).authorizationUrl({ maxAgeSeconds: 120 });
     const url = new URL(authorization.url);
     expect(url.searchParams.get('max_age')).toBe('120');
@@ -617,7 +638,7 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
 
   it('authorizationUrl copies extraAuthorizationParams onto the URL', async () => {
     const authorization = await client(
-      (async () => new Response('not found', { status: 404 })) as typeof fetch,
+      (async () => new Response('not found', { status: 404 })) as unknown as typeof fetch,
       { extraAuthorizationParams: { audience: 'https://api.example.com' } },
     ).authorizationUrl();
     const url = new URL(authorization.url);

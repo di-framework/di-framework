@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
+import { memoryPair } from '../src/adapters/memory.ts';
+import { createRpcClient } from '../src/client.ts';
+import { RpcField, RpcMessage, RpcMethod, RpcService } from '../src/decorators.ts';
+import { createRpcDispatcher } from '../src/dispatcher.ts';
+import registry, { RpcRegistry } from '../src/registry.ts';
 import { compileConnectSchema } from '../src/schema/connect.ts';
 import {
   decodeRpcMessage,
@@ -8,11 +13,6 @@ import {
   printProto,
   rpcMessageToJson,
 } from '../src/schema/messages.ts';
-import { RpcField, RpcMessage, RpcMethod, RpcService } from '../src/decorators.ts';
-import registry, { RpcRegistry } from '../src/registry.ts';
-import { createRpcDispatcher } from '../src/dispatcher.ts';
-import { memoryPair } from '../src/adapters/memory.ts';
-import { createRpcClient } from '../src/client.ts';
 import { createRpcServer } from '../src/server.ts';
 
 beforeEach(() => {
@@ -324,7 +324,7 @@ describe('schema/messages - nested + bytes fields through a live RPC round trip'
       name: 'Ada',
       home: { city: 'London' },
       other: [{ city: 'Paris' }, { city: 'Berlin' }],
-      avatar: avatarBase64,
+      avatar: avatarBase64 as unknown as Uint8Array,
     });
 
     await server.stop();

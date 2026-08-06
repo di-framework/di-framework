@@ -581,11 +581,11 @@ describe('memorySessionStore direct operations', () => {
     await sessions.create(sessionFixture('s1', 'u1'));
     await sessions.create({ ...sessionFixture('s2', 'u2'), absoluteExpiresAt: 5 });
 
-    expect(await sessions.purgeExpired(10)).toBe(1);
+    expect(await sessions.purgeExpired!(10)).toBe(1);
     expect(await sessions.get('s1')).not.toBeNull();
     expect(await sessions.get('s2')).toBeNull();
     // Purging again removes nothing further.
-    expect(await sessions.purgeExpired(10)).toBe(0);
+    expect(await sessions.purgeExpired!(10)).toBe(0);
   });
 
   it('touch() is a no-op for a session that no longer exists', async () => {
@@ -669,7 +669,7 @@ describe('memoryStateStore direct operations', () => {
     const state = memoryStateStore();
     await state.put({ purpose: 'oauth-state', key: 'k1', data: {}, expiresAt: 5 });
     await state.put({ purpose: 'oauth-state', key: 'k2', data: {}, expiresAt: future });
-    expect(await state.purgeExpired(10)).toBe(1);
+    expect(await state.purgeExpired!(10)).toBe(1);
     expect(await state.consume('oauth-state', 'k2')).not.toBeNull();
   });
 });
@@ -712,7 +712,7 @@ describe('memoryRefreshTokenStore direct operations', () => {
     const store = memoryRefreshTokenStore();
     await store.issue(record('r1', 'f1', 'u1', 5));
     await store.issue(record('r2', 'f2', 'u1', 500));
-    expect(await store.purgeExpired(10)).toBe(1);
+    expect(await store.purgeExpired!(10)).toBe(1);
     expect(await store.find('r1')).toBeNull();
     expect(await store.find('r2')).not.toBeNull();
   });
@@ -752,8 +752,7 @@ describe('memoryKeyStore direct operations', () => {
 
 describe('inMemoryAuthStores() production warning', () => {
   it('warns exactly once when NODE_ENV=production and silent is not set', () => {
-    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } })
-      .process;
+    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } }).process;
     const original = proc?.env.NODE_ENV;
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
@@ -769,8 +768,7 @@ describe('inMemoryAuthStores() production warning', () => {
   });
 
   it('never warns when silent is set, regardless of NODE_ENV', () => {
-    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } })
-      .process;
+    const proc = (globalThis as { process?: { env: Record<string, string | undefined> } }).process;
     const original = proc?.env.NODE_ENV;
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     try {

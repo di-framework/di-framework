@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { defaultToolCallResultConverter } from '../src/tool/execution/tool-call-result-converter.ts';
-import { resolveToolCallbacksDedupe } from '../src/tool/tool-callback-provider.ts';
 import {
   type CallAdvisor,
   type CallAdvisorChain,
@@ -28,6 +26,8 @@ import {
   toolDefinition,
   userMessage,
 } from '../src/index.ts';
+import { defaultToolCallResultConverter } from '../src/tool/execution/tool-call-result-converter.ts';
+import { resolveToolCallbacksDedupe } from '../src/tool/tool-callback-provider.ts';
 
 describe('ToolDefinition / FunctionToolCallback', () => {
   test('toolDefinition defaults description and schema', () => {
@@ -189,7 +189,12 @@ describe('ToolContext.has / toRecord', () => {
   });
 
   test('toRecord() converts the context back to a plain object', () => {
-    const ctx = new ToolContext(new Map([['userId', 'u-1'], ['tenant', 't1']]));
+    const ctx = new ToolContext(
+      new Map([
+        ['userId', 'u-1'],
+        ['tenant', 't1'],
+      ]),
+    );
     expect(ctx.toRecord()).toEqual({ userId: 'u-1', tenant: 't1' });
   });
 });
@@ -488,7 +493,8 @@ describe('ToolCallingAdvisorBuilder fluent setters', () => {
       .toolCallingManager(manager)
       .toolExecutionEligibilityChecker((response) => {
         checked += 1;
-        return hasToolCalls(response?.getResult()?.output);
+        const output = response?.getResult()?.output;
+        return output != null && hasToolCalls(output);
       })
       .advisorOrder(DEFAULT_TOOL_CALLING_ORDER + 1)
       .conversationHistoryEnabled(true)

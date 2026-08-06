@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import type { CallAdvisor, CallAdvisorChain, StreamAdvisorChain } from '../src/index.ts';
+import { StructuredOutputValidationAdvisor } from '../src/chat/client/advisor/structured-output-validation-advisor.ts';
 import { chatClientRequest } from '../src/chat/client/chat-client-request.ts';
 import { chatClientResponse } from '../src/chat/client/chat-client-response.ts';
-import { StructuredOutputValidationAdvisor } from '../src/chat/client/advisor/structured-output-validation-advisor.ts';
-import { ChatResponse } from '../src/chat/model/chat-response.ts';
 import { assistantMessage } from '../src/chat/messages/factories.ts';
-import { generation } from '../src/chat/model/generation.ts';
 import { chatResponseMetadata } from '../src/chat/metadata/chat-response-metadata.ts';
+import { ChatResponse } from '../src/chat/model/chat-response.ts';
+import { generation } from '../src/chat/model/generation.ts';
 import { Prompt } from '../src/chat/prompt/prompt.ts';
+import type { CallAdvisor, CallAdvisorChain, StreamAdvisorChain } from '../src/index.ts';
 
 const schema = JSON.stringify({
   type: 'object',
@@ -18,9 +18,14 @@ const schema = JSON.stringify({
 function toolCallResponse() {
   return new ChatResponse(
     [
-      generation(assistantMessage(null, { toolCalls: [{ id: 't1', name: 'x', arguments: '{}' }] }), {
-        finishReason: 'tool_calls',
-      }),
+      generation(
+        assistantMessage(null, {
+          toolCalls: [{ id: 't1', type: 'function', name: 'x', arguments: '{}' }],
+        }),
+        {
+          finishReason: 'tool_calls',
+        },
+      ),
     ],
     chatResponseMetadata(),
   );
@@ -62,7 +67,8 @@ describe('StructuredOutputValidationAdvisor', () => {
 
   test('throws when maxRepeatAttempts is negative', () => {
     expect(
-      () => new StructuredOutputValidationAdvisor({ outputJsonSchema: schema, maxRepeatAttempts: -1 }),
+      () =>
+        new StructuredOutputValidationAdvisor({ outputJsonSchema: schema, maxRepeatAttempts: -1 }),
     ).toThrow('maxRepeatAttempts must be >= 0');
   });
 

@@ -589,9 +589,9 @@ describe('executeDerivedQuery - direct plan construction for defensive branches'
     });
     // Empty array -> empty; non-empty array -> not empty; a bare number -> falls
     // through isEmptyValue's final `return false` (neither string, array, nor nullish).
-    expect((await executeDerivedQuery(isEmptyQuery, repo, [])).map((r: any) => r.id)).toEqual([
-      '1',
-    ]);
+    expect(
+      ((await executeDerivedQuery(isEmptyQuery, repo, [])) as { id: string }[]).map((r) => r.id),
+    ).toEqual(['1']);
   });
 
   test('eq and ordered comparisons against Date properties', async () => {

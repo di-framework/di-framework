@@ -1,24 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 import { textDocument } from '../src/document/document.ts';
-import { embedDocument, type EmbeddingModel } from '../src/embedding/embedding-model.ts';
+import { type EmbeddingModel, embedDocument } from '../src/embedding/embedding-model.ts';
 import { FakeEmbeddingModel } from '../src/embedding/fake-embedding-model.ts';
 import {
   emptyToolCallbackResolver,
   staticToolCallbackResolver,
 } from '../src/model/tool/tool-callback-resolver.ts';
 import { functionToolCallback } from '../src/tool/function-tool-callback.ts';
-import { PgVectorStore, type PgClient } from '../src/vectorstore/adapters/pgvector.ts';
-import { VectorizeVectorStore, type VectorizeIndex } from '../src/vectorstore/adapters/vectorize.ts';
+import { type PgClient, PgVectorStore } from '../src/vectorstore/adapters/pgvector.ts';
 import {
+  type VectorizeIndex,
+  VectorizeVectorStore,
+} from '../src/vectorstore/adapters/vectorize.ts';
+import { filterExpression, filterKey, filterValue } from '../src/vectorstore/filter/index.ts';
+import {
+  SearchRequestBuilder,
   searchRequest,
   searchRequestBuilder,
-  SearchRequestBuilder,
 } from '../src/vectorstore/search-request.ts';
 import {
   similaritySearchQuery,
   type VectorStoreRetriever,
 } from '../src/vectorstore/vector-store-retriever.ts';
-import { filterExpression, filterKey, filterValue } from '../src/vectorstore/filter/index.ts';
 
 describe('embedding-model.embedDocument', () => {
   test('delegates to model.embedDocument when present', async () => {
@@ -121,9 +124,7 @@ describe('search-request', () => {
     expect(built.similarityThreshold).toBe(0.5);
     expect(built.filterExpression).not.toBeNull();
 
-    expect(() => new SearchRequestBuilder().query(null as never)).toThrow(
-      'Query can not be null.',
-    );
+    expect(() => new SearchRequestBuilder().query(null as never)).toThrow('Query can not be null.');
 
     const acceptAll = searchRequestBuilder()
       .query('x')
@@ -141,7 +142,7 @@ describe('PgVectorStore', () => {
     const rows: Array<{ id: string; content: string; metadata: string; score: number }> = [];
     const client = {
       calls: [] as { sql: string; params?: unknown[] }[],
-      query(sql: string, params?: unknown[]) {
+      query<T = any>(sql: string, params?: unknown[]): { rows: T[] } {
         client.calls.push({ sql, params });
         if (sql.startsWith('INSERT')) {
           const [id, content, metadata] = params as [string, string, string, string];
@@ -155,7 +156,7 @@ describe('PgVectorStore', () => {
           return { rows: [] };
         }
         // SELECT ... similarity search
-        return { rows: rows.map((r) => ({ ...r, score: 0.9 })) };
+        return { rows: rows.map((r) => ({ ...r, score: 0.9 })) as T[] };
       },
     };
     return client;
@@ -182,13 +183,13 @@ describe('PgVectorStore', () => {
 
   test('filters out results below the similarity threshold and parses string metadata', async () => {
     const client: PgClient = {
-      query: (sql: string) => {
+      query: <T = any>(sql: string): { rows: T[] } => {
         if (sql.startsWith('SELECT')) {
           return {
             rows: [
               { id: 'low', content: 'low score', metadata: '{"a":1}', score: 0.1 },
               { id: 'high', content: 'high score', metadata: null, score: 0.95 },
-            ],
+            ] as T[],
           };
         }
         return { rows: [] };
@@ -232,9 +233,7 @@ describe('VectorizeVectorStore', () => {
         };
       },
       async deleteByIds(ids: string[]) {
-        index.upserted = index.upserted.filter(
-          (v) => !ids.includes((v as { id: string }).id),
-        );
+        index.upserted = index.upserted.filter((v) => !ids.includes((v as { id: string }).id));
       },
     };
     return index;
@@ -245,10 +244,7 @@ describe('VectorizeVectorStore', () => {
     const store = new VectorizeVectorStore({ index, embeddingModel: new FakeEmbeddingModel() });
     expect(store.name).toBe('VectorizeVectorStore');
 
-    await store.add([
-      textDocument('alpha', { g: 1 }, 'v1'),
-      textDocument('beta', { g: 2 }, 'v2'),
-    ]);
+    await store.add([textDocument('alpha', { g: 1 }, 'v1'), textDocument('beta', { g: 2 }, 'v2')]);
     expect(index.upserted).toHaveLength(2);
 
     const hits = await store.similaritySearch(searchRequest({ query: 'alpha', topK: 5 }));

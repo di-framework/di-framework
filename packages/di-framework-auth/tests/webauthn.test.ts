@@ -295,9 +295,7 @@ describe('COSE keys extended', () => {
       /Unsupported COSE key type/,
     );
     expect(() => parseCoseKey(concatBytes(bytes(0xa2, 0x01, 0x02, 0x03, 0x26)))).toThrow(/no crv/);
-    expect(() =>
-      parseCoseKey(concatBytes(bytes(0xa2, 0x01, 0x01, 0x03, 0x27))),
-    ).toThrow(/no crv/);
+    expect(() => parseCoseKey(concatBytes(bytes(0xa2, 0x01, 0x01, 0x03, 0x27)))).toThrow(/no crv/);
   });
 
   it('imports ES256/RS256 keys and verifies signatures', async () => {
@@ -498,13 +496,13 @@ describe('clientDataJSON', () => {
       parseClientData(concatBytes(bytes(0xef, 0xbb, 0xbf), new TextEncoder().encode('{}'))),
     ).toThrow(/BOM/);
 
-    await expect(
-      verifyClientData(build({ challenge: 'not!base64url' }), expected),
-    ).rejects.toThrow(/base64url/);
+    await expect(verifyClientData(build({ challenge: 'not!base64url' }), expected)).rejects.toThrow(
+      /base64url/,
+    );
 
-    await expect(
-      verifyClientData(build({ origin: 'not a url' }), expected),
-    ).rejects.toThrow(/not a valid URL/);
+    await expect(verifyClientData(build({ origin: 'not a url' }), expected)).rejects.toThrow(
+      /not a valid URL/,
+    );
 
     expect(normalizeOrigin(':::')).toBeNull();
   });
@@ -550,7 +548,11 @@ async function signAssertion(input: {
 }): Promise<Uint8Array> {
   const signed = concatBytes(input.authData, await sha256(input.clientDataJSON));
   const raw = new Uint8Array(
-    await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, input.privateKey, signed),
+    await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      input.privateKey,
+      signed as BufferSource,
+    ),
   );
   // Authenticators emit DER, which is the encoding this package must convert.
   return p1363ToDer(raw);
@@ -1107,7 +1109,7 @@ describe('WebAuthn registration ceremony', () => {
       extensions: { credProps: true },
     });
     expect(ceremony.options.excludeCredentials?.[0]?.transports).toEqual(['usb']);
-    expect(ceremony.options.authenticatorSelection.authenticatorAttachment).toBe('platform');
+    expect(ceremony.options.authenticatorSelection!.authenticatorAttachment).toBe('platform');
 
     const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
       'sign',
@@ -1209,7 +1211,11 @@ describe('WebAuthn registration ceremony', () => {
       const clientDataHash = await sha256(clientDataJSON);
       const signed = concatBytes(authData, clientDataHash);
       const raw = new Uint8Array(
-        await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, signed),
+        await crypto.subtle.sign(
+          { name: 'ECDSA', hash: 'SHA-256' },
+          pair.privateKey,
+          signed as BufferSource,
+        ),
       );
       const sig = p1363ToDer(raw);
       const attStmt = concatBytes(
@@ -1257,7 +1263,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // Unsupported format, none with non-empty attStmt, packed x5c paths, duplicate credential.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const badFmt = await registrationResponse({
         service: context.service,
@@ -1277,7 +1286,10 @@ describe('WebAuthn registration ceremony', () => {
     }
 
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const nonempty = await registrationResponse({
         service: context.service,
@@ -1323,7 +1335,10 @@ describe('WebAuthn registration ceremony', () => {
     }
 
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const x5c = concatBytes(
         bytes(0xa1),
@@ -1362,7 +1377,10 @@ describe('WebAuthn registration ceremony', () => {
         createdAt: 0,
         version: 0,
       });
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const { challengeKey, response } = await registrationResponse({
         service: context.service,
         challenge: c.options.challenge,
@@ -1438,7 +1456,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // Build a CBOR attestation object that omits authData entirely.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const incomplete = concatBytes(
         bytes(0xa2),
         cborText('fmt'),
@@ -1472,7 +1493,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // Wrong rpId hash on registration.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const { challengeKey, response } = await registrationResponse({
         service: context.service,
@@ -1514,7 +1538,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // No AT flag / no attested credential data.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const bare = buildAuthData({
         rpIdHash: await sha256(RP_ID),
         flags: 0x01,
@@ -1546,7 +1573,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // BS without BE at registration.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const { challengeKey, response } = await registrationResponse({
         service: context.service,
@@ -1575,7 +1605,10 @@ describe('WebAuthn registration ceremony', () => {
         rsaN,
         bytes(0x21, 0x43, 0x01, 0x00, 0x01),
       );
-      const c = await limited.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await limited.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const authData = buildAuthData({
         rpIdHash: await sha256(RP_ID),
@@ -1609,7 +1642,10 @@ describe('WebAuthn registration ceremony', () => {
 
     // Packed alg mismatch + invalid self-attestation signature + unhandled format.
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const authData = buildAuthData({
         rpIdHash: await sha256(RP_ID),
@@ -1648,7 +1684,10 @@ describe('WebAuthn registration ceremony', () => {
     }
 
     {
-      const c = await context.service.generateRegistrationOptions({ userId: 'u1', username: 'ada' });
+      const c = await context.service.generateRegistrationOptions({
+        userId: 'u1',
+        username: 'ada',
+      });
       const id = crypto.getRandomValues(new Uint8Array(16));
       const authData = buildAuthData({
         rpIdHash: await sha256(RP_ID),

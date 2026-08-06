@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
 import { Component, Container } from '@di-framework/core/decorators';
 import { connectWebSocketClient } from '../node.ts';
-import type { SocketConnection, SocketListenFactory } from '../src/core/types.ts';
+import type { SocketConnection } from '../src/core/types.ts';
 import {
   OnClose,
   OnConnect,
@@ -13,6 +13,7 @@ import {
   stopSocketGateways,
 } from '../src/decorators.ts';
 import registry, { SocketGatewayRegistry } from '../src/registry.ts';
+import type { SocketListenFactory } from '../src/types.ts';
 
 afterEach(async () => {
   await stopSocketGateways();
@@ -144,7 +145,9 @@ describe('@SocketGateway decorators', () => {
     // firing onMessage/onClose so we can cover every wireConnection() branch
     // (malformed JSON, type mismatch, handler throw -> @OnError, @OnClose dispatch)
     // without depending on whether a real transport ever calls dispatchClose.
-    let messageHandler: ((frame: { kind: string; text?: string; data: Uint8Array }) => void) | undefined;
+    let messageHandler:
+      | ((frame: { kind: string; text?: string; data: Uint8Array }) => void)
+      | undefined;
     let closeHandler: ((info: { code?: number; reason?: string }) => void) | undefined;
     const customListen: SocketListenFactory = ({ onConnection }) => {
       const conn: SocketConnection = {
@@ -207,9 +210,17 @@ describe('@SocketGateway decorators', () => {
     // Malformed JSON for a typed handler: JSON.parse throws -> `continue`.
     messageHandler?.({ kind: 'text', text: '{not json', data: new Uint8Array() });
     // Well-formed JSON but mismatched `type` -> `continue`.
-    messageHandler?.({ kind: 'text', text: JSON.stringify({ type: 'not-boom' }), data: new Uint8Array() });
+    messageHandler?.({
+      kind: 'text',
+      text: JSON.stringify({ type: 'not-boom' }),
+      data: new Uint8Array(),
+    });
     // Matches `boom`: first handler throws, routed to @OnError; second handler still runs.
-    messageHandler?.({ kind: 'text', text: JSON.stringify({ type: 'boom' }), data: new Uint8Array() });
+    messageHandler?.({
+      kind: 'text',
+      text: JSON.stringify({ type: 'boom' }),
+      data: new Uint8Array(),
+    });
     await Bun.sleep(20);
 
     expect(errors).toHaveLength(1);
@@ -257,8 +268,9 @@ describe('@SocketGateway decorators', () => {
     const handle = (gateway as unknown as Record<symbol, { started: boolean; server: unknown }>)[
       Symbol.for('di-framework.socket.gateway-handle')
     ];
-    expect(handle.started).toBe(true);
-    expect(handle.server).toBe(server1);
+    expect(handle).toBeDefined();
+    expect(handle!.started).toBe(true);
+    expect(handle!.server).toBe(server1);
 
     await gateway.$stopGateway();
     expect(stopCalls).toBe(1);
@@ -317,7 +329,13 @@ describe('@SocketGateway decorators', () => {
 
       useContainer().resolve(FailGateway);
       await Bun.sleep(30);
-      expect(errors.some((a) => String(a).includes('listen-fail') || String((a as unknown[])[0]).includes('SocketGateway'))).toBe(true);
+      expect(
+        errors.some(
+          (a) =>
+            String(a).includes('listen-fail') ||
+            String((a as unknown[])[0]).includes('SocketGateway'),
+        ),
+      ).toBe(true);
     } finally {
       console.error = orig;
     }

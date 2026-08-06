@@ -20,12 +20,8 @@ beforeEach(() => {
 describe('@RpcField - non-string property keys', () => {
   it('throws when applied to a symbol-keyed property', () => {
     expect(() => {
-      class Bad {
-        // @ts-expect-error - intentionally decorating a symbol-keyed property.
-        @RpcField(1)
-        [Symbol('sym')]!: string;
-      }
-      void Bad;
+      class Bad {}
+      RpcField(1)(Bad.prototype, Symbol('sym'));
     }).toThrow(/requires a string property name/);
   });
 });
@@ -190,7 +186,8 @@ describe('startRpcServices / stopRpcServices', () => {
     const customContainer = {
       has: () => true,
       register: registerSpy,
-      resolve: (target: unknown) => (target === AlreadyRegistered ? new AlreadyRegistered() : undefined),
+      resolve: (target: unknown) =>
+        target === AlreadyRegistered ? new AlreadyRegistered() : undefined,
     };
 
     const pair = memoryPair();

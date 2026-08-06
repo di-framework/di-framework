@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
-import { base64UrlDecode, base64UrlEncode, base64UrlEncodeString } from '../src/crypto/base64url.ts';
+import {
+  base64UrlDecode,
+  base64UrlEncode,
+  base64UrlEncodeString,
+} from '../src/crypto/base64url.ts';
 import { AuthError } from '../src/errors.ts';
 import { memoryKeyStore, memoryRefreshTokenStore } from '../src/providers/memory.ts';
 import { isAlgorithmSupported } from '../src/tokens/algorithms.ts';
@@ -90,11 +94,15 @@ describe('JWK', () => {
   it('refuses a curve mismatch between the JWK and the requested algorithm', async () => {
     const p256 = await generateKeyPair('ES256');
     const wrongCurveJwk = { ...p256.publicJwk, crv: 'P-384' };
-    await expect(importJwk(wrongCurveJwk, 'ES256', 'verify')).rejects.toThrow(/does not match algorithm/);
+    await expect(importJwk(wrongCurveJwk, 'ES256', 'verify')).rejects.toThrow(
+      /does not match algorithm/,
+    );
   });
 
   it('refuses to import a shared secret for a non-symmetric algorithm', async () => {
-    await expect(importHmacKey('k'.repeat(32), 'ES256')).rejects.toThrow(/is not a symmetric algorithm/);
+    await expect(importHmacKey('k'.repeat(32), 'ES256')).rejects.toThrow(
+      /is not a symmetric algorithm/,
+    );
   });
 
   it('refuses a thumbprint whose kty declares a member that is missing', async () => {
@@ -574,9 +582,9 @@ describe('keyService', () => {
   it('rejects verification against an unknown kid', async () => {
     const service = keyService({ store: memoryKeyStore() });
     await service.signingKey();
-    await expect(
-      service.verificationKey({ alg: 'ES256', kid: 'does-not-exist' }),
-    ).rejects.toThrow(/No signing key with kid/);
+    await expect(service.verificationKey({ alg: 'ES256', kid: 'does-not-exist' })).rejects.toThrow(
+      /No signing key with kid/,
+    );
   });
 
   it('rotating with no prior key generates one without treating the store miss as a previous key', async () => {
@@ -735,7 +743,9 @@ describe('remoteJwks', () => {
     await expect(cold.get()).rejects.toThrow(/keys/);
 
     // Invalid JSON.
-    documents = [new Response('not-json', { status: 200, headers: { 'content-type': 'application/json' } })];
+    documents = [
+      new Response('not-json', { status: 200, headers: { 'content-type': 'application/json' } }),
+    ];
     await expect(
       fetchJson('https://idp.example/jwks', {
         timeoutMs: 1_000,
@@ -757,7 +767,7 @@ describe('remoteJwks', () => {
             headers: new Headers(),
             body: null,
             arrayBuffer: async () => new TextEncoder().encode('{"keys":[]}').buffer,
-          }) as unknown as Response) as typeof fetch,
+          }) as unknown as Response) as unknown as typeof fetch,
       }),
     ).resolves.toEqual({ keys: [] });
 
@@ -773,7 +783,7 @@ describe('remoteJwks', () => {
             headers: new Headers(),
             body: null,
             arrayBuffer: async () => new TextEncoder().encode('{"keys":[]}').buffer,
-          }) as unknown as Response) as typeof fetch,
+          }) as unknown as Response) as unknown as typeof fetch,
       }),
     ).rejects.toThrow(/over the 4 cap/);
 
@@ -792,11 +802,7 @@ describe('remoteJwks', () => {
     const only = remoteJwks('https://idp.example/jwks', {
       fetch: (async () =>
         Response.json({
-          keys: [
-            { ...pub, use: 'enc' },
-            { ...pub, alg: 'RS256' },
-            pub,
-          ],
+          keys: [{ ...pub, use: 'enc' }, { ...pub, alg: 'RS256' }, pub],
         })) as unknown as typeof fetch,
     });
     await expect(only.getKey({ alg: 'ES256' })).resolves.toBeInstanceOf(CryptoKey);

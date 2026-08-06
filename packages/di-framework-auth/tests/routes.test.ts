@@ -21,8 +21,7 @@ const jsonPost = (url: string, body: unknown, headers: Record<string, string> = 
     body: JSON.stringify(body),
   });
 
-const get = (url: string, headers: Record<string, string> = {}) =>
-  new Request(url, { headers });
+const get = (url: string, headers: Record<string, string> = {}) => new Request(url, { headers });
 
 function cookieHeader(parts: string[]): string {
   return parts.map((setCookie) => setCookie.split(';')[0]!).join('; ');
@@ -44,19 +43,20 @@ function runtime(overrides: Parameters<typeof registerAuth>[0] = {}): AuthRuntim
 
 describe('createAuthRoutes', () => {
   it('throws when no runtime is registered or passed', () => {
-    const container: AuthContainer = {
+    const container = {
       registerSingletonFactory: () => undefined,
-      resolve: () => undefined,
-    };
+      resolve: (() => undefined) as AuthContainer['resolve'],
+    } as AuthContainer;
     expect(() => createAuthRoutes({ container })).toThrow(/No auth runtime registered/);
   });
 
   it('resolves the runtime from a container when one is registered', async () => {
     const built = runtime({ csrf: false });
-    const container: AuthContainer = {
+    const container = {
       registerSingletonFactory: () => undefined,
-      resolve: (token) => (token === AUTH_RUNTIME ? built : undefined),
-    };
+      resolve: ((token) =>
+        token === AUTH_RUNTIME ? built : undefined) as AuthContainer['resolve'],
+    } as AuthContainer;
     const router = createAuthRoutes({
       container,
       enable: { webauthn: false, oauth: false, refresh: false, csrf: false },
@@ -117,30 +117,26 @@ describe('createAuthRoutes', () => {
     expect(sessionCookies.some((c) => c.startsWith('__Host-csrf='))).toBe(true);
     const cookie = cookieHeader(sessionCookies);
 
-    const session = await router.fetch(
-      get('https://app.example.com/session', { cookie }),
-    );
+    const session = await router.fetch(get('https://app.example.com/session', { cookie }));
     expect(session.status).toBe(200);
     expect(await session.json()).toMatchObject({
       principal: { sub: expect.any(String), method: 'session' },
     });
 
     const anonSession = await router.fetch(get('https://app.example.com/session'));
-    expect(await anonSession.json()).toEqual({ principal: null });
+    expect((await anonSession.json()) as { principal: null }).toEqual({ principal: null });
 
     const csrf = await router.fetch(get('https://app.example.com/csrf', { cookie }));
     expect(csrf.status).toBe(200);
-    expect((await csrf.json() as { token: string }).token.length).toBeGreaterThan(10);
+    expect(((await csrf.json()) as { token: string }).token.length).toBeGreaterThan(10);
 
     await expect(
       router.fetch(get('https://app.example.com/csrf')).then(async (r) => {
-        if (!r.ok) throw new AuthError(await r.text(), { code: 'unauthenticated', status: r.status });
+        if (!r.ok) throw new AuthError(await r.text(), { code: 'no_credential', status: r.status });
       }),
     ).rejects.toBeDefined();
 
-    const logout = await router.fetch(
-      jsonPost('https://app.example.com/logout', {}, { cookie }),
-    );
+    const logout = await router.fetch(jsonPost('https://app.example.com/logout', {}, { cookie }));
     expect(logout.status).toBe(204);
     expect(logout.headers.getSetCookie().some((c) => c.includes('Max-Age=0'))).toBe(true);
 
@@ -199,7 +195,16 @@ describe('createAuthRoutes', () => {
       generateRegistrationOptions: async () => ({
         challengeKey: 'reg-key',
         expiresAt: 9_999,
-        options: { challenge: 'c', rp: { id: 'example.com', name: 'Example' }, user: { id: 'h', name: 'u', displayName: 'u' }, pubKeyCredParams: [], timeout: 1, excludeCredentials: [], authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' }, attestation: 'none' },
+        options: {
+          challenge: 'c',
+          rp: { id: 'example.com', name: 'Example' },
+          user: { id: 'h', name: 'u', displayName: 'u' },
+          pubKeyCredParams: [],
+          timeout: 1,
+          excludeCredentials: [],
+          authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+          attestation: 'none',
+        },
       }),
       verifyRegistrationResponse: async () => ({
         credential: {
@@ -217,7 +222,7 @@ describe('createAuthRoutes', () => {
           transports: ['internal'],
         },
         attestation: { fmt: 'none', verified: false, trustPath: 'none' },
-        flags: { up: true, uv: false, be: false, bs: false, at: true, ed: false },
+        flags: { up: true, uv: false, be: false, bs: false, at: true, ed: false, raw: 0x41 },
       }),
       generateAuthenticationOptions: async () => ({
         challengeKey: 'auth-key',
@@ -231,7 +236,7 @@ describe('createAuthRoutes', () => {
         signCountSupported: true,
         cloneWarning: false,
         backupStateChanged: false,
-        flags: { up: true, uv: true, be: false, bs: false, at: false, ed: false },
+        flags: { up: true, uv: true, be: false, bs: false, at: false, ed: false, raw: 0x05 },
         principal,
       }),
     };
@@ -251,9 +256,9 @@ describe('createAuthRoutes', () => {
       }),
     );
     expect(regOpts.status).toBe(200);
-    expect(regOpts.headers.getSetCookie().some((c) => c.startsWith(`${WEBAUTHN_COOKIE_NAME}=`))).toBe(
-      true,
-    );
+    expect(
+      regOpts.headers.getSetCookie().some((c) => c.startsWith(`${WEBAUTHN_COOKIE_NAME}=`)),
+    ).toBe(true);
 
     const regVerify = await router.fetch(
       jsonPost(
@@ -297,6 +302,9 @@ describe('createAuthRoutes', () => {
         url: `https://idp.example/authorize?returnTo=${returnTo ?? ''}`,
         stateCookie: '__Host-oauth-state=state; Path=/; Secure; HttpOnly',
         state: 'state',
+        nonce: 'nonce',
+        codeVerifier: 'verifier',
+        expiresAt: 9_999,
       }),
       callback: async () => ({
         tokens: {
@@ -304,11 +312,15 @@ describe('createAuthRoutes', () => {
           tokenType: 'Bearer',
           expiresIn: 3600,
         },
-        profile: { subject: 'google-sub', email: 'ada@example.com' },
+        profile: {
+          subject: 'google-sub',
+          issuer: 'https://idp.example',
+          email: 'ada@example.com',
+          raw: { sub: 'google-sub', email: 'ada@example.com' },
+        },
         principal: createPrincipal({ sub: 'google-sub', method: 'oauth', amr: ['oauth'] }),
         returnTo: '/welcome',
         clearStateCookie: '__Host-oauth-state=; Max-Age=0',
-        claims: {},
       }),
       refresh: async () => ({ accessToken: 'a', tokenType: 'Bearer', expiresIn: 1 }),
       userinfo: async () => ({}),

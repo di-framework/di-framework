@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { SecureSession, textFrame } from '../index.ts';
+import { SecureSession, type SocketConnection, textFrame } from '../index.ts';
 import {
   cfMessageToFrame,
   createPushableDuplex,
@@ -68,11 +68,11 @@ describe('createPushableDuplex lifecycle', () => {
     expect(got).toEqual(['a']);
     off();
 
-    duplex.close(1000, 'bye');
+    duplex.close?.(1000, 'bye');
     expect(duplex.closed).toBe(true);
     duplex.push(textFrame('ignored'));
     duplex.send(textFrame('ignored'));
-    duplex.close(1000, 'again');
+    duplex.close?.(1000, 'again');
   });
 });
 
@@ -93,14 +93,14 @@ describe('duplexFromWebSocket', () => {
     duplex.send(textFrame('out'));
     expect(ws._sent).toContain('out');
 
-    duplex.close(1000, 'done');
+    duplex.close?.(1000, 'done');
     duplex.send(textFrame('after'));
-    duplex.close();
+    duplex.close?.();
 
     const ws2 = mockWs({ closeThrows: true });
     const d2 = duplexFromWebSocket(ws2);
     d2.dispose();
-    d2.close(1000, 'x');
+    d2.close?.(1000, 'x');
   });
 });
 
@@ -133,7 +133,7 @@ describe('createWorkerWebSocketUpgrade', () => {
     };
 
     let connected = false;
-    let connRef: { send: (f: unknown) => unknown; close: (c?: number, r?: string) => void } | undefined;
+    let connRef: SocketConnection | undefined;
     const res = await createWorkerWebSocketUpgrade(
       new Request('https://example.com/ws', { headers: { Upgrade: 'WebSocket' } }),
       {
