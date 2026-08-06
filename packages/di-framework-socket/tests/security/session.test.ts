@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { binaryFrame, createMemoryDuplexPair, SecureSession, textFrame } from '../../index.ts';
+import { encodeSealedJson } from '../../src/security/sealed-wire.ts';
 
 describe('SecureSession over memory duplex', () => {
   it('handshakes and preserves text vs binary application frames', async () => {
@@ -46,7 +47,97 @@ describe('SecureSession over memory duplex', () => {
     await provider.send(new Uint8Array([1, 2]));
     expect(await gotBytes).toBe('binary');
 
+    // onData() returns an unsubscribe function; exercise it directly.
+    let unsubCalls = 0;
+    const unsub = consumer.onData(() => {
+      unsubCalls++;
+    });
+    unsub();
+    await provider.send(textFrame('after-unsub'));
+    await Bun.sleep(5);
+    expect(unsubCalls).toBe(0);
+
     provider.close();
     consumer.close();
+  });
+
+  it('sendSealedText() delivers sealed application data over a text JSON envelope', async () => {
+    const { left, right } = createMemoryDuplexPair();
+    const [provider, consumer] = await Promise.all([
+      SecureSession.connect({ role: 'provider', duplex: left }),
+      SecureSession.connect({ role: 'consumer', duplex: right }),
+    ]);
+
+    const got = new Promise<{ kind: string; text?: string }>((resolve) => {
+      consumer.onData((frame) => resolve({ kind: frame.kind, text: frame.text }));
+    });
+    await provider.sendSealedText(textFrame('via-text-envelope'));
+    expect(await got).toEqual({ kind: 'text', text: 'via-text-envelope' });
+
+    provider.close();
+    consumer.close();
+  });
+
+  it('throws when send()/sendSealedText()/exportSnapshot() are called on a closed session', async () => {
+    const { left, right } = createMemoryDuplexPair();
+    const [provider, consumer] = await Promise.all([
+      SecureSession.connect({ role: 'provider', duplex: left }),
+      SecureSession.connect({ role: 'consumer', duplex: right }),
+    ]);
+    provider.close();
+    await expect(provider.send('nope')).rejects.toThrow(/not open/);
+    await expect(provider.sendSealedText('nope')).rejects.toThrow(/not open/);
+    expect(() => provider.exportSnapshot()).toThrow(/not open/);
+    consumer.close();
+  });
+
+  it('fail()s the session (via the onMessage catch handler) on a sealed-frame session ID mismatch', async () => {
+    const { left, right } = createMemoryDuplexPair();
+    const [provider, consumer] = await Promise.all([
+      SecureSession.connect({ role: 'provider', duplex: left }),
+      SecureSession.connect({ role: 'consumer', duplex: right }),
+    ]);
+    expect(provider.getState()).toBe('open');
+
+    // Inject a malicious sealed JSON envelope with the wrong sessionId directly
+    // on the raw duplex (bypassing SecureSession.send), forcing onSealedFrame's
+    // session-mismatch branch to throw inside the internal onMessage handler.
+    right.send(
+      textFrame(
+        encodeSealedJson({
+          sessionId: 'not-the-real-session',
+          kind: 'text',
+          counter: 0n,
+          sealedBody: new Uint8Array(28),
+        }),
+      ),
+    );
+    await Bun.sleep(10);
+    expect(provider.getState()).toBe('failed');
+
+    consumer.close();
+  });
+
+  it('rehydrates an open session from a snapshot without a new handshake', async () => {
+    const { left, right } = createMemoryDuplexPair();
+    const [provider, consumer] = await Promise.all([
+      SecureSession.connect({ role: 'provider', duplex: left }),
+      SecureSession.connect({ role: 'consumer', duplex: right }),
+    ]);
+    const snapshot = provider.exportSnapshot();
+    provider.close({ closeTransport: false });
+    consumer.close({ closeTransport: false });
+
+    const { left: rehydratedDuplex, right: rehydratedPeer } = createMemoryDuplexPair();
+    const rehydrated = await SecureSession.rehydrate({ duplex: rehydratedDuplex, snapshot });
+    expect(rehydrated.getState()).toBe('open');
+    expect(rehydrated.sessionId).toBe(snapshot.sessionId);
+
+    // Exercise the internal onMessage handler wired up during rehydrate() by
+    // delivering a (malformed, since we don't have a live peer channel) sealed
+    // frame; it's routed through the same catch(fail) path as a live session.
+    rehydratedPeer.send(binaryFrame(new Uint8Array([1, 2, 3])));
+    await Bun.sleep(5);
+    expect(rehydrated.getState()).toBe('failed');
   });
 });

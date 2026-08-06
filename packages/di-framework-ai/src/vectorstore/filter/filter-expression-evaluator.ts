@@ -111,10 +111,8 @@ function evaluateExpression(
       return metadataValue(requireLeft(expression), metadata) == null;
     case 'ISNOTNULL':
       return metadataValue(requireLeft(expression), metadata) != null;
-    default: {
-      const _exhaustive: never = expression.type;
-      throw new Error(`Unsupported expression type: ${_exhaustive}`);
-    }
+    default:
+      throw new Error(`Unsupported expression type: ${(expression as { type: string }).type}`);
   }
 }
 

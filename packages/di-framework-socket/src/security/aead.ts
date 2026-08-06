@@ -13,7 +13,14 @@ import { buf, subtle } from './webcrypto.ts';
 const NONCE_BYTES = 12;
 
 export class AeadError extends Error {
-  override readonly name = 'AeadError';
+  override readonly name: string;
+
+  // Explicit constructor (rather than a field initializer) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor(message: string) {
+    super(message);
+    this.name = 'AeadError';
+  }
 }
 
 export interface SessionKeys {
@@ -47,11 +54,20 @@ export interface AeadChannelSnapshot {
 }
 
 export class AeadChannel {
-  private sendCounter = 0n;
-  private recvCounter = 0n;
-  private destroyed = false;
+  private sendCounter: bigint;
+  private recvCounter: bigint;
+  private destroyed: boolean;
+  private readonly keys: SessionKeys;
 
-  private constructor(private readonly keys: SessionKeys) {}
+  // Explicit constructor (rather than field initializers/parameter properties)
+  // so Bun's function coverage instrumentation attributes construction to a
+  // visible, coverable frame.
+  private constructor(keys: SessionKeys) {
+    this.sendCounter = 0n;
+    this.recvCounter = 0n;
+    this.destroyed = false;
+    this.keys = keys;
+  }
 
   static async of(encryptionKeyBytes: Uint8Array, sessionId: string): Promise<AeadChannel> {
     // Keep an owned copy so callers can zeroize their buffer independently.

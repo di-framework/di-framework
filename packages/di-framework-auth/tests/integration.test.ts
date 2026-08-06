@@ -11,12 +11,13 @@ import { optionalAuth, requireAuth, requireAuthExcept } from '../src/http/middle
 import { publicEndpoint, secured, securitySchemesFor } from '../src/http/openapi.ts';
 import { getPrincipal, isAuthenticated, requirePrincipal } from '../src/http/request.ts';
 import { applyAuthHeaders, withHeaders } from '../src/http/responses.ts';
-import { protect, withAuthRoutes } from '../src/http/router.ts';
+import { mountAuthRoutes, optional, protect, withAuthRoutes } from '../src/http/router.ts';
 import { createPrincipal } from '../src/principal.ts';
 import {
   inMemoryAuthStores,
   memoryCredentialStore,
   memorySessionStore,
+  memoryUserStore,
 } from '../src/providers/memory.ts';
 import type { SessionStore } from '../src/providers/types.ts';
 import type { AuthRuntime } from '../src/register.ts';
@@ -28,8 +29,9 @@ import { bearerTokenStrategy } from '../src/strategies/bearer.ts';
 import { sessionCookieStrategy } from '../src/strategies/session-cookie.ts';
 import { generateKeyPair, importJwk } from '../src/tokens/jwk.ts';
 import { signJwt } from '../src/tokens/jwt.ts';
-import { AUTH_RUNTIME, AUTH_SESSIONS, AUTH_STRATEGY } from '../src/tokens.ts';
-import type { AuthStrategy } from '../src/types.ts';
+import { AUTH_RUNTIME, AUTH_SESSIONS, AUTH_STRATEGY, AUTH_WEBAUTHN } from '../src/tokens.ts';
+import type { AuthContainer, AuthStrategy } from '../src/types.ts';
+import type { WebAuthnService } from '../src/webauthn/service.ts';
 
 const SECRET = 'z'.repeat(48);
 
@@ -134,6 +136,109 @@ describe('strategy chain', () => {
   it('refuses an empty chain', () => {
     expect(() => chain([])).toThrow(/at least one strategy/);
   });
+
+  it('fails a required strategy that found no credential, rather than falling through', async () => {
+    let reached = false;
+    const composed = chain(
+      [
+        { name: 'must-have', authenticate: async () => noCredential() },
+        {
+          name: 'fallback',
+          authenticate: async () => {
+            reached = true;
+            return authenticated(createPrincipal({ sub: 'u1', method: 'session' }));
+          },
+        },
+      ],
+      { required: ['must-have'] },
+    );
+
+    const result = await composed.authenticate(makeContext(get()));
+    expect(result.state).toBe('failed');
+    expect(reached).toBe(false);
+  });
+
+  it('offers the first available challenge', () => {
+    const composed = chain([
+      { name: 'a', authenticate: async () => noCredential(), challenge: () => undefined },
+      { name: 'b', authenticate: async () => noCredential(), challenge: () => 'Bearer' },
+      { name: 'c', authenticate: async () => noCredential(), challenge: () => 'Basic' },
+    ]);
+    expect(composed.challenge?.(makeContext(get()))).toBe('Bearer');
+  });
+});
+
+describe('AuthResult type guards', () => {
+  it('isAuthenticated, isNoCredential, and isFailure narrow correctly', async () => {
+    const {
+      isAuthenticated: resultIsAuthenticated,
+      isNoCredential,
+      isFailure,
+    } = await import('../src/result.ts');
+    const principal = createPrincipal({ sub: 'u1', method: 'bearer' });
+    const success = authenticated(principal);
+    const empty = noCredential();
+    const failure = authFailed('invalid_token', 'bad');
+
+    expect(resultIsAuthenticated(success)).toBe(true);
+    expect(resultIsAuthenticated(empty)).toBe(false);
+    expect(resultIsAuthenticated(failure)).toBe(false);
+
+    expect(isNoCredential(empty)).toBe(true);
+    expect(isNoCredential(success)).toBe(false);
+    expect(isNoCredential(failure)).toBe(false);
+
+    expect(isFailure(failure)).toBe(true);
+    expect(isFailure(success)).toBe(false);
+    expect(isFailure(empty)).toBe(false);
+  });
+});
+
+describe('authenticate() and requireAuthentication() helpers', () => {
+  const principal = createPrincipal({ sub: 'u1', method: 'bearer' });
+  const okStrategy: AuthStrategy = {
+    name: 'ok',
+    authenticate: async () => authenticated(principal),
+  };
+  const emptyStrategy: AuthStrategy = { name: 'empty', authenticate: async () => noCredential() };
+  const failStrategy: AuthStrategy = {
+    name: 'fail',
+    authenticate: async () => authFailed('invalid_token', 'bad'),
+  };
+
+  it('authenticate() resolves the principal, undefined on no-credential, and throws on failure', async () => {
+    const { authenticate } = await import('../src/chain.ts');
+    expect(await authenticate(okStrategy, makeContext(get()))).toBe(principal);
+    expect(await authenticate(emptyStrategy, makeContext(get()))).toBeUndefined();
+    await expect(authenticate(failStrategy, makeContext(get()))).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('requireAuthentication() resolves the principal and throws AuthError otherwise', async () => {
+    const { requireAuthentication } = await import('../src/chain.ts');
+    expect(await requireAuthentication(okStrategy, makeContext(get()))).toBe(principal);
+    await expect(requireAuthentication(failStrategy, makeContext(get()))).rejects.toBeInstanceOf(
+      AuthError,
+    );
+    await expect(requireAuthentication(emptyStrategy, makeContext(get()))).rejects.toBeInstanceOf(
+      AuthError,
+    );
+  });
+
+  it('requireAuthentication() falls back to the strategy challenge when none is passed explicitly', async () => {
+    const { requireAuthentication } = await import('../src/chain.ts');
+    const challenging: AuthStrategy = {
+      name: 'challenging',
+      authenticate: async () => noCredential(),
+      challenge: () => 'Bearer realm="api"',
+    };
+    try {
+      await requireAuthentication(challenging, makeContext(get()));
+      throw new Error('expected requireAuthentication to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AuthError);
+      expect((error as AuthError).challenges).toEqual(['Bearer realm="api"']);
+    }
+  });
 });
 
 describe('bearer strategy', () => {
@@ -204,6 +309,33 @@ describe('bearer strategy', () => {
       expect(result.challenge).toBe('Bearer realm="api", error="invalid_token"');
     }
   });
+
+  it('challenge() advertises the RFC 6750 realm', async () => {
+    const { strategy } = await build();
+    expect(strategy.challenge?.(makeContext(get()))).toBe('Bearer realm="api"');
+  });
+
+  it('fails a well-formed, well-signed token that carries no sub claim', async () => {
+    const { strategy, signingKey } = await build();
+    const token = await signJwt(
+      {},
+      {
+        algorithm: 'ES256',
+        key: signingKey,
+        issuer: 'https://iss',
+        audience: 'api',
+        expiresInSeconds: 60,
+      },
+    );
+    const result = await strategy.authenticate(
+      makeContext(get(undefined, { authorization: `Bearer ${token}` })),
+    );
+    expect(result.state).toBe('failed');
+    if (result.state === 'failed') {
+      expect(result.code).toBe('invalid_token');
+      expect(result.message).toContain('sub claim');
+    }
+  });
 });
 
 describe('session cookie strategy', () => {
@@ -223,6 +355,58 @@ describe('session cookie strategy', () => {
       sessions: sessionManager({ store: memorySessionStore() }),
     });
     expect((await strategy.authenticate(makeContext(get()))).state).toBe('no-credential');
+  });
+
+  it('fails on an unknown or expired session token', async () => {
+    const sessions = sessionManager({ store: memorySessionStore() });
+    const strategy = sessionCookieStrategy({ sessions });
+
+    const unknown = await strategy.authenticate(
+      makeContext(get(undefined, { cookie: '__Host-sid=nonexistent' })),
+    );
+    expect(unknown.state).toBe('failed');
+    if (unknown.state === 'failed') expect(unknown.code).toBe('session_not_found');
+
+    let clock = 0;
+    const expiring = sessionManager({
+      store: memorySessionStore(),
+      policy: { absoluteTimeoutSeconds: 10, inactivityTimeoutSeconds: 0, touchIntervalSeconds: 1 },
+      now: () => clock,
+    });
+    const issued = await expiring.create({ subject: 'u1' });
+    clock = 100;
+    const expiredStrategy = sessionCookieStrategy({ sessions: expiring });
+    const expired = await expiredStrategy.authenticate(
+      makeContext(get(undefined, { cookie: `__Host-sid=${issued.token}` })),
+    );
+    expect(expired.state).toBe('failed');
+    if (expired.state === 'failed') expect(expired.code).toBe('session_expired');
+  });
+
+  it('runs CSRF after the session resolves, and rejects with a 403 rather than a 401', async () => {
+    const { csrfGuard } = await import('../src/csrf.ts');
+    const sessions = sessionManager({ store: memorySessionStore() });
+    const issued = await sessions.create({ subject: 'u1' });
+    const csrf = csrfGuard({ secret: SECRET });
+    const strategy = sessionCookieStrategy({ sessions, csrf });
+
+    const post = (headers: Record<string, string> = {}) =>
+      new Request('https://app.example.com/x', { method: 'POST', headers });
+
+    const missingToken = await strategy.authenticate(
+      makeContext(post({ cookie: `__Host-sid=${issued.token}` })),
+    );
+    expect(missingToken.state).toBe('failed');
+    if (missingToken.state === 'failed') {
+      expect(missingToken.code).toBe('csrf_failed');
+      expect(missingToken.status).toBe(403);
+    }
+
+    const token = await csrf.issue(issued.record.id);
+    const ok = await strategy.authenticate(
+      makeContext(post({ cookie: `__Host-sid=${issued.token}`, [csrf.headerName]: token })),
+    );
+    expect(ok.state).toBe('authenticated');
   });
 });
 
@@ -255,6 +439,81 @@ describe('api key strategy', () => {
     if (unknown.state === 'failed' && expired.state === 'failed') {
       expect(unknown.message).toBe(expired.message);
     }
+  });
+
+  it('also accepts the key from an Authorization header with a configured scheme', async () => {
+    const credentials = memoryCredentialStore();
+    const { key } = await issueApiKey(credentials, { userId: 'u1' });
+    const strategy = apiKeyStrategy({ credentials, authorizationScheme: 'apikey' });
+
+    const viaAuthHeader = await strategy.authenticate(
+      makeContext(get(undefined, { authorization: `ApiKey ${key}` })),
+    );
+    expect(viaAuthHeader.state).toBe('authenticated');
+
+    // Malformed / mismatched Authorization headers are simply "no credential".
+    expect(
+      (
+        await strategy.authenticate(
+          makeContext(get(undefined, { authorization: 'Bearer something' })),
+        )
+      ).state,
+    ).toBe('no-credential');
+    expect(
+      (await strategy.authenticate(makeContext(get(undefined, { authorization: 'nospace' }))))
+        .state,
+    ).toBe('no-credential');
+    expect((await strategy.authenticate(makeContext(get()))).state).toBe('no-credential');
+  });
+
+  it('does not require an Authorization header at all when no scheme is configured', async () => {
+    const credentials = memoryCredentialStore();
+    const strategy = apiKeyStrategy({ credentials });
+    expect(
+      (
+        await strategy.authenticate(
+          makeContext(get(undefined, { authorization: 'Bearer something' })),
+        )
+      ).state,
+    ).toBe('no-credential');
+  });
+
+  it('rejects a key belonging to a missing or disabled user, when a UserStore is configured', async () => {
+    const credentials = memoryCredentialStore();
+    const users = memoryUserStore();
+    const strategy = apiKeyStrategy({ credentials, users });
+
+    const { key: orphanKey } = await issueApiKey(credentials, { userId: 'ghost' });
+    expect(
+      (await strategy.authenticate(makeContext(get(undefined, { 'x-api-key': orphanKey })))).state,
+    ).toBe('failed');
+
+    const user = await users.create({ id: 'u1', identifier: 'ada', createdAt: 0 });
+    await users.update(user.id, { disabled: true });
+    const { key: disabledKey } = await issueApiKey(credentials, { userId: user.id });
+    expect(
+      (await strategy.authenticate(makeContext(get(undefined, { 'x-api-key': disabledKey }))))
+        .state,
+    ).toBe('failed');
+  });
+
+  it('uses the wall-clock default for `now` when none is supplied', async () => {
+    const credentials = memoryCredentialStore();
+    const future = Math.floor(Date.now() / 1000) + 3_600;
+    const { key } = await issueApiKey(credentials, { userId: 'u1', expiresAt: future });
+    const strategy = apiKeyStrategy({ credentials });
+    const result = await strategy.authenticate(makeContext(get(undefined, { 'x-api-key': key })));
+    expect(result.state).toBe('authenticated');
+  });
+
+  it('tracks lastUsedAt when trackUsage is enabled', async () => {
+    const credentials = memoryCredentialStore();
+    const { key, credential } = await issueApiKey(credentials, { userId: 'u1' }, () => 1_000);
+    const strategy = apiKeyStrategy({ credentials, trackUsage: true, now: () => 2_000 });
+
+    await strategy.authenticate(makeContext(get(undefined, { 'x-api-key': key })));
+    const stored = await credentials.findApiKey(credential.id);
+    expect(stored?.lastUsedAt).toBe(2_000);
   });
 });
 
@@ -313,6 +572,66 @@ describe('registerAuth', () => {
     );
     expect(result.state).toBe('authenticated');
   });
+
+  it('derives an HS256 key from the secret when jwt.symmetric is set, and reuses it on a second call', async () => {
+    const runtime = registerAuth({
+      secret: SECRET,
+      jwt: { issuer: 'https://iss', audience: 'api', symmetric: true },
+    });
+    const first = await runtime.tokens!.issueAccessToken({ subject: 'u1' });
+    const second = await runtime.tokens!.issueAccessToken({ subject: 'u2' });
+    expect(typeof first.token).toBe('string');
+    expect(first.token.split('.')).toHaveLength(3);
+    expect(second.token).not.toBe(first.token);
+
+    // The header segment carries `alg`; decode it directly to confirm HS256.
+    const { base64UrlDecodeString } = await import('../src/crypto/base64url.ts');
+    const header = JSON.parse(base64UrlDecodeString(first.token.split('.')[0]!));
+    expect(header.alg).toBe('HS256');
+  });
+
+  it('refuses jwt.symmetric without a secret, at the point a token is actually issued', async () => {
+    const runtime = registerAuth({
+      csrf: false,
+      jwt: { issuer: 'https://iss', audience: 'api', symmetric: true },
+    });
+    await expect(runtime.tokens!.issueAccessToken({ subject: 'u1' })).rejects.toThrow(
+      /requires a `secret`/,
+    );
+  });
+
+  it('builds a webauthn service when a webauthn config is given', () => {
+    const runtime = registerAuth({
+      secret: SECRET,
+      webauthn: { rpId: 'example.com', rpName: 'Example', origins: ['https://example.com'] },
+    });
+    expect(runtime.webauthn).toBeDefined();
+    expect(useContainer().resolve<WebAuthnService>(AUTH_WEBAUTHN)).toBe(runtime.webauthn!);
+  });
+
+  it('uses explicit strategies verbatim instead of composing the defaults', () => {
+    const custom: AuthStrategy = { name: 'custom', authenticate: async () => noCredential() };
+    const runtime = registerAuth({ secret: SECRET, strategies: [custom] });
+    expect(runtime.strategy).toBe(custom);
+  });
+
+  it('throws when the supplied container has no registerFactory', () => {
+    expect(() => registerAuth({ secret: SECRET, container: {} as AuthContainer })).toThrow(
+      /registerFactory/,
+    );
+  });
+
+  it('Auth() decorator registers a runtime and mixes it onto instances', () => {
+    const { Auth } = require('../src/register.ts') as typeof import('../src/register.ts');
+
+    @Auth({ secret: SECRET })
+    class AppRoot {}
+
+    const instance = new AppRoot() as unknown as AuthRuntime;
+    expect(instance.strategy).toBeDefined();
+    expect(instance.strategy).toBe(useContainer().resolve<AuthRuntime>(AUTH_RUNTIME).strategy);
+    expect(AppRoot.name).toBe('AppRoot');
+  });
 });
 
 describe('HTTP guards', () => {
@@ -366,6 +685,33 @@ describe('HTTP guards', () => {
     expect(await guard(get('https://app.example.com/health'))).toBeUndefined();
     expect(await guard(get('https://app.example.com/public/logo.png'))).toBeUndefined();
     expect((await guard(get('https://app.example.com/private')))?.status).toBe(401);
+  });
+
+  it('resolves the strategy from the DI container when none is given explicitly', async () => {
+    const { strategy, token } = await buildStrategy();
+    const container = useContainer();
+    container.clear();
+    try {
+      container.registerFactory(AUTH_STRATEGY, () => strategy, { singleton: true });
+      const request = get(undefined, { cookie: `__Host-sid=${token}` });
+      expect(await requireAuth()(request)).toBeUndefined();
+      expect(getPrincipal(request)?.sub).toBe('u1');
+    } finally {
+      container.clear();
+    }
+  });
+
+  it('throws a clear error when no strategy is registered under the token', async () => {
+    const container = useContainer() as unknown as { resolve?: (token: string) => unknown };
+    const original = container.resolve;
+    try {
+      container.resolve = () => undefined;
+      await expect(requireAuth({ strategyToken: 'not.registered' })(get())).rejects.toThrow(
+        /No authentication strategy registered/,
+      );
+    } finally {
+      container.resolve = original;
+    }
   });
 
   it('cannot be spoofed through a request body field', async () => {
@@ -431,6 +777,45 @@ describe('router integration', () => {
     expect(handler.method).toBe('get');
   });
 
+  it('optional() lets an anonymous request through but still types the principal when present', async () => {
+    const stores = inMemoryAuthStores();
+    const sessions = sessionManager({ store: stores.sessions });
+    const issued = await sessions.create({ subject: 'u1' });
+    const strategy = sessionCookieStrategy({ sessions });
+
+    const handler = optional(
+      (request) => Response.json({ sub: request.principal?.sub ?? null }) as never,
+      { strategy },
+    );
+
+    const anon = await handler(get() as never);
+    expect(await (anon as Response).json()).toEqual({ sub: null } as never);
+
+    const authed = await handler(get(undefined, { cookie: `__Host-sid=${issued.token}` }) as never);
+    expect(await (authed as Response).json()).toEqual({ sub: 'u1' } as never);
+  });
+
+  it('mountAuthRoutes() delegates a prefix and the bare prefix to the sub-router', async () => {
+    // The sub-router strips the mount prefix via itty's own `base` option;
+    // mountAuthRoutes only needs to forward both `${prefix}/*` and the bare
+    // `${prefix}` to it.
+    const sub = TypedRouter({ base: '/auth' });
+    sub.get('/ping', () => Response.json({ ok: true }) as never);
+    sub.get('/', () => Response.json({ root: true }) as never);
+
+    const main = TypedRouter();
+    const mounted = mountAuthRoutes(main, sub, '/auth/');
+    expect(mounted).toBe(main);
+
+    const pingResponse = await main.fetch(get('https://app.example.com/auth/ping'));
+    expect(pingResponse.status).toBe(200);
+    expect(await pingResponse.json()).toEqual({ ok: true } as never);
+
+    const rootResponse = await main.fetch(get('https://app.example.com/auth'));
+    expect(rootResponse.status).toBe(200);
+    expect(await rootResponse.json()).toEqual({ root: true } as never);
+  });
+
   it('runs per-route guards through RouteOptions.use', async () => {
     const strategy: AuthStrategy = { name: 'stub', authenticate: async () => noCredential() };
     const router = TypedRouter();
@@ -478,6 +863,38 @@ describe('response helpers', () => {
   it('passes through when no route matched', () => {
     expect(applyAuthHeaders(undefined, get())).toBeUndefined();
   });
+
+  it('json() sets the content type and serialises the body', async () => {
+    const { json } = await import('../src/http/responses.ts');
+    const response = json({ ok: true }, { status: 201 });
+    expect(response.status).toBe(201);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({ ok: true } as never);
+  });
+
+  it('privateJson() adds Cache-Control: no-store on top of json()', async () => {
+    const { privateJson } = await import('../src/http/responses.ts');
+    const response = privateJson({ sub: 'u1' });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({ sub: 'u1' } as never);
+  });
+
+  it('redirect() carries multiple Set-Cookie headers, which Response.redirect cannot', async () => {
+    const { redirect } = await import('../src/http/responses.ts');
+    const response = redirect('/after-login', ['a=1', 'b=2'], 302);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/after-login');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.getSetCookie()).toEqual(['a=1', 'b=2']);
+  });
+
+  it('redirect() defaults to 303 with no cookies', async () => {
+    const { redirect } = await import('../src/http/responses.ts');
+    const response = redirect('/after-login');
+    expect(response.status).toBe(303);
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
 });
 
 describe('error rendering', () => {
@@ -520,6 +937,57 @@ describe('error rendering', () => {
     });
     expect(new AuthError('x', { code: 'csrf_failed' }).extensions.code).toBe('FORBIDDEN');
   });
+
+  it('logs via console.warn by default when no log option is given', async () => {
+    const silence = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const handler = withAuthErrors();
+      const response = await handler(
+        new AuthError('detail for logs only', { code: 'invalid_token' }),
+      );
+      expect(response.status).toBe(401);
+      expect(silence).toHaveBeenCalledTimes(1);
+      expect(silence.mock.calls[0]?.[0]).toContain('invalid_token');
+    } finally {
+      silence.mockRestore();
+    }
+  });
+
+  it('authErrorHandler renders an AuthError and defers on anything else', async () => {
+    const { authErrorHandler } = await import('../src/http/catch.ts');
+    const rendered = authErrorHandler(new AuthError('x', { code: 'invalid_token' }));
+    expect(rendered).toBeInstanceOf(Response);
+    expect(authErrorHandler(new Error('not ours'))).toBeUndefined();
+  });
+});
+
+describe('AuthError helpers', () => {
+  it('unauthenticated() builds a no_credential error with a default message', () => {
+    const error = AuthError.unauthenticated();
+    expect(error.code).toBe('no_credential');
+    expect(error.message).toBe('No credential presented');
+  });
+
+  it('isAuthError() distinguishes AuthError from other errors', async () => {
+    const { isAuthError } = await import('../src/errors.ts');
+    expect(isAuthError(new AuthError('x'))).toBe(true);
+    expect(isAuthError(new Error('x'))).toBe(false);
+    expect(isAuthError('x')).toBe(false);
+  });
+
+  it('redacted() swaps in the public message but returns itself when already public', () => {
+    const error = new AuthError('sensitive detail', {
+      code: 'invalid_token',
+      challenges: ['Bearer'],
+    });
+    const safe = error.redacted();
+    expect(safe.message).toBe(error.publicMessage);
+    expect(safe.cause).toBe(error);
+    expect(safe.challenges).toEqual(['Bearer']);
+
+    const alreadyPublic = new AuthError(error.publicMessage, { code: 'invalid_token' });
+    expect(alreadyPublic.redacted()).toBe(alreadyPublic);
+  });
 });
 
 describe('OpenAPI security', () => {
@@ -534,6 +1002,16 @@ describe('OpenAPI security', () => {
     expect(schemes['sessionAuth']).toEqual({ type: 'apiKey', in: 'cookie', name: '__Host-sid' });
     expect(schemes['bearerAuth']).toEqual({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
     expect(schemes['apiKeyAuth']).toEqual({ type: 'apiKey', in: 'header', name: 'X-API-Key' });
+  });
+
+  it('adds an openIdConnect scheme when a discovery URL is given', () => {
+    const schemes = securitySchemesFor([], {
+      openIdConnectUrl: 'https://idp.example.com/.well-known/openid-configuration',
+    });
+    expect(schemes['openIdConnect']).toEqual({
+      type: 'openIdConnect',
+      openIdConnectUrl: 'https://idp.example.com/.well-known/openid-configuration',
+    });
   });
 
   it('emits securitySchemes and a document-level default', () => {

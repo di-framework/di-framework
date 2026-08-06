@@ -12,6 +12,7 @@ import {
   decodeCursor,
   encodeCursor,
   offsetToCursor,
+  toConnection,
 } from '../src/connection.ts';
 import { Arg, BoundedContext, Connection, Field, Portal, SemanticType } from '../src/decorators.ts';
 import { SemanticBoundaryError } from '../src/errors.ts';
@@ -145,6 +146,21 @@ describe('connectionFromSlice', () => {
     expect(result.totalCount).toBe(99);
     expect(result.pageInfo.hasNextPage).toBe(true);
     expect(decodeCursor(result.edges[0]!.cursor)).toBe('id:x');
+  });
+});
+
+describe('toConnection', () => {
+  it('passes through nullish, connection-shaped, array, and other values', () => {
+    expect(toConnection(null, {})).toBeNull();
+    expect(toConnection(undefined, {})).toBeUndefined();
+    const shaped = connectionFromArray(['a']);
+    expect(toConnection(shaped, {})).toBe(shaped);
+    expect(
+      (toConnection(['a', 'b'], { first: 1 }) as { edges: { node: string }[] }).edges.map(
+        (e) => e.node,
+      ),
+    ).toEqual(['a']);
+    expect(toConnection(42, {})).toBe(42);
   });
 });
 

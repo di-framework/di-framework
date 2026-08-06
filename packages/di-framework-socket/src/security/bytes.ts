@@ -11,7 +11,14 @@ const LOOKUP = /* @__PURE__ */ (() => {
 const TRAILING_BITS: Record<number, number> = { 2: 4, 3: 2 };
 
 export class EncodingError extends Error {
-  override readonly name = 'EncodingError';
+  override readonly name: string;
+
+  // Explicit constructor (rather than a field initializer) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor(message: string) {
+    super(message);
+    this.name = 'EncodingError';
+  }
 }
 
 export function concatBytes(...parts: readonly Uint8Array[]): Uint8Array {

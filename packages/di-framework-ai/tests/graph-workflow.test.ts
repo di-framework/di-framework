@@ -6,6 +6,7 @@ import {
   GRAPH_FINISH,
   GRAPH_START,
   GraphWorkflow,
+  graphWorkflow,
   isAiError,
   ScriptedChatModel,
   simpleAgentGraph,
@@ -335,6 +336,65 @@ describe('GraphWorkflow', () => {
       })
       .build();
     expect((await graph.run(1)).output).toBe('yes');
+  });
+
+  test('graphName getter, validate(), and link() convenience edge', async () => {
+    const graph = GraphWorkflow.builder<number, number>('named')
+      .node('x', (n: number) => n)
+      .edge(GRAPH_START, 'x')
+      .link('x', GRAPH_FINISH, 'to-finish')
+      .build();
+
+    expect(graph.graphName).toBe('named');
+    expect(() => graph.validate()).not.toThrow();
+    const result = await graph.run(5);
+    expect(result.output).toBe(5);
+    expect(result.steps.at(-1)?.edgeName).toBe('to-finish');
+  });
+
+  test('graphWorkflow() module factory produces a working builder', async () => {
+    const graph = graphWorkflow<number, number>('factory-made')
+      .node('id', (n: number) => n)
+      .edge(GRAPH_START, 'id')
+      .edge('id', GRAPH_FINISH)
+      .build();
+    expect((await graph.run(9)).output).toBe(9);
+  });
+
+  test('withDefaults hooks merge with per-run hooks (both fire in order)', async () => {
+    const events: string[] = [];
+    const graph = GraphWorkflow.builder<string, string>('merged-hooks')
+      .node('a', (s: string) => s.toUpperCase())
+      .edge(GRAPH_START, 'a')
+      .edge('a', GRAPH_FINISH)
+      .withDefaults({
+        hooks: {
+          onGraphStart: () => {
+            events.push('default:g-start');
+          },
+          onNodeComplete: (e) => {
+            events.push(`default:n-done:${e.nodeId}`);
+          },
+        },
+      })
+      .build();
+
+    const result = await graph.run('ok', {
+      hooks: {
+        onGraphStart: () => {
+          events.push('run:g-start');
+        },
+        onNodeComplete: (e) => {
+          events.push(`run:n-done:${e.nodeId}`);
+        },
+      },
+    });
+
+    expect(result.output).toBe('OK');
+    expect(events[0]).toBe('default:g-start');
+    expect(events[1]).toBe('run:g-start');
+    expect(events).toContain('default:n-done:a');
+    expect(events).toContain('run:n-done:a');
   });
 });
 

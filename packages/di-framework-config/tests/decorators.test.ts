@@ -88,4 +88,22 @@ describe('Configuration / Value', () => {
     expect(cfg.port).toBe(9);
     expect(cfg.name).toBe('app');
   });
+
+  it('skips class registration and tolerates throwing constructors for defaults', () => {
+    @Configuration({
+      sources: [objectSource({ ok: true })],
+      registerClass: false,
+      token: 'cfg2',
+    })
+    class ThrowsOnConstruct {
+      ok = false;
+      constructor() {
+        throw new Error('no defaults');
+      }
+    }
+
+    expect(ThrowsOnConstruct).toBeDefined();
+    expect(useContainer().has(ThrowsOnConstruct)).toBe(false);
+    expect(useContainer().resolve<{ ok: boolean }>('cfg2')).toEqual({ ok: true });
+  });
 });

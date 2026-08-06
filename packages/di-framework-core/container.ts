@@ -557,11 +557,8 @@ export class Container {
           };
         };
 
-        const job = {
-          stop: () => {
-            stopped = true;
-          },
-        };
+        // Placeholder until scheduleNext assigns a timer-aware stop.
+        const job = { stop() {} };
         this.cronJobs.push(job);
         scheduleNext();
       }

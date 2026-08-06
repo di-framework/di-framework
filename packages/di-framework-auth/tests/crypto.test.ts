@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'bun:test';
-import { open, openJson, seal, sealJson } from '../src/crypto/aead.ts';
+import { AeadError, open, openJson, seal, sealJson } from '../src/crypto/aead.ts';
 import {
   Base64UrlError,
   base64UrlDecode,
+  base64UrlDecodeString,
   base64UrlEncode,
+  base64UrlEncodeString,
   isBase64Url,
 } from '../src/crypto/base64url.ts';
 import { timingSafeEqual, timingSafeEqualString } from '../src/crypto/compare.ts';
-import { hashSecret, sha256 } from '../src/crypto/hash.ts';
+import { hashSecret, sha256, sha384, sha512 } from '../src/crypto/hash.ts';
 import {
   deriveAesKey,
   hkdf,
@@ -16,7 +18,7 @@ import {
   toSecretBytes,
 } from '../src/crypto/kdf.ts';
 import { pbkdf2Hasher } from '../src/crypto/password-hasher.ts';
-import { randomToken } from '../src/crypto/random.ts';
+import { randomBytes, randomToken } from '../src/crypto/random.ts';
 
 const hex = (bytes: Uint8Array): string =>
   [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -69,6 +71,11 @@ describe('base64url', () => {
   it('reports validity without throwing', () => {
     expect(isBase64Url('Zm9vYmFy')).toBe(true);
     expect(isBase64Url('Zm9vYmFy=')).toBe(false);
+  });
+
+  it('round-trips a UTF-8 string through the string helpers', () => {
+    const text = 'hello, ünïcode';
+    expect(base64UrlDecodeString(base64UrlEncodeString(text))).toBe(text);
   });
 });
 
@@ -143,6 +150,18 @@ describe('AES-256-GCM sealing', () => {
     const sealed = await sealJson(key, 'p', { a: 1 });
     expect(await openJson<{ a: number }>(key, 'p', sealed)).toEqual({ a: 1 });
   });
+
+  it('openJson() returns null rather than throwing when the plaintext is not JSON', async () => {
+    const key = await deriveAesKey(secret, KDF_LABELS.cookieAead);
+    const sealed = await seal(key, 'p', 'not valid json');
+    expect(await openJson(key, 'p', sealed)).toBeNull();
+  });
+
+  it('AeadError carries a stable name for callers that branch on it', () => {
+    const error = new AeadError('boom');
+    expect(error.name).toBe('AeadError');
+    expect(error).toBeInstanceOf(Error);
+  });
 });
 
 describe('pbkdf2Hasher', () => {
@@ -179,6 +198,13 @@ describe('pbkdf2Hasher', () => {
   it('returns false rather than throwing for a malformed stored hash', async () => {
     expect(await hasher.verify('pw', 'garbage')).toBe(false);
     expect(await hasher.verify('pw', '$pbkdf2-sha256$i=0$a$b')).toBe(false);
+    // Well-formed iterations, but the salt/hash segments are not valid base64url.
+    expect(await hasher.verify('pw', '$pbkdf2-sha256$i=1$a+b$c/d')).toBe(false);
+  });
+
+  it('refuses a non-positive iteration count', () => {
+    expect(() => pbkdf2Hasher({ iterations: 0 })).toThrow(RangeError);
+    expect(() => pbkdf2Hasher({ iterations: -5 })).toThrow(RangeError);
   });
 
   it('applies NFKC normalisation so equivalent inputs match', async () => {
@@ -206,6 +232,22 @@ describe('hashSecret', () => {
   });
 });
 
+describe('sha384', () => {
+  it('produces a 48-byte digest, distinct from sha256', async () => {
+    const digest = await sha384('abc');
+    expect(digest).toHaveLength(48);
+    expect(digest).not.toEqual(await sha256('abc'));
+  });
+});
+
+describe('sha512', () => {
+  it('produces a 64-byte digest, distinct from sha256', async () => {
+    const digest = await sha512('abc');
+    expect(digest).toHaveLength(64);
+    expect(digest).not.toEqual(await sha256('abc'));
+  });
+});
+
 describe('randomToken', () => {
   it('refuses entropy below the NIST SP 800-63B floor', () => {
     expect(() => randomToken(8)).toThrow(RangeError);
@@ -215,6 +257,22 @@ describe('randomToken', () => {
   it('produces distinct values', () => {
     const seen = new Set(Array.from({ length: 200 }, () => randomToken()));
     expect(seen.size).toBe(200);
+  });
+});
+
+describe('randomBytes', () => {
+  it('refuses a non-positive or non-integer length', () => {
+    expect(() => randomBytes(0)).toThrow(RangeError);
+    expect(() => randomBytes(-1)).toThrow(RangeError);
+    expect(() => randomBytes(1.5)).toThrow(RangeError);
+  });
+
+  it('chunks requests over the getRandomValues 65536-byte cap', () => {
+    const length = 65_536 + 100;
+    const bytes = randomBytes(length);
+    expect(bytes).toHaveLength(length);
+    // Not all-zero: a real cryptographic fill happened across every chunk.
+    expect(bytes.some((byte) => byte !== 0)).toBe(true);
   });
 });
 
@@ -241,5 +299,50 @@ describe('optional Argon2id hashers', () => {
     expect(argon.needsRehash(await argon.hash('pw'))).toBe(false);
     // And a foreign hash simply does not verify, rather than throwing.
     expect(await argon.verify('pw', legacy)).toBe(false);
+  });
+
+  it('refuses to run when Bun.password is unavailable', async () => {
+    const { bunPasswordHasher } = await import('../src/adapters/argon2.ts');
+    const bun = (globalThis as { Bun?: { password?: unknown } }).Bun;
+    const original = bun?.password;
+    try {
+      if (bun) bun.password = undefined;
+      expect(() => bunPasswordHasher()).toThrow(/requires the Bun runtime/);
+    } finally {
+      if (bun) bun.password = original;
+    }
+  });
+});
+
+describe('nodeScryptHasher', () => {
+  it('round-trips, salts, flags weaker parameters, and burns the dummy path', async () => {
+    const { nodeScryptHasher } = await import('../src/adapters/argon2.ts');
+    const hasher = nodeScryptHasher({ cost: 2 ** 10 });
+
+    const encoded = await hasher.hash('correct horse battery staple');
+    expect(encoded.startsWith('$scrypt$N=1024,r=8,p=1$')).toBe(true);
+    expect(await hasher.verify('correct horse battery staple', encoded)).toBe(true);
+    expect(await hasher.verify('wrong', encoded)).toBe(false);
+    expect(await hasher.hash('same')).not.toBe(await hasher.hash('same'));
+
+    const stronger = nodeScryptHasher({ cost: 2 ** 11 });
+    expect(stronger.needsRehash(encoded)).toBe(true);
+    expect(hasher.needsRehash(encoded)).toBe(false);
+    expect(hasher.needsRehash('not-a-scrypt-hash')).toBe(true);
+    expect(hasher.needsRehash('$pbkdf2-sha256$i=1$a$b')).toBe(true);
+
+    expect(await hasher.verify('pw', 'garbage')).toBe(false);
+    expect(await hasher.verifyDummy('anything')).toBe(false);
+  });
+
+  it('surfaces a clear error when node:crypto cannot be imported', async () => {
+    const { nodeScryptHasher } = await import('../src/adapters/argon2.ts');
+    const hasher = nodeScryptHasher({
+      cost: 2 ** 10,
+      loadCrypto: async () => {
+        throw new Error('unavailable');
+      },
+    });
+    await expect(hasher.hash('pw')).rejects.toThrow(/requires node:crypto/);
   });
 });

@@ -119,16 +119,14 @@ export async function validateIdToken(
 
   if (options.accessToken && typeof claims['at_hash'] === 'string') {
     const expected = await computeTokenHash(options.accessToken, header.alg);
-    if (expected !== null && !(await timingSafeEqualString(claims['at_hash'], expected))) {
+    if (expected !== null && !(await timingSafeEqualString(claims['at_hash'], expected)))
       reject('ID token at_hash does not match the access token', 'invalid_token');
-    }
   }
 
   if (options.code && typeof claims['c_hash'] === 'string') {
     const expected = await computeTokenHash(options.code, header.alg);
-    if (expected !== null && !(await timingSafeEqualString(claims['c_hash'], expected))) {
+    if (expected !== null && !(await timingSafeEqualString(claims['c_hash'], expected)))
       reject('ID token c_hash does not match the authorization code', 'invalid_token');
-    }
   }
 
   return claims;

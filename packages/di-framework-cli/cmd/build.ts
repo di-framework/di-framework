@@ -58,6 +58,14 @@ export function handleBuildFailure(err: unknown): never {
   process.exit(1);
 }
 
-if (import.meta.main) {
-  build().catch(handleBuildFailure);
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export function runBuildMain(
+  isMain = import.meta.main,
+  start: () => Promise<void> = () => build().catch(handleBuildFailure),
+): void {
+  if (isMain) {
+    void start();
+  }
 }
+
+runBuildMain();

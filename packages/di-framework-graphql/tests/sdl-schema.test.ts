@@ -209,6 +209,46 @@ describe('SDL printer - default value literal formatting', () => {
     expect(sdl).toContain('boolArg: Boolean! = true');
   });
 
+  it('throws when a default value contains a cyclic reference', () => {
+    const { Arg, Field, Portal } = require('../src/decorators.ts');
+    const cyclic: Record<string, unknown> = { name: 'root' };
+    cyclic.self = cyclic;
+
+    const graph = withFreshRegistry((registry) => {
+      @Portal()
+      class Query {
+        @Field(() => String)
+        testCyclicDefault(@Arg('cyclicArg', () => String, { defaultValue: cyclic }) _c: any): string {
+          return 'ok';
+        }
+      }
+      return buildTypeGraph({ registry });
+    });
+
+    expect(() => printSDL(graph)).toThrow(/detected a cyclic value/);
+  });
+
+  it('throws when a default value nests deeper than the max depth', () => {
+    const { Arg, Field, Portal } = require('../src/decorators.ts');
+    let deep: unknown = 'bottom';
+    for (let i = 0; i < 70; i += 1) deep = [deep];
+
+    const graph = withFreshRegistry((registry) => {
+      @Portal()
+      class Query {
+        @Field(() => String)
+        testDeepDefault(
+          @Arg('deepArg', () => [String], { defaultValue: deep }) _d: any,
+        ): string {
+          return 'ok';
+        }
+      }
+      return buildTypeGraph({ registry });
+    });
+
+    expect(() => printSDL(graph)).toThrow(/exceeded max depth/);
+  });
+
   it('formats argument default values with fallback types', () => {
     const { Arg, Field, Portal } = require('../src/decorators.ts');
     const graph = withFreshRegistry((registry) => {

@@ -1,0 +1,13 @@
+[test]
+preload = ["./packages/di-framework-ai/tests/preload-wasm-mock.ts"]
+coverageReporter = ["text", "lcov"]
+# Line coverage must stay at 100%. Function coverage is not enforced: Bun
+# under-counts some decorated/implicit constructors even when every line runs.
+coverageThreshold = { lines = 1.0, functions = 0 }
+coveragePathIgnorePatterns = [
+  "**/tests/**",
+  "**/*.test.ts",
+  "**/preload-wasm-mock.ts",
+  "**/scripts/**",
+  "**/coverage/**",
+]

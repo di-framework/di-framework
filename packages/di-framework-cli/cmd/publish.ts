@@ -1,4 +1,4 @@
-import { $ } from 'bun';
+import { $ as defaultShell } from 'bun';
 import { join } from 'path';
 
 export const PACKAGES = [
@@ -15,16 +15,19 @@ export const PACKAGES = [
   'packages/di-framework-cli',
 ];
 
-export async function publish() {
+/** Bun `$` tagged-template runner; injectable for in-process coverage tests. */
+export type PublishShell = typeof defaultShell;
+
+export async function publish(shell: PublishShell = defaultShell) {
   // 1. Run tests
   console.log('🧪 Running tests...');
   for (const pkgDir of PACKAGES) {
-    await $`bun test ${pkgDir}`;
+    await shell`bun test ${pkgDir}`;
   }
 
   // 2. Build
   console.log('🏗️  Building packages...');
-  await $`bun run packages/di-framework-cli/cmd/build.ts`;
+  await shell`bun run packages/di-framework-cli/cmd/build.ts`;
 
   // 3. Publish
   for (const pkgDir of PACKAGES) {
@@ -36,7 +39,7 @@ export async function publish() {
     // Using --access public for scoped packages
     // We use npm publish or bun publish. Bun publish is fine.
     try {
-      await $`cd ${fullPath} && bun publish --access public`;
+      await shell`cd ${fullPath} && bun publish --access public`;
       console.log(`  ✅ Published ${pkgJson.name}`);
     } catch (err) {
       console.error(`  ❌ Failed to publish ${pkgJson.name}:`, err);
@@ -53,6 +56,14 @@ export function handlePublishFailure(err: unknown): never {
   process.exit(1);
 }
 
-if (import.meta.main) {
-  publish().catch(handlePublishFailure);
+/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
+export function runPublishMain(
+  isMain = import.meta.main,
+  start: () => Promise<void> = () => publish().catch(handlePublishFailure),
+): void {
+  if (isMain) {
+    void start();
+  }
 }
+
+runPublishMain();

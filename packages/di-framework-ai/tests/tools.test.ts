@@ -6,11 +6,15 @@ import {
   type ChatClientRequest,
   createToolCallingManager,
   DEFAULT_TOOL_CALLING_ORDER,
+  defaultToolExecutionExceptionProcessor,
   FunctionToolCallback,
   functionToolCallback,
   hasToolCalls,
+  isToolCallback,
+  isToolCallbackProvider,
   isToolResponseMessage,
   Prompt,
+  resolveToolCallbacks,
   ScriptedChatModel,
   staticToolCallbackProvider,
   ToolCallingAdvisor,
@@ -22,6 +26,8 @@ import {
   toolDefinition,
   userMessage,
 } from '../src/index.ts';
+import { defaultToolCallResultConverter } from '../src/tool/execution/tool-call-result-converter.ts';
+import { resolveToolCallbacksDedupe } from '../src/tool/tool-callback-provider.ts';
 
 describe('ToolDefinition / FunctionToolCallback', () => {
   test('toolDefinition defaults description and schema', () => {
@@ -29,6 +35,28 @@ describe('ToolDefinition / FunctionToolCallback', () => {
     expect(def.name).toBe('getWeather');
     expect(def.description).toBe('get Weather');
     expect(def.inputSchema).toContain('object');
+  });
+
+  test('toolDefinition throws for an empty/whitespace name', () => {
+    expect(() => toolDefinition({ name: '   ' })).toThrow(/name cannot be empty/);
+  });
+
+  test('toolDefinition falls back to the default schema for a blank string schema', () => {
+    const def = toolDefinition({ name: 'ping', inputSchema: '   ' });
+    expect(def.inputSchema).toBe('{"type":"object","properties":{}}');
+  });
+
+  test('toolDefinition keeps a trimmed string schema as-is', () => {
+    const def = toolDefinition({ name: 'ping', inputSchema: '  {"type":"string"}  ' });
+    expect(def.inputSchema).toBe('{"type":"string"}');
+  });
+
+  test('defaultToolCallResultConverter falls back to String() when JSON.stringify throws', () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(defaultToolCallResultConverter(circular)).toBe(String(circular));
+    expect(defaultToolCallResultConverter(null)).toBe('');
+    expect(defaultToolCallResultConverter('already a string')).toBe('already a string');
   });
 
   test('functionToolCallback parses JSON and returns stringified result', async () => {
@@ -73,10 +101,101 @@ describe('ToolDefinition / FunctionToolCallback', () => {
     expect(seen).toBe('u-1');
   });
 
+  test('defaultToolExecutionExceptionProcessor rethrows by default and can be configured to return a JSON error string', async () => {
+    const cb = functionToolCallback({
+      name: 'boom',
+      call: () => {
+        throw new Error('nope');
+      },
+    });
+    let caught: unknown;
+    try {
+      await cb.call('{}');
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ToolExecutionException);
+    const error = caught as ToolExecutionException;
+
+    const alwaysThrowProcessor = defaultToolExecutionExceptionProcessor();
+    expect(() => alwaysThrowProcessor(error)).toThrow(error);
+
+    const returnErrorProcessor = defaultToolExecutionExceptionProcessor({ alwaysThrow: false });
+    const payload = JSON.parse(returnErrorProcessor(error));
+    expect(payload).toEqual({ error: true, message: error.message, tool: 'boom' });
+  });
+
   test('staticToolCallbackProvider exposes callbacks', () => {
     const a = functionToolCallback({ name: 'a', call: () => 'a' });
     const provider = staticToolCallbackProvider([a]);
     expect(provider.getToolCallbacks()).toHaveLength(1);
+  });
+
+  test('resolveToolCallbacks flattens arrays, providers, and single callbacks', () => {
+    const a = functionToolCallback({ name: 'a', call: () => 'a' });
+    const b = functionToolCallback({ name: 'b', call: () => 'b' });
+    const c = functionToolCallback({ name: 'c', call: () => 'c' });
+    const provider = staticToolCallbackProvider([b]);
+
+    const result = resolveToolCallbacks([a], provider, c, null, undefined);
+    expect(result.map((cb) => cb.toolDefinition.name)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('resolveToolCallbacks rejects unrecognized source values', () => {
+    expect(() => resolveToolCallbacks(42 as never)).toThrow(
+      /Expected ToolCallback, ToolCallbackProvider, or array/,
+    );
+  });
+
+  test('resolveToolCallbacks throws on duplicate tool names', () => {
+    const a = functionToolCallback({ name: 'dup', call: () => 'a' });
+    const b = functionToolCallback({ name: 'dup', call: () => 'b' });
+    expect(() => resolveToolCallbacks([a, b])).toThrow(/Multiple tools with the same name/);
+  });
+
+  test('isToolCallback / isToolCallbackProvider distinguish shapes', () => {
+    const cb = functionToolCallback({ name: 'x', call: () => 'x' });
+    const provider = staticToolCallbackProvider([cb]);
+    expect(isToolCallback(cb)).toBe(true);
+    expect(isToolCallback(provider)).toBe(false);
+    expect(isToolCallback(null)).toBe(false);
+    expect(isToolCallbackProvider(provider)).toBe(true);
+    expect(isToolCallbackProvider(cb)).toBe(false);
+    expect(isToolCallbackProvider(null)).toBe(false);
+  });
+
+  test('resolveToolCallbacksDedupe keeps the last callback per tool name across arrays/providers', () => {
+    const aFirst = functionToolCallback({ name: 'a', call: () => 'first' });
+    const aSecond = functionToolCallback({ name: 'a', call: () => 'second' });
+    const provider = staticToolCallbackProvider([aSecond]);
+
+    const result = resolveToolCallbacksDedupe([aFirst], provider);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(aSecond);
+  });
+
+  test('resolveToolCallbacksDedupe rejects unrecognized source values', () => {
+    expect(() => resolveToolCallbacksDedupe(42 as never)).toThrow(
+      /Expected ToolCallback, ToolCallbackProvider, or array/,
+    );
+  });
+});
+
+describe('ToolContext.has / toRecord', () => {
+  test('has() reports whether a key is present', () => {
+    const ctx = new ToolContext({ userId: 'u-1' });
+    expect(ctx.has('userId')).toBe(true);
+    expect(ctx.has('missing')).toBe(false);
+  });
+
+  test('toRecord() converts the context back to a plain object', () => {
+    const ctx = new ToolContext(
+      new Map([
+        ['userId', 'u-1'],
+        ['tenant', 't1'],
+      ]),
+    );
+    expect(ctx.toRecord()).toEqual({ userId: 'u-1', tenant: 't1' });
   });
 });
 
@@ -363,5 +482,54 @@ describe('hasToolCalls helper', () => {
     const response = toolCallResponse([toolCall('1', 'x', {})]);
     expect(response.hasToolCalls()).toBe(true);
     expect(hasToolCalls(response.getResult()!.output)).toBe(true);
+  });
+});
+
+describe('ToolCallingAdvisorBuilder fluent setters', () => {
+  test('each setter configures the built advisor', async () => {
+    const manager = createToolCallingManager();
+    let checked = 0;
+    const advisor = ToolCallingAdvisor.builder()
+      .toolCallingManager(manager)
+      .toolExecutionEligibilityChecker((response) => {
+        checked += 1;
+        const output = response?.getResult()?.output;
+        return output != null && hasToolCalls(output);
+      })
+      .advisorOrder(DEFAULT_TOOL_CALLING_ORDER + 1)
+      .conversationHistoryEnabled(true)
+      .build();
+
+    expect(advisor.order).toBe(DEFAULT_TOOL_CALLING_ORDER + 1);
+
+    const model = new ScriptedChatModel([{ respond: textResponse('final') }]);
+    const tool = functionToolCallback({ name: 'noop', call: () => 'ok' });
+    const content = await ChatClient.create(model)
+      .prompt()
+      .user('q')
+      .tools(tool)
+      .advisors(advisor)
+      .call()
+      .content();
+
+    expect(content).toBe('final');
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  test('disableInternalConversationHistory() sets conversationHistoryEnabled to false', async () => {
+    const advisor = ToolCallingAdvisor.builder().disableInternalConversationHistory().build();
+    const model = new ScriptedChatModel([
+      { respond: toolCallResponse([toolCall('1', 'noop', {}, 'function')]) },
+      { respond: textResponse('final') },
+    ]);
+    const tool = functionToolCallback({ name: 'noop', call: () => 'ok' });
+    const content = await ChatClient.create(model)
+      .prompt()
+      .user('q')
+      .tools(tool)
+      .advisors(advisor)
+      .call()
+      .content();
+    expect(content).toBe('final');
   });
 });

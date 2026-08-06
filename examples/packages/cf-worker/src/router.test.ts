@@ -144,4 +144,24 @@ describe('cf-worker router', () => {
     const helloBody: any = await helloRes.json();
     expect(helloBody.greeting).toBe('Hello world');
   });
+
+  test('POST /api/count with malformed JSON body falls back to delta=1', async () => {
+    let countValue = 0;
+    const mockDOEnv = {
+      MY_DURABLE_OBJECT: {
+        getByName: () => ({
+          increment: async (delta: number) => (countValue += delta),
+        }),
+      },
+    };
+    const postReq = new Request('http://localhost/api/count', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not valid json',
+    });
+    const postRes = await handleRequest(postReq, mockDOEnv, mockCtx);
+    expect(postRes.status).toBe(200);
+    const body: any = await postRes.json();
+    expect(body.value).toBe(1);
+  });
 });

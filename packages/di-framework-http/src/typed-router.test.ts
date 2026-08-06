@@ -211,6 +211,14 @@ describe('TypedRouter', () => {
     expect(res.status).toBe(415);
   });
 
+  it('should pass through non-function properties untouched', () => {
+    const router = TypedRouter();
+    router.get('/x', () => json({}));
+
+    expect(Array.isArray((router as any).routes)).toBe(true);
+    expect((router as any).routes.length).toBeGreaterThan(0);
+  });
+
   it('should type params and query from RequestSpec', async () => {
     const router = TypedRouter();
     router.get<

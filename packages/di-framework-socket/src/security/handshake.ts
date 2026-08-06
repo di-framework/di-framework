@@ -13,12 +13,16 @@ import {
 import { buf, subtle } from './webcrypto.ts';
 
 export class HandshakeError extends Error {
-  override readonly name = 'HandshakeError';
-  constructor(
-    message: string,
-    readonly code: string = 'handshake_failed',
-  ) {
+  override readonly name: string;
+  readonly code: string;
+
+  // Explicit field assignments (rather than field initializers/parameter
+  // properties) so Bun's function coverage instrumentation attributes
+  // construction to a visible, coverable frame.
+  constructor(message: string, code: string = 'handshake_failed') {
     super(message);
+    this.name = 'HandshakeError';
+    this.code = code;
   }
 }
 
@@ -60,15 +64,29 @@ async function deriveSessionKeys(
  * Flow: start() → handleResponse(handshake-response) → handleConfirmation(key-confirmation)
  */
 export class SecureHandshakeProvider {
-  private keyPair: Awaited<ReturnType<typeof generateEcdhKeyPair>> | null = null;
-  private sessionId = '';
-  private providerNonce: Uint8Array | null = null;
-  private consumerNonce: Uint8Array | null = null;
-  private consumerPublicKeyB64: string | null = null;
-  private sharedSecret: Uint8Array | null = null;
-  private keys: InternalKeys | null = null;
-  private confirmed = false;
-  private destroyed = false;
+  private keyPair: Awaited<ReturnType<typeof generateEcdhKeyPair>> | null;
+  private sessionId: string;
+  private providerNonce: Uint8Array | null;
+  private consumerNonce: Uint8Array | null;
+  private consumerPublicKeyB64: string | null;
+  private sharedSecret: Uint8Array | null;
+  private keys: InternalKeys | null;
+  private confirmed: boolean;
+  private destroyed: boolean;
+
+  // Explicit constructor (rather than field initializers) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor() {
+    this.keyPair = null;
+    this.sessionId = '';
+    this.providerNonce = null;
+    this.consumerNonce = null;
+    this.consumerPublicKeyB64 = null;
+    this.sharedSecret = null;
+    this.keys = null;
+    this.confirmed = false;
+    this.destroyed = false;
+  }
 
   static async create(): Promise<SecureHandshakeProvider> {
     const p = new SecureHandshakeProvider();
@@ -229,15 +247,29 @@ export class SecureHandshakeProvider {
  * Flow: handleInit(handshake-init) → handleConfirmationRequest(key-confirmation-request)
  */
 export class SecureHandshakeConsumer {
-  private keyPair: Awaited<ReturnType<typeof generateEcdhKeyPair>> | null = null;
-  private sessionId: string | null = null;
-  private providerNonce: Uint8Array | null = null;
-  private consumerNonce: Uint8Array | null = null;
-  private providerPublicKeyB64: string | null = null;
-  private sharedSecret: Uint8Array | null = null;
-  private keys: InternalKeys | null = null;
-  private confirmed = false;
-  private destroyed = false;
+  private keyPair: Awaited<ReturnType<typeof generateEcdhKeyPair>> | null;
+  private sessionId: string | null;
+  private providerNonce: Uint8Array | null;
+  private consumerNonce: Uint8Array | null;
+  private providerPublicKeyB64: string | null;
+  private sharedSecret: Uint8Array | null;
+  private keys: InternalKeys | null;
+  private confirmed: boolean;
+  private destroyed: boolean;
+
+  // Explicit constructor (rather than field initializers) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor() {
+    this.keyPair = null;
+    this.sessionId = null;
+    this.providerNonce = null;
+    this.consumerNonce = null;
+    this.providerPublicKeyB64 = null;
+    this.sharedSecret = null;
+    this.keys = null;
+    this.confirmed = false;
+    this.destroyed = false;
+  }
 
   static async create(): Promise<SecureHandshakeConsumer> {
     const c = new SecureHandshakeConsumer();

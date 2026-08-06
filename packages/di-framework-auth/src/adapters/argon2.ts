@@ -101,6 +101,11 @@ export interface NodeScryptOptions {
   blockSize?: number;
   parallelization?: number;
   keyLength?: number;
+  /**
+   * Override the `node:crypto` loader. Intended for tests that exercise the
+   * missing-module error path; production callers should leave this unset.
+   */
+  loadCrypto?: () => Promise<unknown>;
 }
 
 /**
@@ -118,7 +123,7 @@ export function nodeScryptHasher(options: NodeScryptOptions = {}): PasswordHashe
 
   let module: Promise<NodeCryptoLike> | undefined;
   const load = (): Promise<NodeCryptoLike> => {
-    module ??= import('node:crypto')
+    module ??= (options.loadCrypto ?? (() => import('node:crypto')))()
       .then((imported) => imported as unknown as NodeCryptoLike)
       .catch((cause) => {
         throw new Error(

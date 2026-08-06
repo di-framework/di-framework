@@ -20,17 +20,12 @@ function wsSendFrame(ws: WsWebSocket, frame: SocketFrame): void {
   }
 }
 
-function rawToFrame(data: RawData, isBinary: boolean): SocketFrame {
+export function rawToFrame(data: RawData, isBinary: boolean): SocketFrame {
   if (!isBinary) {
-    const text =
-      typeof data === 'string'
-        ? data
-        : Buffer.isBuffer(data)
-          ? data.toString('utf8')
-          : Array.isArray(data)
-            ? Buffer.concat(data).toString('utf8')
-            : new TextDecoder().decode(new Uint8Array(data as ArrayBuffer));
-    return textFrame(text);
+    if (typeof data === 'string') return textFrame(data);
+    if (Buffer.isBuffer(data)) return textFrame(data.toString('utf8'));
+    if (Array.isArray(data)) return textFrame(Buffer.concat(data).toString('utf8'));
+    return textFrame(new TextDecoder().decode(new Uint8Array(data as ArrayBuffer)));
   }
   if (Buffer.isBuffer(data)) return binaryFrame(new Uint8Array(data));
   if (data instanceof ArrayBuffer) return binaryFrame(new Uint8Array(data));
@@ -130,11 +125,7 @@ export function createWebSocketServer(options: NodeWebSocketServerOptions = {}):
         const session = await SecureSession.connect({ role: 'provider', duplex });
         await options.onConnection?.(connectionFromSecureSession(session, 'websocket', mode));
       } catch {
-        try {
-          ws.close(1011, 'Handshake failed');
-        } catch {
-          /* ignore */
-        }
+        try { ws.close(1011, 'Handshake failed'); } catch { /* ignore */ }
       }
     })();
   });

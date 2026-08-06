@@ -123,15 +123,13 @@ export function parseCoseKey(bytes: Uint8Array): CoseKey {
 export async function importCoseKey(key: CoseKey): Promise<CryptoKey> {
   switch (key.alg) {
     case COSE_ALG.ES256: {
-      if (key.kty !== KTY_EC2 || key.crv !== CRV_P256) {
+      if (key.kty !== KTY_EC2 || key.crv !== CRV_P256)
         fail('COSE alg -7 (ES256) requires an EC2 key on P-256');
-      }
       // P-256 coordinates are exactly 32 bytes. A short or long coordinate would
       // be rejected by importKey with an opaque DOMException, so check here and
       // report something a developer can act on.
-      if (key.x?.length !== 32 || key.y?.length !== 32) {
+      if (key.x?.length !== 32 || key.y?.length !== 32)
         fail(`COSE P-256 coordinates must be 32 bytes (x=${key.x?.length}, y=${key.y?.length})`);
-      }
       return subtle.importKey(
         'jwk',
         {
@@ -152,9 +150,8 @@ export async function importCoseKey(key: CoseKey): Promise<CryptoKey> {
       const modulus = key.n!;
       // Strip DER-style sign padding before measuring the modulus.
       const significant = modulus[0] === 0x00 ? modulus.subarray(1) : modulus;
-      if (significant.length < 256) {
+      if (significant.length < 256)
         fail(`RSA modulus is ${significant.length * 8} bits; a minimum of 2048 is required`);
-      }
       return subtle.importKey(
         'jwk',
         {
@@ -169,16 +166,14 @@ export async function importCoseKey(key: CoseKey): Promise<CryptoKey> {
       );
     }
 
-    case COSE_ALG.EdDSA: {
-      if (key.kty !== KTY_OKP || key.crv !== CRV_ED25519) {
+    case COSE_ALG.EdDSA:
+      if (key.kty !== KTY_OKP || key.crv !== CRV_ED25519)
         fail('COSE alg -8 (EdDSA) requires an OKP key on Ed25519');
-      }
-      if (!(await isAlgorithmSupported('EdDSA'))) {
+      if (!(await isAlgorithmSupported('EdDSA')))
         fail(
           "This runtime's WebCrypto cannot verify Ed25519. Restrict WebAuthnConfig." +
             'pubKeyCredParams to [-7, -257], or deploy on a runtime with Ed25519 support.',
         );
-      }
       if (key.x?.length !== 32) fail(`Ed25519 public keys are 32 bytes; received ${key.x?.length}`);
       return subtle.importKey(
         'jwk',
@@ -187,7 +182,6 @@ export async function importCoseKey(key: CoseKey): Promise<CryptoKey> {
         false,
         ['verify'],
       );
-    }
 
     default:
       return fail(`Unsupported COSE algorithm ${key.alg}`);

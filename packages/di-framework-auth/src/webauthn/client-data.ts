@@ -34,6 +34,12 @@ function reject(
 }
 
 export function parseClientData(bytes: Uint8Array): ParsedClientData {
+  // Detect UTF-8 BOM from the bytes themselves. Some runtimes' TextDecoder
+  // strip U+FEFF even when `ignoreBOM: false`, which would otherwise hide the
+  // mismatch between the hashed bytes and the parsed JSON.
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+    reject('clientDataJSON starts with a BOM', 'malformed_credential');
+
   let raw: string;
   try {
     raw = strictDecoder().decode(bytes);
@@ -135,9 +141,8 @@ export async function verifyClientData(
   if (parsed.topOrigin !== undefined) {
     const topOrigin = normalizeOrigin(parsed.topOrigin);
     const permittedTop = (expected.topOrigins ?? []).map(normalizeOrigin);
-    if (!topOrigin || !permittedTop.includes(topOrigin)) {
+    if (!topOrigin || !permittedTop.includes(topOrigin))
       reject(`clientDataJSON topOrigin '${parsed.topOrigin}' is not permitted`, 'origin_mismatch');
-    }
   }
 
   // `tokenBinding` is deprecated in Level 3 and deliberately ignored.

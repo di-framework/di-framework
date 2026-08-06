@@ -108,6 +108,20 @@ describe('scalarNameForConstructor', () => {
   });
 });
 
+describe('JSONScalar serialize/parseValue', () => {
+  it('serialize passes the value through unchanged', async () => {
+    const JSONScalar = (await import('../src/schema.ts')).JSONScalar;
+    expect(JSONScalar.serialize({ a: 1 })).toEqual({ a: 1 });
+    expect(JSONScalar.serialize('plain string')).toBe('plain string');
+  });
+
+  it('parseValue passes the value through unchanged', async () => {
+    const JSONScalar = (await import('../src/schema.ts')).JSONScalar;
+    expect(JSONScalar.parseValue({ a: 1 })).toEqual({ a: 1 });
+    expect(JSONScalar.parseValue(42)).toBe(42);
+  });
+});
+
 describe('application scalar registration', () => {
   it('makes a custom scalar available to SDL and executable schemas', async () => {
     await withRegistry(async (registry) => {

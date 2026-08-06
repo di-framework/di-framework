@@ -15,6 +15,8 @@ import type {
 interface PendingCall {
   resolve(value: unknown): void;
   reject(error: Error): void;
+  /** Settled by resolve/reject; kept so rejectPayload can attach a no-op catch. */
+  promise?: Promise<unknown>;
   timeout?: ReturnType<typeof setTimeout>;
   onAbort?: () => void;
 }
@@ -167,8 +169,9 @@ export function createRpcClient<T>(
   ): Promise<unknown> => {
     const timeoutMs = callOptions?.timeoutMs ?? options.timeoutMs;
     const merged = mergeSignals(options.signal, callOptions?.signal);
-    return new Promise<unknown>((resolve, reject) => {
-      const call: PendingCall = { resolve, reject };
+    let call!: PendingCall;
+    const promise = new Promise<unknown>((resolve, reject) => {
+      call = { resolve, reject };
       if (merged.signal) {
         if (merged.signal.aborted) {
           merged.cleanup?.();
@@ -204,6 +207,8 @@ export function createRpcClient<T>(
       }
       pending.set(id, call);
     });
+    call.promise = promise;
+    return promise;
   };
 
   const resolveMethod = (propertyKey: string) => {
@@ -226,6 +231,9 @@ export function createRpcClient<T>(
       if (pendingCall.timeout) clearTimeout(pendingCall.timeout);
       pendingCall.onAbort?.();
       pending.delete(String(call.id));
+      // Attach a no-op handler before reject so Bun does not report an unhandled
+      // rejection when the awaiting caller has not chained onto this promise yet.
+      void pendingCall.promise?.catch(() => {});
       pendingCall.reject(err);
     }
   };
@@ -258,8 +266,11 @@ export function createRpcClient<T>(
           params: context.params,
         });
       } catch (error) {
+        // Reject the pending promise (so callers awaiting it fail) and return it
+        // instead of rethrowing — avoids an orphaned rejection when nobody has
+        // chained `.catch` onto `result` yet.
         rejectPayload([{ jsonrpc: '2.0', id: callId, method, params: context.params }], error);
-        throw error;
+        return result;
       }
       return result;
     });
@@ -315,7 +326,8 @@ export function createRpcClient<T>(
             await transport.send(payload);
           } catch (error) {
             rejectPayload(payload, error);
-            throw error;
+            // Pending calls are already rejected; surface the same error to $batch.
+            throw error instanceof Error ? error : new Error(String(error));
           }
         };
         const markReady = async () => {

@@ -171,9 +171,8 @@ export async function verifyJwt(token: string, options: VerifyJwtOptions): Promi
   if (options.maxTokenAgeSeconds !== undefined) {
     if (typeof jwt.iat !== 'number')
       reject('JWT has no iat, so its age cannot be checked', 'invalid_token');
-    if (jwt.iat + options.maxTokenAgeSeconds + tolerance <= at) {
+    if (jwt.iat + options.maxTokenAgeSeconds + tolerance <= at)
       reject(`JWT is older than ${options.maxTokenAgeSeconds}s`, 'token_expired');
-    }
   }
 
   return { header, claims: jwt };

@@ -265,9 +265,12 @@ export function createGraphqlTransportWs<TContext = unknown>(
             variables?: Record<string, unknown>;
             operationName?: string | null;
           },
-        ).catch((error) => {
-          send({ id: opId, type: 'error', payload: [{ message: String(error) }] });
-        });
+        ).then(
+          () => {},
+          (error) => {
+            send({ id: opId, type: 'error', payload: [{ message: String(error) }] });
+          },
+        );
         return;
       }
 

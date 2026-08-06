@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   A2ABus,
+  a2aBus,
   ChatClient,
   functionToolCallback,
   PlannerExecutorWorkflow,
@@ -276,5 +277,47 @@ describe('A2ABus', () => {
     await expect(bus.send('a', 'b', 'x', { signal: ac.signal })).rejects.toMatchObject({
       code: 'cancelled',
     });
+  });
+
+  test('unregister removes a handler so messages fall through unhandled', async () => {
+    const bus = A2ABus.create();
+    bus.register('agent', async () => 'handled');
+    bus.unregister('agent');
+    const result = await bus.send('a', 'agent', 'hello');
+    expect(result.content).toBe('hello');
+  });
+
+  test('inbox() peeks queued messages without invoking a handler', async () => {
+    const bus = A2ABus.create();
+    await bus.send('a', 'b', 'hello');
+    expect(bus.inbox('b').map((m) => m.content)).toEqual(['hello']);
+    expect(bus.inbox('unknown-agent')).toEqual([]);
+  });
+
+  test('human() always routes through the human hook regardless of requireHumanFor', async () => {
+    const seen: string[] = [];
+    const bus = A2ABus.create({
+      onHumanInTheLoop: (m) => {
+        seen.push(m.content);
+        return m;
+      },
+    });
+    await bus.human('a', 'b', 'from a human');
+    expect(seen).toEqual(['from a human']);
+  });
+
+  test('a2aBus() factory creates a working bus', async () => {
+    const bus = a2aBus();
+    bus.register('agent', async () => 'ok');
+    const result = await bus.send('a', 'agent', 'hi');
+    expect(result.content).toBe('ok');
+  });
+
+  test('inbox trims to maxInboxSize when exceeded', async () => {
+    const bus = A2ABus.create({ maxInboxSize: 2 });
+    await bus.send('a', 'b', 'one');
+    await bus.send('a', 'b', 'two');
+    await bus.send('a', 'b', 'three');
+    expect(bus.inbox('b').map((m) => m.content)).toEqual(['two', 'three']);
   });
 });

@@ -174,6 +174,18 @@ describe('build command', () => {
       }
     });
 
+    it('runBuildMain invokes start only when isMain is true', async () => {
+      const { runBuildMain } = await import('../cmd/build');
+      let calls = 0;
+      const start = async () => {
+        calls++;
+      };
+      runBuildMain(false, start);
+      expect(calls).toBe(0);
+      runBuildMain(true, start);
+      expect(calls).toBe(1);
+    });
+
     it('exits with code 1 when build fails under import.meta.main', async () => {
       const empty = mkdtempSync(join(tmpdir(), 'build-main-fail-'));
       temps.push(empty);

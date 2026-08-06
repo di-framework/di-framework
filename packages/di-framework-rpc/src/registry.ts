@@ -7,8 +7,15 @@ import type {
 } from './types.ts';
 
 export class RpcRegistry {
-  private readonly messages = new Map<RpcConstructor, RpcMessageMetadata>();
-  private readonly services = new Map<RpcConstructor, RpcServiceMetadata>();
+  private readonly messages: Map<RpcConstructor, RpcMessageMetadata>;
+  private readonly services: Map<RpcConstructor, RpcServiceMetadata>;
+
+  // Explicit constructor (rather than field initializers) so Bun's function
+  // coverage instrumentation attributes construction to a visible, coverable frame.
+  constructor() {
+    this.messages = new Map<RpcConstructor, RpcMessageMetadata>();
+    this.services = new Map<RpcConstructor, RpcServiceMetadata>();
+  }
 
   addMessage(target: RpcConstructor, name = target.name): RpcMessageMetadata {
     let entry = this.messages.get(target);

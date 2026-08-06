@@ -16,7 +16,7 @@ import type { LibraryContext } from './domain/context.ts';
 import { BookAvailability, Loan, LoanService } from './domain/lending.ts';
 import { BookReviews, ReviewRepository, ReviewsPortal } from './domain/reviews.ts';
 import { library, publicCatalog } from './schema.ts';
-import { handler, serve, startFromMain } from './server.ts';
+import { handler, runGraphqlMain, serve, startFromMain } from './server.ts';
 
 function run(query: string, context: LibraryContext = { memberId: 'm1' }, variables?: any) {
   return library.execute({ query, context, variables });
@@ -148,6 +148,12 @@ describe('resolution', () => {
     expect(stats.selections.slice(before)).toEqual([{ field: 'books', count: 2 }]);
   });
 
+  it('filters books by genre', async () => {
+    const result = data(await run('{ books(genre: Fiction) { id genre } }'));
+    expect(result.books.length).toBeGreaterThan(0);
+    for (const book of result.books) expect(book.genre).toBe('Fiction');
+  });
+
   it('batches contributed fields instead of N+1ing them', async () => {
     const reviews = useContainer().resolve(ReviewRepository);
     const before = reviews.reads;
@@ -236,6 +242,36 @@ describe('subscriptions', () => {
         memberId: 'm2',
         book: { title: 'The Left Hand of Darkness' },
       },
+    });
+
+    await iterator.return?.();
+  });
+
+  it('filters @Subscription events by argument', async () => {
+    const stream = await library.subscribe({
+      query: 'subscription { reviewPosted(bookId: "b2") { id rating } }',
+      context: { memberId: 'm1' },
+    });
+    const iterator = stream as AsyncIterableIterator<ExecutionResult>;
+
+    // Posted against a different book: the filter drops it.
+    await run(
+      'mutation ($input: ReviewInput!) { postReview(input: $input) { id } }',
+      { memberId: 'm1' },
+      { input: { bookId: 'b1', rating: 3 } },
+    );
+    // Posted against the book we filtered on: the filter lets it through.
+    const posted = data(
+      await run(
+        'mutation ($input: ReviewInput!) { postReview(input: $input) { id } }',
+        { memberId: 'm1' },
+        { input: { bookId: 'b2', rating: 4 } },
+      ),
+    );
+
+    const event = await iterator.next();
+    expect(event.value?.data).toEqual({
+      reviewPosted: { id: posted.postReview.id, rating: 4 },
     });
 
     await iterator.return?.();
@@ -538,6 +574,17 @@ describe('the server', () => {
       expect(log.mock.calls.some((c) => String(c[0]).includes('SDL'))).toBe(true);
       expect(log.mock.calls.some((c) => String(c[0]).includes('contexts'))).toBe(true);
       server.stop(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('runs the CLI main gate when isMain is true', () => {
+    const log = spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const server = runGraphqlMain(true, 0);
+      expect(server).toBeDefined();
+      server!.stop(true);
     } finally {
       log.mockRestore();
     }

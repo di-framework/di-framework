@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { SemanticRegistry, setRegistry } from '../src/registry.ts';
+import { getRegistry, SemanticRegistry, setRegistry } from '../src/registry.ts';
+import { UnionRef } from '../src/types.ts';
 import { withRegistry } from './helpers.ts';
 
 describe('SemanticRegistry', () => {
@@ -131,6 +132,33 @@ describe('SemanticRegistry', () => {
     });
   });
 
+  it('registers and retrieves interfaces by target and in bulk', () => {
+    withRegistry((registry) => {
+      class Node {}
+      expect(registry.getInterface(Node)).toBeUndefined();
+      expect(registry.getInterfaces()).toEqual([]);
+
+      registry.registerInterface({ target: Node, name: 'Node', options: {} });
+
+      expect(registry.getInterface(Node)).toMatchObject({ name: 'Node' });
+      expect(registry.getInterfaces()).toHaveLength(1);
+    });
+  });
+
+  it('registers and retrieves unions by ref and in bulk', () => {
+    withRegistry((registry) => {
+      const ref = new UnionRef('SearchResult', () => []);
+      expect(registry.getUnion(ref)).toBeUndefined();
+      expect(registry.getUnions()).toEqual([]);
+
+      registry.registerUnion({ ref, name: 'SearchResult', options: {} });
+
+      expect(registry.getUnion(ref)).toMatchObject({ name: 'SearchResult' });
+      expect(registry.getUnions()).toHaveLength(1);
+      expect(registry.getUnions()[0]!.ref).toBe(ref);
+    });
+  });
+
   it('clear removes all registrations', () => {
     withRegistry((registry) => {
       registry.registerType({
@@ -165,6 +193,20 @@ describe('SemanticRegistry', () => {
       expect(registry.getEnums()).toHaveLength(0);
       expect(registry.getExtensions()).toHaveLength(0);
     });
+  });
+});
+
+describe('setRegistry', () => {
+  it('swaps the process-wide registry and returns the previous one', () => {
+    const before = getRegistry();
+    const fresh = new SemanticRegistry();
+    const returned = setRegistry(fresh);
+    try {
+      expect(returned).toBe(before);
+      expect(getRegistry()).toBe(fresh);
+    } finally {
+      setRegistry(before);
+    }
   });
 });
 

@@ -77,7 +77,13 @@ export type RepositoryMap<T> = {
   [K in keyof T]: T[K] extends BaseRepository<infer E> ? BaseRepository<E> : never;
 };
 
-export abstract class EntityRepository<E, ID = EntityId> extends BaseRepository<E, ID> {}
+export abstract class EntityRepository<E, ID = EntityId> extends BaseRepository<E, ID> {
+  // Explicit (even though it only forwards) so construction itself is a
+  // coverable, named function rather than a compiler-synthesized one.
+  protected constructor(adapter: StorageAdapter<E, ID>) {
+    super(adapter);
+  }
+}
 
 export type EntityOf<R> = R extends BaseRepository<infer E> ? E : never;
 export type IdOf<R> = R extends BaseRepository<any, infer ID> ? ID : never;
@@ -90,6 +96,10 @@ export abstract class SoftDeleteRepository<
   E extends SoftDeletable & { id: ID },
   ID = EntityId,
 > extends EntityRepository<E, ID> {
+  protected constructor(adapter: StorageAdapter<E, ID>) {
+    super(adapter);
+  }
+
   abstract softDelete(id: ID): Promise<boolean>;
   abstract restore(id: ID): Promise<boolean>;
   abstract findActive(): Promise<E[]>;
