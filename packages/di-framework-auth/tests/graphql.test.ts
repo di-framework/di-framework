@@ -480,6 +480,50 @@ describe('GraphQL authorization', () => {
     expect(calls[0]?.principal).toBeUndefined();
   });
 
+  it('invokes onDeny before an anonymous @Authorize() field rejects', async () => {
+    @Portal()
+    class ProtectedPortal {
+      @Authorize({ action: 'secret:read' })
+      @Field(() => String)
+      secret(): string {
+        return 'never';
+      }
+    }
+
+    const deniedRules: unknown[] = [];
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: { authorize: () => authorizationAllowed() },
+      onDeny: (_field, _context, rule) => {
+        deniedRules.push(rule);
+        throw new AuthError('custom denial');
+      },
+    });
+    const result = await api.execute({ query: '{ secret }', context: {} });
+
+    expect(result.errors?.[0]?.message).toBe('custom denial');
+    expect(deniedRules).toEqual([{}]);
+  });
+
+  it('uses a field-level manager over the schema-level manager', async () => {
+    const schemaManager = { authorize: () => authorizationDenied('schema manager') };
+    const fieldManager = { authorize: () => authorizationAllowed() };
+
+    @Portal()
+    class ManagerPortal {
+      @Authorize({ action: 'override:read' }, { manager: fieldManager })
+      @Field(() => String)
+      override(): string {
+        return 'allowed';
+      }
+    }
+
+    const api = protectSchema(buildSemanticSchema(), { manager: schemaManager });
+    const result = await api.execute({ query: '{ override }', context: { principal } });
+
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ override: 'allowed' });
+  });
+
   it('fails clearly when a decorated field has no manager', async () => {
     @Portal()
     class MissingManagerPortal {

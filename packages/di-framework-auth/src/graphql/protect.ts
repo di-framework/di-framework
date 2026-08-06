@@ -165,7 +165,10 @@ export function protectSchema(
 
       if (authorizationRule) {
         const principal = ctx?.principal;
-        if (!principal && !authorizationRule.allowAnonymous) requirePrincipal(ctx);
+        if (!principal && !authorizationRule.allowAnonymous) {
+          if (options.onDeny) options.onDeny(field, ctx, {});
+          requirePrincipal(ctx);
+        }
 
         const manager = resolveAuthorizationManager<GraphQLAuthorizationContext>({
           ...(authorizationRule.manager
