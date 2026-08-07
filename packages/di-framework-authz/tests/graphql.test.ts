@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  Allow,
-  HasRole,
-  Owner,
-  Policy,
-  policyAuthorizationManager,
-} from '../index.ts';
-import {
+  evaluateGraphQLResourcePolicy,
   GraphQLResourceAuthorization,
   GraphQLResourcePolicyError,
-  ResourceAction,
-  evaluateGraphQLResourcePolicy,
   protectGraphQLField,
+  ResourceAction,
 } from '../graphql.ts';
+import { Allow, HasRole, Owner, Policy, policyAuthorizationManager } from '../index.ts';
 
 @Policy('article')
 class ArticlePolicy {
@@ -44,16 +38,30 @@ describe('GraphQL Resource-Policy Bindings', () => {
 
     // Query read
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'art-1' }, ctxAuthor, {
-        fieldName: 'getArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'art-1' },
+        ctxAuthor,
+        {
+          fieldName: 'getArticle',
+        },
+        { manager },
+      ),
     ).resolves.toBeUndefined();
 
     // Mutation update
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'art-1' }, ctxAuthor, {
-        fieldName: 'updateArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'art-1' },
+        ctxAuthor,
+        {
+          fieldName: 'updateArticle',
+        },
+        { manager },
+      ),
     ).resolves.toBeUndefined();
   });
 
@@ -61,9 +69,16 @@ describe('GraphQL Resource-Policy Bindings', () => {
     const ctxOther = { user: { sub: 'user-other', roles: [] } };
 
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'art-1' }, ctxOther, {
-        fieldName: 'updateArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'art-1' },
+        ctxOther,
+        {
+          fieldName: 'updateArticle',
+        },
+        { manager },
+      ),
     ).rejects.toThrow(GraphQLResourcePolicyError);
   });
 
@@ -72,24 +87,45 @@ describe('GraphQL Resource-Policy Bindings', () => {
 
     // List query
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, {}, ctxAdmin, {
-        fieldName: 'listArticles',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        {},
+        ctxAdmin,
+        {
+          fieldName: 'listArticles',
+        },
+        { manager },
+      ),
     ).resolves.toBeUndefined();
 
     // Delete mutation
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'art-1' }, ctxAdmin, {
-        fieldName: 'deleteArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'art-1' },
+        ctxAdmin,
+        {
+          fieldName: 'deleteArticle',
+        },
+        { manager },
+      ),
     ).resolves.toBeUndefined();
   });
 
   it('fails closed when unauthenticated', async () => {
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'art-1' }, {}, {
-        fieldName: 'getArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'art-1' },
+        {},
+        {
+          fieldName: 'getArticle',
+        },
+        { manager },
+      ),
     ).rejects.toThrow('Authentication is required');
   });
 
@@ -97,9 +133,16 @@ describe('GraphQL Resource-Policy Bindings', () => {
     const ctxAuthor = { user: { sub: 'user-author', roles: [] } };
 
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, {}, ctxAuthor, {
-        fieldName: 'updateArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        {},
+        ctxAuthor,
+        {
+          fieldName: 'updateArticle',
+        },
+        { manager },
+      ),
     ).rejects.toThrow('Resource ID is missing');
   });
 
@@ -161,9 +204,16 @@ describe('GraphQL Resource-Policy Bindings', () => {
     const ctxAuthor = { user: { sub: 'user-author', roles: [] } };
 
     await expect(
-      evaluateGraphQLResourcePolicy(ArticlePolicy, null, { id: 'infra-error' }, ctxAuthor, {
-        fieldName: 'getArticle',
-      }, { manager }),
+      evaluateGraphQLResourcePolicy(
+        ArticlePolicy,
+        null,
+        { id: 'infra-error' },
+        ctxAuthor,
+        {
+          fieldName: 'getArticle',
+        },
+        { manager },
+      ),
     ).rejects.toThrow('Database connection failed');
   });
 
@@ -176,7 +226,9 @@ describe('GraphQL Resource-Policy Bindings', () => {
       action: 'read',
     });
 
-    const result = await protectedResolver(null, { id: 'art-1' }, ctxAuthor, { fieldName: 'article' });
+    const result = await protectedResolver(null, { id: 'art-1' }, ctxAuthor, {
+      fieldName: 'article',
+    });
     expect(result).toBe('Resolved art-1');
   });
 

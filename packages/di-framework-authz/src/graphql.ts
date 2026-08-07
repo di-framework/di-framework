@@ -43,9 +43,7 @@ export interface GraphQLResourceAuthorizationOptions {
   action?: string;
   idArg?: string | ((args: Record<string, any>, parent: unknown) => string | undefined);
   idField?: string;
-  manager?:
-    | AuthorizationManager<any>
-    | (() => AuthorizationManager<any>);
+  manager?: AuthorizationManager<any> | (() => AuthorizationManager<any>);
   managerToken?: string;
   container?: { resolve<T>(token: string): T; has?(token: string): boolean };
   onDenied?: (denial: GraphQLAuthzDenial) => Error;
@@ -74,13 +72,23 @@ function inferGraphQLAction(
   if (optionsAction) return { action: optionsAction, collection: false };
 
   const name = fieldName.toLowerCase();
-  if (name.startsWith('list') || name.startsWith('getmany') || name.startsWith('all') || name.includes('connection')) {
+  if (
+    name.startsWith('list') ||
+    name.startsWith('getmany') ||
+    name.startsWith('all') ||
+    name.includes('connection')
+  ) {
     return { action: 'list', collection: true };
   }
   if (name.startsWith('create') || name.startsWith('add') || name.startsWith('insert')) {
     return { action: 'create', collection: true };
   }
-  if (name.startsWith('update') || name.startsWith('edit') || name.startsWith('modify') || name.startsWith('set')) {
+  if (
+    name.startsWith('update') ||
+    name.startsWith('edit') ||
+    name.startsWith('modify') ||
+    name.startsWith('set')
+  ) {
     return { action: 'update', collection: false };
   }
   if (name.startsWith('delete') || name.startsWith('remove')) {
@@ -105,7 +113,7 @@ function resolveResourceId(
     const val = (parent as Record<string, any>)?.[options.idField];
     return val !== undefined && val !== null ? String(val) : undefined;
   }
-  const fallback = args['id'] ?? args['idParam'] ?? (parent as Record<string, any>)?.[ 'id' ];
+  const fallback = args['id'] ?? args['idParam'] ?? (parent as Record<string, any>)?.['id'];
   return fallback !== undefined && fallback !== null ? String(fallback) : undefined;
 }
 
@@ -203,13 +211,24 @@ export async function evaluateGraphQLResourcePolicy(
   }
 }
 
-export function protectGraphQLField<TSource = unknown, TArgs = Record<string, any>, TContext = unknown>(
+export function protectGraphQLField<
+  TSource = unknown,
+  TArgs = Record<string, any>,
+  TContext = unknown,
+>(
   reference: PolicyClass | string,
   resolver: (source: TSource, args: TArgs, ctx: TContext, info: any) => any,
   options: GraphQLResourceAuthorizationOptions = {},
 ): (source: TSource, args: TArgs, ctx: TContext, info: any) => Promise<any> {
   return async (source: TSource, args: TArgs, ctx: TContext, info: any) => {
-    await evaluateGraphQLResourcePolicy(reference, source, args as Record<string, any>, ctx, info, options);
+    await evaluateGraphQLResourcePolicy(
+      reference,
+      source,
+      args as Record<string, any>,
+      ctx,
+      info,
+      options,
+    );
     return resolver(source, args, ctx, info);
   };
 }
