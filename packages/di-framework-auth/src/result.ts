@@ -69,6 +69,14 @@ export type AuthErrorCode =
   | 'nonce_mismatch'
   | 'issuer_mismatch'
   | 'discovery_failed'
+  // oauth server
+  | 'invalid_request'
+  | 'invalid_client'
+  | 'invalid_grant'
+  | 'unauthorized_client'
+  | 'unsupported_response_type'
+  | 'unsupported_grant_type'
+  | 'invalid_scope'
   // authorization
   | 'access_denied'
   // configuration
