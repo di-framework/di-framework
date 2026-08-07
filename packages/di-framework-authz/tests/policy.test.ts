@@ -47,7 +47,7 @@ describe('policy authoring and EBNF', () => {
   });
   it('parses comments, alternatives, and structural equals values', () => {
     const parsed = parsePolicies(
-      '(* hi *) policy P = "thing"; allow P read = ("read" | "list"), ? equals "resource.meta" {"x": 1} ?;',
+      '(* hi *) policy P = "thing"; allow P read = ("read" | "list"), ? equals "resource.meta" {"x": 1} ?; (* unclosed comment',
     );
     expect(parsed.policies[0]?.rules[0]?.actions).toEqual(['read', 'list']);
   });
