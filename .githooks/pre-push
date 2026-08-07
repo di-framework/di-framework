@@ -1,4 +1,24 @@
 #!/bin/sh
 set -e
-bun test --coverage
-bun scripts/check-line-coverage.ts
+
+echo "[pre-push] Running tests with the required 100% aggregate line coverage..."
+if ! bun test --coverage; then
+  echo >&2
+  echo "[pre-push] FAILED: the test/coverage command returned a non-zero exit status." >&2
+  echo "[pre-push] If the summary above says '0 fail', the failure is the 100% line-coverage threshold." >&2
+  echo "[pre-push] Coverage details:" >&2
+  bun scripts/check-line-coverage.ts || true
+  echo "[pre-push] Reproduce with: bun test --coverage" >&2
+  exit 1
+fi
+
+echo "[pre-push] Aggregate coverage passed. Checking every reported source file for 100% line coverage..."
+if ! bun scripts/check-line-coverage.ts; then
+  echo >&2
+  echo "[pre-push] FAILED: one or more source files are below 100% line coverage." >&2
+  echo "[pre-push] Add tests for the uncovered lines listed above." >&2
+  echo "[pre-push] Reproduce with: bun test --coverage && bun scripts/check-line-coverage.ts" >&2
+  exit 1
+fi
+
+echo "[pre-push] Passed: tests and line coverage checks succeeded."

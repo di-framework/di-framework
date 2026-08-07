@@ -28,7 +28,7 @@ export const documents = new Map<string, DocumentRecord>([
 
 @Policy('document')
 export class DocumentPolicy {
-  @Allow('read') @HasScope('documents:read') read() {}
+  @Allow('list', 'read') @HasScope('documents:read') read() {}
   @Allow('update', 'delete') @Owner() own() {}
   @Allow('delete') @HasRole('admin') admin() {}
   @Deny('update', 'delete') @Equals('resource.locked', true) locked() {}
