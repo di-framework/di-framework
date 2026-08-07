@@ -240,3 +240,36 @@ Method or property decorator that attaches OpenAPI metadata.
 - `description`: Verbose explanation.
 - `requestBody`: OpenAPI Request Body object.
 - `responses`: OpenAPI Responses object.
+
+### `HttpRouter.builder()` & `@HttpRouter(options?)`
+
+An extensible, fluent builder above `TypedRouter()` and its corresponding decorator:
+
+```typescript
+import { HttpRouter } from '@di-framework/http';
+
+// 1. Fluent Builder
+const http = HttpRouter.builder()
+  .prefix('/api')
+  .use(loggingMiddleware)
+  .catch((err) => new Response(JSON.stringify({ error: err.message }), { status: 500 }))
+  .build();
+
+http.get('/health', async () => new Response('OK'));
+
+// 2. Class Decorator with DI integration
+@HttpRouter({
+  prefix: '/v1',
+  use: [authMiddleware],
+})
+export class ApiRouter {}
+
+// Resolve from DI container
+const router = useContainer().resolve('HTTP_ROUTER');
+```
+
+- **`prefix(pathPrefix)`**: Sets a global base path prefix for registered routes.
+- **`catch(handler)`**: Registers a custom global error handler.
+- **`use(...middleware)`**: Registers global middleware executed on all routes.
+- **`withAuth(options)`**: Extension point for auth integrations without introducing runtime dependencies in `@di-framework/http`.
+- **`extend(fn)`**: Register custom builder extensions.
