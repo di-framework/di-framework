@@ -57,6 +57,10 @@ describe('policy authoring and EBNF', () => {
     expect(() => parsePolicies('policy P = "x"; allow P x = "r", ? nope "x" ?;')).toThrow(
       /Unsupported/,
     );
+    expect(() => parsePolicies(String.raw`policy P = "\x";`)).toThrow(/Malformed string/);
+    expect(() =>
+      parsePolicies('policy P = "x"; allow P x = "read", ? equals "resource.value" nope ?;'),
+    ).toThrow(/Malformed equals JSON/);
   });
   it('supports isolated registries', () => {
     const registry = new PolicyRegistry();
@@ -189,6 +193,31 @@ describe('evaluation and providers', () => {
         subject: { ...input, scopes: ['documents:read', 'documents:write'] },
       }).allowed,
     ).toBeTrue();
+  });
+
+  it('compares nested JSON values structurally', () => {
+    class StructuralPolicy {
+      @Allow('read') @Equals('resource.metadata', { flags: ['a', 'b'], rank: 1 }) read() {}
+    }
+    Policy('structural')(StructuralPolicy);
+    const document = compilePolicies();
+
+    expect(
+      evaluatePolicy(document, {
+        resource: 'structural',
+        action: 'read',
+        subject,
+        value: { metadata: { rank: 1, flags: ['a', 'b'] } },
+      }).allowed,
+    ).toBeTrue();
+    expect(
+      evaluatePolicy(document, {
+        resource: 'structural',
+        action: 'read',
+        subject,
+        value: { metadata: { rank: 1, flags: ['a'] } },
+      }).allowed,
+    ).toBeFalse();
   });
 
   it('snapshots the decorator registry when a manager is created', async () => {

@@ -1,3 +1,4 @@
 #!/bin/sh
 set -e
-bun test
+bun test --coverage
+bun scripts/check-line-coverage.ts

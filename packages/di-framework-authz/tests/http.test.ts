@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { type AuthStrategy, authenticated, noCredential } from '@di-framework/auth';
 import { withAuthRoutes } from '@di-framework/auth/http';
 import { Controller, TypedRouter } from '@di-framework/http';
-import { ResourceAuthorization } from '../http.ts';
+import { ResourceAction, ResourceAuthorization } from '../http.ts';
 import {
   Allow,
   Deny,
@@ -77,6 +77,35 @@ describe('HTTP resource authorization', () => {
     }
     Controller()(C);
     expect(() => ResourceAuthorization(P)(C)).toThrow(/conflicts/);
+  });
+
+  it('validates explicit actions and policy references', () => {
+    expect(() => ResourceAction('')).toThrow(/Unknown resource action/);
+    expect(() => ResourceAction('not valid')).toThrow(/Unknown resource action/);
+    expect(() => ResourceAction('archive')({ route: 1 }, 'route')).toThrow(/initialized static/);
+
+    class MissingPolicy {}
+    class MissingController {}
+    Controller()(MissingController);
+    expect(() => ResourceAuthorization(MissingPolicy)(MissingController)).toThrow(/not registered/);
+  });
+
+  it('rejects routes whose action cannot be inferred', () => {
+    class P {
+      @Allow('create') create() {}
+    }
+    Policy('x')(P);
+    const strategy: AuthStrategy = {
+      name: 'test',
+      authenticate: async () => authenticated({ sub: 'u1', method: 'bearer', authTime: 1 }),
+    };
+    const router = TypedRouter();
+    const secure = withAuthRoutes(router, { strategy });
+    class C {
+      static create = secure.post('/x/:id', () => new Response() as never);
+    }
+    Controller()(C);
+    expect(() => ResourceAuthorization(P)(C)).toThrow(/Cannot infer a resource action/);
   });
 
   it('enforces real policies and redacts every deny path', async () => {
