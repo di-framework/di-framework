@@ -504,6 +504,24 @@ describe('GraphQL authorization', () => {
     expect(deniedRules).toEqual([{}]);
   });
 
+  it('rejects an unauthenticated read of an @Authorize() field when allowAnonymous is not enabled', async () => {
+    @Portal()
+    class ProtectedPortal {
+      @Authorize({ action: 'secret:read' })
+      @Field(() => String)
+      secret(): string {
+        return 'never';
+      }
+    }
+
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: { authorize: () => authorizationAllowed() },
+    });
+    const result = await api.execute({ query: '{ secret }', context: {} });
+
+    expect(result.errors?.[0]?.extensions).toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+
   it('uses a field-level manager over the schema-level manager', async () => {
     const schemaManager = { authorize: () => authorizationDenied('schema manager') };
     const fieldManager = { authorize: () => authorizationAllowed() };
