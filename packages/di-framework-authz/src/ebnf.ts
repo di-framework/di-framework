@@ -107,8 +107,33 @@ function parseCondition(raw: string): PolicyCondition {
   }
   throw new SyntaxError(`Unsupported or malformed predicate '${kind ?? ''}'`);
 }
+function stripComments(source: string): string {
+  let result = '';
+  let i = 0;
+  let inString = false;
+  while (i < source.length) {
+    const char = source[i];
+    if (!inString && char === '(' && source[i + 1] === '*') {
+      const end = source.indexOf('*)', i + 2);
+      if (end === -1) {
+        result += ' ';
+        break;
+      }
+      result += ' ';
+      i = end + 2;
+      continue;
+    }
+    if (char === '"' && (i === 0 || source[i - 1] !== '\\')) {
+      inString = !inString;
+    }
+    result += char;
+    i++;
+  }
+  return result;
+}
+
 export function parsePolicies(source: string): PolicyDocument {
-  const clean = source.replace(/\(\*[\s\S]*?\*\)/g, ' ');
+  const clean = stripComments(source);
   const statements = clean
     .split(';')
     .map((x) => x.trim())

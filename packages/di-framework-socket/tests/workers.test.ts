@@ -429,7 +429,7 @@ describe('HibernatableSocketHub', () => {
       duplexClosed = true;
     };
 
-    const upgradeP = hub.handleUpgrade(
+    void hub.handleUpgrade(
       new Request('https://example.com/ws', { headers: { Upgrade: 'websocket' } }),
       () => ({ 0: client, 1: server }),
     );
