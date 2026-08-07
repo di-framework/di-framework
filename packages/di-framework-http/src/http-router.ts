@@ -2,10 +2,7 @@ import { useContainer } from '@di-framework/core/container';
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 import type { IRequest, RequestHandler } from 'itty-router';
 import registry from './registry.ts';
-import {
-  TypedRouter,
-  type TypedRouterType,
-} from './typed-router.ts';
+import { TypedRouter, type TypedRouterType } from './typed-router.ts';
 
 export type ExtensionFunction<Args extends any[] = any[]> = (
   builder: HttpRouterBuilder<Args>,

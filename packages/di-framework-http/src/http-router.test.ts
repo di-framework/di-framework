@@ -1,12 +1,6 @@
-import { describe, expect, it, afterEach } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
-import {
-  HttpRouter,
-  HttpRouterBuilder,
-  TypedRouter,
-  json,
-  registry,
-} from '../index.ts';
+import { HttpRouter, HttpRouterBuilder, json, registry, TypedRouter } from '../index.ts';
 
 describe('HttpRouter Builder & @HttpRouter Decorator', () => {
   afterEach(() => {

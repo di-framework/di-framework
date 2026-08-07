@@ -74,6 +74,31 @@ Actions infer fail-closed: GET collection/member becomes `list`/`read`, POST col
 
 Decisions expose a stable category (`allow-rule-matched`, `explicit-deny`, `no-matching-allow`, or `resource-unavailable`) plus sorted decisive rule IDs. These travel as log-only authorization detail to HTTP/GraphQL denial hooks. Serialized errors remain generic and do not disclose policy structure.
 
-## Future boundaries
+## Bind GraphQL Resolvers
 
-[OAuth2/OIDC authorization-server support (#118)](https://github.com/di-framework/di-framework/issues/118) and [GraphQL policy bindings (#119)](https://github.com/di-framework/di-framework/issues/119) are separate follow-up features. The latter will reuse this AST, evaluator, providers, and decision shape; neither belongs to the policy-neutral authentication core.
+`@di-framework/authz/graphql` connects declarative resource policies to GraphQL queries, mutations, subscriptions, and field resolvers:
+
+```typescript
+import { GraphQLResourceAuthorization, protectGraphQLField, ResourceAction } from '@di-framework/authz/graphql';
+
+// 1. Class Decorator on Resolver Service
+class ArticleResolver {
+  @GraphQLResourceAuthorization(ArticlePolicy)
+  @ResourceAction('read')
+  async findOne(parent: any, args: { id: string }, ctx: any, info: any) {
+    return articleService.find(args.id);
+  }
+}
+
+// 2. Resolver Wrapper
+const protectedResolver = protectGraphQLField(ArticlePolicy, rawResolver, {
+  idArg: (args) => args.id,
+  action: 'read',
+});
+```
+
+- Reuses the core AST, evaluator, and `ResourceProvider` infrastructure without introducing a separate policy language.
+- Action inference detects `list`, `create`, `update`, `delete`, or `read` based on field names, or uses `@ResourceAction`.
+- Missing or ambiguous resource IDs fail closed immediately.
+- Client error responses sanitize decision details (`ruleIds`, `category`) and return standard `GraphQLResourcePolicyError` (`FORBIDDEN`/`UNAUTHENTICATED`).
+
