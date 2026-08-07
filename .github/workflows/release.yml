@@ -60,5 +60,22 @@ jobs:
               continue
             fi
             echo "Publishing $name@$version from $pkg"
+            node -e "
+              const fs = require('fs');
+              const file = './$pkg/package.json';
+              const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+              const fix = (deps) => {
+                if (!deps) return;
+                for (const k of Object.keys(deps)) {
+                  if (k.startsWith('@di-framework/') && (deps[k] === 'workspace:*' || deps[k] === 'workspace:^')) {
+                    deps[k] = '^' + '$version';
+                  }
+                }
+              };
+              fix(json.peerDependencies);
+              fix(json.dependencies);
+              fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
+            "
             (cd "$pkg" && npm publish --access public --provenance --ignore-scripts)
+            git checkout "./$pkg/package.json"
           done
