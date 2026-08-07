@@ -28,6 +28,10 @@ export class Registry {
   getTargets() {
     return this.targets;
   }
+
+  clear() {
+    this.targets.clear();
+  }
 }
 
 const GLOBAL_KEY = Symbol.for('@di-framework/http-registry');

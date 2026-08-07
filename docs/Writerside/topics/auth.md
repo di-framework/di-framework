@@ -8,6 +8,7 @@ Domain services stay on `@di-framework/core`; this package is the authentication
 
 - **Password + server sessions**: NIST SP 800-63B password policy, PBKDF2-HMAC-SHA-256 hashing, opaque session tokens stored hashed, `__Host-` cookies, absolute and inactivity timeouts, regeneration on login, signed double-submit CSRF.
 - **JWT / JWS bearer tokens**: compact JWS over WebCrypto with a mandatory algorithm allowlist, `kid` and JWKS publishing, overlapping key rotation, and opaque refresh tokens with rotation and reuse detection.
+- **OAuth2 / OIDC authorization server**: RFC 6749 authorization code flow with mandatory PKCE (S256), exact redirect URI matching, consent evaluation, refresh token revocation (RFC 7009), OIDC Core 1.0 ID Tokens, UserInfo endpoint, and OIDC Discovery (`/.well-known/openid-configuration`, `/.well-known/jwks.json`).
 - **OAuth2 / OIDC relying party**: Authorization Code with mandatory PKCE S256, discovery, `state` + `nonce` binding, ID-token validation, and presets for Google, Microsoft Entra, GitHub, and any compliant OIDC provider.
 - **WebAuthn passkeys**: W3C WebAuthn Level 3 registration and authentication, including a CTAP2-canonical CBOR decoder and COSE key handling, with no dependencies.
 - **Provider pattern throughout**: strategies and storage are plain interfaces with factory-function implementations. In-memory stores ship for development; a bridge over `@di-framework/repo`'s `StorageAdapter` covers real backends.
@@ -280,6 +281,31 @@ registerAuth({
 Interfaces: `UserStore`, `SessionStore`, `CredentialStore`, `StateStore`, `RefreshTokenStore`, `KeyStore`, `LoginThrottle`.
 
 Three methods must be a compare-and-swap: `StateStore.consume`, `RefreshTokenStore.rotate`, and `CredentialStore.updateSignCount`. They are the replay defences for OAuth `state`, refresh tokens, and WebAuthn sign counters. `StorageAdapter` has no conditional write, so `repoStateStore` and `repoRefreshTokenStore` require an explicit `atomic` hook and **throw at construction without one** rather than shipping a defence that silently does nothing.
+
+## OAuth 2.0 / OIDC Authorization Server
+
+`@di-framework/auth/server` turns an application into an OAuth 2.0 (RFC 6749) and OpenID Connect 1.0 Authorization Server:
+
+```ts
+import { AuthorizationServer, handleOAuthServerRequest } from '@di-framework/auth/server';
+
+const server = new AuthorizationServer({
+  issuer: 'https://auth.example.com',
+  clients: clientStore,
+  codes: authCodeStore,
+  tokens: oauthTokenStore,
+  keyService,
+});
+
+// Serve OAuth 2.0 & OIDC routes:
+// /.well-known/openid-configuration, /.well-known/jwks.json, /oauth/authorize, /oauth/token, /oauth/revoke, /oauth/userinfo
+const response = await handleOAuthServerRequest(server, request);
+```
+
+- **PKCE Requirement**: Mandatory `code_challenge_method=S256` (RFC 7636).
+- **Exact Redirect URI Matching**: String equality check preventing wildcard/substring redirect hijacks.
+- **Revocation Endpoint**: RFC 7009 token revocation support (`/oauth/revoke`).
+- **OIDC Core 1.0**: Issuer discovery metadata, JWKS endpoint, signed ID Tokens, and UserInfo endpoint.
 
 ## Security notes
 
