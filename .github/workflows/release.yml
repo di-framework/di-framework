@@ -41,7 +41,18 @@ jobs:
           # Must stay in step with PACKAGES in packages/di-framework-cli/cmd/build.ts.
           # `events` and `config` were missing here since they were added, so they
           # have been version-bumped and built by CI but never published.
-          for pkg in packages/di-framework-core packages/di-framework-repo packages/di-framework-http packages/di-framework-graphql packages/di-framework-events packages/di-framework-config packages/di-framework-auth packages/di-framework-authz packages/di-framework-ai packages/di-framework-cli; do
+          for pkg in packages/di-framework-core \
+          packages/di-framework-repo \
+          packages/di-framework-http \
+          packages/di-framework-graphql \
+          packages/di-framework-events \
+          packages/di-framework-config \
+          packages/di-framework-auth \
+          packages/di-framework-authz \
+          packages/di-framework-socket \
+          packages/di-framework-rpc \
+          packages/di-framework-ai \
+          packages/di-framework-cli; do
             name=$(node -p "require('./$pkg/package.json').name")
             version=$(node -p "require('./$pkg/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
