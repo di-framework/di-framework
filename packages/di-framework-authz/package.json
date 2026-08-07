@@ -16,6 +16,11 @@
       "bun": "./http.ts",
       "import": "./dist/http.js",
       "default": "./dist/http.js"
+    },
+    "./graphql": {
+      "bun": "./graphql.ts",
+      "import": "./dist/graphql.js",
+      "default": "./dist/graphql.js"
     }
   },
   "files": [
@@ -23,10 +28,11 @@
     "README.md",
     "index.ts",
     "http.ts",
+    "graphql.ts",
     "src"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./http.ts --outdir ./dist --target node --splitting --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./http.ts ./graphql.ts --outdir ./dist --target node --splitting --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",
     "test": "bun test",
     "prepublishOnly": "bun run build"
   },
