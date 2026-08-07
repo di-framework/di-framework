@@ -1,16 +1,16 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
 import {
-  AuthorizationServer,
+  type AuthorizationServer,
+  createAuthorizationServer,
+  handleOAuthServerRequest,
   InMemoryAuthCodeStore,
   InMemoryClientStore,
   InMemoryConsentStore,
   InMemoryOAuthTokenStore,
-  createAuthorizationServer,
-  handleOAuthServerRequest,
 } from '../../server.ts';
-import { keyService } from '../../src/tokens/keystore.ts';
 import { generatePkce } from '../../src/oauth/pkce.ts';
 import type { KeyStore, SigningKeyRecord } from '../../src/providers/types.ts';
+import { keyService } from '../../src/tokens/keystore.ts';
 
 class MemoryKeyStore implements KeyStore {
   private records: SigningKeyRecord[] = [];
