@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/ai",
-  "version": "0.0.1",
+  "version": "4.1.1",
   "description": "Declarative library for building AI applications",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -51,7 +51,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@di-framework/core": "workspace:^",
+    "@di-framework/core": "workspace:*",
     "typescript": "^5"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/auth",
-  "version": "4.0.2",
+  "version": "4.1.1",
   "description": "Authentication for di-framework — sessions, JWT/JWS bearer, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with zero runtime dependencies",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -96,10 +96,10 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/core": "workspace:^",
-    "@di-framework/graphql": "workspace:^",
-    "@di-framework/http": "workspace:^",
-    "@di-framework/repo": "workspace:^",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/graphql": "workspace:*",
+    "@di-framework/http": "workspace:*",
+    "@di-framework/repo": "workspace:*",
     "graphql": "^16.8.0 || ^17.0.0",
     "typescript": "^5"
   },

@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/rpc",
-  "version": "0.1.0",
+  "version": "4.1.1",
   "description": "Decorator-centric JSON-RPC and per-method gRPC for di-framework",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -67,8 +67,8 @@
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
-    "@di-framework/core": "workspace:^",
-    "@di-framework/socket": "workspace:^",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/socket": "workspace:*",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {

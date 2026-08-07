@@ -21,6 +21,7 @@ async function makeFakeWorkspace(): Promise<string> {
       JSON.stringify({
         name: `@test/${pkgDir.split('/').pop()}`,
         version: '0.0.0',
+        peerDependencies: { '@di-framework/core': '^0.0.0' },
         scripts: { build: 'mkdir -p dist && echo ok > dist/out.txt' },
       }) + '\n',
     );
@@ -113,6 +114,7 @@ describe('build command', () => {
           // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
           const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
           expect(pkgJson.version).toBe('9.9.9');
+          expect(pkgJson.peerDependencies['@di-framework/core']).toBe('^9.9.9');
         }
         expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
       } finally {

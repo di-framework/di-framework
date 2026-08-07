@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/socket",
-  "version": "0.1.0",
+  "version": "4.1.1",
   "description": "Decorator-driven WebSocket, TCP, and UDP for di-framework — @SocketGateway / @OnMessage with a WebCrypto secure channel",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -80,7 +80,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/core": "workspace:^",
+    "@di-framework/core": "workspace:*",
     "typescript": "^5"
   }
 }

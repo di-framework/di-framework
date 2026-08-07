@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/authz",
-  "version": "0.1.0",
+  "version": "4.1.1",
   "description": "Declarative resource authorization policies for di-framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,9 +37,9 @@
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
-    "@di-framework/auth": "workspace:^",
-    "@di-framework/core": "workspace:^",
-    "@di-framework/http": "workspace:^",
+    "@di-framework/auth": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/http": "workspace:*",
     "typescript": "^5"
   },
   "devDependencies": {

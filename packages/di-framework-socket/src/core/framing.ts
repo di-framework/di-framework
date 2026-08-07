@@ -28,43 +28,43 @@ export class FramingError extends Error {
 const MAX_DEFAULT = 1_048_576; // 1 MiB
 
 export const LengthPrefixFramer = class LengthPrefixFramer {
-  private buffer: Uint8Array;
-  private readonly maxPayloadBytes: number;
+  #buffer: Uint8Array;
+  #maxPayloadBytes: number;
 
   constructor(maxPayloadBytes: number = MAX_DEFAULT) {
-    this.buffer = new Uint8Array(0);
-    this.maxPayloadBytes = maxPayloadBytes;
+    this.#buffer = new Uint8Array(0);
+    this.#maxPayloadBytes = maxPayloadBytes;
   }
 
   /** Push stream bytes; returns zero or more complete frames. */
   push(chunk: Uint8Array): SocketFrame[] {
-    this.buffer = concat(this.buffer, chunk) as Uint8Array;
+    this.#buffer = concat(this.#buffer, chunk) as Uint8Array;
     const frames: SocketFrame[] = [];
 
-    while (this.buffer.length >= 4) {
+    while (this.#buffer.length >= 4) {
       const len =
-        ((this.buffer[0]! << 24) |
-          (this.buffer[1]! << 16) |
-          (this.buffer[2]! << 8) |
-          this.buffer[3]!) >>>
+        ((this.#buffer[0]! << 24) |
+          (this.#buffer[1]! << 16) |
+          (this.#buffer[2]! << 8) |
+          this.#buffer[3]!) >>>
         0;
-      if (len > this.maxPayloadBytes + 1) {
-        throw new FramingError(`Frame length ${len} exceeds max ${this.maxPayloadBytes + 1}`);
+      if (len > this.#maxPayloadBytes + 1) {
+        throw new FramingError(`Frame length ${len} exceeds max ${this.#maxPayloadBytes + 1}`);
       }
       if (len < 1) {
         throw new FramingError('Frame length must include kind byte');
       }
-      if (this.buffer.length < 4 + len) break;
-      const body = this.buffer.subarray(4, 4 + len);
+      if (this.#buffer.length < 4 + len) break;
+      const body = this.#buffer.subarray(4, 4 + len);
       frames.push(decodeFramedBody(body));
-      this.buffer = this.buffer.subarray(4 + len);
+      this.#buffer = this.#buffer.subarray(4 + len);
     }
 
     return frames;
   }
 
   reset(): void {
-    this.buffer = new Uint8Array(0);
+    this.#buffer = new Uint8Array(0);
   }
 };
 

@@ -33,18 +33,37 @@ export async function publish(shell: PublishShell = defaultShell) {
   // 3. Publish
   for (const pkgDir of PACKAGES) {
     const fullPath = join(process.cwd(), pkgDir);
-    const pkgJson = await import(join(fullPath, 'package.json'));
+    const pkgJsonPath = join(fullPath, 'package.json');
+    const { readFileSync, writeFileSync } = await import('fs');
+    const rawPkgJson = readFileSync(pkgJsonPath, 'utf-8');
+    const pkgJson = JSON.parse(rawPkgJson);
 
     console.log(`\n🚢 Publishing ${pkgJson.name}@${pkgJson.version}...`);
 
-    // Using --access public for scoped packages
-    // We use npm publish or bun publish. Bun publish is fine.
+    // Prepare package.json for npm publish: replace workspace:* with ^version
+    const publishPkgJson = JSON.parse(rawPkgJson);
+    const replaceWorkspaceSpecs = (deps?: Record<string, string>) => {
+      if (!deps) return;
+      for (const depKey of Object.keys(deps)) {
+        if (
+          depKey.startsWith('@di-framework/') &&
+          (deps[depKey] === 'workspace:*' || deps[depKey] === 'workspace:^')
+        ) {
+          deps[depKey] = `^${pkgJson.version}`;
+        }
+      }
+    };
+    replaceWorkspaceSpecs(publishPkgJson.peerDependencies);
+    replaceWorkspaceSpecs(publishPkgJson.dependencies);
+
     try {
+      writeFileSync(pkgJsonPath, JSON.stringify(publishPkgJson, null, 2) + '\n');
       await shell`cd ${fullPath} && bun publish --access public`;
       console.log(`  ✅ Published ${pkgJson.name}`);
     } catch (err) {
       console.error(`  ❌ Failed to publish ${pkgJson.name}:`, err);
-      // Depending on needs, we might want to continue or stop
+    } finally {
+      writeFileSync(pkgJsonPath, rawPkgJson);
     }
   }
 
