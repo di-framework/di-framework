@@ -9,6 +9,7 @@ export const PACKAGES = [
   'packages/di-framework-events',
   'packages/di-framework-config',
   'packages/di-framework-auth',
+  'packages/di-framework-authz',
   'packages/di-framework-socket',
   'packages/di-framework-rpc',
   'packages/di-framework-ai',

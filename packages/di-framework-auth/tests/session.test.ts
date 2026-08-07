@@ -529,9 +529,7 @@ describe('passwordService', () => {
     });
     await users.update(user.id, { disabled: true });
 
-    const error = await passwords
-      .login('ada@example.com', 'correct horse battery')
-      .catch((e) => e);
+    const error = await passwords.login('ada@example.com', 'correct horse battery').catch((e) => e);
     expect(error).toBeInstanceOf(AuthError);
     expect(error.code).toBe('invalid_credentials');
   });

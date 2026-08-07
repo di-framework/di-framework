@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { useContainer } from '@di-framework/core/container';
-import {
-  loadAndRegisterConfig,
-  loadAndRegisterConfigSync,
-} from '../src/bootstrap.ts';
+import { loadAndRegisterConfig, loadAndRegisterConfigSync } from '../src/bootstrap.ts';
 import { coerceEnvValue, toCamelCase } from '../src/coerce.ts';
 import { loadConfig, loadConfigSync } from '../src/load.ts';
 import { deepMerge, flattenEntries, getByPath, setByPath } from '../src/path.ts';

@@ -3,7 +3,7 @@
  * Fail CI when any non-test source file in the LCOV report is below 100% lines.
  * Complements Bun's coverageThreshold (which applies to the aggregate report).
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const lcovPath = resolve(process.cwd(), 'coverage/lcov.info');

@@ -90,7 +90,10 @@ test('D1Adapter uses prepared statements and maps CRUD', async () => {
 });
 
 test('D1Adapter findAll uses allRows, and transaction forwards to the callback', async () => {
-  const rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }];
+  const rows = [
+    { id: 1, name: 'Ada' },
+    { id: 2, name: 'Grace' },
+  ];
   const db: D1Database = {
     prepare() {
       return {

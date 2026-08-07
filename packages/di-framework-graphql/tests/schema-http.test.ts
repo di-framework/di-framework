@@ -44,9 +44,7 @@ function fakeIterable(
   };
 }
 
-function fakeApi(
-  subscribeImpl: (request: ExecuteRequest) => unknown,
-): SemanticSchema {
+function fakeApi(subscribeImpl: (request: ExecuteRequest) => unknown): SemanticSchema {
   return { subscribe: subscribeImpl } as unknown as SemanticSchema;
 }
 
@@ -113,9 +111,7 @@ describe('mountGraphQL', () => {
 describe('createGraphQLSSEHandler', () => {
   it('rejects non-GET requests', async () => {
     const handler = createGraphQLSSEHandler(fakeApi(async () => fakeIterable([])));
-    const response = await handler(
-      new Request('http://localhost/sse', { method: 'POST' }),
-    );
+    const response = await handler(new Request('http://localhost/sse', { method: 'POST' }));
     expect(response.status).toBe(405);
   });
 
@@ -218,7 +214,9 @@ describe('createGraphQLSSEHandler', () => {
   it('calls iterator.return() when the client cancels the stream', async () => {
     let returned = false;
     const handler = createGraphQLSSEHandler(
-      fakeApi(() => fakeIterable([{ data: {} }, { data: {} }], { onReturn: () => (returned = true) })),
+      fakeApi(() =>
+        fakeIterable([{ data: {} }, { data: {} }], { onReturn: () => (returned = true) }),
+      ),
     );
 
     const response = await handler(new Request('http://localhost/sse?query={tick}'));

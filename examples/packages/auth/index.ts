@@ -1,11 +1,18 @@
 /**
  * @di-framework/auth example
  *
- * A password login protecting an HTTP route, and a bearer token protecting the
- * same route for machine clients — both through one strategy chain.
+ * Password and bearer authentication protecting HTTP routes through one
+ * strategy chain, plus an OPA-shaped remote authorization manager.
  */
 
-import { type AuthError, registerAuth } from '@di-framework/auth';
+import {
+  type AuthError,
+  type AuthorizationContext,
+  type AuthorizationManager,
+  authorizationAllowed,
+  authorizationDenied,
+  registerAuth,
+} from '@di-framework/auth';
 import { withAuthErrors, withAuthRoutes } from '@di-framework/auth/http';
 import { useContainer } from '@di-framework/core/container';
 import { Controller, Endpoint, json, TypedRouter } from '@di-framework/http';
@@ -18,9 +25,47 @@ import { Controller, Endpoint, json, TypedRouter } from '@di-framework/http';
 // It must be at least 32 bytes; HKDF expands it into the CSRF and cookie keys.
 const AUTH_SECRET = 'example-secret-please-replace-me-32b+';
 
+type PolicyFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+/**
+ * A deliberately small remote-manager example. The framework knows nothing
+ * about OPA or this policy document; it only passes the principal and opaque
+ * route metadata to this application-owned decision point.
+ */
+export function opaAuthorizationManager(
+  endpoint: string,
+  fetchPolicy: PolicyFetch = fetch,
+): AuthorizationManager {
+  return {
+    async authorize(principal, context: AuthorizationContext) {
+      const response = await fetchPolicy(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            principal: principal ? { sub: principal.sub, scope: principal.scope } : null,
+            metadata: context.metadata,
+            transport: context.transport,
+          },
+        }),
+      });
+      if (!response.ok) {
+        return authorizationDenied(`Policy agent returned HTTP ${response.status}`);
+      }
+      const document = (await response.json()) as { result?: unknown };
+      return document.result === true
+        ? authorizationAllowed()
+        : authorizationDenied('Policy agent returned a non-allow decision');
+    },
+  };
+}
+
+const authorization = opaAuthorizationManager('https://opa.example.com/v1/data/library/allow');
+
 const auth = registerAuth({
   secret: AUTH_SECRET,
   jwt: { issuer: 'https://api.example.com', audience: 'library-api', accessTtlSeconds: 900 },
+  authorization,
   // The in-memory stores are the default. Swap in `repoUserStore(...)` and
   // friends from '@di-framework/auth/repo' to persist.
 });
@@ -69,6 +114,12 @@ secure.post('/notes', async (req) => {
 
 // Marked public even though it sits on the protected router.
 secure.get('/whoami', () => json({ anonymous: true }), { auth: false });
+
+// Authentication runs first. The opaque action is then sent to the registered
+// remote manager, which owns the policy model and returns allow or deny.
+secure.get('/admin', () => json({ ok: true }), {
+  authorization: { metadata: { resource: 'notes', action: 'admin:read' } },
+});
 
 /* -------------------------------------------------------------------------- */
 /* Walk through it                                                            */

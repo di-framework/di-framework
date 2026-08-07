@@ -8,9 +8,10 @@ import {
   Portal,
   SemanticRegistry,
   SemanticType,
-  setRegistry,
   Subscription,
+  setRegistry,
 } from '@di-framework/graphql';
+import { authorizationAllowed, authorizationDenied } from '../src/authorization.ts';
 import { makeContext } from '../src/context.ts';
 import { AuthError } from '../src/errors.ts';
 import {
@@ -20,7 +21,7 @@ import {
   requirePrincipal,
   requireSubject,
 } from '../src/graphql/context.ts';
-import { Authenticated, PublicField } from '../src/graphql/decorators.ts';
+import { Authenticated, Authorize, PublicField } from '../src/graphql/decorators.ts';
 import { protectSchema } from '../src/graphql/protect.ts';
 import {
   assertNotExpired,
@@ -369,6 +370,250 @@ describe('protectSchema', () => {
     expect((await api.execute({ query: '{ health }', context: {} })).data).toEqual({
       health: 'ok',
     });
+  });
+});
+
+describe('GraphQL authorization', () => {
+  beforeEach(() => {
+    setRegistry(new SemanticRegistry());
+    useContainer().clear();
+  });
+
+  function buildAuthorizationFixture(allowed: boolean) {
+    @Authorize({ resource: 'vault', action: 'read' })
+    @SemanticType()
+    class Vault {
+      @Field(() => String)
+      secret(): string {
+        return 'classified';
+      }
+    }
+
+    @Portal()
+    class PolicyPortal {
+      @Field(() => Vault)
+      vault(): Vault {
+        return new Vault();
+      }
+
+      @Authenticated()
+      @Authorize({ action: 'loan:create' })
+      @Action(() => String)
+      borrow(): string {
+        return 'borrowed';
+      }
+
+      @Authorize({ action: 'catalogue:list' }, { allowAnonymous: true })
+      @Field(() => String)
+      policyPublic(): string {
+        return 'public-by-policy';
+      }
+
+      @Authorize({ action: 'events:read' })
+      @Subscription('authorization.event', () => String)
+      onPolicyEvent(): string {
+        return 'event';
+      }
+    }
+
+    const calls: Array<{ principal: unknown; context: unknown }> = [];
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: {
+        authorize(received, context) {
+          calls.push({ principal: received, context });
+          return allowed
+            ? authorizationAllowed()
+            : authorizationDenied('internal policy row 42 rejected the request');
+        },
+      },
+    });
+    return { api, calls };
+  }
+
+  it('enforces field and type decorators and passes opaque metadata', async () => {
+    const { api, calls } = buildAuthorizationFixture(true);
+    const result = await api.execute({
+      query: '{ vault { secret } }',
+      context: { principal },
+    });
+    expect(result.data).toEqual({ vault: { secret: 'classified' } });
+    expect(calls[0]?.principal).toBe(principal);
+    expect(calls[0]?.context).toMatchObject({
+      transport: 'graphql',
+      phase: 'resolve',
+      metadata: { resource: 'vault', action: 'read' },
+    });
+  });
+
+  it('composes with @Authenticated() and rejects anonymous before policy evaluation', async () => {
+    const { api, calls } = buildAuthorizationFixture(true);
+    const denied = await api.execute({ query: 'mutation { borrow }', context: {} });
+    expect(denied.errors?.[0]?.extensions).toMatchObject({ code: 'UNAUTHENTICATED' });
+    expect(calls).toHaveLength(0);
+
+    const allowed = await api.execute({
+      query: 'mutation { borrow }',
+      context: { principal },
+    });
+    expect(allowed.data).toEqual({ borrow: 'borrowed' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('returns a generic FORBIDDEN error without leaking the policy reason', async () => {
+    const { api } = buildAuthorizationFixture(false);
+    const result = await api.execute({
+      query: '{ vault { secret } }',
+      context: { principal },
+    });
+    expect(result.errors?.[0]?.extensions).toMatchObject({
+      code: 'FORBIDDEN',
+      reason: 'access_denied',
+    });
+    expect(result.errors?.[0]?.message).toBe('Access denied');
+    expect(result.errors?.[0]?.message).not.toContain('row 42');
+  });
+
+  it('passes undefined to managers only when anonymous evaluation is explicit', async () => {
+    const { api, calls } = buildAuthorizationFixture(true);
+    const result = await api.execute({ query: '{ policyPublic }', context: {} });
+    expect(result.data).toEqual({ policyPublic: 'public-by-policy' });
+    expect(calls[0]?.principal).toBeUndefined();
+  });
+
+  it('invokes onDeny before an anonymous @Authorize() field rejects', async () => {
+    @Portal()
+    class ProtectedPortal {
+      @Authorize({ action: 'secret:read' })
+      @Field(() => String)
+      secret(): string {
+        return 'never';
+      }
+    }
+
+    const deniedRules: unknown[] = [];
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: { authorize: () => authorizationAllowed() },
+      onDeny: (_field, _context, rule) => {
+        deniedRules.push(rule);
+        throw new AuthError('custom denial');
+      },
+    });
+    const result = await api.execute({ query: '{ secret }', context: {} });
+
+    expect(result.errors?.[0]?.message).toBe('custom denial');
+    expect(deniedRules).toEqual([{}]);
+  });
+
+  it('rejects an unauthenticated read of an @Authorize() field when allowAnonymous is not enabled', async () => {
+    @Portal()
+    class ProtectedPortal {
+      @Authorize({ action: 'secret:read' })
+      @Field(() => String)
+      secret(): string {
+        return 'never';
+      }
+    }
+
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: { authorize: () => authorizationAllowed() },
+    });
+    const result = await api.execute({ query: '{ secret }', context: {} });
+
+    expect(result.errors?.[0]?.extensions).toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+
+  it('uses a field-level manager over the schema-level manager', async () => {
+    const schemaManager = { authorize: () => authorizationDenied('schema manager') };
+    const fieldManager = { authorize: () => authorizationAllowed() };
+
+    @Portal()
+    class ManagerPortal {
+      @Authorize({ action: 'override:read' }, { manager: fieldManager })
+      @Field(() => String)
+      override(): string {
+        return 'allowed';
+      }
+    }
+
+    const api = protectSchema(buildSemanticSchema(), { manager: schemaManager });
+    const result = await api.execute({ query: '{ override }', context: { principal } });
+
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ override: 'allowed' });
+  });
+
+  it('treats @PublicField as an opt-out of type-level authn and authz', async () => {
+    @Authenticated()
+    @Authorize({ action: 'profile:read' })
+    @SemanticType()
+    class Profile {
+      @PublicField()
+      @Field(() => String)
+      label(): string {
+        return 'public';
+      }
+
+      @Field(() => String)
+      secret(): string {
+        return 'private';
+      }
+    }
+
+    @Portal()
+    class ProfilePortal {
+      @Field(() => Profile)
+      profile(): Profile {
+        return new Profile();
+      }
+    }
+
+    const calls: unknown[] = [];
+    const api = protectSchema(buildSemanticSchema(), {
+      manager: {
+        authorize(_principal, context) {
+          calls.push(context);
+          return authorizationDenied('private rule');
+        },
+      },
+    });
+
+    const publicResult = await api.execute({ query: '{ profile { label } }', context: {} });
+    expect(publicResult.data).toEqual({ profile: { label: 'public' } });
+    expect(calls).toHaveLength(0);
+
+    const privateResult = await api.execute({
+      query: '{ profile { secret } }',
+      context: { principal },
+    });
+    expect(privateResult.errors?.[0]?.extensions).toMatchObject({ code: 'FORBIDDEN' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('fails clearly when a decorated field has no manager', async () => {
+    @Portal()
+    class MissingManagerPortal {
+      @Authorize({ action: 'missing' })
+      @Field(() => String)
+      protected(): string {
+        return 'never';
+      }
+    }
+
+    const api = protectSchema(buildSemanticSchema());
+    const result = await api.execute({ query: '{ protected }', context: { principal } });
+    expect(result.errors?.[0]?.message).toContain('No authorization manager registered');
+  });
+
+  it('protects subscription establishment', async () => {
+    const { api, calls } = buildAuthorizationFixture(false);
+    const denied = await api.subscribe({
+      query: 'subscription { onPolicyEvent }',
+      context: { principal },
+    });
+    expect(
+      (denied as { errors?: readonly { extensions?: unknown }[] }).errors?.[0]?.extensions,
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(calls[0]?.context).toMatchObject({ phase: 'subscribe' });
   });
 });
 

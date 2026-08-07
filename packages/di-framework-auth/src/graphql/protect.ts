@@ -1,9 +1,20 @@
 import type { ResolvedField, SemanticSchema } from '@di-framework/graphql';
 import { defaultFieldResolver } from 'graphql';
+import {
+  type AuthorizationContext,
+  type AuthorizationManager,
+  resolveAuthorizationManager,
+} from '../authorization.ts';
 import { AuthError } from '../errors.ts';
 import { hasAmr, type Principal } from '../principal.ts';
+import type { AuthContainer } from '../types.ts';
 import { type AuthGraphQLContext, requirePrincipal } from './context.ts';
-import { type AuthenticatedOptions, authRuleFor } from './decorators.ts';
+import {
+  type AuthenticatedOptions,
+  type AuthorizeRule,
+  authorizationRuleFor,
+  authRuleFor,
+} from './decorators.ts';
 
 /**
  * Enforce `@Authenticated()` by post-processing the built schema.
@@ -33,7 +44,32 @@ export interface ProtectSchemaOptions {
   default?: 'public' | 'authenticated';
   /** Replace the rejection. Must throw. */
   onDeny?: (field: ResolvedField, context: AuthGraphQLContext, rule: AuthenticatedOptions) => never;
+  /** Explicit default authorization manager, or a factory. Resolved from DI when omitted. */
+  manager?:
+    | AuthorizationManager<GraphQLAuthorizationContext>
+    | (() => AuthorizationManager<GraphQLAuthorizationContext>);
+  managerToken?: string;
+  container?: AuthContainer;
+  /** Observe or replace a policy denial. Must throw. */
+  onForbidden?: (
+    field: ResolvedField,
+    context: AuthGraphQLContext,
+    rule: AuthorizeRule,
+    error: AuthError,
+  ) => never;
   now?: () => number;
+}
+
+/** Context supplied to a manager for a GraphQL field or subscription. */
+export interface GraphQLAuthorizationContext<TMetadata = unknown>
+  extends AuthorizationContext<TMetadata> {
+  readonly transport: 'graphql';
+  readonly field: ResolvedField;
+  readonly phase: 'resolve' | 'subscribe';
+  readonly parent: unknown;
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly context: AuthGraphQLContext;
+  readonly info: unknown;
 }
 
 /**
@@ -113,15 +149,64 @@ export function protectSchema(
 
   const guard = (
     field: ResolvedField,
-    rule: AuthenticatedOptions,
+    authRule: AuthenticatedOptions | undefined,
+    authorizationRule: AuthorizeRule | undefined,
+    phase: 'resolve' | 'subscribe',
     inner: AnyResolver,
   ): AnyResolver =>
     // biome-ignore lint/suspicious/noExplicitAny: positional graphql-js signature.
-    function guarded(this: unknown, parent: any, args: any, context: any, info: any) {
+    async function guarded(this: unknown, parent: any, args: any, context: any, info: any) {
       const ctx = context as AuthGraphQLContext;
-      if (!ctx?.principal && options.onDeny) options.onDeny(field, ctx, rule);
-      const principal = requirePrincipal(ctx);
-      assertAuthStrength(principal, rule, now);
+      if (authRule) {
+        if (!ctx?.principal && options.onDeny) options.onDeny(field, ctx, authRule);
+        const principal = requirePrincipal(ctx);
+        assertAuthStrength(principal, authRule, now);
+      }
+
+      if (authorizationRule) {
+        const principal = ctx?.principal;
+        if (!principal && !authorizationRule.allowAnonymous) {
+          if (options.onDeny) options.onDeny(field, ctx, {});
+          requirePrincipal(ctx);
+        }
+
+        const manager = resolveAuthorizationManager<GraphQLAuthorizationContext>({
+          ...(authorizationRule.manager
+            ? {
+                manager:
+                  authorizationRule.manager as AuthorizationManager<GraphQLAuthorizationContext>,
+              }
+            : options.manager
+              ? { manager: options.manager }
+              : {}),
+          ...(options.managerToken ? { managerToken: options.managerToken } : {}),
+          ...(options.container ? { container: options.container } : {}),
+        });
+        const result = await manager.authorize(principal, {
+          transport: 'graphql',
+          metadata: authorizationRule.metadata,
+          field,
+          phase,
+          parent,
+          args,
+          context: ctx,
+          info,
+        });
+        if (!result.allowed) {
+          const error = AuthError.forbidden(
+            result.reason ?? 'Authorization manager denied GraphQL field access',
+            result.reason === undefined && result.detail === undefined
+              ? undefined
+              : {
+                  ...(result.reason === undefined ? {} : { reason: result.reason }),
+                  detail: result.detail,
+                },
+          );
+          if (options.onForbidden) options.onForbidden(field, ctx, authorizationRule, error);
+          throw error.redacted();
+        }
+      }
+
       return inner.call(this, parent, args, context, info);
     };
 
@@ -137,7 +222,8 @@ export function protectSchema(
 
     for (const field of fields) {
       const rule = authRuleFor(field.source.target, field.source.propertyKey, fallback);
-      if (!rule) continue;
+      const authorizationRule = authorizationRuleFor(field.source.target, field.source.propertyKey);
+      if (!rule && !authorizationRule) continue;
 
       const target = executable[field.name];
       if (!target) continue;
@@ -148,15 +234,30 @@ export function protectSchema(
         // the connection itself must be refused.
         const subscribe = (target as { subscribe?: AnyResolver }).subscribe;
         if (typeof subscribe === 'function') {
-          (target as { subscribe?: AnyResolver }).subscribe = guard(field, rule, subscribe);
+          (target as { subscribe?: AnyResolver }).subscribe = guard(
+            field,
+            rule,
+            authorizationRule,
+            'subscribe',
+            subscribe,
+          );
         }
       }
 
       const resolve = (target.resolve ?? defaultFieldResolver) as AnyResolver;
-      target.resolve = guard(field, rule, resolve) as typeof target.resolve;
+      target.resolve = guard(
+        field,
+        rule,
+        authorizationRule,
+        'resolve',
+        resolve,
+      ) as typeof target.resolve;
       target.extensions = {
         ...target.extensions,
-        diFrameworkAuth: { authenticated: true, rule },
+        diFrameworkAuth: {
+          ...(rule ? { authenticated: true, rule } : {}),
+          ...(authorizationRule ? { authorized: true, authorizationRule } : {}),
+        },
       };
     }
   };

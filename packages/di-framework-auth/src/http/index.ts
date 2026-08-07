@@ -1,3 +1,10 @@
+export {
+  type AuthorizationGuardOptions,
+  authorize,
+  type HttpAuthorizationContext,
+  requireAuthz,
+  runAuthorizationGuard,
+} from './authorization.ts';
 export { type AuthErrorHandlerOptions, authErrorHandler, withAuthErrors } from './catch.ts';
 export {
   type AuthGuardOptions,
@@ -30,6 +37,9 @@ export {
   type AuthedRoute,
   type AuthedRouteOptions,
   type AuthedRouter,
+  type AuthedRouterDefaults,
+  DEFERRED_AUTHORIZATION,
+  type DeferredAuthorizationBinder,
   mountAuthRoutes,
   type OptionalAuthedRequest,
   optional,

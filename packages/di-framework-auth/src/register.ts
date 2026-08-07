@@ -1,5 +1,6 @@
 import { useContainer } from '@di-framework/core/container';
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
+import type { AuthorizationManager } from './authorization.ts';
 import { chain } from './chain.ts';
 import type { CookieAttributes } from './cookies.ts';
 import { deriveHmacKey, KDF_LABELS, toSecretBytes } from './crypto/kdf.ts';
@@ -35,6 +36,7 @@ import {
   AUTH_TOKEN_SERVICE,
   AUTH_USERS,
   AUTH_WEBAUTHN,
+  AUTHORIZATION_MANAGER,
 } from './tokens.ts';
 import type { AuthContainer, AuthStrategy } from './types.ts';
 import { type WebAuthnService, webAuthnService } from './webauthn/service.ts';
@@ -89,6 +91,8 @@ export interface RegisterAuthOptions {
   webauthn?: WebAuthnConfig;
   /** Strategies to compose. Defaults to session + bearer (when `jwt` is set). */
   strategies?: readonly AuthStrategy[];
+  /** Pluggable policy decision point used by `@Authorize()` and `requireAuthz()`. */
+  authorization?: AuthorizationManager;
   now?: () => number;
 }
 
@@ -110,6 +114,7 @@ export interface AuthRuntime {
   sessions: SessionManager;
   passwords: PasswordService;
   strategy: AuthStrategy;
+  authorization?: AuthorizationManager;
   csrf?: CsrfGuard;
   tokens?: TokenService;
   refresh?: RefreshService;
@@ -261,6 +266,7 @@ export function registerAuth(options: RegisterAuthOptions = {}): AuthRuntime {
     sessions,
     passwords,
     strategy,
+    ...(options.authorization ? { authorization: options.authorization } : {}),
     cookie: options.cookie ?? {},
     ...(csrf ? { csrf } : {}),
     ...(tokens ? { tokens } : {}),
@@ -281,6 +287,9 @@ export function registerAuth(options: RegisterAuthOptions = {}): AuthRuntime {
   register(container, AUTH_SESSION_MANAGER, sessions);
   register(container, AUTH_PASSWORD_SERVICE, passwords);
   register(container, AUTH_STRATEGY, strategy);
+  if (options.authorization) {
+    register(container, AUTHORIZATION_MANAGER, options.authorization);
+  }
   if (csrf) register(container, AUTH_CSRF, csrf);
   if (tokens) register(container, AUTH_TOKEN_SERVICE, tokens);
   if (refresh) register(container, AUTH_REFRESH_SERVICE, refresh);

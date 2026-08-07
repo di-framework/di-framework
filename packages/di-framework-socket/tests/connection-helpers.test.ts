@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { createPlainConnection } from '../src/adapters/connection-helpers.ts';
 import { textFrame } from '../index.ts';
+import { createPlainConnection } from '../src/adapters/connection-helpers.ts';
 
 describe('createPlainConnection', () => {
   it('dispatches messages and close events to registered handlers', () => {

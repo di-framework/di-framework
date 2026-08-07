@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
-import { auth, router, runAuthMain } from './index.ts';
+import { auth, opaAuthorizationManager, router, runAuthMain } from './index.ts';
 
 describe('auth example', () => {
   it('refuses an unauthenticated request', async () => {
@@ -86,6 +86,66 @@ describe('auth example', () => {
       }),
     );
     expect(response.status).toBe(200);
+  });
+
+  it('serves the remotely authorized admin route', async () => {
+    const manager = auth.authorization;
+    if (!manager || !auth.tokens) throw new Error('Auth example is missing authorization or JWT');
+    const authorize = manager.authorize;
+    manager.authorize = async () => ({ allowed: true });
+    try {
+      const { token } = await auth.tokens.issueAccessToken({ subject: 'admin' });
+      const response = await router.fetch(
+        new Request('https://api.example.com/admin', {
+          headers: { authorization: `Bearer ${token}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()) as { ok: boolean }).toEqual({ ok: true });
+    } finally {
+      manager.authorize = authorize;
+    }
+  });
+
+  it('shows an OPA-shaped remote authorization manager', async () => {
+    let body: unknown;
+    const manager = opaAuthorizationManager(
+      'https://opa.example/v1/data/library/allow',
+      async (_input, init) => {
+        body = JSON.parse(String(init?.body));
+        return Response.json({ result: true });
+      },
+    );
+
+    const decision = await manager.authorize(
+      { sub: 'u1', method: 'session', authTime: 1 },
+      { transport: 'http', metadata: { resource: 'notes', action: 'admin:read' } },
+    );
+    expect(decision).toEqual({ allowed: true });
+    expect(body).toMatchObject({
+      input: {
+        principal: { sub: 'u1' },
+        metadata: { resource: 'notes', action: 'admin:read' },
+      },
+    });
+  });
+
+  it('denies unavailable and non-allow policy decisions', async () => {
+    const unavailable = opaAuthorizationManager(
+      'https://opa.example/v1/data/library/allow',
+      async () => new Response(null, { status: 503 }),
+    );
+    expect(
+      await unavailable.authorize(undefined, { transport: 'http', metadata: { action: 'read' } }),
+    ).toEqual({ allowed: false, reason: 'Policy agent returned HTTP 503' });
+
+    const rejected = opaAuthorizationManager(
+      'https://opa.example/v1/data/library/allow',
+      async () => Response.json({ result: false }),
+    );
+    expect(
+      await rejected.authorize(undefined, { transport: 'http', metadata: { action: 'read' } }),
+    ).toEqual({ allowed: false, reason: 'Policy agent returned a non-allow decision' });
   });
 
   // Runs the full walkthrough via the injectable CLI gate (covers `main()` and

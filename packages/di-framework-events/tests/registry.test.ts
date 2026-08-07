@@ -12,9 +12,7 @@ describe('EventBridgeRegistry', () => {
   it('exposes getTargets() for all registered targets', () => {
     registry.addTarget(FakeTarget);
     registry.addTarget(OtherTarget);
-    expect(registry.getTargets()).toEqual(
-      expect.arrayContaining([FakeTarget, OtherTarget]),
-    );
+    expect(registry.getTargets()).toEqual(expect.arrayContaining([FakeTarget, OtherTarget]));
   });
 
   it('getRegistry() returns the shared singleton', () => {

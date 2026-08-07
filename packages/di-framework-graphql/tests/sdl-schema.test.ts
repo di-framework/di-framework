@@ -218,7 +218,9 @@ describe('SDL printer - default value literal formatting', () => {
       @Portal()
       class Query {
         @Field(() => String)
-        testCyclicDefault(@Arg('cyclicArg', () => String, { defaultValue: cyclic }) _c: any): string {
+        testCyclicDefault(
+          @Arg('cyclicArg', () => String, { defaultValue: cyclic }) _c: any,
+        ): string {
           return 'ok';
         }
       }
@@ -237,9 +239,7 @@ describe('SDL printer - default value literal formatting', () => {
       @Portal()
       class Query {
         @Field(() => String)
-        testDeepDefault(
-          @Arg('deepArg', () => [String], { defaultValue: deep }) _d: any,
-        ): string {
+        testDeepDefault(@Arg('deepArg', () => [String], { defaultValue: deep }) _d: any): string {
           return 'ok';
         }
       }

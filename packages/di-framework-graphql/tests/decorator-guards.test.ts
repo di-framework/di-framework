@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { Arg, Connection, Field, Lookup, Portal, registerEnum, SemanticType } from '../src/decorators.ts';
+import { Arg, Connection, Field, Lookup, Portal } from '../src/decorators.ts';
 import { SemanticSchemaError } from '../src/errors.ts';
 import { withRegistry } from './helpers.ts';
 

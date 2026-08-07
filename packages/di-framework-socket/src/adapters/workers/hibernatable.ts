@@ -218,8 +218,12 @@ export class HibernatableSocketHub {
       const plain = createPlainConnection({
         protocol: 'websocket',
         mode: 'plain',
-        send(frame) { duplex.send(frame); },
-        close(code, reason) { duplex.close?.(code, reason); },
+        send(frame) {
+          duplex.send(frame);
+        },
+        close(code, reason) {
+          duplex.close?.(code, reason);
+        },
       });
       duplex.onMessage((frame) => plain.dispatchMessage(frame));
       this.live.set(ws, { ws, duplex, connection: plain.connection, plain });
@@ -236,10 +240,18 @@ export class HibernatableSocketHub {
         id: 'pending',
         protocol: 'websocket',
         securityMode: 'secure',
-        send() { throw new Error('Secure handshake not finished'); },
-        close(code, reason) { duplex.close?.(code, reason); },
-        onMessage() { return () => {}; },
-        onClose() { return () => {}; },
+        send() {
+          throw new Error('Secure handshake not finished');
+        },
+        close(code, reason) {
+          duplex.close?.(code, reason);
+        },
+        onMessage() {
+          return () => {};
+        },
+        onClose() {
+          return () => {};
+        },
       },
     };
     this.live.set(ws, pending);
@@ -260,8 +272,12 @@ export class HibernatableSocketHub {
       const plain = createPlainConnection({
         protocol: 'websocket',
         mode: 'plain',
-        send(frame) { duplex.send(frame); },
-        close(code, reason) { duplex.close?.(code, reason); },
+        send(frame) {
+          duplex.send(frame);
+        },
+        close(code, reason) {
+          duplex.close?.(code, reason);
+        },
       });
       duplex.onMessage((frame) => plain.dispatchMessage(frame));
       this.live.set(ws, { ws, duplex, connection: plain.connection, plain });
