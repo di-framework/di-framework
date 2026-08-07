@@ -22,6 +22,8 @@ async function makePublishWorkspace(): Promise<string> {
       JSON.stringify({
         name: `@test/${pkgDir.split('/').pop()}`,
         version: '1.0.0',
+        peerDependencies: { '@di-framework/core': 'workspace:*' },
+        dependencies: { '@di-framework/core': 'workspace:^', other: '1.0.0' },
       }) + '\n',
     );
     // So `bun test ${pkgDir}` finds a passing file.
