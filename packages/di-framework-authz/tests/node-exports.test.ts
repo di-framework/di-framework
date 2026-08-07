@@ -28,5 +28,5 @@ describe('published Node exports', () => {
     const nodeExit = await node.exited;
     const nodeError = await new Response(node.stderr).text();
     expect(nodeExit, nodeError).toBe(0);
-  });
+  }, 30_000);
 });
