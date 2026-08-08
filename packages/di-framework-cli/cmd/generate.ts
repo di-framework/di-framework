@@ -1,7 +1,7 @@
 import { generate } from '@di-framework/codegen';
 
-export async function generateCommand() {
-  const args = process.argv.slice(3);
+export async function generateCommand(rawArgs: string[] = process.argv.slice(3)) {
+  const args = rawArgs.length > 0 ? rawArgs : process.argv.slice(3);
 
   let configPath: string | undefined;
   let init = false;
