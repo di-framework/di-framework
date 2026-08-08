@@ -2,6 +2,15 @@
 
 This guide will walk you through the basic concepts of the DI framework with simple examples.
 
+To scaffold a ready-to-run app instead of pasting these snippets by hand:
+
+```bash
+bun x @di-framework/cli init my-api
+cd my-api && bun install && bun run dev
+```
+
+See [CLI](cli.md) for `check`, `build`, and options. The sections below cover the same concepts the scaffold uses.
+
 ## 1. Basic Service
 
 The simplest way to use the framework is to mark a class with the `@Container()` decorator:
@@ -155,6 +164,8 @@ console.log(user);
 
 ## Next Steps
 
+- [CLI](cli.md) - App `init` / `check` / `build` and maintainer `mx`
+- [Runtime type checks](tsc.md) - Optional emit-time parameter guards
 - [API Reference](api-reference.md) - Learn about all available APIs and options
 - [Advanced Usage](advanced-usage.md) - Explore advanced patterns like transient services and factory functions
 - [Best Practices](best-practices.md) - Learn recommended patterns and approaches

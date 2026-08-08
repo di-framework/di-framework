@@ -18,6 +18,7 @@ npm i @di-framework/core
 - `packages/di-framework-rpc` - decorator-generated JSON-RPC and per-method gRPC / Connect
 - `packages/di-framework-ai` - Spring AI–aligned chat, tools, RAG, MCP, and agents
 - `packages/di-framework-cli` - app CLI (`init`, `build`, `check`) + maintainer `mx`
+- `packages/di-framework-tsc` - optional `ttsc` transform for runtime parameter checks
 - `examples` - usage examples
 
 ## CLI
