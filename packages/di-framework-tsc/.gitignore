@@ -1,0 +1,6 @@
+*.tgz
+node_modules/
+fixture/node_modules/
+fixture/dist/
+fixture/bun.lock
+

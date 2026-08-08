@@ -1,35 +1,60 @@
 # @di-framework/cli
 
-Monorepo tooling for `@di-framework` (`build`, `test`, `typecheck`, `publish`).
+CLI for apps built with `@di-framework/*`. Monorepo maintainer actions live under **`mx`**.
 
 Requires [Bun](https://bun.sh). The package ships TypeScript source as the `bin` entry — no platform-specific compiled binary.
 
-## Usage
-
-### Link (from the monorepo)
+## Install
 
 ```bash
-cd packages/di-framework-cli
-bun link
+bun add -d @di-framework/cli
+# or one-shot:
+bun x @di-framework/cli <command>
 ```
 
+From this monorepo:
+
 ```bash
+cd packages/di-framework-cli && bun link
 di-framework <command> [args...]
 ```
 
-### Run without linking
+## App commands
+
+| Command | Description |
+| ------- | ----------- |
+| **`init [name]`** | Scaffold a new app (`package.json`, decorator-ready `tsconfig`, sample `src/index.ts`) |
+| **`build`** | Run the project’s `build` script, or `tsc -p tsconfig.json` if none |
+| **`check`** | Typecheck with the nearest `tsconfig.json` (`tsc --noEmit`) |
 
 ```bash
-bun run packages/di-framework-cli/main.ts <command> [args...]
+di-framework init my-api
+cd my-api && bun install && bun run dev
+
+di-framework check
+di-framework build
 ```
 
-### Available commands
+### `init` options
 
-- **`build`** — build packages and sync versions
-- **`test`** — E2E test suite
-- **`typecheck`** — TypeScript project checks
-- **`publish`** — publish packages to npm
+```
+di-framework init [name] [--dir path] [--name pkg-name] [--force]
+```
+
+## Maintainer commands (`mx`)
+
+Used only inside the **di-framework monorepo** (publish, package graph build, E2E):
+
+```bash
+di-framework mx build       # build packages + sync versions
+di-framework mx test        # monorepo E2E suite
+di-framework mx typecheck   # language-service typecheck
+di-framework mx publish     # test → build → npm publish
+```
+
+Legacy top-level `test` / `typecheck` / `publish` still redirect to `mx` with a note.
 
 ## Adding commands
 
-Add a module under `cmd/` and register it in `main.ts`.
+- App-facing: add a module under `cmd/` and register it in `main.ts`.
+- Maintainer: add under `cmd/mx/` and register in `cmd/mx.ts`.

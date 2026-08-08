@@ -17,7 +17,7 @@ npm i @di-framework/core
 - `packages/di-framework-socket` - security-first WebSocket / TCP / UDP (WebCrypto secure channel)
 - `packages/di-framework-rpc` - decorator-generated JSON-RPC and per-method gRPC / Connect
 - `packages/di-framework-ai` - Spring AI–aligned chat, tools, RAG, MCP, and agents
-- `packages/di-framework-cli` - `di-framework-core` cli (build, test, typecheck, publish)
+- `packages/di-framework-cli` - app CLI (`init`, `build`, `check`) + maintainer `mx`
 - `examples` - usage examples
 
 ## CLI
@@ -28,12 +28,18 @@ npm i @di-framework/core
 di-framework <command>
 ```
 
-| Command     | Description                                                           |
-| ----------- | --------------------------------------------------------------------- |
-| `test`      | Runs the E2E test suite (type checks, unit tests, example validation) |
-| `build`     | Builds all packages and syncs versions from the workspace root        |
-| `typecheck` | Runs `tsc --noEmit` across all packages                               |
-| `publish`   | Tests, builds, and publishes all packages to npm                      |
+| Command   | Description |
+| --------- | ----------- |
+| `init`    | Scaffold a new di-framework application |
+| `build`   | Build the current app (`package.json` script or `tsc`) |
+| `check`   | Typecheck the current app |
+| `mx …`    | Maintainer tools for this monorepo (`build`, `test`, `typecheck`, `publish`) |
+
+```bash
+di-framework init my-api
+di-framework check
+di-framework mx build    # monorepo maintainers
+```
 
 ## Simple Example
 
