@@ -1,0 +1,69 @@
+{
+  "name": "@di-framework/tsc",
+  "version": "0.1.0",
+  "description": "ttsc transform that injects runtime parameter checks from TypeScript types (assertAll)",
+  "author": "@di-framework Contributors",
+  "license": "MIT",
+  "private": false,
+  "type": "commonjs",
+  "main": "plugin.cjs",
+  "exports": {
+    ".": "./plugin.cjs"
+  },
+  "bin": {
+    "dtsc": "bin/dtsc.cjs"
+  },
+  "ttsc": {
+    "plugin": {
+      "transform": "@di-framework/tsc"
+    }
+  },
+  "files": [
+    "bin",
+    "plugin.cjs",
+    "plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ttsc",
+    "ttsc-plugin",
+    "tsgo",
+    "typescript",
+    "runtime-checks",
+    "assertAll"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-tsc"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "peerDependencies": {
+    "ttsc": ">=0.25.0",
+    "typescript": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ttsc": {
+      "optional": false
+    },
+    "typescript": {
+      "optional": false
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun -e \"console.log('@di-framework/tsc: plugin package (plugin.cjs + Go sidecar), no TS5 compile step')\"",
+    "pack:check": "npm pack --dry-run",
+    "test": "bun test",
+    "smoke": "bun run --cwd fixture smoke"
+  }
+}

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PACKAGES } from '../cmd/publish';
+import { PACKAGES } from '../cmd/mx/publish';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 const REAL_BUN = process.execPath;
@@ -34,9 +34,9 @@ async function makePublishWorkspace(): Promise<string> {
   }
 
   // Stub the build entrypoint invoked by publish().
-  mkdirSync(join(root, 'packages/di-framework-cli/cmd'), { recursive: true });
+  mkdirSync(join(root, 'packages/di-framework-cli/cmd/mx'), { recursive: true });
   await Bun.write(
-    join(root, 'packages/di-framework-cli/cmd/build.ts'),
+    join(root, 'packages/di-framework-cli/cmd/mx/build.ts'),
     'console.log("fake build");\n',
   );
 
@@ -74,7 +74,7 @@ async function runPublishInChild(
   const runner = join(cwd, '_run_publish.ts');
   await Bun.write(
     runner,
-    `import { publish } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'publish.ts'))};
+    `import { publish } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'mx', 'publish.ts'))};
 await publish();
 `,
   );
@@ -124,10 +124,11 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-rpc');
       expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-cli');
+      expect(PACKAGES).toContain('packages/di-framework-tsc');
     });
 
     it('matches the build command PACKAGES list', async () => {
-      const { PACKAGES: BUILD_PACKAGES } = await import('../cmd/build');
+      const { PACKAGES: BUILD_PACKAGES } = await import('../cmd/mx/build');
       expect(PACKAGES).toEqual(BUILD_PACKAGES);
     });
 
@@ -156,9 +157,9 @@ describe('publish command', () => {
 
   describe('publish pipeline order', () => {
     it('runs tests before build in the source', async () => {
-      const source = await Bun.file(join(import.meta.dir, '..', 'cmd', 'publish.ts')).text();
+      const source = await Bun.file(join(import.meta.dir, '..', 'cmd', 'mx', 'publish.ts')).text();
       const testIndex = source.indexOf('bun test');
-      const buildIndex = source.indexOf('bun run packages/di-framework-cli/cmd/build.ts');
+      const buildIndex = source.indexOf('bun run packages/di-framework-cli/cmd/mx/build.ts');
       const publishIndex = source.indexOf('bun publish');
 
       expect(testIndex).toBeGreaterThan(-1);
@@ -211,13 +212,13 @@ describe('publish command', () => {
             resolve({ exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() });
           },
         };
-      }) as import('../cmd/publish').PublishShell;
+      }) as import('../cmd/mx/publish').PublishShell;
 
       try {
         process.chdir(root);
         const log = spyOn(console, 'log').mockImplementation(() => {});
         const err = spyOn(console, 'error').mockImplementation(() => {});
-        const { publish } = await import('../cmd/publish');
+        const { publish } = await import('../cmd/mx/publish');
         await publish(fakeShell);
         expect(err.mock.calls.some((c) => String(c[0]).includes('Failed to publish'))).toBe(true);
         expect(log.mock.calls.some((c) => String(c[0]).includes('Published'))).toBe(true);
@@ -234,7 +235,7 @@ describe('publish command', () => {
 
   describe('CLI entrypoint', () => {
     it('handlePublishFailure logs and exits 1', () => {
-      const { handlePublishFailure } = require('../cmd/publish');
+      const { handlePublishFailure } = require('../cmd/mx/publish');
       const err = spyOn(console, 'error').mockImplementation(() => {});
       const originalExit = process.exit;
       let code: number | undefined;
@@ -253,7 +254,7 @@ describe('publish command', () => {
     });
 
     it('runPublishMain invokes start only when isMain is true', async () => {
-      const { runPublishMain } = await import('../cmd/publish');
+      const { runPublishMain } = await import('../cmd/mx/publish');
       let calls = 0;
       const start = async () => {
         calls++;
@@ -267,7 +268,7 @@ describe('publish command', () => {
     it('exits with code 1 when publish fails under import.meta.main', async () => {
       const empty = mkdtempSync(join(tmpdir(), 'publish-main-fail-'));
       temps.push(empty);
-      const proc = Bun.spawn([REAL_BUN, join(import.meta.dir, '..', 'cmd', 'publish.ts')], {
+      const proc = Bun.spawn([REAL_BUN, join(import.meta.dir, '..', 'cmd', 'mx', 'publish.ts')], {
         cwd: empty,
         stdout: 'pipe',
         stderr: 'pipe',

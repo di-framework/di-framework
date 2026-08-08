@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
 // @ts-expect-error — static import embeds the file at compile time
-import E2E_SCRIPT from '../scripts/e2e-test.sh' with { type: 'text' };
+import E2E_SCRIPT from '../../scripts/e2e-test.sh' with { type: 'text' };
 
 export async function test(script: string = E2E_SCRIPT) {
   const tmp = join(tmpdir(), `di-framework-e2e-${process.pid}.sh`);

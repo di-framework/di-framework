@@ -7,6 +7,17 @@ The core package has no runtime dependencies and works with SWC and TypeScript's
 - TypeScript 5.0 or higher
 - SWC or TypeScript compiler with decorator support enabled
 
+## Scaffold an app (recommended)
+
+The fastest path is the app CLI:
+
+```bash
+bun x @di-framework/cli init my-api
+cd my-api && bun install && bun run dev
+```
+
+That writes a decorator-ready `tsconfig.json`, `package.json`, and a sample `src/index.ts`. See [CLI](cli.md) for `check` / `build` and options.
+
 ## Install the Package
 
 ```bash
@@ -117,6 +128,8 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 
 | Package | Docs |
 | --- | --- |
+| `@di-framework/cli` | [CLI](cli.md) |
+| `@di-framework/tsc` | [Runtime type checks](tsc.md) |
 | `@di-framework/repo` | [Repositories](repositories.md) |
 | `@di-framework/http` | [HTTP Router](http-router.md) |
 | `@di-framework/graphql` | [GraphQL](graphql.md) |
@@ -133,4 +146,5 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 Now that you have the framework installed, learn how to use it:
 
 - [Quick Start](quick-start.md) - Learn the basics with simple examples
+- [CLI](cli.md) - App `init` / `check` / `build` and maintainer `mx`
 - [API Reference](api-reference.md) - Complete API documentation

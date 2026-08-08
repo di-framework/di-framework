@@ -13,12 +13,12 @@
     "examples/packages/*"
   ],
   "scripts": {
-    "build": "bun run packages/di-framework-cli/cmd/build.ts",
+    "build": "bun run packages/di-framework-cli/main.ts mx build",
     "test:all": "bun --filter=* run test",
     "test": "bun test",
-    "publish": "bun run packages/di-framework-cli/cmd/publish.ts",
+    "publish": "bun run packages/di-framework-cli/main.ts mx publish",
     "link-cli": "(cd packages/di-framework-cli && bun link >/dev/null 2>&1)",
-    "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework <command> [args...]'",
+    "postinstall": "git config core.hooksPath .githooks && bun link-cli && echo 'di-framework init | build | check  (mx: maintainers)'",
     "tsc": "tsc",
     "lint": "biome check .",
     "typecheck": "bun x tsc -b --noEmit",

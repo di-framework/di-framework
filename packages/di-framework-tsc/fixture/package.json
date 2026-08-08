@@ -1,0 +1,15 @@
+{
+  "name": "@di-framework/tsc-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Isolated ttsc + TypeScript 7 smoke fixture for @di-framework/tsc (not part of the TS5 workspace graph)",
+  "scripts": {
+    "smoke": "rm -rf dist && ttsc --emit && node ../scripts/check-emit.cjs",
+    "smoke:dtsc": "rm -rf dist && dtsc --emit && node ../scripts/check-emit.cjs"
+  },
+  "devDependencies": {
+    "@di-framework/tsc": "file:..",
+    "ttsc": ">=0.25.0",
+    "typescript": "^7.0.2"
+  }
+}

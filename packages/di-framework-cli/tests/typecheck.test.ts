@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { findTopmostTsconfig, parseArgs } from '../cmd/typecheck';
+import { findTopmostTsconfig, parseArgs } from '../cmd/mx/typecheck';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
@@ -123,7 +123,7 @@ describe('typecheck command', () => {
         );
         await Bun.write(join(dir, 'src', 'ok.ts'), 'export const ok: number = 1;\n');
 
-        const { typecheck } = await import('../cmd/typecheck');
+        const { typecheck } = await import('../cmd/mx/typecheck');
         const originalArgv = process.argv;
         const log = spyOn(console, 'log').mockImplementation(() => {});
         const err = spyOn(console, 'error').mockImplementation(() => {});
@@ -142,7 +142,7 @@ describe('typecheck command', () => {
     );
 
     it('exits 2 when the tsconfig path cannot be read', async () => {
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -157,7 +157,7 @@ describe('typecheck command', () => {
     it('exits 2 when no tsconfig.json can be found', async () => {
       const empty = mkdtempSync(join(tmpdir(), 'typecheck-none-'));
       temps.push(empty);
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -179,7 +179,7 @@ describe('typecheck command', () => {
       temps.push(dir);
       await Bun.write(join(dir, 'tsconfig.json'), '{ not json');
 
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -209,7 +209,7 @@ describe('typecheck command', () => {
         })}\n`,
       );
 
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -241,7 +241,7 @@ describe('typecheck command', () => {
       );
       await Bun.write(join(dir, 'broken.ts'), 'const n: number = "not-a-number";\n');
 
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const err = spyOn(console, 'error').mockImplementation(() => {});
       const log = spyOn(console, 'log').mockImplementation(() => {});
@@ -288,7 +288,7 @@ describe('typecheck command', () => {
       );
       await Bun.write(join(dir, 'src', 'ok.ts'), 'export const ok: number = 1;\n');
 
-      const { typecheck } = await import('../cmd/typecheck');
+      const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
@@ -327,7 +327,7 @@ describe('typecheck command', () => {
         const fakeScript = join(dir, 'nested', 'typecheck.ts');
         await Bun.write(fakeScript, '// placeholder\n');
 
-        const { typecheck } = await import('../cmd/typecheck');
+        const { typecheck } = await import('../cmd/mx/typecheck');
         const originalArgv = process.argv;
         const log = spyOn(console, 'log').mockImplementation(() => {});
         const err = spyOn(console, 'error').mockImplementation(() => {});
@@ -348,7 +348,7 @@ describe('typecheck command', () => {
 
   describe('CLI entrypoint', () => {
     it('handleTypecheckFailure logs and exits 2', async () => {
-      const { handleTypecheckFailure } = await import('../cmd/typecheck');
+      const { handleTypecheckFailure } = await import('../cmd/mx/typecheck');
       const err = spyOn(console, 'error').mockImplementation(() => {});
       const originalExit = process.exit;
       let code: number | undefined;
@@ -367,7 +367,7 @@ describe('typecheck command', () => {
     });
 
     it('runTypecheckMain invokes start only when isMain is true', async () => {
-      const { runTypecheckMain } = await import('../cmd/typecheck');
+      const { runTypecheckMain } = await import('../cmd/mx/typecheck');
       let calls = 0;
       const start = async () => {
         calls++;
@@ -384,7 +384,7 @@ describe('typecheck command', () => {
       const proc = Bun.spawn(
         [
           process.execPath,
-          join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
+          join(import.meta.dir, '..', 'cmd', 'mx', 'typecheck.ts'),
           'nope.json',
           '--pretty=0',
         ],
@@ -413,7 +413,7 @@ describe('typecheck command', () => {
           process.execPath,
           '--preload',
           preload,
-          join(import.meta.dir, '..', 'cmd', 'typecheck.ts'),
+          join(import.meta.dir, '..', 'cmd', 'mx', 'typecheck.ts'),
           join(dir, 'tsconfig.json'),
           '--pretty=0',
         ],

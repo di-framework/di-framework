@@ -1,11 +1,12 @@
 {
   "name": "@di-framework/cli",
   "version": "4.1.1",
+  "description": "CLI for di-framework apps (init, build, check) and monorepo maintainers (mx)",
   "private": false,
   "type": "module",
   "main": "main.ts",
   "license": "MIT",
-  "author": "@@di-framework Contributors",
+  "author": "@di-framework Contributors",
   "repository": {
     "type": "git",
     "url": "https://github.com/di-framework/di-framework",

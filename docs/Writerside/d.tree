@@ -9,6 +9,8 @@
     <toc-element topic="overview.md"/>
     <toc-element topic="installation.md"/>
     <toc-element topic="quick-start.md"/>
+    <toc-element topic="cli.md"/>
+    <toc-element topic="tsc.md"/>
     <toc-element topic="repositories.md"/>
     <toc-element topic="http-router.md"/>
     <toc-element topic="graphql.md"/>
