@@ -263,9 +263,9 @@ describe('sessionManager', () => {
     const second = await sessions.regenerate(first.token);
 
     expect(second).not.toBeNull();
-    expect(second!.token).not.toBe(first.token);
+    expect(second?.token).not.toBe(first.token);
     expect((await sessions.resolve(first.token)).state).toBe('not-found');
-    expect((await sessions.resolve(second!.token)).state).toBe('active');
+    expect((await sessions.resolve(second?.token)).state).toBe('active');
   });
 
   it('preserves authTime across regeneration', async () => {
@@ -277,7 +277,7 @@ describe('sessionManager', () => {
     const first = await sessions.create({ subject: 'u1' });
     clock += 500;
     const second = await sessions.regenerate(first.token);
-    expect(second!.record.authTime).toBe(first.record.authTime);
+    expect(second?.record.authTime).toBe(first.record.authTime);
   });
 
   it('does not regenerate expired or inactive sessions', async () => {
@@ -361,8 +361,8 @@ describe('passwordService', () => {
       password: 'correct horse battery',
     });
     const stored = await users.findById(user.id);
-    expect(stored!.webauthnUserHandle).toBeDefined();
-    expect(stored!.webauthnUserHandle).not.toContain('ada');
+    expect(stored?.webauthnUserHandle).toBeDefined();
+    expect(stored?.webauthnUserHandle).not.toContain('ada');
   });
 
   // A login endpoint that distinguishes "no such user" from "wrong password" is
@@ -468,7 +468,9 @@ describe('passwordService', () => {
     });
     await weak.createUser({ identifier: 'ada@example.com', password: 'correct horse battery' });
     const before = (await credentials.findPassword(
-      (await users.findByIdentifier('ada@example.com'))!.id,
+      (
+        await users.findByIdentifier('ada@example.com')
+      )?.id,
     ))!;
     expect(before.hash).toContain('i=1000');
 
@@ -479,7 +481,9 @@ describe('passwordService', () => {
     });
     await strong.login('ada@example.com', 'correct horse battery');
     const after = (await credentials.findPassword(
-      (await users.findByIdentifier('ada@example.com'))!.id,
+      (
+        await users.findByIdentifier('ada@example.com')
+      )?.id,
     ))!;
     expect(after.hash).toContain('i=5000');
   });

@@ -1,21 +1,39 @@
+export {
+  type CreateGrpcHandlerOptions,
+  createGrpcHandler,
+  createGrpcRoutes,
+  type GrpcTransportOptions,
+  grpcTransport,
+} from './src/adapters/grpc.ts';
+export {
+  type CreateHttpRpcHandlerOptions,
+  createHttpRpcHandler,
+  type HttpRpcTransportOptions,
+  httpTransport,
+} from './src/adapters/http.ts';
 export { type MemoryPairOptions, type MemoryRpcPair, memoryPair } from './src/adapters/memory.ts';
-export { createRpcClient, RpcRemoteError } from './src/client.ts';
+export { createRpcClient, PushStream, RpcRemoteError } from './src/client.ts';
 export {
   isJsonRpcCall,
   isJsonRpcResponse,
+  isJsonRpcStreamFrame,
   JSON_RPC_ERRORS,
   parseJsonRpc,
   rpcFailure,
   serializeJsonRpc,
 } from './src/codec.ts';
 export {
+  isStream,
   RpcField,
   RpcMessage,
   RpcMethod,
   RpcNotify,
   RpcService,
+  RpcStream,
+  Stream,
   startRpcServices,
   stopRpcServices,
+  unwrapStream,
 } from './src/decorators.ts';
 export { createRpcDispatcher, type RpcDispatcher } from './src/dispatcher.ts';
 export {
@@ -49,6 +67,10 @@ export type {
   JsonRpcPayload,
   JsonRpcRequest,
   JsonRpcResponse,
+  JsonRpcStreamComplete,
+  JsonRpcStreamError,
+  JsonRpcStreamFrame,
+  JsonRpcStreamNextSuccess,
   JsonRpcSuccess,
   RpcCallOptions,
   RpcClient,
@@ -70,8 +92,11 @@ export type {
   RpcServiceHost,
   RpcServiceMetadata,
   RpcServiceOptions,
+  RpcStreamStatus,
+  RpcStreamWrapper,
   RpcTransport,
   RpcTransportHandler,
   RpcTypeFactory,
   RpcUnsubscribe,
 } from './src/types.ts';
+export { MethodKind } from './src/types.ts';

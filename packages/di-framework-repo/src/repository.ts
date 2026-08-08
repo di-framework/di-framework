@@ -114,6 +114,6 @@ export abstract class SoftDeleteRepository<
   }
 }
 
-export interface SearchableRepository<E, ID = EntityId> {
+export interface SearchableRepository<E, _ID = EntityId> {
   search(query: string, params?: { page?: number; size?: number }): Promise<PaginatedResult<E>>;
 }

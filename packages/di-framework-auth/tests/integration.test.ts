@@ -564,7 +564,7 @@ describe('registerAuth', () => {
       secret: SECRET,
       jwt: { issuer: 'https://iss', audience: 'api', accessTtlSeconds: 60 },
     });
-    const { token, expiresIn } = await runtime.tokens!.issueAccessToken({ subject: 'u1' });
+    const { token, expiresIn } = await runtime.tokens?.issueAccessToken({ subject: 'u1' });
     expect(expiresIn).toBe(60);
 
     const result = await runtime.strategy.authenticate(
@@ -578,8 +578,8 @@ describe('registerAuth', () => {
       secret: SECRET,
       jwt: { issuer: 'https://iss', audience: 'api', symmetric: true },
     });
-    const first = await runtime.tokens!.issueAccessToken({ subject: 'u1' });
-    const second = await runtime.tokens!.issueAccessToken({ subject: 'u2' });
+    const first = await runtime.tokens?.issueAccessToken({ subject: 'u1' });
+    const second = await runtime.tokens?.issueAccessToken({ subject: 'u2' });
     expect(typeof first.token).toBe('string');
     expect(first.token.split('.')).toHaveLength(3);
     expect(second.token).not.toBe(first.token);
@@ -595,7 +595,7 @@ describe('registerAuth', () => {
       csrf: false,
       jwt: { issuer: 'https://iss', audience: 'api', symmetric: true },
     });
-    await expect(runtime.tokens!.issueAccessToken({ subject: 'u1' })).rejects.toThrow(
+    await expect(runtime.tokens?.issueAccessToken({ subject: 'u1' })).rejects.toThrow(
       /requires a `secret`/,
     );
   });
@@ -656,7 +656,7 @@ describe('HTTP guards', () => {
     const { strategy } = await buildStrategy();
     const response = await requireAuth({ strategy })(get());
     expect(response?.status).toBe(401);
-    expect(await response!.json()).toEqual({
+    expect(await response?.json()).toEqual({
       error: 'Authentication required',
       code: 'no_credential',
     } as never);
@@ -719,7 +719,7 @@ describe('HTTP guards', () => {
     const request = get();
     // A client posting {"principal": ...} sets req.content.principal, never the
     // symbol the guard reads back.
-    (request as unknown as Record<string, unknown>)['principal'] = { sub: 'admin' };
+    (request as unknown as Record<string, unknown>).principal = { sub: 'admin' };
     const response = await requireAuth({ strategy })(request);
     expect(response?.status).toBe(401);
     expect(getPrincipal(request)).toBeUndefined();
@@ -999,16 +999,16 @@ describe('OpenAPI security', () => {
     ]);
     const schemes = securitySchemesFor([strategy]);
 
-    expect(schemes['sessionAuth']).toEqual({ type: 'apiKey', in: 'cookie', name: '__Host-sid' });
-    expect(schemes['bearerAuth']).toEqual({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
-    expect(schemes['apiKeyAuth']).toEqual({ type: 'apiKey', in: 'header', name: 'X-API-Key' });
+    expect(schemes.sessionAuth).toEqual({ type: 'apiKey', in: 'cookie', name: '__Host-sid' });
+    expect(schemes.bearerAuth).toEqual({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
+    expect(schemes.apiKeyAuth).toEqual({ type: 'apiKey', in: 'header', name: 'X-API-Key' });
   });
 
   it('adds an openIdConnect scheme when a discovery URL is given', () => {
     const schemes = securitySchemesFor([], {
       openIdConnectUrl: 'https://idp.example.com/.well-known/openid-configuration',
     });
-    expect(schemes['openIdConnect']).toEqual({
+    expect(schemes.openIdConnect).toEqual({
       type: 'openIdConnect',
       openIdConnectUrl: 'https://idp.example.com/.well-known/openid-configuration',
     });
@@ -1021,8 +1021,8 @@ describe('OpenAPI security', () => {
       security: secured('bearerAuth'),
     }) as unknown as Record<string, unknown>;
 
-    expect((spec['components'] as Record<string, unknown>)['securitySchemes']).toBeDefined();
-    expect(spec['security']).toEqual([{ bearerAuth: [] }] as never);
+    expect((spec.components as Record<string, unknown>).securitySchemes).toBeDefined();
+    expect(spec.security).toEqual([{ bearerAuth: [] }] as never);
   });
 
   // An empty array is meaningful in OpenAPI — it opts an operation out of the
@@ -1042,8 +1042,8 @@ describe('OpenAPI security', () => {
       title: 'API',
       security: secured('bearerAuth'),
     }) as unknown as Record<string, unknown>;
-    const paths = spec['paths'] as Record<string, Record<string, Record<string, unknown>>>;
-    const operation = paths['/public']!['get']!;
-    expect(operation['security']).toEqual([]);
+    const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+    const operation = paths['/public']?.get!;
+    expect(operation.security).toEqual([]);
   });
 });

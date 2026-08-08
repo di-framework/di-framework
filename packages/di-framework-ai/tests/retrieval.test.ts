@@ -371,9 +371,9 @@ describe('SimpleVectorStore', () => {
     expect(store.size).toBe(1);
 
     await store.add([textDocument('three', { keep: false }, 'c')]);
-    await store.deleteByFilter!(new FilterExpressionBuilder().eq('keep', false).build());
+    await store.deleteByFilter?.(new FilterExpressionBuilder().eq('keep', false).build());
     expect(store.size).toBe(1);
-    const remaining = await store.similaritySearchQuery!('two');
+    const remaining = await store.similaritySearchQuery?.('two');
     expect(remaining.some((d) => d.id === 'b')).toBe(true);
   });
 
@@ -445,7 +445,7 @@ describe('RetrievalAugmentationAdvisor', () => {
 
     expect(content).toBe('Yorktown is in Virginia.');
     expect(model.calls).toHaveLength(1);
-    const promptText = model.calls[0]!.getUserMessage().text ?? '';
+    const promptText = model.calls[0]?.getUserMessage().text ?? '';
     expect(promptText).toContain('Yorktown is a historic town in Virginia.');
     expect(promptText).toContain('Where is Yorktown?');
   });
@@ -477,7 +477,7 @@ describe('RetrievalAugmentationAdvisor', () => {
 
     expect(chunks.at(-1)).toBe('Yorktown is in Virginia.');
     expect(lastResponse?.context.get(RAG_DOCUMENT_CONTEXT)).toBeDefined();
-    expect(model.calls[0]!.getUserMessage().text ?? '').toContain(
+    expect(model.calls[0]?.getUserMessage().text ?? '').toContain(
       'Yorktown is a historic town in Virginia.',
     );
   });
@@ -501,8 +501,8 @@ describe('RetrievalAugmentationAdvisor', () => {
 
     const docs = response.context.get(RAG_DOCUMENT_CONTEXT) as { id: string }[] | undefined;
     expect(docs).toBeDefined();
-    expect(docs!.length).toBeGreaterThan(0);
-    expect(docs![0]?.id).toBe('d1');
+    expect(docs?.length).toBeGreaterThan(0);
+    expect(docs?.[0]?.id).toBe('d1');
     expect(response.chatResponse?.metadata[RAG_DOCUMENT_CONTEXT]).toBeDefined();
   });
 
@@ -536,7 +536,7 @@ describe('RetrievalAugmentationAdvisor', () => {
       .call()
       .content();
 
-    const user = model.calls[0]!.getUserMessage().text ?? '';
+    const user = model.calls[0]?.getUserMessage().text ?? '';
     // Augmentation still uses original query text in template, with retrieved docs
     expect(user).toContain('The capital of France is Paris.');
   });

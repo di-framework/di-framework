@@ -135,9 +135,9 @@ export async function importJwk(
       { code: 'invalid_algorithm' },
     );
   }
-  if (spec.curve && typeof jwk['crv'] === 'string' && jwk['crv'] !== spec.curve) {
+  if (spec.curve && typeof jwk.crv === 'string' && jwk.crv !== spec.curve) {
     throw new AuthError(
-      `JWK curve '${jwk['crv']}' does not match algorithm '${algorithm}' (expected '${spec.curve}')`,
+      `JWK curve '${jwk.crv}' does not match algorithm '${algorithm}' (expected '${spec.curve}')`,
       { code: 'invalid_algorithm' },
     );
   }

@@ -29,7 +29,7 @@ describe('auth example', () => {
   });
 
   it('serves a request carrying a bearer token', async () => {
-    const { token } = await auth.tokens!.issueAccessToken({ subject: 'machine-client' });
+    const { token } = await auth.tokens?.issueAccessToken({ subject: 'machine-client' });
     const response = await router.fetch(
       new Request('https://api.example.com/notes', {
         headers: { authorization: `Bearer ${token}` },
@@ -67,7 +67,7 @@ describe('auth example', () => {
     const withToken = await router.fetch(
       new Request('https://api.example.com/notes', {
         method: 'POST',
-        headers: { ...headers, 'x-csrf-token': await auth.csrf!.issue(session.record.id) },
+        headers: { ...headers, 'x-csrf-token': await auth.csrf?.issue(session.record.id) },
         body,
       }),
     );
@@ -77,7 +77,7 @@ describe('auth example', () => {
   // Bearer requests carry no ambient credential, so forcing a CSRF token on them
   // would be pure friction.
   it('does not require a CSRF token for a bearer mutation', async () => {
-    const { token } = await auth.tokens!.issueAccessToken({ subject: 'machine-client' });
+    const { token } = await auth.tokens?.issueAccessToken({ subject: 'machine-client' });
     const response = await router.fetch(
       new Request('https://api.example.com/notes', {
         method: 'POST',

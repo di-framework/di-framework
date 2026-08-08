@@ -176,10 +176,10 @@ describe('authenticator data', () => {
       }),
     );
 
-    expect(parsed.attestedCredentialData!.credentialId).toEqual(credentialId);
-    expect(parsed.attestedCredentialData!.credentialPublicKey).toEqual(coseKey);
-    expect(parsed.attestedCredentialData!.coseKey.alg).toBe(COSE_ALG.ES256);
-    expect(parsed.attestedCredentialData!.aaguidHex).toBe('07'.repeat(16));
+    expect(parsed.attestedCredentialData?.credentialId).toEqual(credentialId);
+    expect(parsed.attestedCredentialData?.credentialPublicKey).toEqual(coseKey);
+    expect(parsed.attestedCredentialData?.coseKey.alg).toBe(COSE_ALG.ES256);
+    expect(parsed.attestedCredentialData?.aaguidHex).toBe('07'.repeat(16));
   });
 
   it('rejects a truncated structure', () => {
@@ -1109,7 +1109,7 @@ describe('WebAuthn registration ceremony', () => {
       extensions: { credProps: true },
     });
     expect(ceremony.options.excludeCredentials?.[0]?.transports).toEqual(['usb']);
-    expect(ceremony.options.authenticatorSelection!.authenticatorAttachment).toBe('platform');
+    expect(ceremony.options.authenticatorSelection?.authenticatorAttachment).toBe('platform');
 
     const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
       'sign',

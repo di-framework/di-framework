@@ -176,7 +176,7 @@ describe('McpToolCallback', () => {
     expect(cb.originalToolName).toBe('add');
     const result = await cb.call('{"a":2,"b":3}');
     expect(result).toBe('5');
-    expect(session.calls[0]!.name).toBe('add');
+    expect(session.calls[0]?.name).toBe('add');
   });
 
   test('forwards tool context as _meta', async () => {
@@ -191,7 +191,7 @@ describe('McpToolCallback', () => {
       tool: { name: 'echo' },
     });
     await cb.call('{}', new ToolContext({ userId: 'u-1' }));
-    expect(session.calls[0]!._meta).toEqual({ userId: 'u-1' });
+    expect(session.calls[0]?._meta).toEqual({ userId: 'u-1' });
   });
 
   test('isError results become ToolExecutionException', async () => {
@@ -259,8 +259,8 @@ describe('McpToolCallbackProvider', () => {
     await provider.refresh();
     const tools = provider.getToolCallbacks();
     expect(tools).toHaveLength(1);
-    expect(tools[0]!.toolDefinition.name).toBe('ping');
-    expect(await tools[0]!.call('{}')).toBe('pong');
+    expect(tools[0]?.toolDefinition.name).toBe('ping');
+    expect(await tools[0]?.call('{}')).toBe('pong');
   });
 
   test('invalidate clears the cache and requires another refresh', async () => {
@@ -345,7 +345,7 @@ describe('McpToolCallbackProvider', () => {
     const model = new ScriptedChatModel([
       {
         respond: toolCallResponse([
-          toolCall('c1', tools[0]!.toolDefinition.name, { city: 'Yorktown' }),
+          toolCall('c1', tools[0]?.toolDefinition.name, { city: 'Yorktown' }),
         ]),
       },
       { respond: '68F in Yorktown' },
@@ -359,7 +359,7 @@ describe('McpToolCallbackProvider', () => {
       .content();
 
     expect(answer).toBe('68F in Yorktown');
-    expect(session.calls[0]!.arguments).toEqual({ city: 'Yorktown' });
+    expect(session.calls[0]?.arguments).toEqual({ city: 'Yorktown' });
   });
 });
 

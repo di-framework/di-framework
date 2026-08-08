@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { spawnSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const CLI_PATH = path.resolve(import.meta.dir, 'cli.ts');
 const TEST_OUTPUT = 'test.openapi.json';

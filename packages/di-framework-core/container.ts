@@ -53,7 +53,7 @@ type ContainerEventPayloads = {
 };
 type Listener<T> = (payload: T) => void;
 
-const INJECTABLE_METADATA_KEY = 'di:injectable';
+const _INJECTABLE_METADATA_KEY = 'di:injectable';
 const INJECT_METADATA_KEY = 'di:inject';
 const DESIGN_PARAM_TYPES_KEY = 'design:paramtypes';
 export const TELEMETRY_METADATA_KEY = 'di:telemetry';
@@ -72,7 +72,7 @@ function defineMetadata(key: string | symbol, value: any, target: any): void {
   if (!metadataStore.has(target)) {
     metadataStore.set(target, new Map());
   }
-  metadataStore.get(target)!.set(key, value);
+  metadataStore.get(target)?.set(key, value);
 }
 
 function getMetadata(key: string | symbol, target: any): any {
@@ -80,7 +80,7 @@ function getMetadata(key: string | symbol, target: any): any {
 }
 
 function hasMetadata(key: string | symbol, target: any): boolean {
-  return metadataStore.has(target) && Boolean(metadataStore.get(target)!.has(key));
+  return metadataStore.has(target) && Boolean(metadataStore.get(target)?.has(key));
 }
 
 function getOwnMetadata(key: string | symbol, target: any): any {
@@ -378,7 +378,7 @@ export class Container {
       this.listeners.set(event as string, new Set());
     }
 
-    this.listeners.get(event as string)!.add(listener as Listener<any>);
+    this.listeners.get(event as string)?.add(listener as Listener<any>);
     return () => this.off(event, listener);
   }
 
@@ -746,7 +746,7 @@ export class Container {
   private getConstructorParamNames(target: Constructor): string[] {
     const funcStr = target.toString();
     const match = funcStr.match(/constructor\s*\(([^)]*)\)/);
-    if (!match || !match[1]) return [];
+    if (!match?.[1]) return [];
 
     const paramsStr = match[1];
     return paramsStr
@@ -758,28 +758,6 @@ export class Container {
         return withoutType.trim();
       })
       .filter((param) => param);
-  }
-
-  /**
-   * Extract parameter types from TypeScript compiled code
-   * Looks for type annotations in the compiled constructor signature
-   */
-  private extractParamTypesFromSource(target: Constructor): any[] {
-    const funcStr = target.toString();
-
-    // Try to extract types from decorated constructor
-    // In compiled TypeScript with emitDecoratorMetadata, types appear in decorator calls
-    const decoratorMatch = funcStr.match(
-      /__decorate\(\[\s*(?:\w+\s*\([^)]*\),?\s*)*__param\((\d+),\s*(\w+)\([^)]*\)\)/g,
-    );
-
-    if (decoratorMatch) {
-      // Found decorator-based metadata
-      return [];
-    }
-
-    // Return empty array - will fall back to type annotations or @Component decorators
-    return [];
   }
 }
 

@@ -27,7 +27,7 @@ function mockWs(opts: { closeThrows?: boolean } = {}) {
     deserializeAttachment: () => null,
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, new Set());
-      listeners.get(type)!.add(listener);
+      listeners.get(type)?.add(listener);
     },
     removeEventListener(type, listener) {
       listeners.get(type)?.delete(listener);
@@ -150,9 +150,9 @@ describe('createWorkerWebSocketUpgrade', () => {
     expect(connected).toBe(true);
 
     // Exercise plain send/close callbacks wired into the duplex
-    await connRef!.send(textFrame('ping'));
+    await connRef?.send(textFrame('ping'));
     expect(server._sent).toContain('ping');
-    connRef!.close(1000, 'done');
+    connRef?.close(1000, 'done');
   });
 
   it('falls back to client.accept() when server has no accept', async () => {

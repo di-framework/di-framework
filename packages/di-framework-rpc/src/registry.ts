@@ -1,3 +1,4 @@
+import { unwrapStream } from './decorators.ts';
 import type {
   RpcConstructor,
   RpcFieldMetadata,
@@ -105,8 +106,8 @@ export class RpcRegistry {
     for (const service of this.services.values()) {
       if (service.package !== packageName) continue;
       for (const method of service.methods) {
-        roots.push(method.input());
-        if (method.output) roots.push(method.output());
+        roots.push(unwrapStream(method.input()));
+        if (method.output) roots.push(unwrapStream(method.output()));
       }
     }
     const seen = new Set<RpcConstructor>();

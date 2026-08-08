@@ -88,7 +88,7 @@ export class Prompt {
     const copy = [...this.messages];
     const index = copy.findIndex(isSystemMessage);
     if (index >= 0) {
-      copy[index] = systemMessage(text, copy[index]!.metadata);
+      copy[index] = systemMessage(text, copy[index]?.metadata);
     } else {
       copy.unshift(systemMessage(text));
     }

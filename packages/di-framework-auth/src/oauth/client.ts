@@ -83,16 +83,16 @@ function fail(
 function defaultProfileMap(provider: OAuthProvider): NonNullable<OAuthProvider['profileMap']> {
   return (claims, userinfo) => {
     const source = { ...(claims ?? {}), ...(userinfo ?? {}) } as Record<string, unknown>;
-    const subject = typeof source['sub'] === 'string' ? source['sub'] : '';
+    const subject = typeof source.sub === 'string' ? source.sub : '';
     return {
       subject,
       issuer: provider.issuer ?? provider.id,
-      ...(typeof source['email'] === 'string' ? { email: source['email'] } : {}),
-      ...(typeof source['email_verified'] === 'boolean'
-        ? { emailVerified: source['email_verified'] }
+      ...(typeof source.email === 'string' ? { email: source.email } : {}),
+      ...(typeof source.email_verified === 'boolean'
+        ? { emailVerified: source.email_verified }
         : {}),
-      ...(typeof source['name'] === 'string' ? { name: source['name'] } : {}),
-      ...(typeof source['picture'] === 'string' ? { picture: source['picture'] } : {}),
+      ...(typeof source.name === 'string' ? { name: source.name } : {}),
+      ...(typeof source.picture === 'string' ? { picture: source.picture } : {}),
       raw: source,
     } satisfies OAuthProfile;
   };
@@ -163,7 +163,7 @@ export function oauthClient(provider: OAuthProvider, options: OAuthClientOptions
       // or `%` — which is exactly the kind of bug that surfaces months later
       // after a secret rotation.
       const credentials = `${encodeURIComponent(provider.clientId)}:${encodeURIComponent(provider.clientSecret)}`;
-      headers['authorization'] = `Basic ${btoa(credentials)}`;
+      headers.authorization = `Basic ${btoa(credentials)}`;
     }
     return headers;
   };
@@ -191,22 +191,20 @@ export function oauthClient(provider: OAuthProvider, options: OAuthClientOptions
       fail(`Token endpoint returned HTTP ${response.status}`, 'oauth_error', payload);
     }
 
-    const accessToken = payload['access_token'];
-    const tokenType = payload['token_type'];
+    const accessToken = payload.access_token;
+    const tokenType = payload.token_type;
     if (typeof accessToken !== 'string') fail('Token response has no access_token', 'oauth_error');
     if (typeof tokenType !== 'string' || tokenType.toLowerCase() !== 'bearer') {
       fail(`Token response token_type '${String(tokenType)}' is not Bearer`, 'oauth_error');
     }
 
-    const scope = payload['scope'];
+    const scope = payload.scope;
     return {
       accessToken,
       tokenType,
-      ...(typeof payload['expires_in'] === 'number' ? { expiresIn: payload['expires_in'] } : {}),
-      ...(typeof payload['refresh_token'] === 'string'
-        ? { refreshToken: payload['refresh_token'] }
-        : {}),
-      ...(typeof payload['id_token'] === 'string' ? { idToken: payload['id_token'] } : {}),
+      ...(typeof payload.expires_in === 'number' ? { expiresIn: payload.expires_in } : {}),
+      ...(typeof payload.refresh_token === 'string' ? { refreshToken: payload.refresh_token } : {}),
+      ...(typeof payload.id_token === 'string' ? { idToken: payload.id_token } : {}),
       ...(typeof scope === 'string' ? { scope: scope.split(' ').filter(Boolean) } : {}),
     };
   };
@@ -372,7 +370,7 @@ export function oauthClient(provider: OAuthProvider, options: OAuthClientOptions
         // OIDC Core §5.3.2: the userinfo `sub` MUST match the ID token's.
         // Skipping this lets a confused or compromised userinfo endpoint swap
         // one identity for another after the token has already been validated.
-        if (idTokenClaims && userinfoClaims['sub'] !== idTokenClaims.sub) {
+        if (idTokenClaims && userinfoClaims.sub !== idTokenClaims.sub) {
           fail('Userinfo sub does not match the ID token sub', 'invalid_token');
         }
       }
@@ -391,8 +389,8 @@ export function oauthClient(provider: OAuthProvider, options: OAuthClientOptions
           method: 'oauth',
           issuer: profile.issuer,
           authTime:
-            typeof idTokenClaims?.['auth_time'] === 'number'
-              ? (idTokenClaims['auth_time'] as number)
+            typeof idTokenClaims?.auth_time === 'number'
+              ? (idTokenClaims.auth_time as number)
               : now(),
           ...(tokens.scope ? { scope: tokens.scope } : {}),
           ...(tokens.expiresIn !== undefined ? { expiresAt: now() + tokens.expiresIn } : {}),

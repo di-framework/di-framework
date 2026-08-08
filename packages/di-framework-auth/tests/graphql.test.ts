@@ -12,7 +12,6 @@ import {
   setRegistry,
 } from '@di-framework/graphql';
 import { authorizationAllowed, authorizationDenied } from '../src/authorization.ts';
-import { makeContext } from '../src/context.ts';
 import { AuthError } from '../src/errors.ts';
 import {
   type AuthGraphQLContext,
@@ -74,7 +73,7 @@ describe('createAuthContext', () => {
       strategy: okStrategy,
       next: () => ({ loaders: 'built' }),
     })(request());
-    expect(context['loaders']).toBe('built');
+    expect(context.loaders).toBe('built');
     expect(context.principal?.sub).toBe('u1');
   });
 

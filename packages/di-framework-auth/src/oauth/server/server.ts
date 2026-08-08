@@ -2,7 +2,7 @@ import { AuthError } from '../../errors.ts';
 import type { SignatureAlgorithm } from '../../tokens/algorithms.ts';
 import { signJwt, verifyJwt } from '../../tokens/jwt.ts';
 import { computeS256Challenge, isValidCodeVerifier } from '../pkce.ts';
-import { InMemoryAuthCodeStore, InMemoryConsentStore, InMemoryOAuthTokenStore } from './stores.ts';
+import { InMemoryConsentStore, InMemoryOAuthTokenStore } from './stores.ts';
 import type {
   AuthCodeStore,
   AuthorizationRequest,
@@ -11,7 +11,6 @@ import type {
   ConsentStore,
   OAuthAuthorizationCode,
   OAuthAuthorizationServerOptions,
-  OAuthClientConfig,
   OAuthConsent,
   OAuthRefreshTokenRecord,
   OAuthTokenGrant,
@@ -291,16 +290,16 @@ export class AuthorizationServer {
       issuer: this.issuer,
     });
 
-    if (verified.claims['type'] !== 'refresh_token') {
+    if (verified.claims.type !== 'refresh_token') {
       throw new AuthError('Invalid token type for refresh', {
         status: 400,
         code: 'invalid_grant',
       });
     }
 
-    const clientId = verified.claims['client_id'] as string;
+    const clientId = verified.claims.client_id as string;
     const subjectId = verified.claims.sub as string;
-    const scope = (request.scope || verified.claims['scope']) as string;
+    const scope = (request.scope || verified.claims.scope) as string;
 
     const client = await this.clientStore.getClient(clientId);
     if (!client) {
@@ -427,7 +426,7 @@ export class AuthorizationServer {
       issuer: this.issuer,
     });
 
-    if (verified.claims['type'] !== 'access_token') {
+    if (verified.claims.type !== 'access_token') {
       throw new AuthError('Token is not an access_token', {
         status: 401,
         code: 'invalid_token',

@@ -192,8 +192,8 @@ describe('@Tool decorator', () => {
 
     const callbacks = toolCallbacksFromBean(new LocalTools());
     expect(callbacks).toHaveLength(1);
-    expect(callbacks[0]!.toolDefinition.name).toBe('add');
-    const result = await callbacks[0]!.call(JSON.stringify({ a: 2, b: 3 }));
+    expect(callbacks[0]?.toolDefinition.name).toBe('add');
+    const result = await callbacks[0]?.call(JSON.stringify({ a: 2, b: 3 }));
     expect(JSON.parse(result)).toBe(5);
   });
 
@@ -247,7 +247,7 @@ describe('@Tool decorator', () => {
     const provider = toolCallbackProviderFromBeans(new ToolsC());
     const callbacks = provider.getToolCallbacks();
     expect(callbacks).toHaveLength(1);
-    expect(await callbacks[0]!.call('{}')).toContain('c-result');
+    expect(await callbacks[0]?.call('{}')).toContain('c-result');
   });
 
   test('hasToolMethods reflects presence/absence of @Tool methods', () => {
@@ -512,7 +512,7 @@ describe('registerChatClient manual', () => {
     const registered = useContainer().resolve<{ toolDefinition: { name: string } }[]>(
       AiTokens.TOOL_CALLBACKS,
     );
-    expect(registered[0]!.toolDefinition.name).toBe('getWeather');
+    expect(registered[0]?.toolDefinition.name).toBe('getWeather');
   });
 });
 

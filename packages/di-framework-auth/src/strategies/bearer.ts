@@ -34,20 +34,20 @@ export function bearerTokenStrategy(options: BearerTokenStrategyOptions): AuthSt
   const toPrincipal =
     options.toPrincipal ??
     ((claims: JwtClaims): Principal => {
-      const scope = claims['scope'];
+      const scope = claims.scope;
       return createPrincipal({
         sub: String(claims.sub ?? ''),
         method: 'bearer',
         authTime:
-          typeof claims['auth_time'] === 'number'
-            ? claims['auth_time']
+          typeof claims.auth_time === 'number'
+            ? claims.auth_time
             : typeof claims.iat === 'number'
               ? claims.iat
               : Math.floor(Date.now() / 1000),
         ...(typeof claims.iss === 'string' ? { issuer: claims.iss } : {}),
         ...(typeof claims.exp === 'number' ? { expiresAt: claims.exp } : {}),
-        ...(Array.isArray(claims['amr']) ? { amr: claims['amr'] as string[] } : {}),
-        ...(typeof claims['acr'] === 'string' ? { acr: claims['acr'] } : {}),
+        ...(Array.isArray(claims.amr) ? { amr: claims.amr as string[] } : {}),
+        ...(typeof claims.acr === 'string' ? { acr: claims.acr } : {}),
         // Carried as data. This package does not interpret scopes.
         ...(typeof scope === 'string' ? { scope: scope.split(' ').filter(Boolean) } : {}),
         claims,

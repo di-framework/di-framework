@@ -62,7 +62,7 @@ describe('TypedRouter', () => {
   it('should support extra arguments in fetch', async () => {
     type Env = { BINDING: string };
     const router = TypedRouter<[Env]>();
-    router.get('/env', (req, env) => json({ binding: env.BINDING }));
+    router.get('/env', (_req, env) => json({ binding: env.BINDING }));
 
     const req = new Request('http://localhost/env');
     const res = await router.fetch(req, { BINDING: 'value' });

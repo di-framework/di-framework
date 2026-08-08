@@ -100,21 +100,21 @@ export function validateMetadata(
   // impersonation defence, and it is a byte comparison — no trailing-slash
   // forgiveness, no case folding. Relaxing it is how an attacker who can
   // influence the discovery URL gets to name themselves as a trusted issuer.
-  if (metadata['issuer'] !== expectedIssuer) {
+  if (metadata.issuer !== expectedIssuer) {
     throw new AuthError(
-      `Discovery issuer '${String(metadata['issuer'])}' does not exactly match the requested issuer '${expectedIssuer}'`,
+      `Discovery issuer '${String(metadata.issuer)}' does not exactly match the requested issuer '${expectedIssuer}'`,
       { code: 'issuer_mismatch', status: 502 },
     );
   }
 
-  assertSecureUrl(metadata['authorization_endpoint'], 'authorization_endpoint', allowInsecureHttp);
-  assertSecureUrl(metadata['token_endpoint'], 'token_endpoint', allowInsecureHttp);
-  assertSecureUrl(metadata['jwks_uri'], 'jwks_uri', allowInsecureHttp);
+  assertSecureUrl(metadata.authorization_endpoint, 'authorization_endpoint', allowInsecureHttp);
+  assertSecureUrl(metadata.token_endpoint, 'token_endpoint', allowInsecureHttp);
+  assertSecureUrl(metadata.jwks_uri, 'jwks_uri', allowInsecureHttp);
 
   // RFC 9700 §2.1.1 makes PKCE mandatory for the authorization code grant. A
   // provider that cannot do S256 is one we decline to talk to rather than
   // silently downgrade with.
-  const methods = metadata['code_challenge_methods_supported'];
+  const methods = metadata.code_challenge_methods_supported;
   if (Array.isArray(methods) && !methods.includes('S256')) {
     throw new AuthError(
       `Provider '${expectedIssuer}' does not advertise support for PKCE S256, which is mandatory`,

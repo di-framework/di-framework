@@ -204,17 +204,17 @@ export function decodeJwsHeader(token: string): JwsHeader {
 
   // RFC 7515 §4.1.11: a verifier that does not understand every `crit` entry
   // MUST reject. We understand none of them.
-  const crit = candidate['crit'];
+  const crit = candidate.crit;
   if (crit !== undefined) {
     if (!Array.isArray(crit) || crit.length > 0)
       invalid('JWS header declares unsupported critical parameters');
   }
 
   // RFC 7797 unencoded payloads change what the signature covers.
-  if (candidate['b64'] === false) invalid('JWS with b64=false is not supported');
+  if (candidate.b64 === false) invalid('JWS with b64=false is not supported');
 
-  if (!isSignatureAlgorithm(candidate['alg'])) {
-    invalid(`Unsupported or missing JWS alg '${String(candidate['alg'])}'`, 'invalid_algorithm');
+  if (!isSignatureAlgorithm(candidate.alg)) {
+    invalid(`Unsupported or missing JWS alg '${String(candidate.alg)}'`, 'invalid_algorithm');
   }
 
   return candidate as JwsHeader;

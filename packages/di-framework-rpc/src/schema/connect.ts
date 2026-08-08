@@ -8,6 +8,7 @@ import {
   MethodDescriptorProtoSchema,
   ServiceDescriptorProtoSchema,
 } from '@bufbuild/protobuf/wkt';
+import { isAsyncGeneratorFunction, isStream, unwrapStream } from '../decorators.ts';
 import registry, { type RpcRegistry } from '../registry.ts';
 import type {
   RpcConstructor,
@@ -87,8 +88,11 @@ export function compileConnectSchema(source: RpcRegistry = registry): CompiledCo
       create(ServiceDescriptorProtoSchema, {
         name: service.name,
         method: service.methods.map((method) => {
-          const input = source.getMessage(method.input());
-          const output = method.output ? source.getMessage(method.output()) : undefined;
+          const inputCtor = unwrapStream(method.input());
+          const outputCtor = method.output ? unwrapStream(method.output()) : undefined;
+
+          const input = source.getMessage(inputCtor);
+          const output = outputCtor ? source.getMessage(outputCtor) : undefined;
           if (!input) {
             throw new Error(
               `${service.name}.${method.name}: input is not decorated with @RpcMessage`,
@@ -99,10 +103,22 @@ export function compileConnectSchema(source: RpcRegistry = registry): CompiledCo
               `${service.name}.${method.name}: output is not decorated with @RpcMessage`,
             );
           }
+
+          const handler = (service.target.prototype as Record<string | symbol, unknown>)[
+            method.propertyKey
+          ];
+          const serverStreaming =
+            method.serverStreaming === true ||
+            isStream(method.output?.()) ||
+            isAsyncGeneratorFunction(handler);
+          const clientStreaming = method.clientStreaming === true || isStream(method.input?.());
+
           return create(MethodDescriptorProtoSchema, {
             name: method.name,
             inputType: `.${packageName}.${input.name}`,
             outputType: `.${packageName}.${output?.name ?? 'RpcEmpty'}`,
+            serverStreaming,
+            clientStreaming,
           });
         }),
       }),

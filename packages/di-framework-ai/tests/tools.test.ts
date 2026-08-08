@@ -481,7 +481,7 @@ describe('hasToolCalls helper', () => {
   test('detects tool calls on assistant messages', () => {
     const response = toolCallResponse([toolCall('1', 'x', {})]);
     expect(response.hasToolCalls()).toBe(true);
-    expect(hasToolCalls(response.getResult()!.output)).toBe(true);
+    expect(hasToolCalls(response.getResult()?.output)).toBe(true);
   });
 });
 

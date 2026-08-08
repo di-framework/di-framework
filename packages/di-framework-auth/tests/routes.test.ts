@@ -172,7 +172,7 @@ describe('createAuthRoutes', () => {
       enable: { webauthn: false, oauth: false, csrf: false },
     });
 
-    const issued = await built.refresh!.issue({ subject: 'u1', amr: ['pwd'] });
+    const issued = await built.refresh?.issue({ subject: 'u1', amr: ['pwd'] });
     const response = await router.fetch(
       jsonPost('https://app.example.com/refresh', { refreshToken: issued.token }),
     );

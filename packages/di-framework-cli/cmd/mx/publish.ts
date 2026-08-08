@@ -1,5 +1,5 @@
+import { join } from 'node:path';
 import { $ as defaultShell } from 'bun';
-import { join } from 'path';
 
 export const PACKAGES = [
   'packages/di-framework-core',
@@ -37,7 +37,7 @@ export async function publish(shell: PublishShell = defaultShell) {
   for (const pkgDir of PACKAGES) {
     const fullPath = join(process.cwd(), pkgDir);
     const pkgJsonPath = join(fullPath, 'package.json');
-    const { readFileSync, writeFileSync } = await import('fs');
+    const { readFileSync, writeFileSync } = await import('node:fs');
     const rawPkgJson = readFileSync(pkgJsonPath, 'utf-8');
     const pkgJson = JSON.parse(rawPkgJson);
 
@@ -60,7 +60,7 @@ export async function publish(shell: PublishShell = defaultShell) {
     replaceWorkspaceSpecs(publishPkgJson.dependencies);
 
     try {
-      writeFileSync(pkgJsonPath, JSON.stringify(publishPkgJson, null, 2) + '\n');
+      writeFileSync(pkgJsonPath, `${JSON.stringify(publishPkgJson, null, 2)}\n`);
       await shell`cd ${fullPath} && bun publish --access public`;
       console.log(`  ✅ Published ${pkgJson.name}`);
     } catch (err) {

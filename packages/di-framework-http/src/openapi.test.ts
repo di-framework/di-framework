@@ -205,10 +205,10 @@ describe('generateOpenAPI', () => {
     const spec = generateOpenAPI({ schemas }, registry);
 
     const resolved = spec.components.schemas;
-    expect(resolved['User']).toBeDefined();
-    expect(resolved['Post']).toBeDefined();
-    expect(resolved['Profile']).toBeDefined(); // Transitively resolved!
-    expect(resolved['Comment']).toBeDefined(); // Transitively resolved from array!
-    expect(resolved['Unused']).toBeUndefined();
+    expect(resolved.User).toBeDefined();
+    expect(resolved.Post).toBeDefined();
+    expect(resolved.Profile).toBeDefined(); // Transitively resolved!
+    expect(resolved.Comment).toBeDefined(); // Transitively resolved from array!
+    expect(resolved.Unused).toBeUndefined();
   });
 });

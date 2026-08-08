@@ -67,7 +67,7 @@ function withIdentifierKey(user: UserRecord): UserRecord {
   return { ...user, identifier, identifierKey: identifier.toLowerCase() };
 }
 
-export function memoryUserStore(options: MemoryStoreOptions = {}): UserStore {
+export function memoryUserStore(_options: MemoryStoreOptions = {}): UserStore {
   const byId = new Map<string, UserRecord>();
   const byIdentifier = new Map<string, string>();
   const byHandle = new Map<string, string>();
@@ -127,7 +127,7 @@ export function memoryUserStore(options: MemoryStoreOptions = {}): UserStore {
 }
 
 export function memorySessionStore(options: MemoryStoreOptions = {}): SessionStore {
-  const now = options.now ?? seconds;
+  const _now = options.now ?? seconds;
   const sessions = new Map<string, SessionRecord>();
   const bySubject = new Map<string, Set<string>>();
 
@@ -182,7 +182,7 @@ export function memorySessionStore(options: MemoryStoreOptions = {}): SessionSto
   };
 }
 
-export function memoryCredentialStore(options: MemoryStoreOptions = {}): CredentialStore {
+export function memoryCredentialStore(_options: MemoryStoreOptions = {}): CredentialStore {
   const passwords = new Map<string, PasswordCredential>();
   const webauthn = new Map<string, WebAuthnCredential>();
   const apiKeys = new Map<string, ApiKeyCredential>();

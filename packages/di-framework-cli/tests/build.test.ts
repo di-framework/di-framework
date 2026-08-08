@@ -10,7 +10,7 @@ async function makeFakeWorkspace(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), 'build-cmd-'));
   await Bun.write(
     join(root, 'package.json'),
-    JSON.stringify({ name: 'root', version: '9.9.9' }) + '\n',
+    `${JSON.stringify({ name: 'root', version: '9.9.9' })}\n`,
   );
 
   for (const pkgDir of PACKAGES) {
@@ -18,11 +18,11 @@ async function makeFakeWorkspace(): Promise<string> {
     mkdirSync(full, { recursive: true });
     await Bun.write(
       join(full, 'package.json'),
-      JSON.stringify({
+      `${JSON.stringify({
         name: `@test/${pkgDir.split('/').pop()}`,
         version: '0.0.0',
         scripts: { build: 'mkdir -p dist && echo ok > dist/out.txt' },
-      }) + '\n',
+      })}\n`,
     );
   }
 
@@ -30,7 +30,7 @@ async function makeFakeWorkspace(): Promise<string> {
   const first = join(root, PACKAGES[0]!);
   await Bun.write(
     join(first, 'tsconfig.build.json'),
-    JSON.stringify({
+    `${JSON.stringify({
       compilerOptions: {
         outDir: 'dist',
         rootDir: 'src',
@@ -40,14 +40,14 @@ async function makeFakeWorkspace(): Promise<string> {
         skipLibCheck: true,
       },
       include: ['src/**/*.ts'],
-    }) + '\n',
+    })}\n`,
   );
   await Bun.write(join(first, 'src', 'index.ts'), 'export const x = 1;\n');
   // Drop the build script so only the tsc path is used for this package.
   // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
   const pkgJson = await Bun.file(join(first, 'package.json')).json();
   delete pkgJson.scripts;
-  await Bun.write(join(first, 'package.json'), JSON.stringify(pkgJson, null, 2) + '\n');
+  await Bun.write(join(first, 'package.json'), `${JSON.stringify(pkgJson, null, 2)}\n`);
 
   return root;
 }
@@ -130,7 +130,7 @@ describe('build command', () => {
 
       await Bun.write(
         join(root, PACKAGES[1]!, 'tsconfig.build.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           compilerOptions: {
             outDir: 'dist',
             rootDir: 'src',
@@ -139,7 +139,7 @@ describe('build command', () => {
             skipLibCheck: true,
           },
           include: ['src/**/*.ts'],
-        }) + '\n',
+        })}\n`,
       );
       await Bun.write(join(root, PACKAGES[1]!, 'src', 'index.ts'), 'export const y = 2;\n');
 

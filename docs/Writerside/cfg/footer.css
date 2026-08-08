@@ -1,9 +1,9 @@
 /* Hide the "Powered by JetBrains Writerside" watermark */
 footer[data-test="footer"] {
-  display: none !important;
+  display: none;
 }
 
 /* Alternative: Hide only the Writerside branding while keeping other footer content */
 footer[data-test="footer"] .footer__copyright {
-  display: none !important;
+  display: none;
 }

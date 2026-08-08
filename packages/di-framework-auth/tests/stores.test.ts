@@ -395,7 +395,7 @@ describe('field mapping (repo bridge)', () => {
     expect(created.identifier).toBe('Ada@Example.com');
     // Stored under the mapped field name, not the auth package's own name.
     expect(adapter.data.get('u1')).toMatchObject({ login: 'Ada@Example.com' });
-    expect((adapter.data.get('u1') as Record<string, unknown>)['identifier']).toBeUndefined();
+    expect((adapter.data.get('u1') as Record<string, unknown>).identifier).toBeUndefined();
 
     expect((await store.findByIdentifier('ada@example.com'))?.id).toBe('u1');
   });
@@ -585,7 +585,7 @@ describe('repoKeyStore', () => {
 
     await store.save(key('k2'));
     expect((await store.current()).kid).toBe('k2');
-    expect((await adapter.findById('k1'))?.['current']).toBe(false);
+    expect((await adapter.findById('k1'))?.current).toBe(false);
 
     expect((await store.find('k1'))?.kid).toBe('k1');
     expect(await store.find('ghost')).toBeNull();
@@ -655,11 +655,11 @@ describe('memorySessionStore direct operations', () => {
     await sessions.create(sessionFixture('s1', 'u1'));
     await sessions.create({ ...sessionFixture('s2', 'u2'), absoluteExpiresAt: 5 });
 
-    expect(await sessions.purgeExpired!(10)).toBe(1);
+    expect(await sessions.purgeExpired?.(10)).toBe(1);
     expect(await sessions.get('s1')).not.toBeNull();
     expect(await sessions.get('s2')).toBeNull();
     // Purging again removes nothing further.
-    expect(await sessions.purgeExpired!(10)).toBe(0);
+    expect(await sessions.purgeExpired?.(10)).toBe(0);
   });
 
   it('touch() is a no-op for a session that no longer exists', async () => {
@@ -743,7 +743,7 @@ describe('memoryStateStore direct operations', () => {
     const state = memoryStateStore();
     await state.put({ purpose: 'oauth-state', key: 'k1', data: {}, expiresAt: 5 });
     await state.put({ purpose: 'oauth-state', key: 'k2', data: {}, expiresAt: future });
-    expect(await state.purgeExpired!(10)).toBe(1);
+    expect(await state.purgeExpired?.(10)).toBe(1);
     expect(await state.consume('oauth-state', 'k2')).not.toBeNull();
   });
 });
@@ -786,7 +786,7 @@ describe('memoryRefreshTokenStore direct operations', () => {
     const store = memoryRefreshTokenStore();
     await store.issue(record('r1', 'f1', 'u1', 5));
     await store.issue(record('r2', 'f2', 'u1', 500));
-    expect(await store.purgeExpired!(10)).toBe(1);
+    expect(await store.purgeExpired?.(10)).toBe(1);
     expect(await store.find('r1')).toBeNull();
     expect(await store.find('r2')).not.toBeNull();
   });

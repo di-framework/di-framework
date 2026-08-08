@@ -81,7 +81,7 @@ export async function signJwt(claims: JwtClaims, options: SignJwtOptions): Promi
   };
 
   if (options.jti !== false) {
-    payload['jti'] = typeof options.jti === 'string' ? options.jti : crypto.randomUUID();
+    payload.jti = typeof options.jti === 'string' ? options.jti : crypto.randomUUID();
   }
 
   return signJws(JSON.stringify(payload), {

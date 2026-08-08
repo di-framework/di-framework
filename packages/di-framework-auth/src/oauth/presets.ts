@@ -79,17 +79,17 @@ export function githubProvider(config: OAuthPresetConfig): OAuthProvider {
       : {}),
     profileMap: (_claims, userinfo): OAuthProfile => {
       const source = userinfo ?? {};
-      const id = source['id'];
+      const id = source.id;
       return {
         subject: typeof id === 'number' || typeof id === 'string' ? String(id) : '',
         issuer: 'https://github.com',
-        ...(typeof source['email'] === 'string' ? { email: source['email'] } : {}),
-        ...(typeof source['name'] === 'string'
-          ? { name: source['name'] }
-          : typeof source['login'] === 'string'
-            ? { name: source['login'] }
+        ...(typeof source.email === 'string' ? { email: source.email } : {}),
+        ...(typeof source.name === 'string'
+          ? { name: source.name }
+          : typeof source.login === 'string'
+            ? { name: source.login }
             : {}),
-        ...(typeof source['avatar_url'] === 'string' ? { picture: source['avatar_url'] } : {}),
+        ...(typeof source.avatar_url === 'string' ? { picture: source.avatar_url } : {}),
         raw: source,
       };
     },

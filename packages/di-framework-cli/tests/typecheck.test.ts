@@ -110,7 +110,7 @@ describe('typecheck command', () => {
         mkdirSync(join(dir, 'src'), { recursive: true });
         await Bun.write(
           join(dir, 'tsconfig.json'),
-          JSON.stringify({
+          `${JSON.stringify({
             compilerOptions: {
               strict: true,
               noEmit: true,
@@ -119,7 +119,7 @@ describe('typecheck command', () => {
               skipLibCheck: true,
             },
             files: ['src/ok.ts'],
-          }) + '\n',
+          })}\n`,
         );
         await Bun.write(join(dir, 'src', 'ok.ts'), 'export const ok: number = 1;\n');
 
@@ -200,13 +200,13 @@ describe('typecheck command', () => {
       // Circular extends produces config diagnostics.
       await Bun.write(
         join(dir, 'tsconfig.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           compilerOptions: { module: 'esnext', target: 'esnext' },
           files: ['./missing-file-that-does-not-exist.ts'],
           // Invalid option value triggers parseJsonConfigFileContent errors on some TS versions;
           // pair with a bogus "extends" that cannot be resolved.
           extends: './does-not-exist.json',
-        }) + '\n',
+        })}\n`,
       );
 
       const { typecheck } = await import('../cmd/mx/typecheck');
@@ -228,7 +228,7 @@ describe('typecheck command', () => {
       temps.push(dir);
       await Bun.write(
         join(dir, 'tsconfig.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           compilerOptions: {
             strict: true,
             noEmit: true,
@@ -237,7 +237,7 @@ describe('typecheck command', () => {
             skipLibCheck: true,
           },
           files: ['broken.ts'],
-        }) + '\n',
+        })}\n`,
       );
       await Bun.write(join(dir, 'broken.ts'), 'const n: number = "not-a-number";\n');
 
@@ -269,7 +269,7 @@ describe('typecheck command', () => {
       mkdirSync(join(dir, 'src'), { recursive: true });
       await Bun.write(
         join(dir, 'tsconfig.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           compilerOptions: {
             strict: true,
             noEmit: true,
@@ -284,7 +284,7 @@ describe('typecheck command', () => {
             noUnusedLocals: false,
           },
           files: ['src/ok.ts'],
-        }) + '\n',
+        })}\n`,
       );
       await Bun.write(join(dir, 'src', 'ok.ts'), 'export const ok: number = 1;\n');
 
@@ -311,7 +311,7 @@ describe('typecheck command', () => {
         mkdirSync(join(dir, 'nested'), { recursive: true });
         await Bun.write(
           join(dir, 'tsconfig.json'),
-          JSON.stringify({
+          `${JSON.stringify({
             compilerOptions: {
               strict: true,
               noEmit: true,
@@ -320,7 +320,7 @@ describe('typecheck command', () => {
               skipLibCheck: true,
             },
             files: ['ok.ts'],
-          }) + '\n',
+          })}\n`,
         );
         await Bun.write(join(dir, 'ok.ts'), 'export const ok: number = 1;\n');
         // Fake script path under dir so --from=script walks up to dir/tsconfig.json.
@@ -398,10 +398,10 @@ describe('typecheck command', () => {
       temps.push(dir);
       await Bun.write(
         join(dir, 'tsconfig.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           compilerOptions: { strict: true, noEmit: true, module: 'esnext', target: 'esnext' },
           files: ['typecheck-stub.ts'],
-        }) + '\n',
+        })}\n`,
       );
       await Bun.write(join(dir, 'typecheck-stub.ts'), 'export const ok = 1;\n');
 

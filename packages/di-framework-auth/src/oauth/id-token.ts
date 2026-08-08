@@ -82,7 +82,7 @@ export async function validateIdToken(
   // when `azp` is present at all, `azp` must be this client. Without this a
   // token issued for a different client at the same provider is accepted.
   const audiences = Array.isArray(claims.aud) ? claims.aud : claims.aud ? [claims.aud] : [];
-  const azp = claims['azp'];
+  const azp = claims.azp;
   if (audiences.length > 1 || azp !== undefined) {
     if (azp !== options.clientId) {
       reject(
@@ -97,15 +97,14 @@ export async function validateIdToken(
   // a real gap: `state` binds the redirect to this browser, but nothing stops a
   // previously captured ID token from being presented in a fresh flow.
   if (options.nonce !== null) {
-    if (typeof claims['nonce'] !== 'string')
-      reject('ID token has no nonce claim', 'nonce_mismatch');
-    if (!(await timingSafeEqualString(claims['nonce'], options.nonce))) {
+    if (typeof claims.nonce !== 'string') reject('ID token has no nonce claim', 'nonce_mismatch');
+    if (!(await timingSafeEqualString(claims.nonce, options.nonce))) {
       reject('ID token nonce does not match the authorization request', 'nonce_mismatch');
     }
   }
 
   if (options.maxAgeSeconds !== undefined) {
-    const authTime = claims['auth_time'];
+    const authTime = claims.auth_time;
     if (typeof authTime !== 'number') {
       reject('ID token has no auth_time although max_age was requested', 'invalid_token');
     }
@@ -117,15 +116,15 @@ export async function validateIdToken(
     }
   }
 
-  if (options.accessToken && typeof claims['at_hash'] === 'string') {
+  if (options.accessToken && typeof claims.at_hash === 'string') {
     const expected = await computeTokenHash(options.accessToken, header.alg);
-    if (expected !== null && !(await timingSafeEqualString(claims['at_hash'], expected)))
+    if (expected !== null && !(await timingSafeEqualString(claims.at_hash, expected)))
       reject('ID token at_hash does not match the access token', 'invalid_token');
   }
 
-  if (options.code && typeof claims['c_hash'] === 'string') {
+  if (options.code && typeof claims.c_hash === 'string') {
     const expected = await computeTokenHash(options.code, header.alg);
-    if (expected !== null && !(await timingSafeEqualString(claims['c_hash'], expected)))
+    if (expected !== null && !(await timingSafeEqualString(claims.c_hash, expected)))
       reject('ID token c_hash does not match the authorization code', 'invalid_token');
   }
 

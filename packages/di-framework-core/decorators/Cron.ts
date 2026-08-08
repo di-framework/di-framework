@@ -13,7 +13,7 @@ import { CRON_METADATA_KEY, defineMetadata, getOwnMetadata } from '../container'
  * Cron(30000)          // every 30 seconds
  */
 export function Cron(schedule: string | number) {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol, _descriptor: PropertyDescriptor) => {
     const methods = getOwnMetadata(CRON_METADATA_KEY, target) || {};
     methods[propertyKey as string] = schedule;
     defineMetadata(CRON_METADATA_KEY, methods, target);

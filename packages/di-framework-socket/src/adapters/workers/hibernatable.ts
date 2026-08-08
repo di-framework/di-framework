@@ -50,7 +50,7 @@ export interface HibernatableHubOptions {
   onSerializeAttachment?: (
     current: HibernatableAttachment,
     ws: HibernatableWebSocket,
-  ) => HibernatableAttachment | void;
+  ) => HibernatableAttachment | undefined;
   /**
    * Close code used for rehandshake policy (default 4001).
    */

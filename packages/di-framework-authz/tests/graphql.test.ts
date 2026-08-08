@@ -236,7 +236,7 @@ describe('GraphQL Resource-Policy Bindings', () => {
     class ResolverService {
       @GraphQLResourceAuthorization(ArticlePolicy, { manager })
       @ResourceAction('read')
-      async findOne(parent: any, args: { id: string }, ctx: any, info: any) {
+      async findOne(_parent: any, _args: { id: string }, _ctx: any, _info: any) {
         return 'Article Found';
       }
     }

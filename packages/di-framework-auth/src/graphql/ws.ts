@@ -36,16 +36,16 @@ export function requestFromConnectionParams(
   const headers = new Headers();
   const payload = params ?? {};
 
-  const authorization = payload['authorization'] ?? payload['Authorization'];
+  const authorization = payload.authorization ?? payload.Authorization;
   if (typeof authorization === 'string') headers.set('authorization', authorization);
-  else if (typeof payload['token'] === 'string') {
-    headers.set('authorization', `Bearer ${payload['token']}`);
+  else if (typeof payload.token === 'string') {
+    headers.set('authorization', `Bearer ${payload.token}`);
   }
 
-  const cookie = payload['cookie'] ?? payload['Cookie'];
+  const cookie = payload.cookie ?? payload.Cookie;
   if (typeof cookie === 'string') headers.set('cookie', cookie);
 
-  const apiKey = payload['apiKey'] ?? payload['x-api-key'];
+  const apiKey = payload.apiKey ?? payload['x-api-key'];
   if (typeof apiKey === 'string') headers.set('x-api-key', apiKey);
 
   // A WebSocket upgrade is not CSRF-able in the way a form post is, and there is

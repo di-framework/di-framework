@@ -61,7 +61,7 @@ export class VectorIndexService {
 
   async loadManifest(): Promise<Manifest> {
     if (this.hasStateKv()) {
-      const raw = await this.env().INDEX_STATE!.get(MANIFEST_KEY);
+      const raw = await this.env().INDEX_STATE?.get(MANIFEST_KEY);
       if (!raw) return {};
       try {
         return JSON.parse(raw) as Manifest;
@@ -74,7 +74,7 @@ export class VectorIndexService {
 
   async saveManifest(manifest: Manifest): Promise<void> {
     if (this.hasStateKv()) {
-      await this.env().INDEX_STATE!.put(MANIFEST_KEY, JSON.stringify(manifest));
+      await this.env().INDEX_STATE?.put(MANIFEST_KEY, JSON.stringify(manifest));
     }
     this.memoryManifest = { ...manifest };
   }

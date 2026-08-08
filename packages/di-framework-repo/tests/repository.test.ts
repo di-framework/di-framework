@@ -8,14 +8,14 @@ interface User {
 }
 
 class MockAdapter<E, ID> implements StorageAdapter<E, ID> {
-  findById = mock(async (id: ID) => null as E | null);
-  findMany = mock(async (ids: ID[]) => [] as E[]);
+  findById = mock(async (_id: ID) => null as E | null);
+  findMany = mock(async (_ids: ID[]) => [] as E[]);
   findAll = mock(async () => [] as E[]);
   save = mock(async (entity: E) => entity);
-  delete = mock(async (id: ID) => true);
+  delete = mock(async (_id: ID) => true);
   count = mock(async () => 0);
-  exists = mock(async (id: ID) => false);
-  findPaginated = mock(async (params: any) => ({
+  exists = mock(async (_id: ID) => false);
+  findPaginated = mock(async (_params: any) => ({
     items: [],
     total: 0,
     page: 1,
@@ -31,10 +31,6 @@ class MockAdapter<E, ID> implements StorageAdapter<E, ID> {
 }
 
 class UserRepository extends BaseRepository<User, string> {
-  constructor(adapter: StorageAdapter<User, string>) {
-    super(adapter);
-  }
-
   // Expose protected methods for testing
   public testNormalizeId(id: any) {
     return this.normalizeId(id);
@@ -136,24 +132,16 @@ interface SoftUser {
 }
 
 class MySoftDeleteRepo extends SoftDeleteRepository<SoftUser, string> {
-  softDelete = mock(async (id: string) => true);
-  restore = mock(async (id: string) => true);
+  softDelete = mock(async (_id: string) => true);
+  restore = mock(async (_id: string) => true);
   findActive = mock(async () => []);
   findDeleted = mock(async () => []);
-  afterNotifyDelete = mock((id: string) => {});
-
-  constructor(adapter: StorageAdapter<SoftUser, string>) {
-    super(adapter);
-  }
+  afterNotifyDelete = mock((_id: string) => {});
 }
 
 describe('EntityRepository', () => {
   test('can be extended and constructed through BaseRepository', async () => {
-    class ConcreteEntityRepo extends EntityRepository<User, string> {
-      constructor(adapter: StorageAdapter<User, string>) {
-        super(adapter);
-      }
-    }
+    class ConcreteEntityRepo extends EntityRepository<User, string> {}
 
     const adapter = new MockAdapter<User, string>();
     const repo = new ConcreteEntityRepo(adapter);
