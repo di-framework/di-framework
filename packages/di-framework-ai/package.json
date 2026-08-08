@@ -46,13 +46,20 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@di-framework/auth": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@di-framework/auth": "workspace:*",
     "@di-framework/core": "workspace:*",
     "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@di-framework/auth": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"

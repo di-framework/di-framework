@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from 'bun:test';
+import { useContainer } from '@di-framework/core/container';
 import {
   type NatsConnectionLike,
   type NatsHeadersLike,
@@ -8,6 +9,7 @@ import {
   type NatsSubscriptionLike,
   natsTransport,
 } from '../src/adapters/nats.ts';
+import { createEventBridge } from '../src/bridge.ts';
 import type { EventMessage } from '../src/types.ts';
 
 function makeHeaders(): NatsHeadersLike {
@@ -497,6 +499,294 @@ describe('natsTransport - jetstream subscribe', () => {
       /does not expose JetStream/,
     );
     await transport.stop?.();
+  });
+});
+
+describe('natsTransport + createEventBridge pipeline', () => {
+  it('executes pipeline in deterministic order on NATS transport', async () => {
+    let natsCallback: ((err: Error | null, msg: NatsMsgLike) => void) | undefined;
+    let acked = false;
+
+    const nc: NatsConnectionLike = {
+      publish() {},
+      subscribe(_subject, opts) {
+        natsCallback = opts?.callback;
+        return { unsubscribe() {} };
+      },
+      async drain() {},
+      async close() {},
+      isClosed() {
+        return false;
+      },
+    };
+
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
+
+    const steps: string[] = [];
+    const emitted: unknown[] = [];
+    useContainer().on('nats.event', (payload) => {
+      steps.push('containerEmit');
+      emitted.push(payload);
+    });
+
+    const bridge = createEventBridge({
+      transport,
+      middleware: [
+        async (ctx) => {
+          steps.push('bridgeMw');
+          (ctx.payload as Record<string, unknown>).bm = true;
+          await ctx.next();
+        },
+      ],
+      routes: {
+        inbound: [
+          {
+            topic: 'nats.topic',
+            event: 'nats.event',
+            filter: (payload) => {
+              steps.push('filter');
+              return (payload as { ok: boolean }).ok;
+            },
+            map: (payload) => {
+              steps.push('map');
+              return { ...(payload as object), mapped: true };
+            },
+            validate: (payload) => {
+              steps.push('validate');
+              return { ...(payload as object), validated: true };
+            },
+            middleware: [
+              async (ctx) => {
+                steps.push('routeMw');
+                (ctx.payload as Record<string, unknown>).rm = true;
+                await ctx.next();
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await bridge.start();
+
+    const natsMsg: NatsMsgLike = {
+      subject: 'nats.topic',
+      data: new TextEncoder().encode(JSON.stringify({ ok: true, count: 1 })),
+      ack() {
+        acked = true;
+      },
+    };
+
+    natsCallback?.(null, natsMsg);
+    await Bun.sleep(10);
+
+    expect(steps).toEqual(['filter', 'map', 'validate', 'bridgeMw', 'routeMw', 'containerEmit']);
+    expect(emitted).toEqual([
+      { ok: true, count: 1, mapped: true, validated: true, bm: true, rm: true },
+    ]);
+    expect(acked).toBe(true);
+
+    await bridge.stop();
+  });
+
+  it('short-circuits and acks message without container emit on NATS', async () => {
+    let natsCallback: ((err: Error | null, msg: NatsMsgLike) => void) | undefined;
+    let acked = false;
+
+    const nc: NatsConnectionLike = {
+      publish() {},
+      subscribe(_subject, opts) {
+        natsCallback = opts?.callback;
+        return { unsubscribe() {} };
+      },
+      async drain() {},
+      async close() {},
+      isClosed() {
+        return false;
+      },
+    };
+
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
+
+    const emitted: unknown[] = [];
+    useContainer().on('nats.event', (payload) => emitted.push(payload));
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'nats.topic',
+            event: 'nats.event',
+            middleware: [
+              async (_ctx) => {
+                // short-circuit
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await bridge.start();
+
+    const natsMsg: NatsMsgLike = {
+      subject: 'nats.topic',
+      data: new TextEncoder().encode(JSON.stringify({ short: true })),
+      ack() {
+        acked = true;
+      },
+    };
+
+    natsCallback?.(null, natsMsg);
+    await Bun.sleep(10);
+
+    expect(emitted).toEqual([]);
+    expect(acked).toBe(true);
+
+    await bridge.stop();
+  });
+
+  it('handles validation failure on NATS by routing to onError and nacking without requeue', async () => {
+    let natsCallback: ((err: Error | null, msg: NatsMsgLike) => void) | undefined;
+    let nakMillis: number | undefined = -1;
+
+    const nc: NatsConnectionLike = {
+      publish() {},
+      subscribe(_subject, opts) {
+        natsCallback = opts?.callback;
+        return { unsubscribe() {} };
+      },
+      async drain() {},
+      async close() {},
+      isClosed() {
+        return false;
+      },
+    };
+
+    const errors: Array<{ direction: string; error: unknown }> = [];
+
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'nats.topic',
+            event: 'nats.event',
+            validate: () => {
+              throw new Error('NATS validation error');
+            },
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    const natsMsg: NatsMsgLike = {
+      subject: 'nats.topic',
+      data: new TextEncoder().encode(JSON.stringify({})),
+      nak(millis) {
+        nakMillis = millis;
+      },
+    };
+
+    natsCallback?.(null, natsMsg);
+    await Bun.sleep(10);
+
+    expect(errors).toHaveLength(1);
+    const err0 = errors[0]?.error as Error | undefined;
+    expect(err0?.message).toBe('NATS validation error');
+    expect(nakMillis).toBe(0); // requeue: false maps to 0 millis in natsTransport
+
+    await bridge.stop();
+  });
+
+  it('handles middleware failure on NATS by routing to onError and nacking without requeue', async () => {
+    let natsCallback: ((err: Error | null, msg: NatsMsgLike) => void) | undefined;
+    let nakMillis: number | undefined = -1;
+
+    const nc: NatsConnectionLike = {
+      publish() {},
+      subscribe(_subject, opts) {
+        natsCallback = opts?.callback;
+        return { unsubscribe() {} };
+      },
+      async drain() {},
+      async close() {},
+      isClosed() {
+        return false;
+      },
+    };
+
+    const errors: Array<{ direction: string; error: unknown }> = [];
+
+    const transport = natsTransport({
+      nats: {
+        async connect() {
+          return nc;
+        },
+      },
+    });
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'nats.topic',
+            event: 'nats.event',
+            middleware: [
+              async () => {
+                throw new Error('NATS middleware error');
+              },
+            ],
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    const natsMsg: NatsMsgLike = {
+      subject: 'nats.topic',
+      data: new TextEncoder().encode(JSON.stringify({})),
+      nak(millis) {
+        nakMillis = millis;
+      },
+    };
+
+    natsCallback?.(null, natsMsg);
+    await Bun.sleep(10);
+
+    expect(errors).toHaveLength(1);
+    const err1 = errors[0]?.error as Error | undefined;
+    expect(err1?.message).toBe('NATS middleware error');
+    expect(nakMillis).toBe(0);
+
+    await bridge.stop();
   });
 });
 

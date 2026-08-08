@@ -9,6 +9,9 @@ import {
   type ToolCallbackProvider,
 } from '../tool/tool-callback-provider.ts';
 import type { ToolContext } from '../tool/tool-context.ts';
+import { AiAnnKeys } from './annotations/keys.ts';
+import { readOnCtor } from './annotations/meta.ts';
+import type { ToolSetOptions } from './annotations/tools.ts';
 
 /** Metadata key for `@Tool` method descriptors (di-framework metadata store). */
 export const AI_TOOL_METADATA_KEY = 'ai:tools';
@@ -19,6 +22,7 @@ export interface ToolMethodMetadata {
   readonly description?: string;
   readonly inputSchema?: string | Record<string, unknown>;
   readonly returnDirect?: boolean;
+  readonly auth?: unknown;
 }
 
 export interface ToolDecoratorOptions {
@@ -27,6 +31,7 @@ export interface ToolDecoratorOptions {
   readonly description?: string;
   readonly inputSchema?: string | Record<string, unknown>;
   readonly returnDirect?: boolean;
+  readonly auth?: unknown;
 }
 
 /**
@@ -73,6 +78,7 @@ export function Tool(options: ToolDecoratorOptions | string = {}): MethodDecorat
       description: opts.description,
       inputSchema: opts.inputSchema,
       returnDirect: opts.returnDirect,
+      auth: opts.auth,
     };
 
     const next = [...list.filter((m) => m.methodName !== methodName), entry];
@@ -108,6 +114,8 @@ export function toolCallbacksFromBean(instance: object): ToolCallback[] {
     throw new Error('toolCallbacksFromBean requires a bean instance');
   }
   const meta = getToolMethodMetadata(instance);
+  const toolSetOpts = readOnCtor<ToolSetOptions>(AiAnnKeys.TOOL_SET, instance);
+  const toolSetAuth = toolSetOpts?.auth;
   const callbacks: ToolCallback[] = [];
 
   for (const m of meta) {
@@ -119,11 +127,30 @@ export function toolCallbacksFromBean(instance: object): ToolCallback[] {
     }
     const bound = method.bind(instance) as (input: unknown, context?: ToolContext) => unknown;
 
+    let auth = m.auth;
+    if (toolSetAuth !== undefined) {
+      if (
+        auth !== undefined &&
+        typeof auth === 'object' &&
+        auth !== null &&
+        typeof toolSetAuth === 'object' &&
+        toolSetAuth !== null
+      ) {
+        auth = {
+          ...(toolSetAuth as Record<string, unknown>),
+          ...(auth as Record<string, unknown>),
+        };
+      } else if (auth === undefined) {
+        auth = toolSetAuth;
+      }
+    }
+
     const options: FunctionToolCallbackOptions = {
       name: m.name,
       description: m.description,
       inputSchema: m.inputSchema,
       returnDirect: m.returnDirect,
+      auth,
       call: (input, context) => bound(input, context),
     };
     callbacks.push(functionToolCallback(options));
