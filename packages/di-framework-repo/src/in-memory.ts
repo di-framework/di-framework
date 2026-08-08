@@ -1,10 +1,11 @@
+import type { ConditionalStorageAdapter } from './adapter';
 import { EntityRepository } from './repository';
 import type { EntityId, PaginatedResult } from './types';
 
-export class InMemoryRepository<
-  E extends { id: ID },
-  ID extends string | number = EntityId,
-> extends EntityRepository<E, ID> {
+export class InMemoryRepository<E extends { id: ID }, ID extends string | number = EntityId>
+  extends EntityRepository<E, ID>
+  implements ConditionalStorageAdapter<E, ID>
+{
   protected items = new Map<ID, E>();
 
   constructor() {
@@ -60,5 +61,25 @@ export class InMemoryRepository<
       size,
       pages: Math.ceil(filtered.length / size),
     };
+  }
+
+  async saveIfAbsent(entity: E): Promise<boolean> {
+    const normId = this.normalizeId(entity.id);
+    if (this.items.has(normId)) {
+      return false;
+    }
+    this.items.set(normId, entity);
+    return true;
+  }
+
+  async compareAndSwap(id: ID, mutate: (current: E | null) => E | null): Promise<boolean> {
+    const normId = this.normalizeId(id);
+    const current = this.items.get(normId) ?? null;
+    const next = mutate(current);
+    if (next === null) {
+      return false;
+    }
+    this.items.set(normId, next);
+    return true;
   }
 }

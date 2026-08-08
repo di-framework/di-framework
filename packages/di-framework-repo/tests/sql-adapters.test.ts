@@ -62,6 +62,75 @@ describe('BunSqliteAdapter', () => {
     });
     expect(result).toBe('done');
   });
+
+  test('saveIfAbsent inserts when missing and returns false when present', async () => {
+    const db = new Database(':memory:');
+    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
+    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, {
+      table: 'users',
+    });
+
+    expect(await adapter.saveIfAbsent({ id: 1, name: 'Ada', active: 1 })).toBe(true);
+    expect(await adapter.saveIfAbsent({ id: 1, name: 'Ada Duplicate', active: 0 })).toBe(false);
+    expect(await adapter.findById(1)).toMatchObject({ name: 'Ada', active: 1 });
+  });
+
+  test('compareAndSwap mutates record atomically or aborts when null returned', async () => {
+    const db = new Database(':memory:');
+    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
+    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, {
+      table: 'users',
+    });
+    await adapter.save({ id: 1, name: 'Ada', active: 1 });
+
+    const failed = await adapter.compareAndSwap(1, (curr) => {
+      if (!curr || curr.active !== 0) return null;
+      return { ...curr, active: 0 };
+    });
+    expect(failed).toBe(false);
+
+    const success = await adapter.compareAndSwap(1, (curr) => {
+      if (!curr || curr.active !== 1) return null;
+      return { ...curr, active: 0 };
+    });
+    expect(success).toBe(true);
+    expect(await adapter.findById(1)).toMatchObject({ active: 0 });
+  });
+
+  test('contention: concurrent saveIfAbsent on BunSqliteAdapter has exactly 1 winner', async () => {
+    const db = new Database(':memory:');
+    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
+    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, {
+      table: 'users',
+    });
+
+    const promises = Array.from({ length: 20 }, (_, i) =>
+      adapter.saveIfAbsent({ id: 100, name: `Name ${i}`, active: 1 }),
+    );
+    const results = await Promise.all(promises);
+    const winners = results.filter((r) => r === true);
+    expect(winners).toHaveLength(1);
+  });
+
+  test('contention: concurrent compareAndSwap on BunSqliteAdapter has at most 1 winner per observed state', async () => {
+    const db = new Database(':memory:');
+    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
+    const adapter = new BunSqliteAdapter<{ id: number; name: string; active: number }, number>(db, {
+      table: 'users',
+    });
+    await adapter.save({ id: 1, name: 'Ada', active: 0 });
+
+    const promises = Array.from({ length: 20 }, () =>
+      adapter.compareAndSwap(1, (curr) => {
+        if (!curr || curr.active !== 0) return null;
+        return { ...curr, active: 1 };
+      }),
+    );
+    const results = await Promise.all(promises);
+    const winners = results.filter((r) => r === true);
+    expect(winners).toHaveLength(1);
+    expect(await adapter.findById(1)).toMatchObject({ active: 1 });
+  });
 });
 
 test('D1Adapter uses prepared statements and maps CRUD', async () => {

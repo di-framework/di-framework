@@ -18,6 +18,9 @@ export class D1Adapter<
   E extends Record<string, any>,
   ID extends string | number = string,
 > extends SqlStorageAdapter<E, ID> {
+  private inTx = false;
+  private txChain: Promise<unknown> = Promise.resolve();
+
   constructor(
     private readonly db: D1Database,
     options: SqlAdapterOptions<E>,
@@ -45,6 +48,40 @@ export class D1Adapter<
     return { changes: r.meta?.changes };
   }
   async transaction<T>(fn: (adapter: this) => Promise<T>): Promise<T> {
-    return fn(this);
+    if (this.inTx) {
+      return fn(this);
+    }
+    const runTx = async () => {
+      this.inTx = true;
+      try {
+        await this.db
+          .prepare('BEGIN IMMEDIATE')
+          .run()
+          .catch(() => {});
+      } catch {}
+      try {
+        const result = await fn(this);
+        try {
+          await this.db
+            .prepare('COMMIT')
+            .run()
+            .catch(() => {});
+        } catch {}
+        return result;
+      } catch (err) {
+        try {
+          await this.db
+            .prepare('ROLLBACK')
+            .run()
+            .catch(() => {});
+        } catch {}
+        throw err;
+      } finally {
+        this.inTx = false;
+      }
+    };
+    const nextTx = this.txChain.then(runTx, runTx);
+    this.txChain = nextTx.catch(() => {});
+    return nextTx as Promise<T>;
   }
 }

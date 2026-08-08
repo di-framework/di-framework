@@ -13,6 +13,9 @@ export class BunSqliteAdapter<
   E extends Record<string, any>,
   ID extends string | number = string,
 > extends SqlStorageAdapter<E, ID> {
+  private inTx = false;
+  private txChain: Promise<unknown> = Promise.resolve();
+
   constructor(
     private readonly db: BunSqliteDatabase,
     options: SqlAdapterOptions<E>,
@@ -29,7 +32,28 @@ export class BunSqliteAdapter<
     return this.db.query(sql).run(...args);
   }
   async transaction<T>(fn: (adapter: this) => Promise<T>): Promise<T> {
-    return fn(this);
+    if (this.inTx) {
+      return fn(this);
+    }
+    const runTx = async () => {
+      this.inTx = true;
+      this.db.query('BEGIN IMMEDIATE').run();
+      try {
+        const result = await fn(this);
+        this.db.query('COMMIT').run();
+        return result;
+      } catch (err) {
+        try {
+          this.db.query('ROLLBACK').run();
+        } catch {}
+        throw err;
+      } finally {
+        this.inTx = false;
+      }
+    };
+    const nextTx = this.txChain.then(runTx, runTx);
+    this.txChain = nextTx.catch(() => {});
+    return nextTx as Promise<T>;
   }
   dispose(): void {
     this.db.close?.();

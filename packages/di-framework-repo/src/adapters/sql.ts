@@ -1,4 +1,4 @@
-import type { StorageAdapter } from '../adapter';
+import type { ConditionalStorageAdapter, StorageAdapter } from '../adapter';
 
 type Row = Record<string, unknown>;
 export interface SqlMapping<E> {
@@ -56,7 +56,7 @@ export interface SqlAdapterOptions<E> extends SqlMapping<E> {
 export abstract class SqlStorageAdapter<
   E extends Record<string, any>,
   ID extends string | number = string,
-> implements StorageAdapter<E, ID>
+> implements StorageAdapter<E, ID>, ConditionalStorageAdapter<E, ID>
 {
   protected readonly table: string;
   protected readonly idColumn: string;
@@ -141,6 +141,30 @@ export abstract class SqlStorageAdapter<
       size,
       pages: Math.ceil(total / size),
     };
+  }
+  async saveIfAbsent(entity: E): Promise<boolean> {
+    const row = this.toRow(entity);
+    const keys = Object.keys(row);
+    if (!keys.length) throw new Error('Cannot save an empty entity');
+    const cols = keys.map(ident).join(',');
+    const marks = keys.map(() => '?').join(',');
+    const sql = `INSERT INTO ${this.table} (${cols}) VALUES (${marks}) ON CONFLICT (${this.idColumn}) DO NOTHING`;
+    const result = await this.run(
+      sql,
+      keys.map((k) => row[k]),
+    );
+    return (result.changes ?? 0) > 0;
+  }
+  async compareAndSwap(id: ID, mutate: (current: E | null) => E | null): Promise<boolean> {
+    return this.transaction(async (txAdapter) => {
+      const current = await txAdapter.findById(id);
+      const next = mutate(current);
+      if (next === null) {
+        return false;
+      }
+      await txAdapter.save(next);
+      return true;
+    });
   }
   abstract transaction<T>(fn: (adapter: this) => Promise<T>): Promise<T>;
 }

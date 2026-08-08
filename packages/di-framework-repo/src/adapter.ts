@@ -81,3 +81,34 @@ export type StorageAdapterFactory<E, ID = string | number> = (
  */
 export type EntityOfAdapter<A> = A extends StorageAdapter<infer E, any> ? E : never;
 export type IdOfAdapter<A> = A extends StorageAdapter<any, infer ID> ? ID : never;
+
+/**
+ * Interface for adapters that support atomic conditional write operations.
+ */
+export interface ConditionalStorageAdapter<E, ID = string | number> {
+  /**
+   * Save `entity` only if no record with its ID exists.
+   * Return true if inserted, false if record already exists.
+   */
+  saveIfAbsent(entity: E): Promise<boolean>;
+
+  /**
+   * Apply synchronous, side-effect-free `mutate` function to record at `id` atomically.
+   * Return true if write landed, false if condition failed or entity missing / mutated (i.e. mutate returned null).
+   */
+  compareAndSwap(id: ID, mutate: (current: E | null) => E | null): Promise<boolean>;
+}
+
+/**
+ * Type guard to check if an adapter supports conditional write operations.
+ */
+export function supportsConditionalWrite<E, ID = string | number>(
+  adapter: unknown,
+): adapter is ConditionalStorageAdapter<E, ID> {
+  return (
+    typeof adapter === 'object' &&
+    adapter !== null &&
+    typeof (adapter as any).saveIfAbsent === 'function' &&
+    typeof (adapter as any).compareAndSwap === 'function'
+  );
+}

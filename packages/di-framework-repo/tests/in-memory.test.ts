@@ -79,4 +79,60 @@ describe('InMemoryRepository', () => {
     expect(resultPage2.items).toHaveLength(1);
     expect(resultPage2.items[0]?.name).toBe('David');
   });
+
+  test('should support supportsConditionalWrite type guard', () => {
+    const { supportsConditionalWrite } = require('../src/adapter');
+    expect(supportsConditionalWrite(repo)).toBe(true);
+    expect(supportsConditionalWrite({})).toBe(false);
+  });
+
+  test('saveIfAbsent saves entity only if absent', async () => {
+    const user = { id: '1', name: 'Alice', age: 30 };
+    expect(await repo.saveIfAbsent(user)).toBe(true);
+    expect(await repo.findById('1')).toEqual(user);
+    expect(await repo.saveIfAbsent({ id: '1', name: 'Alice 2', age: 31 })).toBe(false);
+    expect((await repo.findById('1'))?.name).toBe('Alice');
+  });
+
+  test('compareAndSwap mutates entity atomically or aborts when null returned', async () => {
+    await repo.save({ id: '1', name: 'Alice', age: 30 });
+    const aborted = await repo.compareAndSwap('1', (current) => {
+      if (!current || current.age !== 25) return null;
+      return { ...current, age: 26 };
+    });
+    expect(aborted).toBe(false);
+    expect((await repo.findById('1'))?.age).toBe(30);
+
+    const swapped = await repo.compareAndSwap('1', (current) => {
+      if (!current || current.age !== 30) return null;
+      return { ...current, age: 31 };
+    });
+    expect(swapped).toBe(true);
+    expect((await repo.findById('1'))?.age).toBe(31);
+  });
+
+  test('contention: concurrent saveIfAbsent has exactly 1 winner', async () => {
+    const promises = Array.from({ length: 50 }, (_, i) =>
+      repo.saveIfAbsent({ id: 'concurrent-1', name: `User ${i}`, age: i }),
+    );
+    const results = await Promise.all(promises);
+    const winners = results.filter((r) => r === true);
+    expect(winners).toHaveLength(1);
+  });
+
+  test('contention: concurrent compareAndSwap has at most 1 winner per observed state', async () => {
+    await repo.save({ id: 'concurrent-cas', name: 'Original', age: 0 });
+
+    // 50 concurrent requests competing to transition age from 0 to 1
+    const promises = Array.from({ length: 50 }, () =>
+      repo.compareAndSwap('concurrent-cas', (current) => {
+        if (!current || current.age !== 0) return null;
+        return { ...current, age: 1 };
+      }),
+    );
+    const results = await Promise.all(promises);
+    const winners = results.filter((r) => r === true);
+    expect(winners).toHaveLength(1);
+    expect((await repo.findById('concurrent-cas'))?.age).toBe(1);
+  });
 });
