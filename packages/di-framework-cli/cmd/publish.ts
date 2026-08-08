@@ -13,6 +13,7 @@ export const PACKAGES = [
   'packages/di-framework-socket',
   'packages/di-framework-rpc',
   'packages/di-framework-ai',
+  'packages/di-framework-codegen',
   'packages/di-framework-cli',
 ];
 

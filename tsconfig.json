@@ -51,7 +51,9 @@
       "@di-framework/rpc": ["packages/di-framework-rpc/index.ts"],
       "@di-framework/rpc/*": ["packages/di-framework-rpc/*"],
       "@di-framework/ai": ["packages/di-framework-ai/src/index.ts"],
-      "@di-framework/ai/*": ["packages/di-framework-ai/src/*"]
+      "@di-framework/ai/*": ["packages/di-framework-ai/src/*"],
+      "@di-framework/codegen": ["packages/di-framework-codegen/index.ts"],
+      "@di-framework/codegen/*": ["packages/di-framework-codegen/*"]
     }
   },
   "exclude": [

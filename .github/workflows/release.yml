@@ -52,6 +52,7 @@ jobs:
           packages/di-framework-socket \
           packages/di-framework-rpc \
           packages/di-framework-ai \
+          packages/di-framework-codegen \
           packages/di-framework-cli; do
             name=$(node -p "require('./$pkg/package.json').name")
             version=$(node -p "require('./$pkg/package.json').version")

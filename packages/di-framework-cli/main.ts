@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 import { build } from './cmd/build';
+import { generateCommand as generate } from './cmd/generate';
 import { publish } from './cmd/publish';
 import { test } from './cmd/test';
 import { typecheck } from './cmd/typecheck';
 
 const COMMANDS: Record<string, { description: string; run: () => Promise<void> }> = {
+  generate: { description: 'Generates application surfaces from schema manifests', run: generate },
   build: { description: 'Builds all packages and syncs versions', run: build },
   test: { description: 'Runs the E2E test suite', run: test },
   typecheck: { description: 'Runs TypeScript type checking across packages', run: typecheck },
