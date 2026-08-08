@@ -18,26 +18,23 @@ bun add @di-framework/core
 ```
 
 ```ts
-import { Container, Component } from '@di-framework/core/decorators';
-import { useContainer } from '@di-framework/core/container';
+import { Container, Publisher, Subscriber } from '@di-framework/core/decorators';
 
 @Container()
-class Greeter {
-  greet(name: string) {
-    return `Hello, ${name}!`;
+class UserService {
+  @Publisher('user.created')
+  createUser(name: string) {
+    return { id: 1, name };
   }
 }
 
 @Container()
-class App {
-  constructor(@Component(Greeter) private greeter: Greeter) {}
-
-  run() {
-    console.log(this.greeter.greet('di-framework'));
+class AuditService {
+  @Subscriber('user.created')
+  onUserCreated(event: any) {
+    console.log('User created:', event.result);
   }
 }
-
-useContainer().resolve(App).run();
 ```
 
 ## Packages
