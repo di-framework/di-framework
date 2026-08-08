@@ -43,6 +43,21 @@ export type OutboundKeyFn = (payload: unknown) => string | undefined;
 export type OutboundFilterFn = (payload: unknown) => boolean;
 export type InboundMapFn = (payload: unknown, message: EventMessage) => unknown;
 export type InboundFilterFn = (payload: unknown, message: EventMessage) => boolean;
+export type InboundValidateFn = (
+  payload: unknown,
+  message: EventMessage,
+) => unknown | Promise<unknown>;
+
+export interface InboundMiddlewareContext<T = unknown> {
+  message: EventMessage;
+  route: InboundRoute;
+  payload: T;
+  next: () => Promise<void> | void;
+}
+
+export type InboundMiddleware<T = unknown> = (
+  ctx: InboundMiddlewareContext<T>,
+) => Promise<void> | void;
 
 export interface OutboundRoute {
   event: string;
@@ -59,6 +74,8 @@ export interface InboundRoute {
   event: string;
   map?: InboundMapFn;
   filter?: InboundFilterFn;
+  validate?: InboundValidateFn;
+  middleware?: InboundMiddleware | InboundMiddleware[];
 }
 
 export interface EventBridgeRoutes {
@@ -81,6 +98,7 @@ export interface CreateEventBridgeOptions {
   codec?: EventCodec;
   /** Called when publish/consume handling fails. Defaults to console.error + nack. */
   onError?: (ctx: EventBridgeErrorContext) => void;
+  middleware?: InboundMiddleware | InboundMiddleware[];
 }
 
 /** Minimal container surface used by the bridge (avoids tight coupling). */
@@ -112,6 +130,8 @@ export interface InboundDecoratorOptions {
   event: string;
   map?: InboundMapFn;
   filter?: InboundFilterFn;
+  validate?: InboundValidateFn;
+  middleware?: InboundMiddleware | InboundMiddleware[];
 }
 
 export type EventTransportConstructor = abstract new () => EventTransport;
@@ -128,4 +148,5 @@ export interface EventBridgeDecoratorOptions {
   onError?: (ctx: EventBridgeErrorContext) => void;
   /** Start the bridge when the class is resolved. Defaults to `true`. */
   autoStart?: boolean;
+  middleware?: InboundMiddleware | InboundMiddleware[];
 }

@@ -404,3 +404,274 @@ describe('createEventBridge - error handling & filters', () => {
     await bridge.stop();
   });
 });
+
+describe('createEventBridge - inbound middleware & route validation hooks', () => {
+  it('enforces deterministic pipeline execution order and passes transformed payload forward', async () => {
+    const steps: string[] = [];
+    const transport = memoryTransport();
+    const emitted: unknown[] = [];
+    useContainer().on('order.created', (p) => {
+      steps.push('containerEmit');
+      emitted.push(p);
+    });
+
+    const bridge = createEventBridge({
+      transport,
+      middleware: [
+        async (ctx) => {
+          steps.push('bridgeMw1-start');
+          (ctx.payload as Record<string, unknown>).bm1 = true;
+          await ctx.next();
+          steps.push('bridgeMw1-end');
+        },
+        async (ctx) => {
+          steps.push('bridgeMw2-start');
+          (ctx.payload as Record<string, unknown>).bm2 = true;
+          await ctx.next();
+          steps.push('bridgeMw2-end');
+        },
+      ],
+      routes: {
+        inbound: [
+          {
+            topic: 'orders-topic',
+            event: 'order.created',
+            filter: (payload) => {
+              steps.push('filter');
+              return (payload as { active?: boolean }).active !== false;
+            },
+            map: (payload) => {
+              steps.push('map');
+              return { ...(payload as object), mapped: true };
+            },
+            validate: (payload) => {
+              steps.push('validate');
+              return { ...(payload as object), validated: true };
+            },
+            middleware: [
+              async (ctx) => {
+                steps.push('routeMw1-start');
+                (ctx.payload as Record<string, unknown>).rm1 = true;
+                await ctx.next();
+                steps.push('routeMw1-end');
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await bridge.start();
+    await transport.start?.();
+
+    await transport.publish({
+      id: 'm1',
+      topic: 'orders-topic',
+      payload: { id: 100, active: true },
+    });
+    await Bun.sleep(10);
+
+    expect(steps).toEqual([
+      'filter',
+      'map',
+      'validate',
+      'bridgeMw1-start',
+      'bridgeMw2-start',
+      'routeMw1-start',
+      'containerEmit',
+      'routeMw1-end',
+      'bridgeMw2-end',
+      'bridgeMw1-end',
+    ]);
+    expect(emitted).toEqual([
+      { id: 100, active: true, mapped: true, validated: true, bm1: true, bm2: true, rm1: true },
+    ]);
+
+    await bridge.stop();
+  });
+
+  it('short-circuits when middleware completes without calling next()', async () => {
+    const transport = memoryTransport();
+    const emitted: unknown[] = [];
+    useContainer().on('order.created', (p) => emitted.push(p));
+
+    let acked = false;
+    let nacked = false;
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'orders-topic',
+            event: 'order.created',
+            middleware: [
+              async (_ctx) => {
+                // Short-circuit: do NOT call next()
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    // Track transport subscribe ack behavior
+    let handlerRef: ((msg: EventMessage, ack: Ack) => Promise<void>) | undefined;
+    const trackingTransport = {
+      ...transport,
+      async subscribe(topic: string, handler: (msg: EventMessage, ack: Ack) => Promise<void>) {
+        handlerRef = handler;
+        return transport.subscribe(topic, handler);
+      },
+    };
+
+    const trackedBridge = createEventBridge({
+      transport: trackingTransport,
+      routes: {
+        inbound: [
+          {
+            topic: 'orders-topic',
+            event: 'order.created',
+            middleware: [
+              async (_ctx) => {
+                // Short circuit without next()
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await trackedBridge.start();
+    await transport.start?.();
+
+    await handlerRef?.(
+      { id: '1', topic: 'orders-topic', payload: { id: 1 } },
+      {
+        ack() {
+          acked = true;
+        },
+        nack() {
+          nacked = true;
+        },
+      },
+    );
+
+    expect(emitted).toEqual([]);
+    expect(acked).toBe(true);
+    expect(nacked).toBe(false);
+
+    await trackedBridge.stop();
+    await bridge.stop();
+  });
+
+  it('routes validation failure through onError and nack({ requeue: false })', async () => {
+    const errors: Array<{ direction: string; error: unknown }> = [];
+    const transport = memoryTransport();
+    const emitted: unknown[] = [];
+    useContainer().on('order.created', (p) => emitted.push(p));
+
+    let nackOptions: { requeue?: boolean } | undefined;
+    let handlerRef: ((msg: EventMessage, ack: Ack) => Promise<void>) | undefined;
+    const trackingTransport = {
+      ...transport,
+      async subscribe(topic: string, handler: (msg: EventMessage, ack: Ack) => Promise<void>) {
+        handlerRef = handler;
+        return transport.subscribe(topic, handler);
+      },
+    };
+
+    const bridge = createEventBridge({
+      transport: trackingTransport,
+      routes: {
+        inbound: [
+          {
+            topic: 'orders-topic',
+            event: 'order.created',
+            validate: () => {
+              throw new Error('Invalid schema');
+            },
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    let nacked = false;
+    await handlerRef?.(
+      { id: '1', topic: 'orders-topic', payload: {} },
+      {
+        ack() {},
+        nack(opts?: { requeue?: boolean }) {
+          nacked = true;
+          nackOptions = opts;
+        },
+      },
+    );
+
+    expect(emitted).toEqual([]);
+    expect(errors).toHaveLength(1);
+    const err0 = errors[0]?.error as Error | undefined;
+    expect(err0?.message).toBe('Invalid schema');
+    expect(nacked).toBe(true);
+    expect(nackOptions).toEqual({ requeue: false });
+
+    await bridge.stop();
+  });
+
+  it('routes middleware failure through onError and nack({ requeue: false })', async () => {
+    const errors: Array<{ direction: string; error: unknown }> = [];
+    const transport = memoryTransport();
+    let handlerRef: ((msg: EventMessage, ack: Ack) => Promise<void>) | undefined;
+    const trackingTransport = {
+      ...transport,
+      async subscribe(topic: string, handler: (msg: EventMessage, ack: Ack) => Promise<void>) {
+        handlerRef = handler;
+        return transport.subscribe(topic, handler);
+      },
+    };
+
+    const bridge = createEventBridge({
+      transport: trackingTransport,
+      routes: {
+        inbound: [
+          {
+            topic: 'orders-topic',
+            event: 'order.created',
+            middleware: [
+              async () => {
+                throw new Error('Middleware failure');
+              },
+            ],
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    let nacked = false;
+    let nackOptions: { requeue?: boolean } | undefined;
+    await handlerRef?.(
+      { id: '1', topic: 'orders-topic', payload: {} },
+      {
+        ack() {},
+        nack(opts?: { requeue?: boolean }) {
+          nacked = true;
+          nackOptions = opts;
+        },
+      },
+    );
+
+    expect(errors).toHaveLength(1);
+    const err1 = errors[0]?.error as Error | undefined;
+    expect(err1?.message).toBe('Middleware failure');
+    expect(nacked).toBe(true);
+    expect(nackOptions).toEqual({ requeue: false });
+
+    await bridge.stop();
+  });
+});

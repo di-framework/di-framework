@@ -8,6 +8,7 @@ import type {
   EventBridgeHandle,
   EventTransport,
   InboundDecoratorOptions,
+  InboundMiddleware,
   OutboundDecoratorOptions,
 } from './types.ts';
 
@@ -71,6 +72,7 @@ function attachBridgeMethods(ctor: Ctor, options: EventBridgeDecoratorOptions): 
       },
       codec: options.codec,
       onError: options.onError,
+      middleware: options.middleware,
     });
     await handle.start();
     this[BRIDGE_HANDLE] = handle;
@@ -101,7 +103,8 @@ function registerWithContainer(target: Ctor, options: EventBridgeDecoratorOption
  */
 export function EventBridge(options: EventBridgeDecoratorOptions = {}) {
   return <T extends Ctor>(target: T): T => {
-    registry.addTarget(target);
+    const entry = registry.addTarget(target);
+    entry.options = options;
     attachBridgeMethods(target, options);
 
     const autoStart = options.autoStart !== false;
@@ -132,6 +135,7 @@ export function EventBridge(options: EventBridgeDecoratorOptions = {}) {
     // Point registry entries at the class the container will resolve.
     const prior = registry.get(target);
     const slot = registry.addTarget(BridgeClass);
+    slot.options = options;
     if (prior) {
       slot.outbound.push(...prior.outbound);
       slot.inbound.push(...prior.inbound);
@@ -178,6 +182,8 @@ export function Inbound(options: InboundDecoratorOptions) {
       event: options.event,
       map: options.map,
       filter: options.filter,
+      validate: options.validate,
+      middleware: options.middleware,
     });
   };
 }
@@ -190,6 +196,7 @@ export async function startEventBridges(
   options: {
     container?: EventBridgeContainer;
     transport?: EventTransport | (() => EventTransport);
+    middleware?: InboundMiddleware | InboundMiddleware[];
   } = {},
 ): Promise<EventBridgeHandle[]> {
   const container = options.container ?? useContainer();
@@ -233,6 +240,9 @@ export async function startEventBridges(
           container,
           transport,
           routes: { outbound: entry.outbound, inbound: entry.inbound },
+          codec: entry.options?.codec,
+          onError: entry.options?.onError,
+          middleware: options.middleware ?? entry.options?.middleware,
         });
         await handle.start();
         instance[BRIDGE_HANDLE] = handle;

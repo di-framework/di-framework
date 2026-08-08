@@ -306,4 +306,58 @@ describe('startEventBridges - registry/container resolution edge cases', () => {
     await Bun.sleep(10);
     expect(seen).toEqual([{ d: 1 }]);
   });
+
+  it('passes middleware and validate options from @EventBridge and @Inbound to the bridge pipeline', async () => {
+    const transport = memoryTransport();
+    const emitted: unknown[] = [];
+    useContainer().on('dec.event', (p) => emitted.push(p));
+
+    const steps: string[] = [];
+
+    @EventBridge({
+      transport: () => transport,
+      autoStart: false,
+      middleware: [
+        async (ctx) => {
+          steps.push('bridgeMw');
+          (ctx.payload as Record<string, unknown>).bm = true;
+          await ctx.next();
+        },
+      ],
+    })
+    class DecoratedBridge {
+      @Inbound({
+        topic: 'dec.topic',
+        event: 'dec.event',
+        validate: (p) => {
+          steps.push('validate');
+          return { ...(p as object), valid: true };
+        },
+        middleware: [
+          async (ctx) => {
+            steps.push('routeMw');
+            (ctx.payload as Record<string, unknown>).rm = true;
+            await ctx.next();
+          },
+        ],
+      })
+      inboundRoute!: undefined;
+    }
+
+    const c = useContainer();
+    const inst = c.resolve(DecoratedBridge) as BridgedInstance;
+    const handle = await inst.$startBridge?.();
+
+    await transport.publish({
+      id: 'd1',
+      topic: 'dec.topic',
+      payload: { val: 42 },
+    });
+    await Bun.sleep(10);
+
+    expect(steps).toEqual(['validate', 'bridgeMw', 'routeMw']);
+    expect(emitted).toEqual([{ val: 42, valid: true, bm: true, rm: true }]);
+
+    await handle?.stop();
+  });
 });
