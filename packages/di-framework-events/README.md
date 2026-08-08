@@ -136,6 +136,72 @@ const transport = natsTransport({
 
 Core NATS is the default. Set `jetstream: true` (and usually `durable`) for durable consumers.
 
+## Inbound Middleware and Route Validation
+
+Inbound event processing follows a deterministic execution pipeline:
+
+1. **`filter`**: Drops unwanted messages early (`ack.ack()` without emitting).
+2. **`map`**: Transforms raw message payload.
+3. **`validate`**: Validates/transforms the mapped payload. Thrown errors route to `onError` and `ack.nack({ requeue: false })`. The returned value becomes the payload for downstream middleware and event emission.
+4. **Bridge-level middleware**: Functions defined on `@EventBridge` or `createEventBridge({ middleware })`, executed in declaration order.
+5. **Route-level middleware**: Functions defined on `@Inbound` or route options, executed in declaration order.
+6. **Container emit**: Emits the validated/transformed payload onto the container event bus (`container.emit(route.event, payload)`).
+7. **Acknowledge**: Calls `ack.ack()`.
+
+### Validation Reuse
+
+Use the `validate` hook on `@Inbound` or route options to sanitize and type-check incoming payloads:
+
+```typescript
+import { Inbound, EventBridge } from '@di-framework/events';
+import { z } from 'zod';
+
+const PaymentCapturedSchema = z.object({
+  paymentId: z.string(),
+  amount: z.number().positive(),
+  currency: z.string().length(3),
+});
+
+function validateWith<T>(schema: z.ZodType<T>) {
+  return (payload: unknown) => schema.parse(payload);
+}
+
+@EventBridge()
+class PaymentEvents {
+  @Inbound({
+    topic: 'payments.captured',
+    event: 'payment.captured',
+    validate: validateWith(PaymentCapturedSchema),
+  })
+  inboundPayments!: void;
+}
+```
+
+### Idempotency-Claim Middleware
+
+Middleware functions receive an `InboundMiddlewareContext` (`{ message, route, payload, next }`). If a middleware completes without calling `next()`, execution short-circuits: container emission is bypassed, and the message is acknowledged (`ack.ack()`).
+
+```typescript
+import { EventBridge, Inbound, type InboundMiddleware } from '@di-framework/events';
+
+const processedIds = new Set<string>();
+
+const idempotencyMiddleware: InboundMiddleware = async (ctx) => {
+  if (processedIds.has(ctx.message.id)) {
+    // Already handled: short-circuit pipeline & ack message
+    return;
+  }
+  processedIds.add(ctx.message.id);
+  await ctx.next();
+};
+
+@EventBridge({ middleware: [idempotencyMiddleware] })
+class OrderEvents {
+  @Inbound({ topic: 'orders.placed', event: 'order.placed' })
+  inboundOrders!: void;
+}
+```
+
 ## Loop suppression
 
 When the same process both publishes and consumes the same event/topic pair, inbound emits temporarily suppress outbound republishing so a single-process echo cannot spin forever. Local `@Subscriber` handlers still see the original `@Publisher` event; a remote echo would arrive as a second emit in a multi-process deployment.

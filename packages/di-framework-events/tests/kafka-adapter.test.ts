@@ -1,5 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
+import { useContainer } from '@di-framework/core/container';
 import { type KafkaJsLike, kafkaTransport } from '../src/adapters/kafka.ts';
+import { createEventBridge } from '../src/bridge.ts';
 import type { EventMessage } from '../src/types.ts';
 
 interface RunConfig {
@@ -283,5 +285,221 @@ describe('kafkaTransport - subscribe after start & publish guard', () => {
     await expect(transport.publish({ id: '1', topic: 't', payload: {} })).rejects.toThrow(
       /not started/,
     );
+  });
+});
+
+describe('kafkaTransport + createEventBridge pipeline', () => {
+  it('executes pipeline in deterministic order on Kafka transport', async () => {
+    const { mock: kafkajs, runConfigs } = makeMock();
+    const transport = kafkaTransport({
+      client: { clientId: 'test', brokers: ['b:9092'] },
+      groupId: 'g1',
+      kafkajs,
+    });
+
+    const steps: string[] = [];
+    const emitted: unknown[] = [];
+    useContainer().on('kafka.event', (payload) => {
+      steps.push('containerEmit');
+      emitted.push(payload);
+    });
+
+    const bridge = createEventBridge({
+      transport,
+      middleware: [
+        async (ctx) => {
+          steps.push('bridgeMw');
+          (ctx.payload as Record<string, unknown>).bm = true;
+          await ctx.next();
+        },
+      ],
+      routes: {
+        inbound: [
+          {
+            topic: 'kafka.topic',
+            event: 'kafka.event',
+            filter: (payload) => {
+              steps.push('filter');
+              return (payload as { ok: boolean }).ok;
+            },
+            map: (payload) => {
+              steps.push('map');
+              return { ...(payload as object), mapped: true };
+            },
+            validate: (payload) => {
+              steps.push('validate');
+              return { ...(payload as object), validated: true };
+            },
+            middleware: [
+              async (ctx) => {
+                steps.push('routeMw');
+                (ctx.payload as Record<string, unknown>).rm = true;
+                await ctx.next();
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await bridge.start();
+
+    const eachMessage = runConfigs[0]?.eachMessage;
+    await eachMessage?.({
+      topic: 'kafka.topic',
+      partition: 0,
+      message: {
+        key: null,
+        value: Buffer.from(JSON.stringify({ ok: true, id: 'k1' })),
+        timestamp: '1000',
+      },
+    });
+
+    expect(steps).toEqual(['filter', 'map', 'validate', 'bridgeMw', 'routeMw', 'containerEmit']);
+    expect(emitted).toEqual([
+      { ok: true, id: 'k1', mapped: true, validated: true, bm: true, rm: true },
+    ]);
+
+    await bridge.stop();
+  });
+
+  it('short-circuits without container emit on Kafka transport', async () => {
+    const { mock: kafkajs, runConfigs } = makeMock();
+    const transport = kafkaTransport({
+      client: { clientId: 'test', brokers: ['b:9092'] },
+      groupId: 'g1',
+      kafkajs,
+    });
+
+    const emitted: unknown[] = [];
+    useContainer().on('kafka.event', (payload) => emitted.push(payload));
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'kafka.topic',
+            event: 'kafka.event',
+            middleware: [
+              async (_ctx) => {
+                // short-circuit
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await bridge.start();
+
+    const eachMessage = runConfigs[0]?.eachMessage;
+    await eachMessage?.({
+      topic: 'kafka.topic',
+      partition: 0,
+      message: {
+        key: null,
+        value: Buffer.from(JSON.stringify({ skip: true })),
+        timestamp: '1000',
+      },
+    });
+
+    expect(emitted).toEqual([]);
+
+    await bridge.stop();
+  });
+
+  it('handles validation failure on Kafka by routing to onError and nacking', async () => {
+    const { mock: kafkajs, runConfigs } = makeMock();
+    const transport = kafkaTransport({
+      client: { clientId: 'test', brokers: ['b:9092'] },
+      groupId: 'g1',
+      kafkajs,
+    });
+
+    const errors: Array<{ direction: string; error: unknown }> = [];
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'kafka.topic',
+            event: 'kafka.event',
+            validate: () => {
+              throw new Error('Kafka validation error');
+            },
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    const eachMessage = runConfigs[0]?.eachMessage;
+    await eachMessage?.({
+      topic: 'kafka.topic',
+      partition: 0,
+      message: {
+        key: null,
+        value: Buffer.from(JSON.stringify({})),
+        timestamp: '1000',
+      },
+    });
+
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    const err0 = errors[0]?.error as Error | undefined;
+    expect(err0?.message).toBe('Kafka validation error');
+
+    await bridge.stop();
+  });
+
+  it('handles middleware failure on Kafka by routing to onError and nacking', async () => {
+    const { mock: kafkajs, runConfigs } = makeMock();
+    const transport = kafkaTransport({
+      client: { clientId: 'test', brokers: ['b:9092'] },
+      groupId: 'g1',
+      kafkajs,
+    });
+
+    const errors: Array<{ direction: string; error: unknown }> = [];
+
+    const bridge = createEventBridge({
+      transport,
+      routes: {
+        inbound: [
+          {
+            topic: 'kafka.topic',
+            event: 'kafka.event',
+            middleware: [
+              async () => {
+                throw new Error('Kafka middleware error');
+              },
+            ],
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    const eachMessage = runConfigs[0]?.eachMessage;
+    await eachMessage?.({
+      topic: 'kafka.topic',
+      partition: 0,
+      message: {
+        key: null,
+        value: Buffer.from(JSON.stringify({})),
+        timestamp: '1000',
+      },
+    });
+
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    const err1 = errors[0]?.error as Error | undefined;
+    expect(err1?.message).toBe('Kafka middleware error');
+
+    await bridge.stop();
   });
 });
