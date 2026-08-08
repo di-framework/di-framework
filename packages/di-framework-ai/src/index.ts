@@ -441,8 +441,16 @@ export { AiError, cancelledError, isAiError } from './model/errors.ts';
 // Tool calling manager
 export type {
   DefaultToolCallingManagerOptions,
+  PrincipalResolver,
+  ToolAuthorizationAdvisorOptions,
+  ToolAuthorizationContext,
+  ToolAuthorizationManager,
+  ToolCallAdvisor,
   ToolCallbackResolver,
   ToolCallingManager,
+  ToolExecutionAdvisor,
+  ToolExecutionAdvisorContext,
+  ToolExecutionAdvisorNext,
   ToolExecutionEligibilityChecker,
   ToolExecutionResult,
 } from './model/tool/index.ts';
@@ -450,12 +458,16 @@ export {
   buildGenerationsFromToolExecution,
   createToolCallingManager,
   DefaultToolCallingManager,
+  defaultPrincipalResolver,
   defaultToolExecutionEligibilityChecker,
   emptyToolCallbackResolver,
+  executeWithAdvisors,
   staticToolCallbackResolver,
   TOOL_METADATA_TOOL_ID,
   TOOL_METADATA_TOOL_NAME,
   TOOL_RETURN_DIRECT_FINISH_REASON,
+  ToolAuthorizationAdvisor,
+  toolAuthorizationAdvisor,
   toolExecutionResult,
 } from './model/tool/index.ts';
 // Providers (HTTP adapters — no vendor SDKs)

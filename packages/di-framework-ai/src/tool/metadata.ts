@@ -8,11 +8,19 @@ export interface ToolMetadata {
    * instead of being fed back to the model.
    */
   readonly returnDirect: boolean;
+
+  /**
+   * Opaque authorization metadata (e.g. roles, permissions, scopes, policies).
+   */
+  readonly auth?: unknown;
 }
 
-export function toolMetadata(partial: { returnDirect?: boolean } = {}): ToolMetadata {
+export function toolMetadata(
+  partial: { returnDirect?: boolean; auth?: unknown } = {},
+): ToolMetadata {
   return {
     returnDirect: partial.returnDirect ?? false,
+    ...(partial.auth !== undefined ? { auth: partial.auth } : {}),
   };
 }
 
