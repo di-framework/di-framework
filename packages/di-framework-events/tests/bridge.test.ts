@@ -674,4 +674,49 @@ describe('createEventBridge - inbound middleware & route validation hooks', () =
 
     await bridge.stop();
   });
+
+  it('throws an error if next() is called multiple times in middleware', async () => {
+    const errors: Array<{ direction: string; error: unknown }> = [];
+    const transport = memoryTransport();
+    let handlerRef: ((msg: EventMessage, ack: Ack) => Promise<void>) | undefined;
+    const trackingTransport = {
+      ...transport,
+      async subscribe(topic: string, handler: (msg: EventMessage, ack: Ack) => Promise<void>) {
+        handlerRef = handler;
+        return transport.subscribe(topic, handler);
+      },
+    };
+
+    const bridge = createEventBridge({
+      transport: trackingTransport,
+      routes: {
+        inbound: [
+          {
+            topic: 'double-next-topic',
+            event: 'double.next',
+            middleware: [
+              async (ctx) => {
+                await ctx.next();
+                await ctx.next();
+              },
+            ],
+          },
+        ],
+      },
+      onError: (ctx) => errors.push({ direction: ctx.direction, error: ctx.error }),
+    });
+
+    await bridge.start();
+
+    await handlerRef?.(
+      { id: '1', topic: 'double-next-topic', payload: {} },
+      { ack() {}, nack() {} },
+    );
+
+    expect(errors).toHaveLength(1);
+    const err = errors[0]?.error as Error | undefined;
+    expect(err?.message).toMatch(/next\(\) called multiple times/);
+
+    await bridge.stop();
+  });
 });

@@ -125,12 +125,7 @@ export function createEventBridge(options: CreateEventBridgeOptions): EventBridg
           next: async () => {},
         };
 
-        let index = -1;
         const dispatch = async (i: number): Promise<void> => {
-          if (i <= index) {
-            throw new Error('next() called multiple times');
-          }
-          index = i;
           if (i < chain.length) {
             const mw = chain[i];
             let called = false;
