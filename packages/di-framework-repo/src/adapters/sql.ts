@@ -60,11 +60,13 @@ export abstract class SqlStorageAdapter<
 {
   protected readonly table: string;
   protected readonly idColumn: string;
+  protected readonly rawIdColumn: string;
   protected readonly toRow: (entity: E) => Row;
   protected readonly fromRow: (row: Row) => E;
   constructor(options: SqlAdapterOptions<E>) {
     this.table = ident(options.table);
-    this.idColumn = ident(options.idColumn ?? 'id');
+    this.rawIdColumn = options.idColumn ?? 'id';
+    this.idColumn = ident(this.rawIdColumn);
     this.toRow = options.entityToRow ?? ((e) => ({ ...e }));
     this.fromRow = options.rowToEntity ?? ((r) => r as E);
   }
@@ -117,7 +119,7 @@ export abstract class SqlStorageAdapter<
     return Number(row?.count ?? 0);
   }
   async exists(id: ID): Promise<boolean> {
-    return (await this.count({ [this.idColumn.slice(1, -1)]: id })) > 0;
+    return (await this.count({ [this.rawIdColumn]: id })) > 0;
   }
   async findPaginated(params: PaginationParams = {}) {
     const page = Math.max(1, params.page ?? 1);
@@ -161,6 +163,17 @@ export abstract class SqlStorageAdapter<
       const next = mutate(current);
       if (next === null) {
         return false;
+      }
+      const nextRow = this.toRow(next);
+      const nextId =
+        (next as any)[this.rawIdColumn] ??
+        (next as any).id ??
+        nextRow[this.rawIdColumn] ??
+        nextRow.id;
+      if (nextId !== undefined && String(nextId) !== String(id)) {
+        throw new Error(
+          `Cannot mutate entity primary key from ${String(id)} to ${String(nextId)} in compareAndSwap`,
+        );
       }
       await txAdapter.save(next);
       return true;
