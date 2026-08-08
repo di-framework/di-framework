@@ -50,7 +50,7 @@ describe('streaming schema and metadata detection', () => {
     expect(serviceMeta?.package).toBe('telemetry.v1');
 
     const compiled = compileConnectSchema();
-    const compiledService = compiled.services.get(serviceMeta!);
+    const compiledService = serviceMeta ? compiled.services.get(serviceMeta) : undefined;
     expect(compiledService).toBeDefined();
 
     const methodDesc = compiledService?.methods.find((m) => m.name === 'StreamLogs');
@@ -87,7 +87,7 @@ describe('streaming schema and metadata detection', () => {
     expect(bidiMeta?.serverStreaming).toBe(true);
 
     const compiled = compileConnectSchema();
-    const compiledService = compiled.services.get(serviceMeta!);
+    const compiledService = serviceMeta ? compiled.services.get(serviceMeta) : undefined;
     expect(compiledService).toBeDefined();
 
     const uploadDesc = compiledService?.methods.find((m) => m.name === 'UploadMetrics');

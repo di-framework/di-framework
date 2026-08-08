@@ -1,6 +1,7 @@
 import { isJsonRpcStreamFrame, JSON_RPC_ERRORS, parseJsonRpc, rpcFailure } from '../codec.ts';
 import { createRpcDispatcher } from '../dispatcher.ts';
 import type {
+  JsonRpcResponse,
   RpcContainer,
   RpcServerInterceptor,
   RpcTransport,
@@ -118,42 +119,85 @@ export function createHttpRpcHandler(options: CreateHttpRpcHandlerOptions = {}) 
 
     let isStreamResponse = false;
     let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let unaryResponse: JsonRpcResponse | JsonRpcResponse[] | undefined;
+
+    let resolveResponse!: (res: Response) => void;
+    const responsePromise = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+
+    const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         streamController = controller;
       },
     });
-    const encoder = new TextEncoder();
 
     const dispatchPromise = dispatcher.dispatch(parsed, async (frame) => {
-      isStreamResponse = true;
-      if (streamController) {
-        streamController.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
-        if (
-          isJsonRpcStreamFrame(frame) &&
-          (frame.stream === 'complete' || frame.stream === 'error')
-        ) {
-          try {
-            streamController.close();
-          } catch {}
+      if (isJsonRpcStreamFrame(frame)) {
+        if (!isStreamResponse) {
+          isStreamResponse = true;
+          resolveResponse(
+            new Response(stream, {
+              headers: {
+                'content-type': 'text/event-stream',
+                'cache-control': 'no-cache',
+                connection: 'keep-alive',
+              },
+            }),
+          );
         }
+        if (streamController) {
+          try {
+            streamController.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+          } catch {}
+          if (frame.stream === 'complete' || frame.stream === 'error') {
+            try {
+              streamController.close();
+            } catch {}
+          }
+        }
+      } else {
+        unaryResponse = frame;
       }
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    dispatchPromise.then(
+      (dispatchResult) => {
+        if (!isStreamResponse) {
+          const finalResult = unaryResponse ?? dispatchResult;
+          if (finalResult === undefined) {
+            resolveResponse(new Response(null, { status: 204 }));
+          } else {
+            resolveResponse(Response.json(finalResult));
+          }
+          try {
+            streamController?.close();
+          } catch {}
+        }
+      },
+      (error) => {
+        if (!isStreamResponse) {
+          resolveResponse(
+            Response.json(
+              rpcFailure(
+                null,
+                JSON_RPC_ERRORS.SERVER,
+                error instanceof Error ? error.message : String(error),
+              ),
+            ),
+          );
+          try {
+            streamController?.close();
+          } catch {}
+        } else {
+          try {
+            streamController?.close();
+          } catch {}
+        }
+      },
+    );
 
-    if (isStreamResponse) {
-      return new Response(stream, {
-        headers: {
-          'content-type': 'text/event-stream',
-          'cache-control': 'no-cache',
-          connection: 'keep-alive',
-        },
-      });
-    }
-
-    const response = await dispatchPromise;
-    if (response === undefined) return new Response(null, { status: 204 });
-    return Response.json(response);
+    return responsePromise;
   };
 }

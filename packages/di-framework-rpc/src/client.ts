@@ -50,8 +50,10 @@ export class PushStream<T> implements AsyncIterable<T> {
   push(value: T): void {
     if (this.isDone || this.errorState) return;
     if (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.resolve({ value, done: false });
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.resolve({ value, done: false });
+      }
     } else {
       this.queue.push(value);
     }
@@ -61,8 +63,10 @@ export class PushStream<T> implements AsyncIterable<T> {
     if (this.isDone || this.errorState) return;
     this.isDone = true;
     while (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.resolve({ value: undefined as never, done: true });
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.resolve({ value: undefined as never, done: true });
+      }
     }
   }
 
@@ -70,26 +74,35 @@ export class PushStream<T> implements AsyncIterable<T> {
     if (this.isDone || this.errorState) return;
     this.errorState = err;
     while (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.reject(err);
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.reject(err);
+      }
     }
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<T> {
-    while (true) {
-      if (this.queue.length > 0) {
-        yield this.queue.shift()!;
-      } else if (this.isDone) {
-        return;
-      } else if (this.errorState) {
-        throw this.errorState;
-      } else {
-        const nextResult = await new Promise<IteratorResult<T>>((resolve, reject) => {
-          this.resolvers.push({ resolve, reject });
-        });
-        if (nextResult.done) return;
-        yield nextResult.value;
+    try {
+      while (true) {
+        if (this.queue.length > 0) {
+          const item = this.queue.shift();
+          if (item !== undefined) {
+            yield item;
+          }
+        } else if (this.isDone) {
+          return;
+        } else if (this.errorState) {
+          throw this.errorState;
+        } else {
+          const nextResult = await new Promise<IteratorResult<T>>((resolve, reject) => {
+            this.resolvers.push({ resolve, reject });
+          });
+          if (nextResult.done) return;
+          yield nextResult.value;
+        }
       }
+    } finally {
+      this.end();
     }
   }
 }
@@ -241,7 +254,7 @@ export function createRpcClient<T>(
                 : rawItem;
               const finalItem = await composeInterceptors(
                 interceptors,
-                { method: serviceName!, params: hydrated, id },
+                { method: serviceName ?? '', params: hydrated, id },
                 async () => hydrated,
               );
               streamEntry.stream.push(finalItem);
@@ -441,51 +454,58 @@ export function createRpcClient<T>(
 
           pendingStreams.set(callId, pendingStream);
 
-          if (actualClientStream) {
-            // Bi-directional streaming
-            await transport.send({ jsonrpc: '2.0', id: callId, method });
-            (async () => {
-              try {
-                for await (const item of params as AsyncIterable<unknown>) {
-                  if (merged.signal?.aborted) break;
-                  const itemToSend = await composeInterceptors(
-                    interceptors,
-                    { method, params: item, id: callId },
-                    async () => item,
-                  );
-                  const jsonItem = inputMsg
-                    ? rpcMessageToJson(inputMsg, itemToSend, registry)
-                    : itemToSend;
-                  await transport.send({
-                    jsonrpc: '2.0',
-                    id: callId,
-                    stream: 'next',
-                    params: jsonItem,
-                  });
+          try {
+            if (actualClientStream) {
+              // Bi-directional streaming
+              await transport.send({ jsonrpc: '2.0', id: callId, method });
+              (async () => {
+                try {
+                  for await (const item of params as AsyncIterable<unknown>) {
+                    if (merged.signal?.aborted) break;
+                    const itemToSend = await composeInterceptors(
+                      interceptors,
+                      { method, params: item, id: callId },
+                      async () => item,
+                    );
+                    const jsonItem = inputMsg
+                      ? rpcMessageToJson(inputMsg, itemToSend, registry)
+                      : itemToSend;
+                    await transport.send({
+                      jsonrpc: '2.0',
+                      id: callId,
+                      stream: 'next',
+                      params: jsonItem,
+                    });
+                  }
+                  await transport.send({ jsonrpc: '2.0', id: callId, stream: 'complete' });
+                } catch (err) {
+                  await transport
+                    .send({
+                      jsonrpc: '2.0',
+                      id: callId,
+                      stream: 'error',
+                      error: {
+                        code: -32000,
+                        message: err instanceof Error ? err.message : String(err),
+                      },
+                    })
+                    .catch(() => {});
                 }
-                await transport.send({ jsonrpc: '2.0', id: callId, stream: 'complete' });
-              } catch (err) {
-                await transport
-                  .send({
-                    jsonrpc: '2.0',
-                    id: callId,
-                    stream: 'error',
-                    error: {
-                      code: -32000,
-                      message: err instanceof Error ? err.message : String(err),
-                    },
-                  })
-                  .catch(() => {});
-              }
-            })();
-          } else {
-            // Server-streaming only
-            await transport.send({
-              jsonrpc: '2.0',
-              id: callId,
-              method,
-              params: context.params,
-            });
+              })();
+            } else {
+              // Server-streaming only
+              await transport.send({
+                jsonrpc: '2.0',
+                id: callId,
+                method,
+                params: context.params,
+              });
+            }
+          } catch (err) {
+            pendingStream.onAbort?.();
+            pendingStream.mergedCleanup?.();
+            pendingStreams.delete(callId);
+            throw err;
           }
 
           return pushStream;
@@ -514,7 +534,12 @@ export function createRpcClient<T>(
       return ensureStarted().then(() =>
         composeInterceptors(interceptors, context, async () => {
           const resultPromise = registerPending(callId, method, callOptions);
-          await transport.send({ jsonrpc: '2.0', id: callId, method });
+          try {
+            await transport.send({ jsonrpc: '2.0', id: callId, method });
+          } catch (error) {
+            rejectPayload([{ jsonrpc: '2.0', id: callId, method }], error);
+            return resultPromise;
+          }
 
           (async () => {
             try {

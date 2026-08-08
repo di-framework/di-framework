@@ -31,6 +31,11 @@ class EchoResponse {
 @RpcService({ package: 'streaming.v1' })
 class StreamingService {
   @RpcMethod({ input: () => EchoRequest, output: () => EchoResponse })
+  async unaryEcho(req: EchoRequest): Promise<EchoResponse> {
+    return { result: `unary:${req.value}` };
+  }
+
+  @RpcMethod({ input: () => EchoRequest, output: () => EchoResponse })
   async *serverStream(req: EchoRequest): AsyncIterable<EchoResponse> {
     for (let i = 1; i <= 3; i++) {
       yield { result: `${req.value}-${i}` };
@@ -187,5 +192,49 @@ describe('streaming across transports', () => {
       bidiRes.push(item.result);
     }
     expect(bidiRes).toEqual(['echo:req1', 'echo:req2']);
+  });
+
+  it('createHttpRpcHandler returns standard application/json for unary calls without text/event-stream', async () => {
+    const handler = createHttpRpcHandler();
+    const req = new Request('http://localhost/rpc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'streaming.v1.StreamingService/UnaryEcho',
+        params: { value: 'test' },
+      }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(res.headers.get('content-type')).not.toContain('text/event-stream');
+    const body = (await res.json()) as { id: number; result: { result: string } };
+    expect(body.id).toBe(100);
+    expect(body.result.result).toBe('unary:test');
+  });
+
+  it('cleans up pendingStreams and signal listeners when transport.send fails', async () => {
+    const failingTransport = {
+      async send() {
+        throw new Error('Transport send failed');
+      },
+      subscribe() {
+        return () => {};
+      },
+    };
+    const client = createRpcClient(StreamingService, failingTransport);
+    const stream = client.serverStream({ value: 'fail' });
+
+    let caughtErr: Error | undefined;
+    try {
+      for await (const _item of stream) {
+        // should not yield anything
+      }
+    } catch (err) {
+      caughtErr = err as Error;
+    }
+    expect(caughtErr?.message).toBe('Transport send failed');
   });
 });

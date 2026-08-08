@@ -42,7 +42,7 @@ describe('createRpcClient - service/path resolution', () => {
   });
 
   it('supports the string-service overload (transport, { service })', async () => {
-    const { EchoService } = defineEcho();
+    defineEcho();
     const pair = memoryPair();
     const server = createRpcServer({ transport: pair.serverTransport });
     await server.start();

@@ -40,8 +40,10 @@ export class PushStream<T> implements AsyncIterable<T> {
   push(value: T): void {
     if (this.isDone || this.errorState) return;
     if (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.resolve({ value, done: false });
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.resolve({ value, done: false });
+      }
     } else {
       this.queue.push(value);
     }
@@ -51,8 +53,10 @@ export class PushStream<T> implements AsyncIterable<T> {
     if (this.isDone || this.errorState) return;
     this.isDone = true;
     while (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.resolve({ value: undefined as never, done: true });
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.resolve({ value: undefined as never, done: true });
+      }
     }
   }
 
@@ -60,26 +64,35 @@ export class PushStream<T> implements AsyncIterable<T> {
     if (this.isDone || this.errorState) return;
     this.errorState = err;
     while (this.resolvers.length > 0) {
-      const resolver = this.resolvers.shift()!;
-      resolver.reject(err);
+      const resolver = this.resolvers.shift();
+      if (resolver) {
+        resolver.reject(err);
+      }
     }
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<T> {
-    while (true) {
-      if (this.queue.length > 0) {
-        yield this.queue.shift()!;
-      } else if (this.isDone) {
-        return;
-      } else if (this.errorState) {
-        throw this.errorState;
-      } else {
-        const nextResult = await new Promise<IteratorResult<T>>((resolve, reject) => {
-          this.resolvers.push({ resolve, reject });
-        });
-        if (nextResult.done) return;
-        yield nextResult.value;
+    try {
+      while (true) {
+        if (this.queue.length > 0) {
+          const item = this.queue.shift();
+          if (item !== undefined) {
+            yield item;
+          }
+        } else if (this.isDone) {
+          return;
+        } else if (this.errorState) {
+          throw this.errorState;
+        } else {
+          const nextResult = await new Promise<IteratorResult<T>>((resolve, reject) => {
+            this.resolvers.push({ resolve, reject });
+          });
+          if (nextResult.done) return;
+          yield nextResult.value;
+        }
       }
+    } finally {
+      this.end();
     }
   }
 }
@@ -219,7 +232,7 @@ export function createRpcDispatcher(
                 );
                 const nextFrame: JsonRpcStreamNextSuccess = {
                   jsonrpc: '2.0',
-                  id: id!,
+                  id: id ?? null,
                   stream: 'next',
                   result: outputMsg ? rpcMessageToJson(outputMsg, finalItem, source) : finalItem,
                 };
@@ -227,7 +240,7 @@ export function createRpcDispatcher(
               }
               const completeFrame: JsonRpcStreamComplete = {
                 jsonrpc: '2.0',
-                id: id!,
+                id: id ?? null,
                 stream: 'complete',
               };
               if (sendFrame) await sendFrame(completeFrame);
@@ -235,7 +248,7 @@ export function createRpcDispatcher(
               const resJson = outputMsg
                 ? rpcMessageToJson(outputMsg, rawResult, source)
                 : rawResult;
-              const response: JsonRpcSuccess = { jsonrpc: '2.0', id: id!, result: resJson };
+              const response: JsonRpcSuccess = { jsonrpc: '2.0', id: id ?? null, result: resJson };
               if (sendFrame) await sendFrame(response);
             }
           } catch (error) {
@@ -248,7 +261,7 @@ export function createRpcDispatcher(
               : { code: JSON_RPC_ERRORS.SERVER, message: errorMessage(error) };
             const errorFrame: JsonRpcStreamError = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'error',
               error: errObj,
             };
@@ -259,7 +272,7 @@ export function createRpcDispatcher(
         };
 
         if (sendFrame) {
-          void runClientStream();
+          await runClientStream();
           return undefined;
         }
         await runClientStream();
@@ -305,7 +318,7 @@ export function createRpcDispatcher(
                 );
                 const nextFrame: JsonRpcStreamNextSuccess = {
                   jsonrpc: '2.0',
-                  id: id!,
+                  id: id ?? null,
                   stream: 'next',
                   result: outputMsg ? rpcMessageToJson(outputMsg, finalItem, source) : finalItem,
                 };
@@ -313,7 +326,7 @@ export function createRpcDispatcher(
               }
               const completeFrame: JsonRpcStreamComplete = {
                 jsonrpc: '2.0',
-                id: id!,
+                id: id ?? null,
                 stream: 'complete',
               };
               if (sendFrame) await sendFrame(completeFrame);
@@ -328,7 +341,7 @@ export function createRpcDispatcher(
               : { code: JSON_RPC_ERRORS.SERVER, message: errorMessage(error) };
             const errorFrame: JsonRpcStreamError = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'error',
               error: errObj,
             };
@@ -339,7 +352,7 @@ export function createRpcDispatcher(
         };
 
         if (sendFrame) {
-          void runServerStream();
+          await runServerStream();
           return undefined;
         }
         await runServerStream();

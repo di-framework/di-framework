@@ -429,7 +429,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             for await (const item of stream as AsyncIterable<unknown>) {
               const nextFrame: JsonRpcStreamNextSuccess = {
                 jsonrpc: '2.0',
-                id: id!,
+                id: id ?? null,
                 stream: 'next',
                 result: responseJson(match.descriptor, item),
               };
@@ -437,7 +437,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             }
             const completeFrame: JsonRpcStreamComplete = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'complete',
             };
             await emitToHandlers(completeFrame);
@@ -445,7 +445,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             const connectError = ConnectError.from(error);
             const errorFrame: JsonRpcStreamError = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'error',
               error: {
                 code: connectCodeToJsonRpc(connectError.code),
@@ -468,7 +468,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             if (id !== undefined) activeSessions.delete(id);
             const resFrame = {
               jsonrpc: '2.0' as const,
-              id: id!,
+              id: id ?? null,
               result: responseJson(match.descriptor, result),
             };
             await emitToHandlers(resFrame);
@@ -476,7 +476,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             if (id !== undefined) activeSessions.delete(id);
             const connectError = ConnectError.from(error);
             const failure = rpcFailure(
-              id!,
+              id ?? null,
               connectCodeToJsonRpc(connectError.code),
               connectError.rawMessage,
             );
@@ -496,7 +496,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             for await (const item of stream as AsyncIterable<unknown>) {
               const nextFrame: JsonRpcStreamNextSuccess = {
                 jsonrpc: '2.0',
-                id: id!,
+                id: id ?? null,
                 stream: 'next',
                 result: responseJson(match.descriptor, item),
               };
@@ -504,7 +504,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             }
             const completeFrame: JsonRpcStreamComplete = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'complete',
             };
             await emitToHandlers(completeFrame);
@@ -512,7 +512,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
             const connectError = ConnectError.from(error);
             const errorFrame: JsonRpcStreamError = {
               jsonrpc: '2.0',
-              id: id!,
+              id: id ?? null,
               stream: 'error',
               error: {
                 code: connectCodeToJsonRpc(connectError.code),
@@ -545,12 +545,14 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
       if (Array.isArray(payload)) {
         for (const item of payload) {
           if (isJsonRpcStreamFrame(item)) {
-            const session = activeSessions.get(item.id!);
-            if (session) {
-              if (item.stream === 'next')
-                session.push((item.params ?? item.result) as Record<string, unknown>);
-              else if (item.stream === 'complete') session.end();
-              else if (item.stream === 'error') session.error(new Error(item.error.message));
+            if (item.id !== null && item.id !== undefined) {
+              const session = activeSessions.get(item.id);
+              if (session) {
+                if (item.stream === 'next')
+                  session.push((item.params ?? item.result) as Record<string, unknown>);
+                else if (item.stream === 'complete') session.end();
+                else if (item.stream === 'error') session.error(new Error(item.error.message));
+              }
             }
           } else if (isJsonRpcCall(item)) {
             const res = await invoke(item);
@@ -561,12 +563,14 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
       }
 
       if (isJsonRpcStreamFrame(payload)) {
-        const session = activeSessions.get(payload.id!);
-        if (session) {
-          if (payload.stream === 'next')
-            session.push((payload.params ?? payload.result) as Record<string, unknown>);
-          else if (payload.stream === 'complete') session.end();
-          else if (payload.stream === 'error') session.error(new Error(payload.error.message));
+        if (payload.id !== null && payload.id !== undefined) {
+          const session = activeSessions.get(payload.id);
+          if (session) {
+            if (payload.stream === 'next')
+              session.push((payload.params ?? payload.result) as Record<string, unknown>);
+            else if (payload.stream === 'complete') session.end();
+            else if (payload.stream === 'error') session.error(new Error(payload.error.message));
+          }
         }
         return;
       }
