@@ -38,7 +38,7 @@ export class SocketGatewayRegistry {
 
   addHandler(target: GatewayCtor, meta: SocketHandlerMeta): void {
     this.addTarget(target);
-    this.entries.get(target)!.handlers.push(meta);
+    this.entries.get(target)?.handlers.push(meta);
   }
 
   get(target: GatewayCtor): SocketGatewayEntry | undefined {

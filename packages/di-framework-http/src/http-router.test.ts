@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
-import { HttpRouter, HttpRouterBuilder, json, registry, TypedRouter } from '../index.ts';
+import { HttpRouter, json, registry, TypedRouter } from '../index.ts';
 
 describe('HttpRouter Builder & @HttpRouter Decorator', () => {
   afterEach(() => {
@@ -53,7 +53,7 @@ describe('HttpRouter Builder & @HttpRouter Decorator', () => {
     let extended = false;
 
     const http = HttpRouter.builder()
-      .extend((builder, router) => {
+      .extend((_builder, router) => {
         extended = true;
         (router as any).customFacet = { ok: true };
       })
@@ -67,7 +67,7 @@ describe('HttpRouter Builder & @HttpRouter Decorator', () => {
   it('supports auth extension registration and withAuth() option', async () => {
     let extensionCalled = false;
 
-    HttpRouter.registerAuthExtension((builder, router) => {
+    HttpRouter.registerAuthExtension((_builder, router) => {
       extensionCalled = true;
       router.secure = { authenticated: true };
     });

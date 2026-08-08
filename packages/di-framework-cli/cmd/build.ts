@@ -1,6 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { $ } from 'bun';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
 
 export const PACKAGES = [
   'packages/di-framework-core',
@@ -33,7 +33,7 @@ export async function build() {
     const pkgJsonPath = join(fullPath, 'package.json');
     if (existsSync(pkgJsonPath)) {
       const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-      writeFileSync(pkgJsonPath, JSON.stringify({ ...pkgJson, version }, null, 2) + '\n');
+      writeFileSync(pkgJsonPath, `${JSON.stringify({ ...pkgJson, version }, null, 2)}\n`);
     }
 
     // 1. Clean dist

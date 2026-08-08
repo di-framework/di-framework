@@ -40,6 +40,6 @@ const docs = files.map((f) => {
 
 writeFileSync(
   outFile,
-  JSON.stringify({ generatedAt: new Date().toISOString(), docs }, null, 2) + '\n',
+  `${JSON.stringify({ generatedAt: new Date().toISOString(), docs }, null, 2)}\n`,
 );
 console.log(`Wrote ${docs.length} topics → ${outFile}`);

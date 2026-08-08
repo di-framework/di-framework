@@ -249,7 +249,7 @@ async function invokeAiServiceMethod(
 
   let userText: string | undefined;
   if (userParams.length) {
-    userText = String(args[userParams[0]!.index] ?? '');
+    userText = String(args[userParams[0]?.index] ?? '');
   } else if (userMsgAnn?.template) {
     userText = renderTemplate(userMsgAnn.template, varMap);
   } else if (promptOpts?.template) {
@@ -276,7 +276,7 @@ async function invokeAiServiceMethod(
 
   const context: Record<string, unknown> = {};
   if (memoryParams.length) {
-    const id = args[memoryParams[0]!.index];
+    const id = args[memoryParams[0]?.index];
     if (id != null) context[CHAT_MEMORY_CONVERSATION_ID] = String(id);
   }
   if (Object.keys(context).length) {

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { Arg, Connection, Field, Lookup, Portal } from '../src/decorators.ts';
-import { SemanticSchemaError } from '../src/errors.ts';
 import { withRegistry } from './helpers.ts';
 
 describe('decorator guard branches', () => {
   it('@Field throws when applied to a static member', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       expect(() => {
         @Portal()
         class StaticPortal {
@@ -19,7 +18,7 @@ describe('decorator guard branches', () => {
   });
 
   it('@Connection throws when applied to a static member', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       expect(() => {
         @Portal()
         class StaticConnectionPortal {
@@ -33,18 +32,18 @@ describe('decorator guard branches', () => {
   });
 
   it('@Arg with string name and TypeRef throws when used on a constructor', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       expect(() => {
         @Portal()
         class ConstructorArgPortal {
-          constructor(@Arg('value', () => String) value: string) {}
+          constructor(@Arg('value', () => String) _value: string) {}
         }
       }).toThrow(/GraphQL parameter decorators are only supported on methods, not constructors/);
     });
   });
 
   it('@Arg with string name and TypeRef on a method works normally', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       @Portal()
       class NormalArgPortal {
         query(@Arg('id', () => String) id: string): string {
@@ -57,7 +56,7 @@ describe('decorator guard branches', () => {
   });
 
   it('@Arg with options object and TypeRef on a method works normally', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       @Portal()
       class OptionsArgPortal {
         query(@Arg({ name: 'id', type: () => String }) id: string): string {
@@ -70,7 +69,7 @@ describe('decorator guard branches', () => {
   });
 
   it('@Lookup throws when applied to a non-static method', () => {
-    withRegistry((registry) => {
+    withRegistry((_registry) => {
       expect(() => {
         @Portal()
         class NonStaticLookupPortal {

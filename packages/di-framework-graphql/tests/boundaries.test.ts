@@ -242,7 +242,7 @@ describe('semantic boundaries', () => {
       @Portal()
       class EmptyInputPortal {
         @Field(() => String)
-        echo(@Arg('value', () => EmptyInput) value: EmptyInput): string {
+        echo(@Arg('value', () => EmptyInput) _value: EmptyInput): string {
           return 'x';
         }
       }

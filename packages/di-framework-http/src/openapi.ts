@@ -107,7 +107,7 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
     // Look for endpoints on the target (static properties)
     for (const key of Object.getOwnPropertyNames(target)) {
       const property = (target as any)[key];
-      if (property && property.isEndpoint) {
+      if (property?.isEndpoint) {
         const path = property.path || '/unknown';
         const method = (property.method || 'get').toLowerCase();
 

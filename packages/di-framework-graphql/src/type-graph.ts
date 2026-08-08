@@ -33,7 +33,6 @@ import {
   type ResolvedInputType,
   type ResolvedInterfaceType,
   type ResolvedObjectType,
-  type ResolvedRootType,
   type ResolvedUnionType,
   type TypeGraph,
   type TypeInput,

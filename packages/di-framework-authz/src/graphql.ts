@@ -113,7 +113,7 @@ function resolveResourceId(
     const val = (parent as Record<string, any>)?.[options.idField];
     return val !== undefined && val !== null ? String(val) : undefined;
   }
-  const fallback = args['id'] ?? args['idParam'] ?? (parent as Record<string, any>)?.['id'];
+  const fallback = args.id ?? args.idParam ?? (parent as Record<string, any>)?.id;
   return fallback !== undefined && fallback !== null ? String(fallback) : undefined;
 }
 
@@ -237,7 +237,7 @@ export function GraphQLResourceAuthorization(
   reference: PolicyClass | string,
   options: GraphQLResourceAuthorizationOptions = {},
 ) {
-  return (target: object, propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
+  return (target: object, _propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
     if (descriptor && typeof descriptor.value === 'function') {
       const original = descriptor.value;
       descriptor.value = async function (...methodArgs: any[]) {

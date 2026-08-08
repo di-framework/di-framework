@@ -3,7 +3,7 @@ import { useContainer } from '@di-framework/core/container';
 import { buildSemanticSchema } from '../src/schema.ts';
 import { printSDL } from '../src/sdl.ts';
 import { buildTypeGraph } from '../src/type-graph.ts';
-import { domainRegistry, type OrderRow, OrderService, OrderState } from './domain.ts';
+import { domainRegistry, OrderService, OrderState } from './domain.ts';
 
 const api = buildSemanticSchema({ registry: domainRegistry });
 

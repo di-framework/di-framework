@@ -229,7 +229,7 @@ export function requireApiKey(
   provider: string,
   envHint: string,
 ): string {
-  if (apiKey && apiKey.trim()) return apiKey.trim();
+  if (apiKey?.trim()) return apiKey.trim();
   throw new AiError(
     `Missing API key for ${provider}. Set options.apiKey or ${envHint}.`,
     'authentication',

@@ -83,7 +83,7 @@ export class StructuredOutputValidationAdvisor implements CallAdvisor, StreamAdv
       const validation = this.validateResponse(lastResponse);
       success = validation.success;
       if (!success && remaining > 1) {
-        const errorMessage = 'Output JSON validation failed because of: ' + validation.errorMessage;
+        const errorMessage = `Output JSON validation failed because of: ${validation.errorMessage}`;
         const userText = request.prompt.getUserMessage().text ?? '';
         const augmented = userText ? `${userText}\n${errorMessage}` : errorMessage;
         processed = copyChatClientRequest(request, {

@@ -137,8 +137,8 @@ describe('ChainWorkflow', () => {
     );
     expect(detailed.result).toBe('step2');
     expect(detailed.steps).toHaveLength(2);
-    expect(detailed.steps[0]!.output).toBe('step1');
-    expect(detailed.steps[1]!.input).toBe('step1');
+    expect(detailed.steps[0]?.output).toBe('step1');
+    expect(detailed.steps[1]?.input).toBe('step1');
   });
 
   test('rejects empty steps', () => {

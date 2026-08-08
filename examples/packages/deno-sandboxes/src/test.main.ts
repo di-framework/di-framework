@@ -50,7 +50,7 @@ async function stopTestServer() {
 
 Deno.test({
   name: 'Server starts and responds to health check (optional)',
-  async fn(t) {
+  async fn(_t) {
     await startTestServer();
 
     try {

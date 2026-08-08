@@ -21,10 +21,10 @@ describe('LengthPrefixFramer', () => {
     expect(framer.push(a)).toEqual([]);
     const out = framer.push(b);
     expect(out).toHaveLength(2);
-    expect(out[0]!.kind).toBe('text');
-    expect(out[0]!.text).toBe('hello');
-    expect(out[1]!.kind).toBe('binary');
-    expect([...out[1]!.data]).toEqual([1, 2, 3, 4]);
+    expect(out[0]?.kind).toBe('text');
+    expect(out[0]?.text).toBe('hello');
+    expect(out[1]?.kind).toBe('binary');
+    expect([...out[1]?.data]).toEqual([1, 2, 3, 4]);
   });
 
   it('rejects oversized frames', () => {
@@ -48,7 +48,7 @@ describe('LengthPrefixFramer', () => {
     // proving the earlier partial bytes were discarded (not prepended).
     const frames = framer.push(wire);
     expect(frames).toHaveLength(1);
-    expect(frames[0]!.text).toBe('hello');
+    expect(frames[0]?.text).toBe('hello');
   });
 });
 

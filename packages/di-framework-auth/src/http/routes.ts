@@ -218,15 +218,15 @@ export function createAuthRoutes(options: AuthRoutesOptions = {}): TypedRouterTy
       if (!token) throw AuthError.unauthenticated('CSRF tokens are bound to a session');
       const lookup = await runtime.sessions.resolve(token);
       if (lookup.state !== 'active') throw AuthError.unauthenticated('Session is not active');
-      return privateJson({ token: await runtime.csrf!.issue(lookup.record.id) });
+      return privateJson({ token: await runtime.csrf?.issue(lookup.record.id) });
     });
   }
 
   if (on('refresh') && runtime.refresh && runtime.tokens) {
     router.post('/refresh', async (request) => {
       const body = ((request as { content?: unknown }).content ?? {}) as { refreshToken?: unknown };
-      const rotated = await runtime.refresh!.rotate(readString(body.refreshToken, 'refreshToken'));
-      const access = await runtime.tokens!.issueAccessToken({
+      const rotated = await runtime.refresh?.rotate(readString(body.refreshToken, 'refreshToken'));
+      const access = await runtime.tokens?.issueAccessToken({
         subject: rotated.principal.sub,
         authTime: rotated.principal.authTime,
         ...(rotated.principal.amr ? { amr: rotated.principal.amr } : {}),
@@ -318,8 +318,7 @@ export function createAuthRoutes(options: AuthRoutesOptions = {}): TypedRouterTy
     const clients = options.oauth;
 
     router.get('/oauth/:provider/start', async (request) => {
-      const providerId =
-        (request as { params?: Record<string, string> }).params?.['provider'] ?? '';
+      const providerId = (request as { params?: Record<string, string> }).params?.provider ?? '';
       const client = clients[providerId];
       if (!client) {
         throw new AuthError(`No OAuth provider '${providerId}'`, {
@@ -335,8 +334,7 @@ export function createAuthRoutes(options: AuthRoutesOptions = {}): TypedRouterTy
     });
 
     router.get('/oauth/:provider/callback', async (request) => {
-      const providerId =
-        (request as { params?: Record<string, string> }).params?.['provider'] ?? '';
+      const providerId = (request as { params?: Record<string, string> }).params?.provider ?? '';
       const client = clients[providerId];
       if (!client) {
         throw new AuthError(`No OAuth provider '${providerId}'`, {

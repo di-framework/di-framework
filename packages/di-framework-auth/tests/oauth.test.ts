@@ -356,7 +356,7 @@ describe('presets', () => {
     expect(provider.oidc).toBe(false);
     expect(provider.issuer).toBeUndefined();
     expect(provider.userinfoEndpoint).toBe('https://api.github.com/user');
-    const profile = provider.profileMap!(null, { id: 42, login: 'ada', email: 'a@b.c' });
+    const profile = provider.profileMap?.(null, { id: 42, login: 'ada', email: 'a@b.c' });
     expect(profile.subject).toBe('42');
     expect(profile.name).toBe('ada');
   });
@@ -426,7 +426,7 @@ async function stubIdp(options: { nonceOverride?: string; subOverride?: string }
     if (url === metadata.jwks_uri) return json({ keys: [pair.publicJwk] });
 
     if (url === metadata.token_endpoint) {
-      lastTokenBody = new URLSearchParams(init!.body as string);
+      lastTokenBody = new URLSearchParams(init?.body as string);
       const idToken = await signJwt(
         {
           nonce: options.nonceOverride ?? issuedNonce,
@@ -493,7 +493,7 @@ async function startFlow(
     iss: ISSUER,
     ...overrides,
   });
-  const cookieValue = overrides['__cookie'] ?? authorization.state;
+  const cookieValue = overrides.__cookie ?? authorization.state;
 
   return {
     authorization,

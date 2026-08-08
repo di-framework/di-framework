@@ -80,7 +80,7 @@ export class SchemaOutputConverter<T = unknown> implements StructuredOutputConve
         'Do not include markdown code blocks in your response.',
         'Remove the ```json markdown from the output.',
         'Here is the JSON Schema instance your output must adhere to:',
-        '```' + this.schemaString + '```',
+        `\`\`\`${this.schemaString}\`\`\``,
       ].join('\n');
     }
     const label = this.name ? ` (${this.name})` : '';

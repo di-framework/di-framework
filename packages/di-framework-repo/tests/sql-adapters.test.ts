@@ -84,13 +84,13 @@ describe('BunSqliteAdapter', () => {
     await adapter.save({ id: 1, name: 'Ada', active: 1 });
 
     const failed = await adapter.compareAndSwap(1, (curr) => {
-      if (!curr || curr.active !== 0) return null;
+      if (curr?.active !== 0) return null;
       return { ...curr, active: 0 };
     });
     expect(failed).toBe(false);
 
     const success = await adapter.compareAndSwap(1, (curr) => {
-      if (!curr || curr.active !== 1) return null;
+      if (curr?.active !== 1) return null;
       return { ...curr, active: 0 };
     });
     expect(success).toBe(true);
@@ -122,7 +122,7 @@ describe('BunSqliteAdapter', () => {
 
     const promises = Array.from({ length: 20 }, () =>
       adapter.compareAndSwap(1, (curr) => {
-        if (!curr || curr.active !== 0) return null;
+        if (curr?.active !== 0) return null;
         return { ...curr, active: 1 };
       }),
     );
@@ -189,7 +189,7 @@ describe('BunSqliteAdapter', () => {
     await adapter.save({ id: 1, name: 'Ada', active: 1 });
 
     await expect(
-      adapter.compareAndSwap(1, (curr) => {
+      adapter.compareAndSwap(1, (_curr) => {
         return { id: 999, name: 'Mutated Key', active: 1 } as any;
       }),
     ).rejects.toThrow('Cannot mutate entity primary key');
@@ -262,10 +262,10 @@ test('D1Adapter serializes concurrent transactions with async delays', async () 
         bind() {
           return this;
         },
-        async all<T = Record<string, unknown>>() {
+        async all<_T = Record<string, unknown>>() {
           return { results: [] };
         },
-        async first<T = Record<string, unknown>>() {
+        async first<_T = Record<string, unknown>>() {
           return null;
         },
         async run() {
@@ -302,10 +302,10 @@ test('D1Adapter propagates BEGIN and COMMIT errors without silent swallowing', a
         bind() {
           return this;
         },
-        async all<T = Record<string, unknown>>() {
+        async all<_T = Record<string, unknown>>() {
           return { results: [] };
         },
-        async first<T = Record<string, unknown>>() {
+        async first<_T = Record<string, unknown>>() {
           return null;
         },
         async run() {

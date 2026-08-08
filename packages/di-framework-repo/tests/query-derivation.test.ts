@@ -75,8 +75,8 @@ describe('parseQueryMethod', () => {
   test('parses findBy single equality property', () => {
     const q = parseQueryMethod('findByEmail');
     expect(q).not.toBeNull();
-    expect(q!.subject).toBe('query');
-    expect(q!.predicate.conditions).toEqual([
+    expect(q?.subject).toBe('query');
+    expect(q?.predicate.conditions).toEqual([
       { property: 'email', operator: 'eq', ignoreCase: false, argCount: 1 },
     ]);
   });
@@ -102,29 +102,29 @@ describe('parseQueryMethod', () => {
 
   test('And / Or combinators', () => {
     const q = parseQueryMethod('findByLastnameAndActive');
-    expect(q!.predicate.conditions.map((c) => c.property)).toEqual(['lastname', 'active']);
-    expect(q!.predicate.combinators).toEqual(['and']);
+    expect(q?.predicate.conditions.map((c) => c.property)).toEqual(['lastname', 'active']);
+    expect(q?.predicate.combinators).toEqual(['and']);
 
     const q2 = parseQueryMethod('findByCityOrLastname');
-    expect(q2!.predicate.combinators).toEqual(['or']);
+    expect(q2?.predicate.combinators).toEqual(['or']);
   });
 
   test('descriptive token between introducer and By is ignored', () => {
     const q = parseQueryMethod('findUserByEmail');
-    expect(q!.predicate.conditions[0]?.property).toBe('email');
+    expect(q?.predicate.conditions[0]?.property).toBe('email');
   });
 
   test('First / Top / Distinct in subject', () => {
     const first = parseQueryMethod('findFirstByLastname');
-    expect(first!.limit).toBe(1);
-    expect(first!.singleResult).toBe(true);
+    expect(first?.limit).toBe(1);
+    expect(first?.singleResult).toBe(true);
 
     const top3 = parseQueryMethod('findTop3ByActive');
-    expect(top3!.limit).toBe(3);
-    expect(top3!.singleResult).toBe(false);
+    expect(top3?.limit).toBe(3);
+    expect(top3?.singleResult).toBe(false);
 
     const dist = parseQueryMethod('findDistinctByCity');
-    expect(dist!.distinct).toBe(true);
+    expect(dist?.distinct).toBe(true);
   });
 
   test('predicate operators', () => {
@@ -147,7 +147,7 @@ describe('parseQueryMethod', () => {
       ['findByLastnameNot', 'neq', 1],
     ];
     for (const [name, op, argc] of cases) {
-      const c = parseQueryMethod(name)!.predicate.conditions[0]!;
+      const c = parseQueryMethod(name)?.predicate.conditions[0]!;
       expect(c.operator).toBe(op);
       expect(c.argCount).toBe(argc);
     }
@@ -155,15 +155,15 @@ describe('parseQueryMethod', () => {
 
   test('IgnoreCase and AllIgnoreCase', () => {
     const one = parseQueryMethod('findByLastnameIgnoreCase');
-    expect(one!.predicate.conditions[0]?.ignoreCase).toBe(true);
+    expect(one?.predicate.conditions[0]?.ignoreCase).toBe(true);
 
     const all = parseQueryMethod('findByLastnameAndCityAllIgnoreCase');
-    expect(all!.predicate.conditions.every((c) => c.ignoreCase)).toBe(true);
+    expect(all?.predicate.conditions.every((c) => c.ignoreCase)).toBe(true);
   });
 
   test('OrderBy Asc/Desc', () => {
     const q = parseQueryMethod('findByActiveOrderByAgeDescLastnameAsc');
-    expect(q!.orderBy).toEqual([
+    expect(q?.orderBy).toEqual([
       { property: 'age', direction: 'desc' },
       { property: 'lastname', direction: 'asc' },
     ]);
@@ -172,7 +172,7 @@ describe('parseQueryMethod', () => {
   test('underscore property path', () => {
     expect(toPropertyPath('Address_ZipCode')).toBe('address.zipCode');
     const q = parseQueryMethod('findByAddress_ZipCode');
-    expect(q!.predicate.conditions[0]?.property).toBe('address.zipCode');
+    expect(q?.predicate.conditions[0]?.property).toBe('address.zipCode');
   });
 
   test('returns null for non-query names', () => {
@@ -191,7 +191,7 @@ describe('Derived annotation on repository variable', () => {
     const repo = await seeded();
     const rows = await repo.findByEmail('a@example.com');
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.id).toBe('1');
+    expect(rows[0]?.id).toBe('1');
   });
 
   test('findByLastnameAndActive (runtime; compound name)', async () => {
@@ -204,7 +204,7 @@ describe('Derived annotation on repository variable', () => {
     const repo = await seeded();
     const rows = (await (repo as any).getByEmail('b@example.com')) as User[];
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.id).toBe('2');
+    expect(rows[0]?.id).toBe('2');
   });
 
   test('existsBy / countBy', async () => {
@@ -288,7 +288,7 @@ describe('Derived annotation on repository variable', () => {
       city: 'Y',
     });
     const rows = await custom.findByEmail('ignored');
-    expect(rows[0]!.email).toBe('declared@example.com');
+    expect(rows[0]?.email).toBe('declared@example.com');
   });
 
   test('CREATE always derives even if method exists', async () => {
@@ -347,7 +347,7 @@ describe('executeDerivedQuery', () => {
   test('findAllByCity works', async () => {
     const q = parseQueryMethod('findAllByCity');
     expect(q).not.toBeNull();
-    expect(q!.predicate.conditions[0]?.property).toBe('city');
+    expect(q?.predicate.conditions[0]?.property).toBe('city');
 
     const base = createUserRepo();
     await base.save({
@@ -392,19 +392,19 @@ describe('parseQueryMethod - additional edge cases', () => {
 
   test('OrderBy with no Asc/Desc keyword defaults to ascending', () => {
     const q = parseQueryMethod('findByActiveOrderByCity');
-    expect(q!.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
+    expect(q?.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
   });
 
   test('empty predicate with an OrderBy clause (findAllByOrderBy…)', () => {
     const q = parseQueryMethod('findAllByOrderByCity');
     expect(q).not.toBeNull();
-    expect(q!.predicate).toEqual({ conditions: [], combinators: [] });
-    expect(q!.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
+    expect(q?.predicate).toEqual({ conditions: [], combinators: [] });
+    expect(q?.orderBy).toEqual([{ property: 'city', direction: 'asc' }]);
   });
 
   test('IgnoringCase suffix (alternate spelling of IgnoreCase)', () => {
     const one = parseQueryMethod('findByLastnameIgnoringCase');
-    expect(one!.predicate.conditions[0]?.ignoreCase).toBe(true);
+    expect(one?.predicate.conditions[0]?.ignoreCase).toBe(true);
   });
 });
 

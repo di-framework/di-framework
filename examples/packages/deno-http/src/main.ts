@@ -51,7 +51,7 @@ export class NaturalLanguageController {
     responses: { '200': { description: 'N Sentences' } },
   })
   getCount = router.get<RequestSpec<void>, ResponseSpec<SentencesResponse>>('/:count', (req) => {
-    const count = parseInt(req.params.count as string) || 5;
+    const count = parseInt(req.params.count as string, 10) || 5;
     return json({ nonsense: this.service.getText(count), count });
   });
 }

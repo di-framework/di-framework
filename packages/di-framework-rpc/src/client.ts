@@ -1,9 +1,12 @@
+import { isAsyncGeneratorFunction, isStream, unwrapStream } from './decorators.ts';
 import registry from './registry.ts';
+import { hydrateRpcMessage, rpcMessageToJson } from './schema/messages.ts';
 import type {
   CreateRpcClientOptions,
   JsonRpcCall,
   JsonRpcFailure,
   JsonRpcResponse,
+  JsonRpcStreamFrame,
   RpcCallOptions,
   RpcClient,
   RpcConstructor,
@@ -12,6 +15,20 @@ import type {
   RpcTransport,
 } from './types.ts';
 
+function detectServerStreamingMethods(target: RpcConstructor): void {
+  const service = registry.getService(target);
+  if (!service) return;
+  const proto = target.prototype as Record<string | symbol, unknown>;
+  for (const method of service.methods) {
+    if (method.serverStreaming === undefined || method.serverStreaming === false) {
+      const fn = proto[method.propertyKey];
+      if (isAsyncGeneratorFunction(fn)) {
+        method.serverStreaming = true;
+      }
+    }
+  }
+}
+
 interface PendingCall {
   resolve(value: unknown): void;
   reject(error: Error): void;
@@ -19,6 +36,70 @@ interface PendingCall {
   promise?: Promise<unknown>;
   timeout?: ReturnType<typeof setTimeout>;
   onAbort?: () => void;
+}
+
+export class PushStream<T> implements AsyncIterable<T> {
+  private queue: T[] = [];
+  private resolvers: Array<{
+    resolve: (value: IteratorResult<T>) => void;
+    reject: (err: unknown) => void;
+  }> = [];
+  private isDone = false;
+  private errorState: unknown = undefined;
+
+  push(value: T): void {
+    if (this.isDone || this.errorState) return;
+    if (this.resolvers.length > 0) {
+      const resolver = this.resolvers.shift()!;
+      resolver.resolve({ value, done: false });
+    } else {
+      this.queue.push(value);
+    }
+  }
+
+  end(): void {
+    if (this.isDone || this.errorState) return;
+    this.isDone = true;
+    while (this.resolvers.length > 0) {
+      const resolver = this.resolvers.shift()!;
+      resolver.resolve({ value: undefined as never, done: true });
+    }
+  }
+
+  error(err: unknown): void {
+    if (this.isDone || this.errorState) return;
+    this.errorState = err;
+    while (this.resolvers.length > 0) {
+      const resolver = this.resolvers.shift()!;
+      resolver.reject(err);
+    }
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<T> {
+    while (true) {
+      if (this.queue.length > 0) {
+        yield this.queue.shift()!;
+      } else if (this.isDone) {
+        return;
+      } else if (this.errorState) {
+        throw this.errorState;
+      } else {
+        const nextResult = await new Promise<IteratorResult<T>>((resolve, reject) => {
+          this.resolvers.push({ resolve, reject });
+        });
+        if (nextResult.done) return;
+        yield nextResult.value;
+      }
+    }
+  }
+}
+
+interface PendingStream {
+  stream: PushStream<unknown>;
+  outputMsg?: RpcConstructor;
+  mergedCleanup?: () => void;
+  onAbort?: () => void;
+  chain?: Promise<void>;
 }
 
 export class RpcRemoteError extends Error {
@@ -47,6 +128,11 @@ function isCallOptions(value: unknown): value is RpcCallOptions {
 
 function onlyCallOptionKeys(value: object): boolean {
   return Object.keys(value).every((key) => key === 'signal' || key === 'timeoutMs');
+}
+
+function isAsyncIterableInput(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  return typeof (value as Record<string | symbol, unknown>)[Symbol.asyncIterator] === 'function';
 }
 
 function splitArgs(args: unknown[]): { params: unknown; callOptions?: RpcCallOptions } {
@@ -117,6 +203,7 @@ export function createRpcClient<T>(
   maybeOptions: Omit<CreateRpcClientOptions, 'service'> = {},
 ): RpcClient<T> {
   const hasServiceClass = typeof serviceOrTransport === 'function';
+  if (hasServiceClass) detectServerStreamingMethods(serviceOrTransport);
   const transport = (hasServiceClass ? transportOrOptions : serviceOrTransport) as RpcTransport;
   const options = (hasServiceClass ? maybeOptions : transportOrOptions) as CreateRpcClientOptions;
   const serviceMetadata = hasServiceClass ? registry.getService(serviceOrTransport) : undefined;
@@ -131,6 +218,7 @@ export function createRpcClient<T>(
   const methods = serviceMetadata?.methods;
   const interceptors = options.interceptors ?? [];
   const pending = new Map<string, PendingCall>();
+  const pendingStreams = new Map<string, PendingStream>();
   let sequence = 0;
   let started: Promise<void> | undefined;
 
@@ -139,7 +227,45 @@ export function createRpcClient<T>(
     return started;
   };
 
-  const settle = (id: string, response: JsonRpcResponse) => {
+  const settle = async (id: string, response: JsonRpcResponse) => {
+    if ('stream' in response) {
+      const streamEntry = pendingStreams.get(id);
+      if (streamEntry) {
+        const frame = response as JsonRpcStreamFrame;
+        streamEntry.chain = (streamEntry.chain ?? Promise.resolve()).then(async () => {
+          if (frame.stream === 'next') {
+            try {
+              const rawItem = frame.result ?? frame.params;
+              const hydrated = streamEntry.outputMsg
+                ? hydrateRpcMessage(streamEntry.outputMsg, rawItem, registry)
+                : rawItem;
+              const finalItem = await composeInterceptors(
+                interceptors,
+                { method: serviceName!, params: hydrated, id },
+                async () => hydrated,
+              );
+              streamEntry.stream.push(finalItem);
+            } catch (err) {
+              streamEntry.stream.error(err);
+            }
+          } else if (frame.stream === 'complete') {
+            streamEntry.onAbort?.();
+            streamEntry.mergedCleanup?.();
+            pendingStreams.delete(id);
+            streamEntry.stream.end();
+          } else if (frame.stream === 'error') {
+            streamEntry.onAbort?.();
+            streamEntry.mergedCleanup?.();
+            pendingStreams.delete(id);
+            streamEntry.stream.error(
+              new RpcRemoteError(frame.error.code, frame.error.message, frame.error.data),
+            );
+          }
+        });
+      }
+      return;
+    }
+
     const call = pending.get(id);
     if (!call) return;
     pending.delete(id);
@@ -158,7 +284,7 @@ export function createRpcClient<T>(
     const responses = Array.isArray(payload) ? payload : [payload];
     for (const candidate of responses) {
       if (!candidate || typeof candidate !== 'object' || !('id' in candidate)) continue;
-      settle(String((candidate as JsonRpcResponse).id), candidate as JsonRpcResponse);
+      void settle(String((candidate as JsonRpcResponse).id), candidate as JsonRpcResponse);
     }
   });
 
@@ -215,10 +341,17 @@ export function createRpcClient<T>(
     const metadata = methods?.find((method) => method.propertyKey === propertyKey);
     const methodName =
       metadata?.name ?? `${propertyKey.charAt(0).toUpperCase()}${propertyKey.slice(1)}`;
+    const isClientStream =
+      metadata?.clientStreaming === true || (metadata?.input ? isStream(metadata.input()) : false);
+    const isServerStream =
+      metadata?.serverStreaming === true ||
+      (metadata?.output ? isStream(metadata.output()) : false);
     return {
       metadata,
       method: `${serviceName}/${methodName}`,
       notification: metadata?.notification === true,
+      isClientStream,
+      isServerStream,
     };
   };
 
@@ -227,20 +360,26 @@ export function createRpcClient<T>(
     for (const call of payload) {
       if (!('id' in call)) continue;
       const pendingCall = pending.get(String(call.id));
-      if (!pendingCall) continue;
-      if (pendingCall.timeout) clearTimeout(pendingCall.timeout);
-      pendingCall.onAbort?.();
-      pending.delete(String(call.id));
-      // Attach a no-op handler before reject so Bun does not report an unhandled
-      // rejection when the awaiting caller has not chained onto this promise yet.
-      void pendingCall.promise?.catch(() => {});
-      pendingCall.reject(err);
+      if (pendingCall) {
+        if (pendingCall.timeout) clearTimeout(pendingCall.timeout);
+        pendingCall.onAbort?.();
+        pending.delete(String(call.id));
+        void pendingCall.promise?.catch(() => {});
+        pendingCall.reject(err);
+      }
+      const streamEntry = pendingStreams.get(String(call.id));
+      if (streamEntry) {
+        streamEntry.onAbort?.();
+        streamEntry.mergedCleanup?.();
+        pendingStreams.delete(String(call.id));
+        streamEntry.stream.error(err);
+      }
     }
   };
 
-  const invokeOne = async (propertyKey: string, args: unknown[]): Promise<unknown> => {
-    await ensureStarted();
-    const { method, notification } = resolveMethod(propertyKey);
+  const invokeOne = (propertyKey: string, args: unknown[]): unknown => {
+    const { metadata, method, notification, isClientStream, isServerStream } =
+      resolveMethod(propertyKey);
     const { params, callOptions } = splitArgs(args);
     const id = notification ? undefined : `${Date.now().toString(36)}-${++sequence}`;
     const context: RpcInterceptorContext = {
@@ -250,30 +389,188 @@ export function createRpcClient<T>(
       signal: callOptions?.signal ?? options.signal,
     };
 
-    return composeInterceptors(interceptors, context, async () => {
-      if (notification) {
-        await transport.send({ jsonrpc: '2.0', method, params: context.params });
-        return undefined;
-      }
+    const inputMsg = metadata?.input ? unwrapStream(metadata.input()) : undefined;
+    const outputMsg = metadata?.output ? unwrapStream(metadata.output()) : undefined;
 
+    const actualClientStream = isClientStream || isAsyncIterableInput(params);
+
+    if (isServerStream) {
       const callId = id as string;
-      const result = registerPending(callId, method, callOptions);
-      try {
-        await transport.send({
-          jsonrpc: '2.0',
-          id: callId,
-          method,
-          params: context.params,
-        });
-      } catch (error) {
-        // Reject the pending promise (so callers awaiting it fail) and return it
-        // instead of rethrowing — avoids an orphaned rejection when nobody has
-        // chained `.catch` onto `result` yet.
-        rejectPayload([{ jsonrpc: '2.0', id: callId, method, params: context.params }], error);
-        return result;
-      }
-      return result;
-    });
+      const pushStream = new PushStream<unknown>();
+      const merged = mergeSignals(options.signal, callOptions?.signal);
+
+      const startStream = async (): Promise<PushStream<unknown>> => {
+        await ensureStarted();
+        return composeInterceptors(interceptors, context, async () => {
+          const pendingStream: PendingStream = {
+            stream: pushStream,
+            outputMsg,
+            mergedCleanup: merged.cleanup,
+          };
+
+          if (merged.signal) {
+            if (merged.signal.aborted) {
+              merged.cleanup?.();
+              throw merged.signal.reason instanceof Error
+                ? merged.signal.reason
+                : new Error(`RPC ${method} aborted`);
+            }
+            const onAbort = () => {
+              pendingStreams.delete(callId);
+              merged.cleanup?.();
+              pushStream.error(
+                merged.signal?.reason instanceof Error
+                  ? merged.signal.reason
+                  : new Error(`RPC ${method} aborted`),
+              );
+              void transport
+                .send({
+                  jsonrpc: '2.0',
+                  id: callId,
+                  stream: 'error',
+                  error: { code: -32000, message: 'RPC stream aborted' },
+                })
+                .catch(() => {});
+            };
+            merged.signal.addEventListener('abort', onAbort, { once: true });
+            pendingStream.onAbort = () => {
+              merged.signal?.removeEventListener('abort', onAbort);
+              merged.cleanup?.();
+            };
+          }
+
+          pendingStreams.set(callId, pendingStream);
+
+          if (actualClientStream) {
+            // Bi-directional streaming
+            await transport.send({ jsonrpc: '2.0', id: callId, method });
+            (async () => {
+              try {
+                for await (const item of params as AsyncIterable<unknown>) {
+                  if (merged.signal?.aborted) break;
+                  const itemToSend = await composeInterceptors(
+                    interceptors,
+                    { method, params: item, id: callId },
+                    async () => item,
+                  );
+                  const jsonItem = inputMsg
+                    ? rpcMessageToJson(inputMsg, itemToSend, registry)
+                    : itemToSend;
+                  await transport.send({
+                    jsonrpc: '2.0',
+                    id: callId,
+                    stream: 'next',
+                    params: jsonItem,
+                  });
+                }
+                await transport.send({ jsonrpc: '2.0', id: callId, stream: 'complete' });
+              } catch (err) {
+                await transport
+                  .send({
+                    jsonrpc: '2.0',
+                    id: callId,
+                    stream: 'error',
+                    error: {
+                      code: -32000,
+                      message: err instanceof Error ? err.message : String(err),
+                    },
+                  })
+                  .catch(() => {});
+              }
+            })();
+          } else {
+            // Server-streaming only
+            await transport.send({
+              jsonrpc: '2.0',
+              id: callId,
+              method,
+              params: context.params,
+            });
+          }
+
+          return pushStream;
+        }) as Promise<PushStream<unknown>>;
+      };
+
+      const streamPromise = startStream().catch((err) => {
+        pushStream.error(err);
+        return pushStream;
+      });
+
+      const asyncIterable: AsyncIterable<unknown> = {
+        async *[Symbol.asyncIterator]() {
+          const activeStream = await streamPromise;
+          for await (const item of activeStream) {
+            yield item;
+          }
+        },
+      };
+
+      return asyncIterable;
+    }
+
+    if (actualClientStream) {
+      const callId = id as string;
+      return ensureStarted().then(() =>
+        composeInterceptors(interceptors, context, async () => {
+          const resultPromise = registerPending(callId, method, callOptions);
+          await transport.send({ jsonrpc: '2.0', id: callId, method });
+
+          (async () => {
+            try {
+              for await (const item of params as AsyncIterable<unknown>) {
+                const itemToSend = await composeInterceptors(
+                  interceptors,
+                  { method, params: item, id: callId },
+                  async () => item,
+                );
+                const jsonItem = inputMsg
+                  ? rpcMessageToJson(inputMsg, itemToSend, registry)
+                  : itemToSend;
+                await transport.send({
+                  jsonrpc: '2.0',
+                  id: callId,
+                  stream: 'next',
+                  params: jsonItem,
+                });
+              }
+              await transport.send({ jsonrpc: '2.0', id: callId, stream: 'complete' });
+            } catch (err) {
+              rejectPayload([{ jsonrpc: '2.0', id: callId, method }], err);
+            }
+          })();
+
+          const rawResult = await resultPromise;
+          return outputMsg ? hydrateRpcMessage(outputMsg, rawResult, registry) : rawResult;
+        }),
+      );
+    }
+
+    // Standard Unary call
+    return ensureStarted().then(() =>
+      composeInterceptors(interceptors, context, async () => {
+        if (notification) {
+          await transport.send({ jsonrpc: '2.0', method, params: context.params });
+          return undefined;
+        }
+
+        const callId = id as string;
+        const result = registerPending(callId, method, callOptions);
+        try {
+          await transport.send({
+            jsonrpc: '2.0',
+            id: callId,
+            method,
+            params: context.params,
+          });
+        } catch (error) {
+          rejectPayload([{ jsonrpc: '2.0', id: callId, method, params: context.params }], error);
+          return result;
+        }
+        const rawResult = await result;
+        return rawResult;
+      }),
+    );
   };
 
   const client = new Proxy(
@@ -326,7 +623,6 @@ export function createRpcClient<T>(
             await transport.send(payload);
           } catch (error) {
             rejectPayload(payload, error);
-            // Pending calls are already rejected; surface the same error to $batch.
             throw error instanceof Error ? error : new Error(String(error));
           }
         };

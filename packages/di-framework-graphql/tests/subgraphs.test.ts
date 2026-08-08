@@ -233,16 +233,16 @@ describe('subgraphs as SDL artifacts and executable schemas', () => {
       buildSemanticSubgraphs({ container: new Container(), federation: true }),
     );
 
-    const catalog = await subgraphs.Catalog!.execute({ query: '{ book { id title } }' });
+    const catalog = await subgraphs.Catalog?.execute({ query: '{ book { id title } }' });
     expect(catalog.errors).toBeUndefined();
     expect(catalog.data?.book).toEqual({ id: 'b1', title: 'Title b1' });
 
-    const lending = await subgraphs.Lending!.execute({ query: '{ loan { book { id onLoan } } }' });
+    const lending = await subgraphs.Lending?.execute({ query: '{ loan { book { id onLoan } } }' });
     expect(lending.errors).toBeUndefined();
     expect((lending.data as any).loan.book).toEqual({ id: 'b1', onLoan: 'b1 is available' });
 
     // The stub does not expose the owning context's fields.
-    const leak = await subgraphs.Lending!.execute({ query: '{ loan { book { title } } }' });
+    const leak = await subgraphs.Lending?.execute({ query: '{ loan { book { title } } }' });
     expect(leak.errors?.[0]?.message).toContain('Cannot query field "title"');
   });
 
@@ -250,7 +250,7 @@ describe('subgraphs as SDL artifacts and executable schemas', () => {
     const subgraphs = library(() =>
       buildSemanticSubgraphs({ container: new Container(), federation: true }),
     );
-    const result = await subgraphs.Catalog!.execute({
+    const result = await subgraphs.Catalog?.execute({
       query:
         '{ _entities(representations: [{ __typename: "Book", id: "b9" }]) { ... on Book { title } } }',
     });

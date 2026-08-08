@@ -35,7 +35,7 @@ function header(title: string) {
   return `<header style="margin-bottom:1rem"><h1>${title}</h1><p>Built with a lightweight DI container (decorators + auto-wiring)</p></header>`;
 }
 
-export async function handleRequest(request: Request, env: any, ctx: any) {
+export async function handleRequest(request: Request, env: any, _ctx: any) {
   const url = new URL(request.url);
   const path = url.pathname;
 

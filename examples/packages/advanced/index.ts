@@ -25,8 +25,6 @@ export class NotificationService {
   @Component(EmailService)
   private email!: EmailService;
 
-  constructor() {}
-
   notifyUser(userId: string, message: string): void {
     this.email.send(`user${userId}@example.com`, 'Notification', message);
   }
@@ -50,7 +48,7 @@ class UserRegistrationService {
 // ============================================================================
 
 class TestEmailService extends EmailService {
-  send(to: string, subject: string, body: string): void {
+  send(to: string, subject: string, _body: string): void {
     console.log(`[TEST] Email to ${to}: ${subject}`);
   }
 }
@@ -274,9 +272,6 @@ class AnalyticsService {
 
 @Container()
 class PaymentProcessor {
-  @Component(AnalyticsService)
-  private analytics!: AnalyticsService;
-
   @Telemetry({ logging: true })
   async processPayment(amount: number): Promise<boolean> {
     console.log(`💳 Processing payment of $${amount}...`);
@@ -291,9 +286,9 @@ class PaymentProcessor {
 // ============================================================================
 
 export async function runAdvancedExamples(): Promise<void> {
-  console.log('\n' + '='.repeat(70));
+  console.log(`\n${'='.repeat(70)}`);
   console.log('Advanced di-framework Examples');
-  console.log('='.repeat(70) + '\n');
+  console.log(`${'='.repeat(70)}\n`);
 
   const container = useContainer();
 

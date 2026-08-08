@@ -24,7 +24,7 @@ export interface TelemetryOptions {
  * @param options Configuration options for telemetry
  */
 export function Telemetry(options: TelemetryOptions = {}) {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol, _descriptor: PropertyDescriptor) => {
     const methods = getOwnMetadata(TELEMETRY_METADATA_KEY, target) || {};
     methods[propertyKey as string] = options;
     defineMetadata(TELEMETRY_METADATA_KEY, methods, target);
@@ -36,7 +36,7 @@ export function Telemetry(options: TelemetryOptions = {}) {
  * The method will be automatically registered to the container's 'telemetry' event.
  */
 export function TelemetryListener() {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol, _descriptor: PropertyDescriptor) => {
     const listeners = getOwnMetadata(TELEMETRY_LISTENER_METADATA_KEY, target) || [];
     listeners.push(propertyKey);
     defineMetadata(TELEMETRY_LISTENER_METADATA_KEY, listeners, target);

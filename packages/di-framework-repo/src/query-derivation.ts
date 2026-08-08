@@ -361,7 +361,7 @@ function splitAndOr(text: string): {
   while (m !== null) {
     segments.push(text.slice(last, m.index));
     combinators.push(m[1] === 'Or' ? 'or' : 'and');
-    last = m.index + m[1]!.length;
+    last = m.index + m[1]?.length;
     m = re.exec(text);
   }
   segments.push(text.slice(last));
@@ -495,10 +495,10 @@ function filterEntities<E>(entities: E[], predicate: PredicateGroup, args: unkno
   }
 
   return entities.filter((entity) => {
-    let result = evaluateCondition(entity, bound[0]!.cond, bound[0]!.values);
+    let result = evaluateCondition(entity, bound[0]?.cond, bound[0]?.values);
     for (let i = 1; i < bound.length; i++) {
       const comb = predicate.combinators[i - 1] ?? 'and';
-      const next = evaluateCondition(entity, bound[i]!.cond, bound[i]!.values);
+      const next = evaluateCondition(entity, bound[i]?.cond, bound[i]?.values);
       result = comb === 'or' ? result || next : result && next;
     }
     return result;
