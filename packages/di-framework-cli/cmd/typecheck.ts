@@ -46,6 +46,11 @@ export function findTopmostTsconfig(startDir: string): string | undefined {
     const candidate = path.join(dir, 'tsconfig.json');
     if (ts.sys.fileExists(candidate)) lastFound = candidate;
 
+    const gitPath = path.join(dir, '.git');
+    if (ts.sys.fileExists(gitPath) || ts.sys.directoryExists(gitPath)) {
+      break;
+    }
+
     const parent = path.dirname(dir);
     if (parent === dir) break; // reached filesystem root
     dir = parent;

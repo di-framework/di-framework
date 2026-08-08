@@ -167,6 +167,61 @@ configureAi({
 
 Imperative APIs are unchanged: `functionToolCallback`, `MessageChatMemoryAdvisor`, `RetrievalAugmentationAdvisor`, MCP adapters, and `ChainWorkflow` / `RoutingWorkflow` / … See source tests under `tests/` for examples.
 
+### Tool Execution Authorization & Interception
+
+Tool execution can be intercepted and authorized by registering ordered `ToolExecutionAdvisor` instances with `ToolCallingManager` / `DefaultToolCallingManager`.
+
+`ToolAuthorizationAdvisor` integrates with `@di-framework/auth` `AuthorizationManager` to evaluate authorization decisions before executing any tool call.
+
+- **Covered Execution Paths**: Interception occurs inside `DefaultToolCallingManager.executeOne()` whenever the model requests a tool call (including multi-call turns).
+- **Direct Execution Note**: Direct `ToolCallback.call()` invocations performed manually outside of `ToolCallingManager` are **not implicitly intercepted**; authorization policies are enforced during manager-driven execution.
+- **Trusted Principal**: The authenticated subject (`Principal`) is resolved from trusted `ToolContext` data (`toolContext.get('principal')` or custom resolver) — model-generated arguments (`toolCall.arguments`) can **never** supply or overwrite the principal.
+- **Fail Closed**: Missing principal, policy denial, manager exception, or unresolvable manager configurations fail closed and return generic response `"Tool execution unauthorized"` without leaking policy decision details to the model.
+
+```ts
+import {
+  createToolCallingManager,
+  functionToolCallback,
+  ToolAuthorizationAdvisor,
+  toolCallbacksFromBean,
+  Tool,
+  ToolSet,
+} from '@di-framework/ai';
+import type { AuthorizationManager, ToolAuthorizationContext } from '@di-framework/ai';
+
+// 1. Authorization Manager definition
+const authManager: AuthorizationManager<ToolAuthorizationContext> = {
+  async authorize(principal, context) {
+    // context.transport === 'ai-tool'
+    // context.tool === tool name
+    // context.arguments === parsed tool arguments
+    // context.metadata === opaque auth metadata from @Tool / @ToolSet / callback
+    if (principal?.sub === 'admin') return { allowed: true };
+    return { allowed: false, reason: 'Insufficient privileges' };
+  },
+};
+
+// 2. Opaque authorization metadata on callbacks / beans
+const deleteUserTool = functionToolCallback({
+  name: 'deleteUser',
+  auth: { permission: 'users:delete' },
+  call: ({ userId }: { userId: string }) => `Deleted ${userId}`,
+});
+
+@ToolSet({ auth: { scope: 'admin' } })
+class AdminTools {
+  @Tool({ auth: { permission: 'system:shutdown' } })
+  shutdown() {
+    return 'System shutting down';
+  }
+}
+
+// 3. Create ToolCallingManager with Authorization Advisor
+const toolManager = createToolCallingManager({
+  authorizationManager: authManager,
+});
+```
+
 ### Graph workflows
 
 For arbitrary agent control flow (branches, loops, nested subgraphs), use the typed graph runtime:
