@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { SchemaCodegenManifest } from './types.ts';
 
@@ -20,49 +20,16 @@ export function findManifestFiles(patterns: string[], cwd: string = process.cwd(
       continue;
     }
 
-    // Try Bun.Glob if running in Bun runtime
-    try {
-      const bunGlobal = (globalThis as any).Bun;
-      if (bunGlobal && typeof bunGlobal.Glob === 'function') {
-        const glob = new bunGlobal.Glob(pattern);
-        for (const file of glob.scanSync({ cwd })) {
-          const abs = isAbsolute(file) ? file : resolve(cwd, file);
-          if (existsSync(abs) && statSync(abs).isFile()) {
-            filePaths.add(abs);
-          }
+    const bunGlobal = (globalThis as any).Bun;
+    if (bunGlobal?.Glob) {
+      const glob = new bunGlobal.Glob(pattern);
+      for (const file of glob.scanSync({ cwd })) {
+        const abs = isAbsolute(file) ? file : resolve(cwd, file);
+        if (existsSync(abs) && statSync(abs).isFile()) {
+          filePaths.add(abs);
         }
-        continue;
       }
-    } catch {
-      // Fallback to recursive scan if Bun.Glob fails or is unavailable
     }
-
-    // Fallback: recursive directory scan matching ending suffix or pattern
-    const scanDir = (dir: string) => {
-      if (!existsSync(dir)) return;
-      const entries = readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const entryPath = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (
-            entry.name !== 'node_modules' &&
-            entry.name !== 'dist' &&
-            !entry.name.startsWith('.')
-          ) {
-            scanDir(entryPath);
-          }
-        } else if (entry.isFile()) {
-          if (entry.name.endsWith('.codegen.ts') || entry.name.endsWith('.codegen.js')) {
-            filePaths.add(entryPath);
-          }
-        }
-      }
-    };
-
-    // Extract base directory from pattern
-    const baseDir = pattern.split('*')[0] || '.';
-    const absBaseDir = isAbsolute(baseDir) ? baseDir : resolve(cwd, baseDir);
-    scanDir(absBaseDir);
   }
 
   return Array.from(filePaths).sort();

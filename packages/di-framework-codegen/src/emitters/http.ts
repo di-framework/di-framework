@@ -50,9 +50,9 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
   // Route definitions
   const routeChains: string[] = [];
   const prefix = manifest.httpPrefix ?? '';
-  if (prefix) {
-    routeChains.push(`    .prefix('${prefix}')`);
-  }
+  const builderExpr = prefix
+    ? `HttpRouter.builder().prefix('${prefix}').build()`
+    : `HttpRouter.builder().build()`;
 
   for (const op of httpOps) {
     const method = op.http!.method.toLowerCase();
@@ -80,12 +80,12 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
   }
 
   const prefixOpts = prefix ? `{\n  prefix: '${prefix}',\n}` : '';
+  const routesCode = routeChains.length > 0 ? `\n${routeChains.join('\n')}` : '';
 
   return `${OWNERSHIP_HEADER}
 
 import { Component } from '@di-framework/core/decorators';
-import { json } from '@di-framework/http';
-import { HttpRouter } from '@di-framework/http';
+import { HttpRouter, json } from '@di-framework/http';
 ${handlerImports.join('\n')}
 import {
   ${validatorsList},
@@ -95,18 +95,15 @@ import {
 export class ${controllerName} {
 ${handlerProps.join('\n\n')}
 
-  route = HttpRouter.builder()
-${routeChains.join('\n')}
+  route = ${builderExpr}${routesCode};
 }
 `;
 }
 
 function capitalize(str: string): string {
-  if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function uncapitalize(str: string): string {
-  if (!str) return str;
   return str.charAt(0).toLowerCase() + str.slice(1);
 }

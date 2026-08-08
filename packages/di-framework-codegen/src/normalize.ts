@@ -100,11 +100,12 @@ export function normalizeManifest(
 
     // HTTP normalization
     if (op.http) {
+      const method = op.http.method.toUpperCase();
+      const status = op.http.successStatus ?? (method === 'POST' ? 201 : 200);
       normOp.http = {
-        method: op.http.method.toUpperCase(),
+        method,
         path: op.http.path,
-        successStatus:
-          op.http.successStatus ?? (op.http.method.toUpperCase() === 'POST' ? 201 : 200),
+        successStatus: status,
         summary: op.http.summary,
         description: op.http.description,
       };
@@ -196,6 +197,5 @@ export function normalizeManifest(
 }
 
 function capitalize(str: string): string {
-  if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }

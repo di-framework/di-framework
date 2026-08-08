@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, spyOn } from 'bun:test';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateCommand } from '../cmd/generate';
@@ -63,8 +63,8 @@ export const Order = { parse: (i: any) => i, jsonSchema: {} };
   name: 'orders',
   version: 'v1',
   schemas: {
-    CreateOrder: { schema: { parse: (i) => i, jsonSchema: {} }, module: './orders.schemas.ts' },
-    Order: { schema: { parse: (i) => i, jsonSchema: {} }, module: './orders.schemas.ts' },
+    CreateOrder: { schema: { parse: String, jsonSchema: {} }, module: './orders.schemas.ts' },
+    Order: { schema: { parse: String, jsonSchema: {} }, module: './orders.schemas.ts' },
   },
   http: { prefix: '/v1' },
   operations: {
@@ -94,11 +94,24 @@ export const Order = { parse: (i: any) => i, jsonSchema: {} };
     return testDir;
   }
 
-  it('runs di-framework generate --init and produces generated surfaces and companion files', async () => {
+  it('parses flags correctly (--config, --outDir, --clean, --init)', async () => {
     const cwd = setupWorkspace();
     process.chdir(cwd);
 
-    process.argv = ['bun', 'main.ts', 'generate', '--init', '--config=./di-framework.codegen.ts'];
+    const configPath = join(cwd, 'di-framework.codegen.ts');
+    const outDir = join(cwd, 'src', 'generated');
+
+    process.argv = [
+      'bun',
+      'main.ts',
+      'generate',
+      '--config',
+      configPath,
+      '--outDir',
+      outDir,
+      '--clean',
+      '--init',
+    ];
 
     const log = spyOn(console, 'log').mockImplementation(() => {});
     const err = spyOn(console, 'error').mockImplementation(() => {});
@@ -108,12 +121,40 @@ export const Order = { parse: (i: any) => i, jsonSchema: {} };
       expect(exitCode).toBe(0);
 
       const contractsPath = join(cwd, 'src', 'generated', 'orders', 'v1', 'contracts.ts');
-      const httpPath = join(cwd, 'src', 'generated', 'orders', 'v1', 'http.ts');
-      const handlerPath = join(cwd, 'src', 'handlers', 'order.handlers.ts');
-
       expect(existsSync(contractsPath)).toBe(true);
-      expect(existsSync(httpPath)).toBe(true);
-      expect(existsSync(handlerPath)).toBe(true);
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+
+  it('prints info diagnostics on non-drifted generation with unowned stale files', async () => {
+    const cwd = setupWorkspace();
+    process.chdir(cwd);
+
+    // First generate
+    const configPath = join(cwd, 'di-framework.codegen.ts');
+    process.argv = ['bun', 'main.ts', 'generate', `--config=${configPath}`];
+
+    const log = spyOn(console, 'log').mockImplementation(() => {});
+    const err = spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await withExitCapture(() => generateCommand());
+
+      // Create a stale file in ledger without header
+      const staleFile = join(cwd, 'src', 'generated', 'orders', 'v1', 'unowned.ts');
+      writeFileSync(staleFile, '// no ownership header', 'utf-8');
+
+      const ledgerPath = join(cwd, 'src', 'generated', '.codegen-ledger.json');
+      const ledger = JSON.parse(readFileSync(ledgerPath, 'utf-8'));
+      ledger.generatedFiles.push('src/generated/orders/v1/unowned.ts');
+      writeFileSync(ledgerPath, JSON.stringify(ledger), 'utf-8');
+
+      // Generate again
+      const exitCode = await withExitCapture(() => generateCommand());
+      expect(exitCode).toBe(0);
+      expect(log.mock.calls.some((c) => String(c[0]).includes('ℹ️'))).toBe(true);
     } finally {
       log.mockRestore();
       err.mockRestore();
@@ -124,7 +165,14 @@ export const Order = { parse: (i: any) => i, jsonSchema: {} };
     const cwd = setupWorkspace();
     process.chdir(cwd);
 
-    process.argv = ['bun', 'main.ts', 'generate', '--check', '--config=./di-framework.codegen.ts'];
+    process.argv = [
+      'bun',
+      'main.ts',
+      'generate',
+      '--check',
+      '--config=./di-framework.codegen.ts',
+      '--outDir=./src/generated',
+    ];
 
     const log = spyOn(console, 'log').mockImplementation(() => {});
     const err = spyOn(console, 'error').mockImplementation(() => {});

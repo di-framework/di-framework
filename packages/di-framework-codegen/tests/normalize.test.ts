@@ -12,7 +12,7 @@ describe('normalizeImportPath', () => {
     expect(rel).toBe('../../../contracts/orders.schemas');
   });
 
-  it('prepends ./ for same directory imports', () => {
+  it('prepends ./ for same directory imports or absolute targets', () => {
     const fromDir = '/app/src/generated/orders/v1';
     const targetPath = '/app/src/generated/orders/v1/contracts.ts';
 
@@ -52,14 +52,25 @@ describe('normalizeManifest', () => {
           input: 'CreateOrder',
           output: 'Order',
           handler: {
-            module: '../handlers/order.handlers',
+            module: '/app/src/handlers/order.handlers.ts',
             export: 'OrderHandlers',
             method: 'createOrder',
           },
           http: {
             method: 'POST',
             path: '/orders',
-            successStatus: 201,
+            summary: 'Create order',
+            description: 'Create an order in system',
+          },
+          events: {
+            inbound: {
+              topic: 'orders.create.v1',
+              event: 'order.create.requested.v1',
+            },
+            outbound: {
+              topic: 'orders.created.v1',
+              event: 'order.created.v1',
+            },
           },
           rpc: {
             package: 'orders.v1',
@@ -71,6 +82,11 @@ describe('normalizeManifest', () => {
             outputFields: {
               id: 1,
             },
+          },
+          authorization: {
+            resource: 'order',
+            action: 'create',
+            policyModule: '/app/src/policies/order.policy.ts',
           },
         },
       },
@@ -94,6 +110,69 @@ describe('normalizeManifest', () => {
     expect(op?.outputSchemaName).toBe('Order');
     expect(op?.handler.relativeModulePathFromGen).toBe('../../../handlers/order.handlers');
     expect(op?.http?.method).toBe('POST');
+    expect(op?.http?.summary).toBe('Create order');
+    expect(op?.events?.outbound?.event).toBe('order.created.v1');
     expect(op?.rpc?.inputFields.amount?.type).toBe('double');
+  });
+
+  it('throws on invalid schema definition or unknown input/output schema references', async () => {
+    const config = await loadConfig(
+      {
+        manifests: [],
+        outDir: './src/generated',
+      },
+      '/app',
+    );
+
+    const invalidSchemaManifest: any = {
+      name: 'orders',
+      version: 'v1',
+      schemas: {
+        BadSchema: {},
+      },
+      operations: {},
+    };
+
+    expect(() =>
+      normalizeManifest({ manifest: invalidSchemaManifest, filePath: '/app/manifest.ts' }, config),
+    ).toThrow(/Invalid schema definition/);
+
+    const unknownInputManifest: any = {
+      name: 'orders',
+      version: 'v1',
+      schemas: {
+        Order: { parse: (i: any) => i, jsonSchema: {} },
+      },
+      operations: {
+        op1: {
+          input: 'UnknownInput',
+          output: 'Order',
+          handler: { module: './h', export: 'H', method: 'm' },
+        },
+      },
+    };
+
+    expect(() =>
+      normalizeManifest({ manifest: unknownInputManifest, filePath: '/app/manifest.ts' }, config),
+    ).toThrow(/unknown input schema/);
+
+    const unknownOutputManifest: any = {
+      name: 'orders',
+      version: 'v1',
+      schemas: {
+        CreateOrder: { parse: (i: any) => i, jsonSchema: {} },
+      },
+      operations: {
+        op1: {
+          input: 'CreateOrder',
+          output: 'UnknownOutput',
+          handler: { module: './h', export: 'H', method: 'm' },
+        },
+      },
+    };
+
+    expect(() =>
+      normalizeManifest({ manifest: unknownOutputManifest, filePath: '/app/manifest.ts' }, config),
+    ).toThrow(/unknown output schema/);
   });
 });

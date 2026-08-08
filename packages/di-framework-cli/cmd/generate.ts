@@ -1,12 +1,4 @@
-export async function getGenerateFn() {
-  try {
-    const mod = await import('@di-framework/codegen');
-    return mod.generate;
-  } catch {
-    const mod = await import('../../di-framework-codegen/index.ts');
-    return mod.generate;
-  }
-}
+import { generate } from '@di-framework/codegen';
 
 export async function generateCommand() {
   const args = process.argv.slice(3);
@@ -18,15 +10,15 @@ export async function generateCommand() {
   let outDir: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
+    const arg = args[i] ?? '';
     if (arg === '--config' && i + 1 < args.length) {
       configPath = args[++i];
     } else if (arg.startsWith('--config=')) {
-      configPath = arg.split('=')[1];
+      configPath = arg.slice(9);
     } else if (arg === '--outDir' && i + 1 < args.length) {
       outDir = args[++i];
     } else if (arg.startsWith('--outDir=')) {
-      outDir = arg.split('=')[1];
+      outDir = arg.slice(9);
     } else if (arg === '--init') {
       init = true;
     } else if (arg === '--check') {
@@ -38,8 +30,7 @@ export async function generateCommand() {
 
   console.log('⚡ Running @di-framework/codegen...');
 
-  const generateFn = await getGenerateFn();
-  const result = await generateFn({
+  const result = await generate({
     config: configPath,
     init,
     check,
@@ -48,11 +39,8 @@ export async function generateCommand() {
   });
 
   for (const diag of result.diagnostics) {
-    if (result.drifted) {
-      console.error(`  ❌ ${diag}`);
-    } else {
-      console.log(`  ℹ️  ${diag}`);
-    }
+    const icon = result.drifted ? '❌' : 'ℹ️ ';
+    console.log(`  ${icon} ${diag}`);
   }
 
   for (const file of result.files) {

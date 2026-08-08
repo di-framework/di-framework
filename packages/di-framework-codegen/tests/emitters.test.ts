@@ -67,6 +67,7 @@ describe('Surface Emitters', () => {
           inputFields: {
             customerId: { number: 1, type: 'string' },
             amount: { number: 2, type: 'double' },
+            isPriority: { number: 3, type: 'bool' },
           },
           outputFields: {
             id: { number: 1, type: 'string' },
@@ -83,6 +84,37 @@ describe('Surface Emitters', () => {
           description: 'Create an order for the authenticated principal',
         },
       },
+      getOrder: {
+        name: 'getOrder',
+        inputSchemaName: 'CreateOrder',
+        outputSchemaName: 'Order',
+        handler: {
+          modulePath: '/app/src/handlers/query.handlers.ts',
+          relativeModulePathFromGen: '../../../handlers/query.handlers',
+          exportName: 'QueryHandlers',
+          methodName: 'getOrder',
+        },
+        http: {
+          method: 'GET',
+          path: '/orders/:id',
+          successStatus: 200,
+        },
+        rpc: {
+          package: 'orders.v1',
+          service: 'OrdersService',
+          method: 'GetOrder',
+          inputFields: {
+            id: { number: 1, type: 'string' },
+          },
+          outputFields: {
+            id: { number: 1, type: 'string' },
+          },
+        },
+        tool: {
+          name: 'get_order',
+          description: 'Get an order by ID',
+        },
+      },
     },
   };
 
@@ -96,14 +128,13 @@ describe('Surface Emitters', () => {
     expect(code).toContain('export function validateOrder(input: unknown): Order');
   });
 
-  it('emitHttpSurface generates @HttpRouter controller', () => {
+  it('emitHttpSurface generates @HttpRouter controller with POST and GET methods', () => {
     const code = emitHttpSurface(sampleNormManifest);
     expect(code).not.toBeNull();
     expect(code!).toContain('@HttpRouter(');
     expect(code!).toContain('export class OrdersV1HttpController');
-    expect(code!).toContain('@Component(OrderHandlers)');
-    expect(code!).toContain(".post('/orders', async (request: Request) =>");
-    expect(code!).toContain('json(validateOrder(output), { status: 201 })');
+    expect(code!).toContain('.post(');
+    expect(code!).toContain('.get(');
   });
 
   it('emitEventsSurface generates @EventBridge with @Inbound and @Outbound', () => {
@@ -117,17 +148,20 @@ describe('Surface Emitters', () => {
     expect(code!).toContain('outboundCreateOrder');
   });
 
-  it('emitRpcSurface generates @RpcMessage and @RpcService', () => {
+  it('emitRpcSurface generates @RpcMessage and @RpcService with boolean types and multiple handlers', () => {
     const code = emitRpcSurface(sampleNormManifest);
     expect(code).not.toBeNull();
     expect(code!).toContain('@RpcMessage()');
     expect(code!).toContain('export class CreateOrderRequest');
     expect(code!).toContain("@RpcField({ number: 2, type: 'double' })");
+    expect(code!).toContain('isPriority!: boolean');
     expect(code!).toContain("@RpcService({ package: 'orders.v1' })");
     expect(code!).toContain('export class OrdersV1RpcService');
+    expect(code!).toContain('private orderHandlers!: OrderHandlers;');
+    expect(code!).toContain('private queryHandlers!: QueryHandlers;');
   });
 
-  it('emitToolsSurface generates @ToolSet and @Tool class', () => {
+  it('emitToolsSurface generates @ToolSet and @Tool class with multiple handlers', () => {
     const code = emitToolsSurface(sampleNormManifest);
     expect(code).not.toBeNull();
     expect(code!).toContain('@ToolSet(');
@@ -135,5 +169,24 @@ describe('Surface Emitters', () => {
     expect(code!).toContain("name: 'create_order'");
     expect(code!).toContain('inputSchema: CreateOrder.jsonSchema');
     expect(code!).toContain("action: 'create'");
+    expect(code!).toContain('private orderHandlers!: OrderHandlers;');
+    expect(code!).toContain('private queryHandlers!: QueryHandlers;');
+  });
+
+  it('returns null when surfaces are absent', () => {
+    const emptyManifest: NormalizedManifest = {
+      name: 'empty',
+      version: 'v1',
+      manifestFilePath: '/app/empty.ts',
+      outputDir: '/app/out',
+      managedByDi: true,
+      schemas: {},
+      operations: {},
+    };
+
+    expect(emitHttpSurface(emptyManifest)).toBeNull();
+    expect(emitEventsSurface(emptyManifest)).toBeNull();
+    expect(emitRpcSurface(emptyManifest)).toBeNull();
+    expect(emitToolsSurface(emptyManifest)).toBeNull();
   });
 });

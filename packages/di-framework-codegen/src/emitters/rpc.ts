@@ -139,11 +139,9 @@ function getTsType(rpcType: string): string {
 }
 
 function capitalize(str: string): string {
-  if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function uncapitalize(str: string): string {
-  if (!str) return str;
   return str.charAt(0).toLowerCase() + str.slice(1);
 }

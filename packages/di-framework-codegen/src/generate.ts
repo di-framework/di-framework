@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { loadConfig } from './config.ts';
 import { emitEventsSurface } from './emitters/events.ts';
@@ -170,14 +170,21 @@ export async function generate(options: GenerateOptions = {}): Promise<GenerateR
         content: '',
         status: 'drifted',
       });
-    } else {
-      const { unlinkSync } = await import('node:fs');
+    } else if (options.clean) {
       unlinkSync(stalePath);
       files.push({
         path: stalePath,
         relativePath: relPath,
         content: '',
         status: 'deleted',
+      });
+    } else {
+      diagnostics.push(`Stale generated file present: ${relPath}. Use --clean to remove.`);
+      files.push({
+        path: stalePath,
+        relativePath: relPath,
+        content: '',
+        status: 'unchanged',
       });
     }
   }

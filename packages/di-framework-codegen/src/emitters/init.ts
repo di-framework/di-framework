@@ -21,7 +21,6 @@ export function initializeCompanions(
         }
 
         const inputSchemaObj = manifest.schemas[op.inputSchemaName]!;
-        const outputSchemaObj = manifest.schemas[op.outputSchemaName]!;
 
         const schemaImportPath = normalizeImportPath(handlerDir, inputSchemaObj.modulePath);
 

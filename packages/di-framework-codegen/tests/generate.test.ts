@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generate } from '../index.ts';
+import { hasOwnershipHeader, loadLedger } from '../src/ledger.ts';
 import type { SchemaCodegenManifest } from '../src/types.ts';
 
 describe('generate() API', () => {
@@ -73,6 +74,16 @@ export const Order = {
               event: 'order.create.requested.v1',
             },
           },
+          rpc: {
+            package: 'orders.v1',
+            service: 'OrdersService',
+            inputFields: { customerId: 1 },
+            outputFields: { id: 1 },
+          },
+          tool: {
+            name: 'create_order',
+            description: 'Create an order',
+          },
           authorization: {
             resource: 'order',
             action: 'create',
@@ -100,14 +111,19 @@ export const Order = {
     const contractsPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'contracts.ts');
     const httpPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'http.ts');
     const eventsPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'events.ts');
+    const rpcPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'rpc.ts');
+    const toolsPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'tools.ts');
     const ledgerPath = join(testDir, 'src', 'generated', '.codegen-ledger.json');
 
     expect(existsSync(contractsPath)).toBe(true);
     expect(existsSync(httpPath)).toBe(true);
     expect(existsSync(eventsPath)).toBe(true);
+    expect(existsSync(rpcPath)).toBe(true);
+    expect(existsSync(toolsPath)).toBe(true);
     expect(existsSync(ledgerPath)).toBe(true);
 
     const contracts1 = readFileSync(contractsPath, 'utf-8');
+    expect(hasOwnershipHeader(contracts1)).toBe(true);
 
     // Run a second time: should be 100% byte-for-byte identical and unchanged
     const res2 = await generate({
@@ -121,23 +137,50 @@ export const Order = {
     expect(contracts1).toBe(contracts2);
   });
 
-  it('--check reports drift without writing files', async () => {
+  it('--check reports drift without writing files when content is modified or file is missing', async () => {
     const { testDir, manifest } = setupTestWorkspace();
 
-    // In clean directory, run check mode
-    const checkRes = await generate({
+    // 1. Missing file check
+    const checkRes1 = await generate({
       cwd: testDir,
       manifests: [manifest],
       outDir: './src/generated',
       check: true,
     });
 
-    expect(checkRes.success).toBe(false);
-    expect(checkRes.drifted).toBe(true);
-    expect(checkRes.diagnostics.length).toBeGreaterThan(0);
+    expect(checkRes1.success).toBe(false);
+    expect(checkRes1.drifted).toBe(true);
 
+    // Write files
+    await generate({
+      cwd: testDir,
+      manifests: [manifest],
+      outDir: './src/generated',
+    });
+
+    // Modify a generated file
     const contractsPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'contracts.ts');
-    expect(existsSync(contractsPath)).toBe(false);
+    writeFileSync(contractsPath, '// modified content', 'utf-8');
+
+    // Check mode on modified file
+    const checkRes2 = await generate({
+      cwd: testDir,
+      manifests: [manifest],
+      outDir: './src/generated',
+      check: true,
+    });
+
+    expect(checkRes2.success).toBe(false);
+    expect(checkRes2.drifted).toBe(true);
+
+    // Write mode on modified file (updates file)
+    const writeRes = await generate({
+      cwd: testDir,
+      manifests: [manifest],
+      outDir: './src/generated',
+    });
+    expect(writeRes.success).toBe(true);
+    expect(readFileSync(contractsPath, 'utf-8')).not.toBe('// modified content');
   });
 
   it('--init creates missing companion handler and policy files once without overwriting existing ones', async () => {
@@ -186,10 +229,9 @@ export const Order = {
       outDir: './src/generated',
     });
 
-    const oldPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'events.ts');
-    expect(existsSync(oldPath)).toBe(true);
+    const oldEventsPath = join(testDir, 'src', 'generated', 'orders', 'v1', 'events.ts');
+    expect(existsSync(oldEventsPath)).toBe(true);
 
-    // Modify manifest so events operation is removed
     const updatedManifest: SchemaCodegenManifest = {
       ...manifest,
       operations: {
@@ -200,14 +242,55 @@ export const Order = {
       },
     };
 
-    // Run generate again: old events.ts should be safely cleaned up
-    const res = await generate({
+    // Stale check mode test
+    const checkRes = await generate({
+      cwd: testDir,
+      manifests: [updatedManifest],
+      outDir: './src/generated',
+      check: true,
+    });
+    expect(checkRes.drifted).toBe(true);
+    expect(existsSync(oldEventsPath)).toBe(true);
+
+    // Write mode without clean option preserves stale file and emits diagnostic
+    const noCleanRes = await generate({
       cwd: testDir,
       manifests: [updatedManifest],
       outDir: './src/generated',
     });
+    expect(noCleanRes.success).toBe(true);
+    expect(existsSync(oldEventsPath)).toBe(true);
+    expect(noCleanRes.diagnostics.some((d) => d.includes('Use --clean to remove'))).toBe(true);
 
-    expect(res.success).toBe(true);
-    expect(existsSync(oldPath)).toBe(false);
+    // Clean up stale file in write mode with clean: true
+    const writeRes = await generate({
+      cwd: testDir,
+      manifests: [updatedManifest],
+      outDir: './src/generated',
+      clean: true,
+    });
+    expect(writeRes.success).toBe(true);
+    expect(existsSync(oldEventsPath)).toBe(false);
+
+    // Test skipping cleanup when ownership header is missing
+    const fakeStalePath = join(testDir, 'src', 'generated', 'orders', 'v1', 'stale.ts');
+    writeFileSync(fakeStalePath, '// hand written without header', 'utf-8');
+    const ledgerPath = join(testDir, 'src', 'generated', '.codegen-ledger.json');
+
+    // Add fakeStalePath to ledger
+    const ledger = loadLedger(ledgerPath);
+    ledger.generatedFiles.push('src/generated/orders/v1/stale.ts');
+    writeFileSync(ledgerPath, JSON.stringify(ledger), 'utf-8');
+
+    const skipRes = await generate({
+      cwd: testDir,
+      manifests: [updatedManifest],
+      outDir: './src/generated',
+      clean: true,
+    });
+    expect(skipRes.diagnostics.some((d) => d.includes('missing codegen ownership header'))).toBe(
+      true,
+    );
+    expect(existsSync(fakeStalePath)).toBe(true);
   });
 });
