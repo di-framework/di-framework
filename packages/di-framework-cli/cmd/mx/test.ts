@@ -1,7 +1,7 @@
+import { unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { $ } from 'bun';
-import { unlinkSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 // @ts-expect-error — static import embeds the file at compile time
 import E2E_SCRIPT from '../../scripts/e2e-test.sh' with { type: 'text' };
 

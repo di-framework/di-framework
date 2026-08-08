@@ -109,10 +109,10 @@ export async function handleOAuthServerRequest(
 
       // Check Basic auth header for confidential clients
       const authHeader = request.headers.get('authorization');
-      let clientId = body['client_id'];
-      let clientSecret = body['client_secret'];
+      let clientId = body.client_id;
+      let clientSecret = body.client_secret;
 
-      if (authHeader && authHeader.startsWith('Basic ')) {
+      if (authHeader?.startsWith('Basic ')) {
         const decoded = atob(authHeader.slice(6));
         const [id, secret] = decoded.split(':');
         if (id) clientId = id;
@@ -120,14 +120,14 @@ export async function handleOAuthServerRequest(
       }
 
       const grant = await server.token({
-        grantType: body['grant_type'] ?? '',
-        code: body['code'],
-        codeVerifier: body['code_verifier'],
-        redirectUri: body['redirect_uri'],
+        grantType: body.grant_type ?? '',
+        code: body.code,
+        codeVerifier: body.code_verifier,
+        redirectUri: body.redirect_uri,
         clientId,
         clientSecret,
-        refreshToken: body['refresh_token'],
-        scope: body['scope'],
+        refreshToken: body.refresh_token,
+        scope: body.scope,
       });
 
       return new Response(JSON.stringify(grant), {
@@ -153,7 +153,7 @@ export async function handleOAuthServerRequest(
       (path === '/oauth/userinfo' || path === '/userinfo')
     ) {
       const authHeader = request.headers.get('authorization');
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      if (!authHeader?.startsWith('Bearer ')) {
         return new Response(
           JSON.stringify({ error: 'invalid_token', error_description: 'Missing Bearer token' }),
           { status: 401, headers: COMMON_SECURITY_HEADERS },

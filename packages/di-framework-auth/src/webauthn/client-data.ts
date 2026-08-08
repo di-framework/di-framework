@@ -61,19 +61,18 @@ export function parseClientData(bytes: Uint8Array): ParsedClientData {
   }
 
   const data = parsed as Record<string, unknown>;
-  if (typeof data['type'] !== 'string')
-    reject('clientDataJSON has no type', 'malformed_credential');
-  if (typeof data['challenge'] !== 'string')
+  if (typeof data.type !== 'string') reject('clientDataJSON has no type', 'malformed_credential');
+  if (typeof data.challenge !== 'string')
     reject('clientDataJSON has no challenge', 'malformed_credential');
-  if (typeof data['origin'] !== 'string')
+  if (typeof data.origin !== 'string')
     reject('clientDataJSON has no origin', 'malformed_credential');
 
   return {
-    type: data['type'],
-    challenge: data['challenge'],
-    origin: data['origin'],
-    ...(typeof data['crossOrigin'] === 'boolean' ? { crossOrigin: data['crossOrigin'] } : {}),
-    ...(typeof data['topOrigin'] === 'string' ? { topOrigin: data['topOrigin'] } : {}),
+    type: data.type,
+    challenge: data.challenge,
+    origin: data.origin,
+    ...(typeof data.crossOrigin === 'boolean' ? { crossOrigin: data.crossOrigin } : {}),
+    ...(typeof data.topOrigin === 'string' ? { topOrigin: data.topOrigin } : {}),
     raw,
     bytes,
   };

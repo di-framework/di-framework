@@ -217,7 +217,7 @@ class Parser {
 
   private expectIdent(): string {
     const t = this.advance();
-    if (!t || t.type !== 'ident') {
+    if (t?.type !== 'ident') {
       throw new Error(`Expected identifier, got ${t?.raw ?? 'EOF'}`);
     }
     return String(t.value);

@@ -3,6 +3,7 @@ import type {
   JsonRpcFailure,
   JsonRpcPayload,
   JsonRpcResponse,
+  JsonRpcStreamFrame,
   RpcId,
 } from './types.ts';
 
@@ -38,12 +39,22 @@ export function isJsonRpcCall(value: unknown): value is JsonRpcCall {
   );
 }
 
+export function isJsonRpcStreamFrame(value: unknown): value is JsonRpcStreamFrame {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.jsonrpc === '2.0' &&
+    (record.stream === 'next' || record.stream === 'complete' || record.stream === 'error') &&
+    (record.id === null || typeof record.id === 'string' || typeof record.id === 'number')
+  );
+}
+
 export function isJsonRpcResponse(value: unknown): value is JsonRpcResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
     record.jsonrpc === '2.0' &&
-    ('result' in record || 'error' in record) &&
+    ('result' in record || 'error' in record || 'stream' in record) &&
     (record.id === null || typeof record.id === 'string' || typeof record.id === 'number')
   );
 }
@@ -60,13 +71,15 @@ export function parseJsonRpc(input: string | unknown): JsonRpcPayload | JsonRpcF
   if (Array.isArray(value)) {
     if (
       value.length === 0 ||
-      !value.every((item) => isJsonRpcCall(item) || isJsonRpcResponse(item))
+      !value.every(
+        (item) => isJsonRpcCall(item) || isJsonRpcResponse(item) || isJsonRpcStreamFrame(item),
+      )
     ) {
       return rpcFailure(null, JSON_RPC_ERRORS.INVALID_REQUEST, 'Invalid Request');
     }
     return value as JsonRpcPayload;
   }
-  if (!isJsonRpcCall(value) && !isJsonRpcResponse(value)) {
+  if (!isJsonRpcCall(value) && !isJsonRpcResponse(value) && !isJsonRpcStreamFrame(value)) {
     return rpcFailure(null, JSON_RPC_ERRORS.INVALID_REQUEST, 'Invalid Request');
   }
   return value;

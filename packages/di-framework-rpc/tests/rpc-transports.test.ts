@@ -199,11 +199,77 @@ describe('http.ts - transport & handler edge cases', () => {
     } as unknown as Request;
     const response = await handler(fakeRequest);
     const body = await response.json();
-    expect(body).toEqual(
-      expect.objectContaining({
-        error: expect.objectContaining({ message: 'Parse error' }),
+    expect(body).toEqual({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700, message: 'Parse error' },
+    });
+  });
+
+  it('returns 204 No Content when dispatch completes with no response (notification)', async () => {
+    const handler = createHttpRpcHandler();
+    const response = await handler(
+      new Request('http://x.test/rpc', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'nonexistentNotification',
+        }),
       }),
     );
+    expect(response.status).toBe(204);
+  });
+
+  it('handles dispatcher rejection gracefully in createHttpRpcHandler', async () => {
+    defineUsers();
+    const handler = createHttpRpcHandler({
+      interceptors: [
+        () => {
+          throw new Error('interceptor panic');
+        },
+      ],
+    });
+    const response = await handler(
+      new Request('http://x.test/rpc', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'gaps.v1.UserService/Get',
+          params: { id: '1' },
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toBe('interceptor panic');
+  });
+
+  it('handles container resolution failure rejection in createHttpRpcHandler', async () => {
+    defineUsers();
+    const customContainer = {
+      resolve() {
+        throw new Error('DI container failure');
+      },
+    };
+    const handler = createHttpRpcHandler({ container: customContainer as never });
+    const response = await handler(
+      new Request('http://x.test/rpc', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'gaps.v1.UserService/Get',
+          params: { id: '1' },
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toBe('DI container failure');
   });
 });
 

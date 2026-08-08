@@ -27,28 +27,28 @@ export function securitySchemesFor(
   const names = new Set(strategies.flatMap((strategy) => strategy.name.split('+')));
 
   if (names.has('session')) {
-    schemes['sessionAuth'] = {
+    schemes.sessionAuth = {
       type: 'apiKey',
       in: 'cookie',
       name: options.sessionCookieName ?? SESSION_COOKIE_NAME,
     };
   }
   if (names.has('bearer')) {
-    schemes['bearerAuth'] = {
+    schemes.bearerAuth = {
       type: 'http',
       scheme: 'bearer',
       bearerFormat: options.bearerFormat ?? 'JWT',
     };
   }
   if (names.has('api-key')) {
-    schemes['apiKeyAuth'] = {
+    schemes.apiKeyAuth = {
       type: 'apiKey',
       in: 'header',
       name: options.apiKeyHeaderName ?? 'X-API-Key',
     };
   }
   if (options.openIdConnectUrl) {
-    schemes['openIdConnect'] = {
+    schemes.openIdConnect = {
       type: 'openIdConnect',
       openIdConnectUrl: options.openIdConnectUrl,
     };

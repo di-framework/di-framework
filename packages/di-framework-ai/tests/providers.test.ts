@@ -98,7 +98,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function sseResponse(events: string[]): Response {
-  const body = events.map((e) => (e.startsWith('data:') ? e : `data: ${e}`)).join('\n\n') + '\n\n';
+  const body = `${events.map((e) => (e.startsWith('data:') ? e : `data: ${e}`)).join('\n\n')}\n\n`;
   return new Response(body, {
     status: 200,
     headers: { 'Content-Type': 'text/event-stream' },
@@ -177,7 +177,7 @@ describe('toAnthropicMessages edge cases', () => {
         toolCalls: [toolCall('t1', 'getWeather', { city: 'NYC' })],
       }),
     ]);
-    const content = mapped.messages[0]!.content;
+    const content = mapped.messages[0]?.content;
     expect(Array.isArray(content)).toBe(true);
     const blocks = content as { type: string }[];
     expect(blocks[0]?.type).toBe('text');
@@ -188,7 +188,7 @@ describe('toAnthropicMessages edge cases', () => {
     const badMapped = toAnthropicMessages([
       assistantMessage(null, { toolCalls: [toolCall('t2', 'x', 'not-json')] }),
     ]);
-    const block = (badMapped.messages[0]!.content as { input?: unknown }[])[0];
+    const block = (badMapped.messages[0]?.content as { input?: unknown }[])[0];
     expect(block?.input).toEqual({ _raw: 'not-json' });
   });
 
@@ -201,7 +201,7 @@ describe('toAnthropicMessages edge cases', () => {
     const mapped = toAnthropicMessages([
       userMessage('look', { media: [media('image/png', new URL('https://example.test/a.png'))] }),
     ]);
-    const content = mapped.messages[0]!.content as { type: string; source?: { data?: string } }[];
+    const content = mapped.messages[0]?.content as { type: string; source?: { data?: string } }[];
     expect(content.at(-1)?.source?.data).toBe('https://example.test/a.png');
   });
 
@@ -210,7 +210,7 @@ describe('toAnthropicMessages edge cases', () => {
     const mapped = toAnthropicMessages([
       userMessage('look', { media: [media('image/png', bytes)] }),
     ]);
-    const content = mapped.messages[0]!.content as { source?: { data?: string } }[];
+    const content = mapped.messages[0]?.content as { source?: { data?: string } }[];
     expect(content.at(-1)?.source?.data).toBe(btoa('hi'));
   });
 });
@@ -261,11 +261,11 @@ describe('toAnthropicMessages', () => {
     expect(mapped.system).toBe('be helpful');
     expect(mapped.messages).toHaveLength(3);
     expect(mapped.messages[0]).toEqual({ role: 'user', content: 'weather?' });
-    expect(mapped.messages[1]!.role).toBe('assistant');
-    expect(mapped.messages[2]!.role).toBe('user');
-    const toolResult = mapped.messages[2]!.content;
+    expect(mapped.messages[1]?.role).toBe('assistant');
+    expect(mapped.messages[2]?.role).toBe('user');
+    const toolResult = mapped.messages[2]?.content;
     expect(Array.isArray(toolResult)).toBe(true);
-    expect((toolResult as { type: string }[])[0]!.type).toBe('tool_result');
+    expect((toolResult as { type: string }[])[0]?.type).toBe('tool_result');
   });
 
   test('merges consecutive same-role messages', () => {
@@ -274,7 +274,7 @@ describe('toAnthropicMessages', () => {
       toolResponseMessage([toolResponse('x', 't', 'ok')]),
     ]);
     expect(mapped.messages).toHaveLength(1);
-    expect(mapped.messages[0]!.role).toBe('user');
+    expect(mapped.messages[0]?.role).toBe('user');
   });
 });
 
@@ -283,14 +283,14 @@ describe('toOpenAiMessages media edge cases', () => {
     const mapped = toOpenAiMessages([
       userMessage('look', { media: [media('image/png', new URL('https://example.test/a.png'))] }),
     ]);
-    const content = mapped[0]!.content as { image_url: { url: string } }[];
+    const content = mapped[0]?.content as { image_url: { url: string } }[];
     expect(content.at(-1)?.image_url.url).toBe('https://example.test/a.png');
   });
 
   test('media backed by raw bytes is base64-encoded into a data URL', () => {
     const bytes = new Uint8Array([104, 105]); // "hi"
     const mapped = toOpenAiMessages([userMessage('look', { media: [media('image/png', bytes)] })]);
-    const content = mapped[0]!.content as { image_url: { url: string } }[];
+    const content = mapped[0]?.content as { image_url: { url: string } }[];
     expect(content.at(-1)?.image_url.url).toBe(`data:image/png;base64,${btoa('hi')}`);
   });
 });
@@ -424,8 +424,8 @@ describe('OpenAiChatModel', () => {
     const response = await model.call(new Prompt('weather?', { toolCallbacks: [weather] }));
 
     expect(Array.isArray(seenBody.tools)).toBe(true);
-    expect(hasToolCalls(response.getResult()!.output)).toBe(true);
-    expect(response.getResult()!.output.toolCalls[0]!.name).toBe('getWeather');
+    expect(hasToolCalls(response.getResult()?.output)).toBe(true);
+    expect(response.getResult()?.output.toolCalls[0]?.name).toBe('getWeather');
   });
 
   test('maps HTTP 401 to authentication AiError', async () => {
@@ -477,7 +477,7 @@ describe('OpenAiChatModel', () => {
 
     const model = new OpenAiChatModel({ apiKey: 'sk', fetch: fetchImpl });
     const chunks: string[] = [];
-    for await (const chunk of model.stream!(new Prompt('hi'))) {
+    for await (const chunk of model.stream?.(new Prompt('hi'))) {
       chunks.push(chunk.content);
     }
     expect(chunks.at(-1)).toBe('Hello');
@@ -522,7 +522,7 @@ describe('OpenAiChatModel', () => {
 
     const model = new OpenAiChatModel({ apiKey: 'sk', fetch: fetchImpl });
     let last: Awaited<ReturnType<typeof model.call>> | undefined;
-    for await (const chunk of model.stream!(new Prompt('weather?'))) {
+    for await (const chunk of model.stream?.(new Prompt('weather?'))) {
       last = chunk;
     }
     expect(last?.getResult()?.output.toolCalls).toEqual([
@@ -636,7 +636,7 @@ describe('AnthropicChatModel', () => {
 
     const response = await model.call(new Prompt('weather'));
     expect(response.hasToolCalls()).toBe(true);
-    expect(response.getResult()!.output.toolCalls[0]).toMatchObject({
+    expect(response.getResult()?.output.toolCalls[0]).toMatchObject({
       id: 'toolu_1',
       name: 'getWeather',
     });
@@ -674,7 +674,7 @@ describe('AnthropicChatModel', () => {
 
     const model = new AnthropicChatModel({ apiKey: 'k', fetch: fetchImpl });
     let last = '';
-    for await (const chunk of model.stream!(new Prompt('hi'))) {
+    for await (const chunk of model.stream?.(new Prompt('hi'))) {
       last = chunk.content;
     }
     expect(last).toBe('Hey!');
@@ -709,7 +709,7 @@ describe('AnthropicChatModel', () => {
 
     const model = new AnthropicChatModel({ apiKey: 'k', fetch: fetchImpl });
     let last: Awaited<ReturnType<typeof model.call>> | undefined;
-    for await (const chunk of model.stream!(new Prompt('weather?'))) {
+    for await (const chunk of model.stream?.(new Prompt('weather?'))) {
       last = chunk;
     }
     expect(last?.getResult()?.output.toolCalls).toEqual([

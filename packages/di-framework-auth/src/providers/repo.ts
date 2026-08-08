@@ -175,10 +175,10 @@ export function repoUserStore(options: RepoStoreOptions<UserRecord>): UserStore 
 
 export function repoSessionStore(options: RepoStoreOptions<SessionRecord>): SessionStore {
   const { adapter, pageSize = 200 } = options;
-  const now = options.now ?? seconds;
+  const _now = options.now ?? seconds;
   const toEntity = mapper(options.fields);
   const toRecord = reverseMapper(options.fields);
-  const subjectKey = options.fields?.['subject'] ?? 'subject';
+  const subjectKey = options.fields?.subject ?? 'subject';
 
   return {
     async get(id) {

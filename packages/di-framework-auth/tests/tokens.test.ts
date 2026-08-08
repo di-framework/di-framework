@@ -52,8 +52,8 @@ describe('JWK', () => {
 
   it('strips private members when publishing', async () => {
     const pair = await generateKeyPair('ES256');
-    expect(pair.privateJwk['d']).toBeDefined();
-    expect(toPublicJwk(pair.privateJwk)['d']).toBeUndefined();
+    expect(pair.privateJwk.d).toBeDefined();
+    expect(toPublicJwk(pair.privateJwk).d).toBeUndefined();
   });
 
   it('refuses a JWK whose kty does not match the algorithm', async () => {
@@ -71,7 +71,7 @@ describe('JWK', () => {
 
   it('generates an RSA key pair (RS256)', async () => {
     const pair = await generateKeyPair('RS256');
-    expect(pair.privateJwk['kty']).toBe('RSA');
+    expect(pair.privateJwk.kty).toBe('RSA');
     const signingKey = await importJwk(pair.privateJwk, 'RS256', 'sign');
     const verifyKey = await importJwk(pair.publicJwk, 'RS256', 'verify');
     expect(signingKey).toBeDefined();
@@ -565,10 +565,10 @@ describe('keyService', () => {
 
     // And both keys are still published.
     const jwks = await service.publicJwks();
-    expect(jwks.keys.map((key) => key['kid']).sort()).toEqual(
+    expect(jwks.keys.map((key) => key.kid).sort()).toEqual(
       [first.record.kid, second.record.kid].sort(),
     );
-    expect(jwks.keys.every((key) => key['d'] === undefined)).toBe(true);
+    expect(jwks.keys.every((key) => key.d === undefined)).toBe(true);
   });
 
   it('falls back to the current key when a header carries no kid', async () => {

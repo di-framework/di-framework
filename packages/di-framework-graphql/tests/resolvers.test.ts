@@ -185,7 +185,7 @@ describe('@Subscription with @Requires', () => {
     expect(value).toEqual({ hello: 'world' });
 
     // return() delegates to the now-open source once it exists.
-    const closed = await iterator.return!();
+    const closed = await iterator.return?.();
     expect(closed).toEqual({ value: undefined, done: true });
   });
 
@@ -194,7 +194,7 @@ describe('@Subscription with @Requires', () => {
     const subscribe = factory.createSubscribe(field);
     const iterator = subscribe(undefined, {}, { user: { id: 'u1', roles: ['admin'] } }, {});
 
-    const result = await iterator.return!();
+    const result = await iterator.return?.();
     expect(result).toEqual({ value: undefined, done: true });
   });
 
@@ -203,7 +203,7 @@ describe('@Subscription with @Requires', () => {
     const subscribe = factory.createSubscribe(field);
     const iterator = subscribe(undefined, {}, { user: { id: 'u1', roles: ['admin'] } }, {});
 
-    await expect(iterator.throw!(new Error('early'))).rejects.toThrow('early');
+    await expect(iterator.throw?.(new Error('early'))).rejects.toThrow('early');
   });
 
   it('throw() once open delegates to the underlying container event iterator', async () => {
@@ -217,7 +217,7 @@ describe('@Subscription with @Requires', () => {
     container.emit('resolvers-test.event' as any, { n: 1 });
     await pending;
 
-    await expect(iterator.throw!(new Error('boom'))).rejects.toThrow('boom');
+    await expect(iterator.throw?.(new Error('boom'))).rejects.toThrow('boom');
   });
 });
 
@@ -284,7 +284,7 @@ describe('containerEventIterator', () => {
     const container = new Container();
     const iterator = containerEventIterator(container, 'direct.event', (payload) => payload);
 
-    await expect(iterator.throw!(new Error('kaboom'))).rejects.toThrow('kaboom');
+    await expect(iterator.throw?.(new Error('kaboom'))).rejects.toThrow('kaboom');
     // Finishing unsubscribes and marks the iterator done for any further reads.
     expect(await iterator.next()).toEqual({ value: undefined, done: true });
   });
@@ -292,7 +292,7 @@ describe('containerEventIterator', () => {
   it('return() resolves done even with nothing pending', async () => {
     const container = new Container();
     const iterator = containerEventIterator(container, 'direct.event', (payload) => payload);
-    expect(await iterator.return!()).toEqual({ value: undefined, done: true });
+    expect(await iterator.return?.()).toEqual({ value: undefined, done: true });
   });
 
   it('is its own async iterator', () => {

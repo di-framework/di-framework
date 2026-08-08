@@ -17,7 +17,7 @@ describe('SemanticRegistry', () => {
 
       const types = registry.getTypes();
       expect(types).toHaveLength(1);
-      expect(types[0]!.name).toBe('Foo');
+      expect(types[0]?.name).toBe('Foo');
     });
   });
 
@@ -33,7 +33,7 @@ describe('SemanticRegistry', () => {
 
       const inputs = registry.getInputs();
       expect(inputs).toHaveLength(1);
-      expect(inputs[0]!.name).toBe('FooInput');
+      expect(inputs[0]?.name).toBe('FooInput');
     });
   });
 
@@ -49,7 +49,7 @@ describe('SemanticRegistry', () => {
 
       const enums = registry.getEnums();
       expect(enums).toHaveLength(1);
-      expect(enums[0]!.name).toBe('MyEnum');
+      expect(enums[0]?.name).toBe('MyEnum');
     });
   });
 
@@ -111,7 +111,7 @@ describe('SemanticRegistry', () => {
 
       const clone = registry.fork();
       expect(clone.getTypes()).toHaveLength(1);
-      expect(clone.getTypes()[0]!.name).toBe('Forked');
+      expect(clone.getTypes()[0]?.name).toBe('Forked');
     });
   });
 
@@ -155,7 +155,7 @@ describe('SemanticRegistry', () => {
 
       expect(registry.getUnion(ref)).toMatchObject({ name: 'SearchResult' });
       expect(registry.getUnions()).toHaveLength(1);
-      expect(registry.getUnions()[0]!.ref).toBe(ref);
+      expect(registry.getUnions()[0]?.ref).toBe(ref);
     });
   });
 

@@ -41,7 +41,7 @@ type Mutable = Record<string | symbol, any>;
 export function setPrincipal(request: unknown, principal: Principal): void {
   const target = request as Mutable;
   target[PRINCIPAL] = principal;
-  target['principal'] = principal;
+  target.principal = principal;
 }
 
 export function getPrincipal<P = Principal>(request: unknown): P | undefined {

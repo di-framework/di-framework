@@ -4,7 +4,6 @@
  * Shows how to write tests with mocked dependencies
  */
 
-import { Container as DIContainer } from '@di-framework/core';
 import { Component, Container } from '@di-framework/core/decorators';
 
 // ============================================================================
@@ -17,7 +16,7 @@ interface IEmailService {
 
 @Container()
 class RealEmailService implements IEmailService {
-  async send(to: string, subject: string, body: string): Promise<void> {
+  async send(to: string, subject: string, _body: string): Promise<void> {
     console.log(`[REAL] Sending email to ${to}: ${subject}`);
     // Real implementation would use SMTP or email API
     return Promise.resolve();
@@ -111,7 +110,7 @@ class TestRunner {
 
   printSummary(): void {
     const results = this.getResults();
-    console.log('\n' + '='.repeat(60));
+    console.log(`\n${'='.repeat(60)}`);
     console.log('Test Results');
     console.log('='.repeat(60));
     console.log(`Passed: ${results.passed}`);
@@ -262,7 +261,7 @@ export async function runAllTests(): Promise<void> {
   await testContainerIsolation();
   await testErrorScenarios();
 
-  console.log('\n' + '='.repeat(60));
+  console.log(`\n${'='.repeat(60)}`);
   console.log('All test suites completed!');
   console.log('='.repeat(60));
 }

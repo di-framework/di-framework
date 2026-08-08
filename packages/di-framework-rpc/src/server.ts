@@ -19,7 +19,9 @@ export function createRpcServer(options: CreateRpcServerOptions): RpcServerHandl
       await options.transport.start?.();
       unsubscribe = options.transport.subscribe(async (payload) => {
         try {
-          const response = await dispatcher.dispatch(payload);
+          const response = await dispatcher.dispatch(payload, async (frame) => {
+            await options.transport.send(frame);
+          });
           if (response !== undefined) await options.transport.send(response);
         } catch (error) {
           options.onError?.(error);

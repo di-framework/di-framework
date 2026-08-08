@@ -97,14 +97,14 @@ describe('InMemoryRepository', () => {
   test('compareAndSwap mutates entity atomically or aborts when null returned', async () => {
     await repo.save({ id: '1', name: 'Alice', age: 30 });
     const aborted = await repo.compareAndSwap('1', (current) => {
-      if (!current || current.age !== 25) return null;
+      if (current?.age !== 25) return null;
       return { ...current, age: 26 };
     });
     expect(aborted).toBe(false);
     expect((await repo.findById('1'))?.age).toBe(30);
 
     const swapped = await repo.compareAndSwap('1', (current) => {
-      if (!current || current.age !== 30) return null;
+      if (current?.age !== 30) return null;
       return { ...current, age: 31 };
     });
     expect(swapped).toBe(true);
@@ -126,7 +126,7 @@ describe('InMemoryRepository', () => {
     // 50 concurrent requests competing to transition age from 0 to 1
     const promises = Array.from({ length: 50 }, () =>
       repo.compareAndSwap('concurrent-cas', (current) => {
-        if (!current || current.age !== 0) return null;
+        if (current?.age !== 0) return null;
         return { ...current, age: 1 };
       }),
     );

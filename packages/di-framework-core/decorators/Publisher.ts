@@ -24,7 +24,7 @@ export interface PublisherOptions {
  * }
  */
 export function Publisher(optionsOrEvent: string | PublisherOptions) {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol, _descriptor: PropertyDescriptor) => {
     const options: PublisherOptions =
       typeof optionsOrEvent === 'string' ? { event: optionsOrEvent } : optionsOrEvent;
 

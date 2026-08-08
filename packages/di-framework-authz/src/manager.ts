@@ -1,5 +1,4 @@
 import type { AuthorizationManager, Principal } from '@di-framework/auth';
-import type { HttpAuthorizationContext } from '@di-framework/auth/http';
 import { useContainer } from '@di-framework/core/container';
 import { parsePolicies } from './ebnf.ts';
 import { evaluatePolicy } from './evaluator.ts';
@@ -46,7 +45,7 @@ function isProvider(value: unknown): value is ResourceProvider {
 export function policyAuthorizationManager(
   options: PolicyAuthorizationOptions,
 ): AuthorizationManager<any> {
-  if (!options || !options.providers) throw new Error('Policy providers configuration is required');
+  if (!options?.providers) throw new Error('Policy providers configuration is required');
   const document =
     typeof options.policies === 'string'
       ? parsePolicies(options.policies)

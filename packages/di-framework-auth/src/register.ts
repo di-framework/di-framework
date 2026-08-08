@@ -249,9 +249,9 @@ export function registerAuth(options: RegisterAuthOptions = {}): AuthRuntime {
       built.push(
         bearerTokenStrategy({
           algorithms: options.jwt?.symmetric ? ['HS256'] : [options.jwt?.algorithm ?? 'ES256'],
-          key: (header) => tokens!.keys.verificationKey(header),
-          issuer: options.jwt!.issuer,
-          audience: options.jwt!.audience,
+          key: (header) => tokens?.keys.verificationKey(header),
+          issuer: options.jwt?.issuer,
+          audience: options.jwt?.audience,
           now,
         }),
       );

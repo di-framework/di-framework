@@ -12,7 +12,7 @@ import { defineMetadata, getOwnMetadata, SUBSCRIBER_METADATA_KEY } from '../cont
  * }
  */
 export function Subscriber(event: string) {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol, _descriptor: PropertyDescriptor) => {
     const map = getOwnMetadata(SUBSCRIBER_METADATA_KEY, target) || {};
     if (!map[event]) map[event] = [];
     map[event].push(propertyKey as string);

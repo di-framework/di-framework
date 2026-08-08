@@ -11,7 +11,7 @@ async function makePublishWorkspace(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), 'publish-cmd-'));
   await Bun.write(
     join(root, 'package.json'),
-    JSON.stringify({ name: 'root', version: '1.0.0' }) + '\n',
+    `${JSON.stringify({ name: 'root', version: '1.0.0' })}\n`,
   );
 
   for (const pkgDir of PACKAGES) {
@@ -19,12 +19,12 @@ async function makePublishWorkspace(): Promise<string> {
     mkdirSync(full, { recursive: true });
     await Bun.write(
       join(full, 'package.json'),
-      JSON.stringify({
+      `${JSON.stringify({
         name: `@test/${pkgDir.split('/').pop()}`,
         version: '1.0.0',
         peerDependencies: { '@di-framework/core': 'workspace:*' },
         dependencies: { '@di-framework/core': 'workspace:^', other: '1.0.0' },
-      }) + '\n',
+      })}\n`,
     );
     // So `bun test ${pkgDir}` finds a passing file.
     await Bun.write(

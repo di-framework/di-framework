@@ -108,7 +108,7 @@ export class ResolverFactory {
   /** Instances of classes that are not registered with the container. */
   private readonly unmanaged = new Map<Ctor, any>();
 
-  constructor(private readonly options: ResolverOptions) {
+  constructor(readonly options: ResolverOptions) {
     this.container = options.container ?? useContainer();
     this.authorization = options.authorization ?? {};
     for (const input of options.graph.inputs) this.inputsByName.set(input.name, input);
@@ -557,7 +557,7 @@ export function containerEventIterator(
     if (!closed) {
       closed = true;
       unsubscribe();
-      while (waiting.length > 0) waiting.shift()!({ value: undefined, done: true });
+      while (waiting.length > 0) waiting.shift()?.({ value: undefined, done: true });
     }
     return Promise.resolve({ value: undefined, done: true });
   };

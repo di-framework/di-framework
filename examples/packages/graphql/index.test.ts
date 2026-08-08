@@ -584,7 +584,7 @@ describe('the server', () => {
     try {
       const server = runGraphqlMain(true, 0);
       expect(server).toBeDefined();
-      server!.stop(true);
+      server?.stop(true);
     } finally {
       log.mockRestore();
     }

@@ -12,7 +12,7 @@ import {
   startSocketGateways,
   stopSocketGateways,
 } from '../src/decorators.ts';
-import registry, { SocketGatewayRegistry } from '../src/registry.ts';
+import registry from '../src/registry.ts';
 import type { SocketListenFactory } from '../src/types.ts';
 
 afterEach(async () => {
@@ -269,8 +269,8 @@ describe('@SocketGateway decorators', () => {
       Symbol.for('di-framework.socket.gateway-handle')
     ];
     expect(handle).toBeDefined();
-    expect(handle!.started).toBe(true);
-    expect(handle!.server).toBe(server1);
+    expect(handle?.started).toBe(true);
+    expect(handle?.server).toBe(server1);
 
     await gateway.$stopGateway();
     expect(stopCalls).toBe(1);

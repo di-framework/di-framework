@@ -103,7 +103,7 @@ describe('mountGraphQL', () => {
     const api = fakeExecuteApi(async () => ({ data: { ok: true } }));
     mountGraphQL(router, api);
 
-    const response = await handler!(new Request('http://localhost/graphql?query={ok}'));
+    const response = await handler?.(new Request('http://localhost/graphql?query={ok}'));
     expect(response.status).toBe(200);
   });
 });
@@ -185,7 +185,7 @@ describe('createGraphQLSSEHandler', () => {
     );
 
     const response = await handler(new Request('http://localhost/sse?query={tick}'));
-    const reader = response.body!.getReader();
+    const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let text = '';
     // Read until we've seen at least one heartbeat or the stream closes.
@@ -220,7 +220,7 @@ describe('createGraphQLSSEHandler', () => {
     );
 
     const response = await handler(new Request('http://localhost/sse?query={tick}'));
-    const reader = response.body!.getReader();
+    const reader = response.body?.getReader();
     await reader.read();
     await reader.cancel();
 

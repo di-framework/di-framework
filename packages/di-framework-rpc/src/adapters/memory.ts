@@ -25,7 +25,11 @@ export function memoryPair(options: MemoryPairOptions = {}): MemoryRpcPair {
       if (options.delayMs && options.delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, options.delayMs));
       }
-      await Promise.all([...peerHandlers].map((handler) => handler(payload)));
+      for (const handler of peerHandlers) {
+        queueMicrotask(() => {
+          void handler(payload);
+        });
+      }
     },
     subscribe(handler) {
       ownHandlers.add(handler);

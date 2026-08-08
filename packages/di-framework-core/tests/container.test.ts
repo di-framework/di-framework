@@ -239,7 +239,7 @@ describe('Container - cron expression parsing and schedule edge cases', () => {
       c.resolve(ThrowingCronService);
       expect(scheduled.length).toBeGreaterThan(0);
       // Fire the cron tick: method throws, error is logged, and the next tick is scheduled.
-      scheduled[0]!();
+      scheduled[0]?.();
       expect(thrown).toBe(true);
       expect(error.mock.calls.some((call) => String(call[0]).includes('[Cron]'))).toBe(true);
       expect(scheduled.length).toBeGreaterThan(1);
