@@ -19,6 +19,7 @@ import {
 export interface ToolSetOptions {
   readonly description?: string;
   readonly name?: string;
+  readonly auth?: unknown;
 }
 
 /** Mark class as a tool group bean (Koog ToolSet). */

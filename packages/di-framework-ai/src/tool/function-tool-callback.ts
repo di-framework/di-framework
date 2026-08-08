@@ -18,6 +18,7 @@ export interface FunctionToolCallbackOptions<TInput = unknown, TOutput = unknown
   readonly description?: string;
   readonly inputSchema?: string | Record<string, unknown>;
   readonly returnDirect?: boolean;
+  readonly auth?: unknown;
   readonly toolMetadata?: ToolMetadata;
   readonly resultConverter?: ToolCallResultConverter;
   /**
@@ -45,7 +46,8 @@ export class FunctionToolCallback<TInput = unknown, TOutput = unknown> implement
       inputSchema: options.inputSchema,
     });
     this.toolMetadata =
-      options.toolMetadata ?? toolMetadata({ returnDirect: options.returnDirect });
+      options.toolMetadata ??
+      toolMetadata({ returnDirect: options.returnDirect, auth: options.auth });
     this.parseJsonInput = options.parseJsonInput ?? true;
     this.fn = options.call;
     this.resultConverter = options.resultConverter ?? defaultToolCallResultConverter;
