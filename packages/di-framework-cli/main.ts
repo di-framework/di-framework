@@ -7,6 +7,7 @@
  */
 import { build } from './cmd/build';
 import { check } from './cmd/check';
+import { generateCommand } from './cmd/generate';
 import { init } from './cmd/init';
 import { mx, printMxHelp } from './cmd/mx';
 
@@ -19,6 +20,10 @@ const COMMANDS: Record<string, Command> = {
   init: {
     description: 'Scaffold a new di-framework application',
     run: (args) => init(args),
+  },
+  generate: {
+    description: 'Generates application surfaces from schema manifests',
+    run: (args) => generateCommand(args),
   },
   build: {
     description: 'Build the current application (package.json script or tsc)',

@@ -146,7 +146,7 @@
     },
     "packages/di-framework-ai": {
       "name": "@di-framework/ai",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
       },
@@ -170,7 +170,7 @@
     },
     "packages/di-framework-auth": {
       "name": "@di-framework/auth",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "@di-framework/graphql": "workspace:*",
         "@di-framework/http": "workspace:*",
@@ -196,7 +196,7 @@
     },
     "packages/di-framework-authz": {
       "name": "@di-framework/authz",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "@di-framework/auth": "workspace:*",
         "@di-framework/core": "workspace:*",
@@ -216,11 +216,12 @@
     },
     "packages/di-framework-cli": {
       "name": "@di-framework/cli",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "bin": {
         "di-framework": "./main.ts",
       },
       "dependencies": {
+        "@di-framework/codegen": "workspace:*",
         "bun": "^1.3.14",
       },
       "devDependencies": {
@@ -230,9 +231,21 @@
         "typescript": "^5",
       },
     },
+    "packages/di-framework-codegen": {
+      "name": "@di-framework/codegen",
+      "version": "4.1.3",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/core": "workspace:*",
+        "typescript": "^5",
+      },
+    },
     "packages/di-framework-config": {
       "name": "@di-framework/config",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5",
@@ -249,7 +262,7 @@
     },
     "packages/di-framework-core": {
       "name": "@di-framework/core",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "typescript": "^5",
       },
@@ -279,7 +292,7 @@
     },
     "packages/di-framework-graphql": {
       "name": "@di-framework/graphql",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "@types/bun": "latest",
         "graphql": "^17.0.2",
@@ -296,7 +309,7 @@
     },
     "packages/di-framework-http": {
       "name": "@di-framework/http",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "bin": {
         "di-framework-http": "./dist/src/cli.js",
       },
@@ -314,7 +327,7 @@
     },
     "packages/di-framework-repo": {
       "name": "@di-framework/repo",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "peerDependencies": {
         "@di-framework/core": "workspace:*",
         "typescript": "^5",
@@ -322,7 +335,7 @@
     },
     "packages/di-framework-rpc": {
       "name": "@di-framework/rpc",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "devDependencies": {
         "@bufbuild/protobuf": "^2.13.0",
         "@connectrpc/connect": "^2.1.2",
@@ -347,7 +360,7 @@
     },
     "packages/di-framework-socket": {
       "name": "@di-framework/socket",
-      "version": "4.1.1",
+      "version": "4.1.3",
       "dependencies": {
         "ws": "^8.18.3",
       },
@@ -423,6 +436,8 @@
     "@di-framework/authz": ["@di-framework/authz@workspace:packages/di-framework-authz"],
 
     "@di-framework/cli": ["@di-framework/cli@workspace:packages/di-framework-cli"],
+
+    "@di-framework/codegen": ["@di-framework/codegen@workspace:packages/di-framework-codegen"],
 
     "@di-framework/config": ["@di-framework/config@workspace:packages/di-framework-config"],
 
