@@ -1,4 +1,4 @@
-import type { InboundRoute, OutboundRoute } from './types.ts';
+import type { EventBridgeDecoratorOptions, InboundRoute, OutboundRoute } from './types.ts';
 
 // Decorator targets have heterogeneous constructors; matches GraphQL `Ctor`.
 // biome-ignore lint/suspicious/noExplicitAny: see above
@@ -8,6 +8,7 @@ export interface RegisteredEventBridge {
   target: EventBridgeTarget;
   outbound: OutboundRoute[];
   inbound: InboundRoute[];
+  options?: EventBridgeDecoratorOptions;
 }
 
 /**
@@ -70,6 +71,7 @@ export function setRegistry(registry: EventBridgeRegistry): void {
     const slot = globalRegistry.addTarget(entry.target);
     slot.outbound.push(...entry.outbound);
     slot.inbound.push(...entry.inbound);
+    if (entry.options) slot.options = entry.options;
   }
 }
 

@@ -15,6 +15,7 @@ if (!existsSync(lcovPath)) {
 const isSource = (sf: string) => {
   if (!sf.includes('packages/') && !sf.includes('examples/')) return false;
   if (sf.includes('/tests/') || sf.includes('\\tests\\')) return false;
+  if (sf.includes('/dist/') || sf.includes('\\dist\\')) return false;
   if (sf.endsWith('.test.ts') || sf.endsWith('.test.js')) return false;
   if (sf.includes('preload-wasm-mock')) return false;
   if (sf.includes('/scripts/')) return false;

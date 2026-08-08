@@ -4,6 +4,7 @@ import type {
   EventBridgeContainer,
   EventBridgeHandle,
   EventMessage,
+  InboundMiddlewareContext,
   InboundRoute,
   OutboundRoute,
 } from './types.ts';
@@ -89,17 +90,69 @@ export function createEventBridge(options: CreateEventBridgeOptions): EventBridg
   const attachInbound = async (route: InboundRoute) => {
     const unsub = await transport.subscribe(route.topic, async (msg, ack) => {
       try {
+        // 1) filter (if returns false, ack.ack() and stop)
         if (route.filter && !route.filter(msg.payload, msg)) {
           await ack.ack();
           return;
         }
-        const mapped = route.map ? route.map(msg.payload, msg) : msg.payload;
-        inboundDepth += 1;
-        try {
-          container.emit(route.event, mapped);
-        } finally {
-          inboundDepth -= 1;
+
+        // 2) map (transform raw message payload)
+        let payload = route.map ? await route.map(msg.payload, msg) : msg.payload;
+
+        // 3) validate (validate / transform mapped payload)
+        if (route.validate) {
+          payload = await route.validate(payload, msg);
         }
+
+        // 4) Bridge-level middleware (in declaration order)
+        // 5) Route-level middleware (in declaration order)
+        const bridgeMw = options.middleware
+          ? Array.isArray(options.middleware)
+            ? options.middleware
+            : [options.middleware]
+          : [];
+        const routeMw = route.middleware
+          ? Array.isArray(route.middleware)
+            ? route.middleware
+            : [route.middleware]
+          : [];
+        const chain = [...bridgeMw, ...routeMw];
+
+        const ctx: InboundMiddlewareContext = {
+          message: msg,
+          route,
+          payload,
+          next: async () => {},
+        };
+
+        const dispatch = async (i: number): Promise<void> => {
+          if (i < chain.length) {
+            const mw = chain[i];
+            let called = false;
+            ctx.next = async () => {
+              if (called) {
+                throw new Error('next() called multiple times in middleware');
+              }
+              called = true;
+              await dispatch(i + 1);
+            };
+            if (mw) {
+              await mw(ctx as InboundMiddlewareContext<unknown>);
+            }
+          } else {
+            // 6) Container emit (container.emit(route.event, payload))
+            inboundDepth += 1;
+            try {
+              container.emit(route.event, ctx.payload);
+            } finally {
+              inboundDepth -= 1;
+            }
+          }
+        };
+
+        await dispatch(0);
+
+        // 7) ack.ack()
         await ack.ack();
       } catch (error) {
         onError({ direction: 'inbound', topic: route.topic, event: route.event, error });
