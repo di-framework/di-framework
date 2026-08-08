@@ -14,6 +14,8 @@ export const PACKAGES = [
   'packages/di-framework-rpc',
   'packages/di-framework-ai',
   'packages/di-framework-cli',
+  // plugin.cjs + Go sidecar; package.json "build" is a no-op (not tsc/bun compile)
+  'packages/di-framework-tsc',
 ];
 
 /** Bun `$` tagged-template runner; injectable for in-process coverage tests. */
@@ -28,7 +30,7 @@ export async function publish(shell: PublishShell = defaultShell) {
 
   // 2. Build
   console.log('🏗️  Building packages...');
-  await shell`bun run packages/di-framework-cli/cmd/build.ts`;
+  await shell`bun run packages/di-framework-cli/cmd/mx/build.ts`;
 
   // 3. Publish
   for (const pkgDir of PACKAGES) {

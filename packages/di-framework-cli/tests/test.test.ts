@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { handleTestFailure, runTestMain, test } from '../cmd/test';
+import { handleTestFailure, runTestMain, test } from '../cmd/mx/test';
 
 const SCRIPT_PATH = join(import.meta.dir, '..', 'scripts', 'e2e-test.sh');
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
@@ -97,7 +97,7 @@ describe('test command', () => {
       const wrapper = join(root, 'run.ts');
       await Bun.write(
         wrapper,
-        `import { test, handleTestFailure } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'test.ts'))};
+        `import { test, handleTestFailure } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'mx', 'test.ts'))};
 test('#!/bin/bash\\nexit 1\\n').catch(handleTestFailure);
 `,
       );
