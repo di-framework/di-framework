@@ -1,65 +1,94 @@
-# @di-framework/core
+# di-framework
+
+Lightweight, type-safe dependency injection for TypeScript — plus packages for HTTP, GraphQL, events, auth, RPC, and more.
 
 [Documentation](https://docs.di-framework.dev)
 
-```
-npm i @di-framework/core
+## Get started
+
+```bash
+bun x @di-framework/cli init my-api
+cd my-api && bun install && bun run dev
 ```
 
-- `packages/di-framework-core` - core container
-- `packages/di-framework-repo` - data access
-- `packages/di-framework-http` - http handling
-- `packages/di-framework-graphql` - GraphQL schema from domain objects
-- `packages/di-framework-events` - bridge container events to Kafka / NATS / memory
-- `packages/di-framework-config` - typed config from env/files, validated and injected via DI
-- `packages/di-framework-auth` - authentication: sessions, JWT, OAuth2/OIDC, WebAuthn (WebCrypto, zero deps)
-- `packages/di-framework-authz` - declarative resource policies, EBNF interchange, and HTTP controller authorization
-- `packages/di-framework-socket` - security-first WebSocket / TCP / UDP (WebCrypto secure channel)
-- `packages/di-framework-rpc` - decorator-generated JSON-RPC and per-method gRPC / Connect
-- `packages/di-framework-ai` - Spring AI–aligned chat, tools, RAG, MCP, and agents
-- `packages/di-framework-cli` - app CLI (`init`, `build`, `check`) + maintainer `mx`
-- `packages/di-framework-tsc` - optional `ttsc` transform for runtime parameter checks
-- `examples` - usage examples
+Or install the core package into an existing project:
+
+```bash
+bun add @di-framework/core
+```
+
+```ts
+import { Container, Component } from '@di-framework/core/decorators';
+import { useContainer } from '@di-framework/core/container';
+
+@Container()
+class Greeter {
+  greet(name: string) {
+    return `Hello, ${name}!`;
+  }
+}
+
+@Container()
+class App {
+  constructor(@Component(Greeter) private greeter: Greeter) {}
+
+  run() {
+    console.log(this.greeter.greet('di-framework'));
+  }
+}
+
+useContainer().resolve(App).run();
+```
+
+## Packages
+
+| Package | Description |
+| --- | --- |
+| [`@di-framework/core`](packages/di-framework-core) | DI container and decorators |
+| [`@di-framework/cli`](packages/di-framework-cli) | App CLI: `init`, `build`, `check` |
+| [`@di-framework/tsc`](packages/di-framework-tsc) | Optional `ttsc` runtime parameter checks |
+| [`@di-framework/repo`](packages/di-framework-repo) | Data access / repositories |
+| [`@di-framework/http`](packages/di-framework-http) | HTTP routing and OpenAPI |
+| [`@di-framework/graphql`](packages/di-framework-graphql) | GraphQL schema from domain objects |
+| [`@di-framework/events`](packages/di-framework-events) | Bridge container events to Kafka / NATS / memory |
+| [`@di-framework/config`](packages/di-framework-config) | Typed config from env/files via DI |
+| [`@di-framework/auth`](packages/di-framework-auth) | Sessions, JWT, OAuth2/OIDC, WebAuthn |
+| [`@di-framework/authz`](packages/di-framework-authz) | Declarative resource policies |
+| [`@di-framework/socket`](packages/di-framework-socket) | WebSocket / TCP / UDP (WebCrypto channel) |
+| [`@di-framework/rpc`](packages/di-framework-rpc) | JSON-RPC and per-method gRPC / Connect |
+| [`@di-framework/ai`](packages/di-framework-ai) | Chat, tools, RAG, MCP, agents |
+
+Examples live under [`examples/`](examples).
 
 ## CLI
 
-`bun x @di-framework/cli`
-
-```
-di-framework <command>
+```bash
+bun x @di-framework/cli <command>
 ```
 
-| Command   | Description |
-| --------- | ----------- |
-| `init`    | Scaffold a new di-framework application |
-| `build`   | Build the current app (`package.json` script or `tsc`) |
-| `check`   | Typecheck the current app |
-| `mx …`    | Maintainer tools for this monorepo (`build`, `test`, `typecheck`, `publish`) |
+**Apps**
+
+| Command | Description |
+| --- | --- |
+| `init` | Scaffold a new application |
+| `check` | Typecheck the current app |
+| `build` | Build the current app |
+
+**Maintainers** (this monorepo)
+
+| Command | Description |
+| --- | --- |
+| `mx build` | Build packages and sync versions |
+| `mx test` | Run the monorepo E2E suite |
+| `mx typecheck` | Typecheck the workspace |
+| `mx publish` | Test, build, and publish to npm |
 
 ```bash
 di-framework init my-api
 di-framework check
-di-framework mx build    # monorepo maintainers
+di-framework mx build   # maintainers only
 ```
 
-## Simple Example
+## License
 
-```ts
-import { Container, Publisher, Subscriber } from '@di-framework/core';
-
-@Container()
-class UserService {
-  @Publisher('user.created')
-  createUser(name: string) {
-    return { id: 1, name };
-  }
-}
-
-@Container()
-class AuditService {
-  @Subscriber('user.created')
-  onUserCreated(event: any) {
-    console.log('User created:', event.result);
-  }
-}
-```
+MIT
