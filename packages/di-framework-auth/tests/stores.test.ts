@@ -273,6 +273,80 @@ describe('repo bridge against InMemoryRepository', () => {
     expect((await store.findById('u1'))?.identifier).toBe('ada@example.com');
     expect(await store.delete('u1')).toBe(true);
   });
+
+  it('consumes adapter conditional write capability when options.atomic is omitted', async () => {
+    const refreshAdapter = new InMemoryRepository<RefreshTokenRecord, string>();
+    const refreshStore = repoRefreshTokenStore({
+      adapter: refreshAdapter as unknown as StorageAdapterLike<RefreshTokenRecord>,
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const token: RefreshTokenRecord = {
+      id: 'rt1',
+      subject: 'u1',
+      familyId: 'f1',
+      createdAt: now,
+      expiresAt: now + 3600,
+      authTime: now,
+    };
+    await refreshStore.issue(token);
+    const nextToken = { ...token, id: 'rt2' };
+    const res1 = await refreshStore.rotate('rt1', nextToken, now);
+    expect(res1.outcome).toBe('rotated');
+    const res2 = await refreshStore.rotate('rt1', { ...token, id: 'rt3' }, now);
+    expect(res2.outcome).toBe('reused');
+
+    const stateAdapter = new InMemoryRepository<
+      { id: string } & Parameters<StateStore['put']>[0],
+      string
+    >();
+    const stateStore = repoStateStore({
+      adapter: stateAdapter as unknown as StorageAdapterLike<
+        { id: string } & Parameters<StateStore['put']>[0]
+      >,
+    });
+    await stateStore.put({
+      purpose: 'oauth-state',
+      key: 'k1',
+      expiresAt: now + 300,
+      data: { a: 1 },
+    });
+    const stateVal = await stateStore.consume('oauth-state', 'k1');
+    expect(stateVal?.data).toEqual({ a: 1 });
+    const stateReplay = await stateStore.consume('oauth-state', 'k1');
+    expect(stateReplay).toBeNull();
+
+    const webauthnAdapter = new InMemoryRepository<WebAuthnCredential, string>();
+    const credStore = repoCredentialStore({
+      passwords: mapAdapter<PasswordCredential>(),
+      webauthn: webauthnAdapter as unknown as StorageAdapterLike<WebAuthnCredential>,
+      apiKeys: mapAdapter<ApiKeyCredential>(),
+    });
+    const cred: WebAuthnCredential = {
+      kind: 'webauthn',
+      id: 'c1',
+      userId: 'u1',
+      publicKeyCose: 'abc',
+      algorithm: -7,
+      signCount: 1,
+      backupEligible: true,
+      backupState: true,
+      uvInitialized: true,
+      createdAt: now,
+      version: 1,
+    };
+    await credStore.saveWebAuthn(cred);
+    const updated = await credStore.updateSignCount('c1', 2, 1, now);
+    expect(updated).toBe(true);
+
+    const credStoreNoCas = repoCredentialStore({
+      passwords: mapAdapter<PasswordCredential>(),
+      webauthn: mapAdapter<WebAuthnCredential>(),
+      apiKeys: mapAdapter<ApiKeyCredential>(),
+    });
+    expect(credStoreNoCas.updateSignCount('c1', 2, 1, now)).rejects.toThrow(
+      /updateSignCount requires/,
+    );
+  });
 });
 
 describe('login throttle', () => {

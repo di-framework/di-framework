@@ -214,3 +214,27 @@ await users.findPaginated({ page: 1, size: 20, sort: 'name:asc', filter: { activ
 ```
 
 Cloudflare D1 uses the same options and binding API. D1 transactions are scoped to the callback and D1's platform batch/statement limits apply; schema changes and migrations remain out of band. Bun adapters close their database from `dispose()`; D1 disposal is a no-op.
+
+## Conditional Writes & Atomic Operations
+
+Adapters may optionally implement `ConditionalStorageAdapter<E, ID>` to support atomic conditional write capabilities:
+
+- `saveIfAbsent(entity: E): Promise<boolean>`: Inserts `entity` only if no record with its ID currently exists. Returns `true` if inserted, or `false` if a record with the same ID already exists. Built-in SQL adapters use `INSERT INTO ... ON CONFLICT (...) DO NOTHING` and check for positive affected rows.
+- `compareAndSwap(id: ID, mutate: (current: E | null) => E | null): Promise<boolean>`: Executes a synchronous, side-effect-free `mutate` function atomically against the current state at `id`. If `mutate` returns `null` (condition failed or abort requested), the operation aborts without writing and returns `false`. If `mutate` returns a non-null entity, it updates the record and returns `true`.
+
+Use the exported type guard `supportsConditionalWrite(adapter)` to detect capability support at runtime:
+
+```ts
+import { supportsConditionalWrite } from '@di-framework/repo';
+
+if (supportsConditionalWrite(adapter)) {
+  const inserted = await adapter.saveIfAbsent(entity);
+  const swapped = await adapter.compareAndSwap(id, (current) => {
+    if (!current || current.version !== expectedVersion) return null;
+    return { ...current, version: current.version + 1 };
+  });
+}
+```
+
+Built-in adapters (`InMemoryRepository`, `SqlStorageAdapter`, `BunSqliteAdapter`, `D1Adapter`) implement `ConditionalStorageAdapter`. Custom `StorageAdapter` implementations do not require source changes unless conditional write capability is desired.
+

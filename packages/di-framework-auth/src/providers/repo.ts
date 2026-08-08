@@ -1,3 +1,4 @@
+import { type ConditionalStorageAdapter, supportsConditionalWrite } from '@di-framework/repo';
 import type {
   ApiKeyCredential,
   CredentialStore,
@@ -85,7 +86,7 @@ export interface RepoStoreOptions<E> {
 }
 
 export interface AtomicRepoStoreOptions<E> extends RepoStoreOptions<E> {
-  atomic: AtomicOps<E>;
+  atomic?: AtomicOps<E>;
 }
 
 const seconds = () => Math.floor(Date.now() / 1000);
@@ -206,7 +207,7 @@ export function repoCredentialStore(options: {
   passwords: StorageAdapterLike<PasswordCredential>;
   webauthn: StorageAdapterLike<WebAuthnCredential>;
   apiKeys: StorageAdapterLike<ApiKeyCredential>;
-  atomic: AtomicOps<WebAuthnCredential>;
+  atomic?: AtomicOps<WebAuthnCredential>;
   pageSize?: number;
 }): CredentialStore {
   const pageSize = options.pageSize ?? 200;
@@ -225,7 +226,25 @@ export function repoCredentialStore(options: {
     saveWebAuthn: (credential) => options.webauthn.save(credential),
     deleteWebAuthn: (credentialId) => options.webauthn.delete(credentialId),
     async updateSignCount(credentialId, signCount, expectedVersion, lastUsedAt, backupState) {
-      return options.atomic.compareAndSwap(credentialId, (current) => {
+      const atomicCas =
+        options.atomic?.compareAndSwap ??
+        (supportsConditionalWrite(options.webauthn)
+          ? (
+              id: string,
+              mutate: (current: WebAuthnCredential | null) => WebAuthnCredential | null,
+            ) =>
+              (
+                options.webauthn as unknown as ConditionalStorageAdapter<WebAuthnCredential>
+              ).compareAndSwap(id, mutate)
+          : undefined);
+
+      if (!atomicCas) {
+        throw new Error(
+          'updateSignCount requires `atomic.compareAndSwap` or a ConditionalStorageAdapter on webauthn adapter.',
+        );
+      }
+
+      return atomicCas(credentialId, (current) => {
         if (!current || current.version !== expectedVersion) return null;
         return {
           ...current,
@@ -249,13 +268,31 @@ interface StateEntity extends StateEntry {
 }
 
 /**
- * @throws when no {@link AtomicOps} is supplied. Single-use `state` and
+ * @throws when no {@link AtomicOps} and no conditional write capability is supplied. Single-use `state` and
  * single-use WebAuthn challenges are the entire point of this store, and a
  * read-then-delete implementation provides neither. Failing loudly at
  * construction is better than shipping a defence that silently does nothing.
  */
 export function repoStateStore(options: AtomicRepoStoreOptions<StateEntity>): StateStore {
-  if (!options.atomic?.takeOnce) {
+  const atomicTakeOnce =
+    options.atomic?.takeOnce ??
+    (supportsConditionalWrite(options.adapter)
+      ? async (id: string) => {
+          let taken: StateEntity | null = null;
+          const won = await (
+            options.adapter as unknown as ConditionalStorageAdapter<StateEntity>
+          ).compareAndSwap(id, (current) => {
+            if (!current || (current as any).consumed) return null;
+            taken = current;
+            return { ...current, consumed: true } as StateEntity;
+          });
+          if (!won || !taken) return null;
+          await options.adapter.delete(id);
+          return taken;
+        }
+      : undefined);
+
+  if (!atomicTakeOnce) {
     throw new Error(
       'repoStateStore requires `atomic.takeOnce` — an indivisible read-and-delete. ' +
         'OAuth `state` and WebAuthn challenges must be single-use, and a read followed by a ' +
@@ -264,7 +301,7 @@ export function repoStateStore(options: AtomicRepoStoreOptions<StateEntity>): St
         'Redis GETDEL), or use `memoryStateStore()`.',
     );
   }
-  const { adapter, atomic } = options;
+  const { adapter } = options;
   const now = options.now ?? seconds;
   const compose = (purpose: StatePurpose, key: string) => `${purpose} ${key}`;
 
@@ -273,7 +310,7 @@ export function repoStateStore(options: AtomicRepoStoreOptions<StateEntity>): St
       await adapter.save({ ...entry, id: compose(entry.purpose, entry.key) });
     },
     async consume<T = Record<string, unknown>>(purpose: StatePurpose, key: string) {
-      const taken = await atomic.takeOnce!(compose(purpose, key));
+      const taken = await atomicTakeOnce(compose(purpose, key));
       if (!taken) return null;
       if (taken.expiresAt <= now()) return null;
       const { id: _id, ...entry } = taken;
@@ -283,14 +320,23 @@ export function repoStateStore(options: AtomicRepoStoreOptions<StateEntity>): St
 }
 
 /**
- * @throws when no {@link AtomicOps} is supplied. Refresh-token reuse detection
+ * @throws when no {@link AtomicOps} and no conditional write capability is supplied. Refresh-token reuse detection
  * is a compare-and-swap on `rotatedAt`; without one, two concurrent refreshes
  * both succeed and a stolen token is never detected.
  */
 export function repoRefreshTokenStore(
   options: AtomicRepoStoreOptions<RefreshTokenRecord>,
 ): RefreshTokenStore {
-  if (!options.atomic?.compareAndSwap) {
+  const atomicCas =
+    options.atomic?.compareAndSwap ??
+    (supportsConditionalWrite(options.adapter)
+      ? (id: string, mutate: (current: RefreshTokenRecord | null) => RefreshTokenRecord | null) =>
+          (
+            options.adapter as unknown as ConditionalStorageAdapter<RefreshTokenRecord>
+          ).compareAndSwap(id, mutate)
+      : undefined);
+
+  if (!atomicCas) {
     throw new Error(
       'repoRefreshTokenStore requires `atomic.compareAndSwap`. Refresh-token rotation must ' +
         'fail when the token has already been exchanged, which a read followed by a write ' +
@@ -298,7 +344,7 @@ export function repoRefreshTokenStore(
         '(UPDATE ... WHERE rotated_at IS NULL), or use `memoryRefreshTokenStore()`.',
     );
   }
-  const { adapter, atomic, pageSize = 200 } = options;
+  const { adapter, pageSize = 200 } = options;
   const now = options.now ?? seconds;
 
   return {
@@ -312,7 +358,7 @@ export function repoRefreshTokenStore(
       if (existing.rotatedAt !== undefined) return { outcome: 'reused', record: existing };
       if (existing.expiresAt <= now()) return { outcome: 'expired', record: existing };
 
-      const won = await atomic.compareAndSwap(id, (current) =>
+      const won = await atomicCas(id, (current) =>
         current && current.rotatedAt === undefined ? { ...current, rotatedAt } : null,
       );
       // Losing the race means another request rotated this token first — which,
