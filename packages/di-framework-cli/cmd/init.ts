@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 export type InitOptions = {
@@ -65,14 +65,34 @@ Example:
 `);
 }
 
+function isErrno(err: unknown, code: string): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
+}
+
 function writeFile(path: string, content: string, force: boolean): boolean {
-  if (existsSync(path) && !force) {
-    console.log(`  skip  ${path} (exists; use --force to overwrite)`);
-    return false;
+  if (force) {
+    writeFileSync(path, content, 'utf-8');
+    console.log(`  write ${path}`);
+    return true;
   }
-  writeFileSync(path, content, 'utf-8');
-  console.log(`  write ${path}`);
-  return true;
+
+  // Atomic create-or-skip avoids TOCTOU between existsSync and writeFileSync.
+  try {
+    const fd = openSync(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
+    try {
+      writeSync(fd, content, undefined, 'utf-8');
+    } finally {
+      closeSync(fd);
+    }
+    console.log(`  write ${path}`);
+    return true;
+  } catch (err) {
+    if (isErrno(err, 'EEXIST')) {
+      console.log(`  skip  ${path} (exists; use --force to overwrite)`);
+      return false;
+    }
+    throw err;
+  }
 }
 
 export function scaffoldApp(opts: InitOptions): void {

@@ -2,6 +2,10 @@ import { $ } from 'bun';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+function isErrno(err: unknown, code: string): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
+}
+
 export const PACKAGES = [
   'packages/di-framework-core',
   'packages/di-framework-repo',
@@ -31,11 +35,13 @@ export async function build() {
     console.log(`\n📦 Building ${pkgDir}...`);
     const fullPath = join(process.cwd(), pkgDir);
 
-    // Sync version
+    // Sync version (read-or-skip; no existsSync TOCTOU before write)
     const pkgJsonPath = join(fullPath, 'package.json');
-    if (existsSync(pkgJsonPath)) {
+    try {
       const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
       writeFileSync(pkgJsonPath, JSON.stringify({ ...pkgJson, version }, null, 2) + '\n');
+    } catch (err) {
+      if (!isErrno(err, 'ENOENT')) throw err;
     }
 
     // 1. Clean dist
