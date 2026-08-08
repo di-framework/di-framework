@@ -226,11 +226,13 @@ export function createAuthRoutes(options: AuthRoutesOptions = {}): TypedRouterTy
     router.post('/refresh', async (request) => {
       const body = ((request as { content?: unknown }).content ?? {}) as { refreshToken?: unknown };
       const rotated = await runtime.refresh?.rotate(readString(body.refreshToken, 'refreshToken'));
+      if (!rotated) throw new Error('Failed to rotate refresh token');
       const access = await runtime.tokens?.issueAccessToken({
         subject: rotated.principal.sub,
         authTime: rotated.principal.authTime,
         ...(rotated.principal.amr ? { amr: rotated.principal.amr } : {}),
       });
+      if (!access) throw new Error('Failed to issue access token');
       return privateJson({
         accessToken: access.token,
         expiresIn: access.expiresIn,

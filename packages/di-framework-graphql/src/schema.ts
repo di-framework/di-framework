@@ -295,14 +295,14 @@ class SchemaAssembler {
     const mutation = this.graph.mutation
       ? new GraphQLObjectType({
           name: 'Mutation',
-          fields: () => this.toFieldConfigMap(this.graph.mutation?.fields),
+          fields: () => this.toFieldConfigMap(this.graph.mutation!.fields),
         })
       : undefined;
 
     const subscription = this.graph.subscription
       ? new GraphQLObjectType({
           name: 'Subscription',
-          fields: () => this.toFieldConfigMap(this.graph.subscription?.fields, true),
+          fields: () => this.toFieldConfigMap(this.graph.subscription!.fields, true),
         })
       : undefined;
 
