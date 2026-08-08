@@ -60,6 +60,7 @@
     "node_modules",
     "examples/packages/deno-sandboxes/**/*",
     "examples/packages/deno-http/**/*",
+    "packages/di-framework-tsc/fixture/**/*",
     "references/**/*"
   ]
 }

@@ -1,73 +1,113 @@
-import { $ } from 'bun';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { $ as defaultShell } from 'bun';
 
-export const PACKAGES = [
-  'packages/di-framework-core',
-  'packages/di-framework-repo',
-  'packages/di-framework-http',
-  'packages/di-framework-graphql',
-  'packages/di-framework-events',
-  'packages/di-framework-config',
-  'packages/di-framework-auth',
-  'packages/di-framework-authz',
-  'packages/di-framework-socket',
-  'packages/di-framework-rpc',
-  'packages/di-framework-ai',
-  'packages/di-framework-codegen',
-  'packages/di-framework-cli',
-];
+export type AppBuildOptions = {
+  cwd: string;
+  /** Extra args forwarded to the underlying build tool */
+  passthrough: string[];
+};
 
-export async function build() {
-  console.log('🚀 Starting build process...');
+/** Bun `$` tagged-template runner; injectable for coverage tests. */
+export type BuildShell = typeof defaultShell;
 
-  const rootPkgPath = join(process.cwd(), 'package.json');
-  const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
-  const version = rootPkg.version;
-  console.log(`📌 Using version ${version} from workspace root`);
-
-  for (const pkgDir of PACKAGES) {
-    console.log(`\n📦 Building ${pkgDir}...`);
-    const fullPath = join(process.cwd(), pkgDir);
-
-    // Sync version
-    const pkgJsonPath = join(fullPath, 'package.json');
-    if (existsSync(pkgJsonPath)) {
-      const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-      writeFileSync(pkgJsonPath, JSON.stringify({ ...pkgJson, version }, null, 2) + '\n');
-    }
-
-    // 1. Clean dist
-    await $`rm -rf ${join(fullPath, 'dist')}`;
-
-    // 2. Run build
-    console.log('  Running build...');
-    if (existsSync(join(fullPath, 'tsconfig.build.json'))) {
-      await $`cd ${fullPath} && bun x tsc -p tsconfig.build.json`;
-    } else {
-      await $`cd ${fullPath} && bun run build`;
-    }
-
-    console.log(`  ✅ Finished building ${pkgDir}`);
-  }
-
-  console.log('\n✨ All builds completed successfully!');
+export function parseBuildArgs(args: string[], cwd = process.cwd()): AppBuildOptions {
+  return {
+    cwd: resolve(cwd),
+    passthrough: args.filter((a) => a !== '--help' && a !== '-h'),
+  };
 }
 
-/** Shared entrypoint error handler (kept separate so tests can cover it). */
+export function printBuildHelp(stream: NodeJS.WritableStream = process.stderr): void {
+  stream.write(`Build the current di-framework application.
+
+Usage:
+  di-framework build [args...]
+
+Runs, in order of preference:
+  1. package.json "build" script  (bun run build / npm run build)
+  2. tsc -p tsconfig.json         if tsconfig exists and no build script
+
+Maintainer monorepo build: di-framework mx build
+`);
+}
+
+export function detectPackageManager(cwd: string): 'bun' | 'npm' | 'pnpm' | 'yarn' {
+  if (existsSync(join(cwd, 'bun.lock')) || existsSync(join(cwd, 'bun.lockb'))) return 'bun';
+  if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(cwd, 'yarn.lock'))) return 'yarn';
+  return existsSync(join(cwd, 'package-lock.json')) ? 'npm' : 'bun';
+}
+
+export async function buildApp(
+  opts: AppBuildOptions,
+  shell: BuildShell = defaultShell,
+): Promise<void> {
+  if (opts.passthrough.includes('--help') || opts.passthrough.includes('-h')) {
+    printBuildHelp();
+    return;
+  }
+
+  const pkgPath = join(opts.cwd, 'package.json');
+  if (!existsSync(pkgPath)) {
+    throw new Error(
+      `No package.json in ${opts.cwd}. Run \`di-framework init\` first, or cd into your app.`,
+    );
+  }
+
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+    scripts?: Record<string, string>;
+  };
+  const hasBuildScript = Boolean(pkg.scripts?.build);
+  const tsconfig = join(opts.cwd, 'tsconfig.json');
+  const pm = detectPackageManager(opts.cwd);
+
+  if (hasBuildScript) {
+    console.log(`Building with ${pm} run build…`);
+    if (pm === 'bun') {
+      await shell`bun run build ${opts.passthrough}`.cwd(opts.cwd);
+    } else if (pm === 'pnpm') {
+      await shell`pnpm run build ${opts.passthrough}`.cwd(opts.cwd);
+    } else if (pm === 'yarn') {
+      await shell`yarn run build ${opts.passthrough}`.cwd(opts.cwd);
+    } else {
+      await shell`npm run build -- ${opts.passthrough}`.cwd(opts.cwd);
+    }
+    console.log('✅ Build finished');
+    return;
+  }
+
+  if (existsSync(tsconfig)) {
+    console.log('No "build" script; running tsc -p tsconfig.json…');
+    await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
+    console.log('✅ Build finished');
+    return;
+  }
+
+  throw new Error(
+    'Nothing to build: add a "build" script to package.json or a tsconfig.json. ' +
+      'Or scaffold with `di-framework init`.',
+  );
+}
+
+export async function build(args: string[] = process.argv.slice(3)): Promise<void> {
+  if (args[0] === '--help' || args[0] === '-h') {
+    printBuildHelp();
+    return;
+  }
+  await buildApp(parseBuildArgs(args));
+}
+
 export function handleBuildFailure(err: unknown): never {
-  console.error('❌ Build failed:', err);
+  console.error('build failed:', err instanceof Error ? err.message : err);
   process.exit(1);
 }
 
-/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
 export function runBuildMain(
   isMain = import.meta.main,
   start: () => Promise<void> = () => build().catch(handleBuildFailure),
 ): void {
-  if (isMain) {
-    void start();
-  }
+  if (isMain) void start();
 }
 
 runBuildMain();

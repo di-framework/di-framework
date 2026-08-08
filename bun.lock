@@ -374,6 +374,17 @@
         "typescript": "^5",
       },
     },
+    "packages/di-framework-tsc": {
+      "name": "@di-framework/tsc",
+      "version": "0.1.0",
+      "bin": {
+        "dtsc": "bin/dtsc.cjs",
+      },
+      "peerDependencies": {
+        "ttsc": ">=0.25.0",
+        "typescript": ">=7.0.0",
+      },
+    },
   },
   "packages": {
     "@biomejs/biome": ["@biomejs/biome@2.5.6", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.6", "@biomejs/cli-darwin-x64": "2.5.6", "@biomejs/cli-linux-arm64": "2.5.6", "@biomejs/cli-linux-arm64-musl": "2.5.6", "@biomejs/cli-linux-x64": "2.5.6", "@biomejs/cli-linux-x64-musl": "2.5.6", "@biomejs/cli-win32-arm64": "2.5.6", "@biomejs/cli-win32-x64": "2.5.6" }, "bin": { "biome": "bin/biome" } }, "sha512-lxVNjv7UF6KfhMJfL9gaUHbWdJdHbsAj6OSmwSYNdhRuG67NxNQ4Xdvh3TUxsSK9sBzJBQhEJj3AopmmNJ5pSA=="],
@@ -449,6 +460,8 @@
     "@di-framework/rpc": ["@di-framework/rpc@workspace:packages/di-framework-rpc"],
 
     "@di-framework/socket": ["@di-framework/socket@workspace:packages/di-framework-socket"],
+
+    "@di-framework/tsc": ["@di-framework/tsc@workspace:packages/di-framework-tsc"],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
@@ -609,6 +622,20 @@
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.23", "", {}, "sha512-iRoq6i6JDJP6Mt2A5JaPvzw0pgYHH6k92ij+yXiTrB7T2y9N789aWE3EHWj/5ztlJBokcCBja3iYLVdu5wgnkg=="],
+
+    "@ttsc/darwin-arm64": ["@ttsc/darwin-arm64@0.25.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-DrqbSBDRHPfCtYTWVuUMde4p+1dvfMHlBy430t3ckrQu2t8YzTzJRHKQiX858LaFjh3tyIF/1z55rjkXqyg/Ww=="],
+
+    "@ttsc/darwin-x64": ["@ttsc/darwin-x64@0.25.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-CX1B4HPxZsEQbMFTLAH2C2GHUl+a1Hs23Lht8iizqMNnWCTY5WG5CrvZhA6WYUwARzDLdvjdcvlECz4oHOwpgA=="],
+
+    "@ttsc/linux-arm": ["@ttsc/linux-arm@0.25.0", "", { "os": "linux", "cpu": "arm" }, "sha512-Dv4RANjL9/qwbBThXQ746uXasLw0okIc2YkjwbaNBUXGFN2Jusp7SQsXvfbNsr6Bbj/udyz3mmAAkCe3tnB9nw=="],
+
+    "@ttsc/linux-arm64": ["@ttsc/linux-arm64@0.25.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-Vs3ELSCgHCPbEh2Mxgb4LjLTimK9f/MsGmDsy6nix5QIg+48l48F9qqpW452jdjTABWshd41CpnNqzWYIUqtZg=="],
+
+    "@ttsc/linux-x64": ["@ttsc/linux-x64@0.25.0", "", { "os": "linux", "cpu": "x64" }, "sha512-WkWQzPMJY2oo6SY+rtPjALvLNF3GiGV+POPhp96/R6NLLiwqEv2ou6noxp9v3bGAct6//nUNvzw+VfxRPi64Ww=="],
+
+    "@ttsc/win32-arm64": ["@ttsc/win32-arm64@0.25.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-mWHslRlxwLR5Sm7Pcq5/A/nH35kYnqrAqufkL8w32L6xoYbXHIQetdRBqf22djQNDqJ7xPqNBoq7ET22WO2e1g=="],
+
+    "@ttsc/win32-x64": ["@ttsc/win32-x64@0.25.0", "", { "os": "win32", "cpu": "x64" }, "sha512-HLwKmIX3kZiL8CINhIzKFTttFOkU3Z9crXwzHvWH3ihsHn7UqlgvjWQgoLNXgyqZzBo1fAz3IDupLgTMUCHbWw=="],
 
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
@@ -885,6 +912,8 @@
     "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "ttsc": ["ttsc@0.25.0", "", { "optionalDependencies": { "@ttsc/darwin-arm64": "0.25.0", "@ttsc/darwin-x64": "0.25.0", "@ttsc/linux-arm": "0.25.0", "@ttsc/linux-arm64": "0.25.0", "@ttsc/linux-x64": "0.25.0", "@ttsc/win32-arm64": "0.25.0", "@ttsc/win32-x64": "0.25.0" }, "bin": { "ttsc": "lib/launcher/ttsc.js", "ttscserver": "lib/launcher/ttscserver.js", "ttsx": "lib/launcher/ttsx.js" } }, "sha512-f5FZg7TZb4BgMBAWfRWcd0KcLG5uVNNyzIMOHZLAk/0f4sQHUucNm6a6SDMd34WKhVsRmbCNk9BVoTvqytUpfQ=="],
 
     "tweetnacl": ["tweetnacl@1.0.3", "", {}, "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="],
 

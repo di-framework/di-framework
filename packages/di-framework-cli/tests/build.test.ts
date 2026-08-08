@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PACKAGES } from '../cmd/build';
+import { PACKAGES } from '../cmd/mx/build';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
@@ -84,6 +84,7 @@ describe('build command', () => {
       expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-codegen');
       expect(PACKAGES).toContain('packages/di-framework-cli');
+      expect(PACKAGES).toContain('packages/di-framework-tsc');
     });
 
     it('every package directory exists', async () => {
@@ -107,7 +108,7 @@ describe('build command', () => {
 
       try {
         process.chdir(root);
-        const { build } = await import('../cmd/build');
+        const { build } = await import('../cmd/mx/build');
         await build();
 
         for (const pkgDir of PACKAGES) {
@@ -145,7 +146,7 @@ describe('build command', () => {
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
         process.chdir(root);
-        const { build } = await import('../cmd/build');
+        const { build } = await import('../cmd/mx/build');
         await build();
         expect(await Bun.file(join(root, PACKAGES[1]!, 'package.json')).exists()).toBe(false);
         expect(await Bun.file(join(root, PACKAGES[1]!, 'dist', 'index.js')).exists()).toBe(true);
@@ -158,7 +159,7 @@ describe('build command', () => {
 
   describe('CLI entrypoint', () => {
     it('handleBuildFailure logs and exits 1', async () => {
-      const { handleBuildFailure } = await import('../cmd/build');
+      const { handleBuildFailure } = await import('../cmd/mx/build');
       const err = spyOn(console, 'error').mockImplementation(() => {});
       const originalExit = process.exit;
       let code: number | undefined;
@@ -177,7 +178,7 @@ describe('build command', () => {
     });
 
     it('runBuildMain invokes start only when isMain is true', async () => {
-      const { runBuildMain } = await import('../cmd/build');
+      const { runBuildMain } = await import('../cmd/mx/build');
       let calls = 0;
       const start = async () => {
         calls++;
@@ -193,7 +194,7 @@ describe('build command', () => {
       temps.push(empty);
       await Bun.write(join(empty, 'package.json'), '{'); // invalid JSON → build throws
 
-      const proc = Bun.spawn(['bun', join(import.meta.dir, '..', 'cmd', 'build.ts')], {
+      const proc = Bun.spawn(['bun', join(import.meta.dir, '..', 'cmd', 'mx', 'build.ts')], {
         cwd: empty,
         stdout: 'pipe',
         stderr: 'pipe',
