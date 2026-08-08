@@ -237,4 +237,20 @@ describe('streaming across transports', () => {
     }
     expect(caughtErr?.message).toBe('Transport send failed');
   });
+
+  it('cleans up signal listener on normal completion when signal is provided', async () => {
+    const pair = memoryPair();
+    const server = createRpcServer({ transport: pair.serverTransport });
+    await server.start();
+    const controller = new AbortController();
+    const client = createRpcClient(StreamingService, pair.clientTransport, {
+      signal: controller.signal,
+    });
+    const items: string[] = [];
+    for await (const item of client.serverStream({ value: 'normal-signal' })) {
+      items.push(item.result);
+    }
+    expect(items).toEqual(['normal-signal-1', 'normal-signal-2', 'normal-signal-3']);
+    await server.stop();
+  });
 });

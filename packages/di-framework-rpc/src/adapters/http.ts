@@ -162,8 +162,8 @@ export function createHttpRpcHandler(options: CreateHttpRpcHandlerOptions = {}) 
       }
     });
 
-    dispatchPromise.then(
-      (dispatchResult) => {
+    dispatchPromise
+      .then((dispatchResult) => {
         if (!isStreamResponse) {
           const finalResult = unaryResponse ?? dispatchResult;
           if (finalResult === undefined) {
@@ -171,32 +171,17 @@ export function createHttpRpcHandler(options: CreateHttpRpcHandlerOptions = {}) 
           } else {
             resolveResponse(Response.json(finalResult));
           }
-          try {
-            streamController?.close();
-          } catch {}
         }
-      },
-      (error) => {
-        if (!isStreamResponse) {
-          resolveResponse(
-            Response.json(
-              rpcFailure(
-                null,
-                JSON_RPC_ERRORS.SERVER,
-                error instanceof Error ? error.message : String(error),
-              ),
-            ),
-          );
-          try {
-            streamController?.close();
-          } catch {}
-        } else {
-          try {
-            streamController?.close();
-          } catch {}
-        }
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        resolveResponse(Response.json(rpcFailure(null, JSON_RPC_ERRORS.SERVER, msg)));
+      })
+      .finally(() => {
+        try {
+          streamController?.close();
+        } catch {}
+      });
 
     return responsePromise;
   };
