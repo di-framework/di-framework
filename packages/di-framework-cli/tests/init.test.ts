@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import * as fs from 'node:fs';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -161,6 +162,24 @@ describe('init command', () => {
         scaffoldApp({ dir, name: 'app', force: true });
         expect(logs.some((l) => l.includes(dir))).toBe(true);
       } finally {
+        log.mockRestore();
+      }
+    });
+
+    it('rethrows unexpected open errors when not forcing', () => {
+      const root = mkdtempSync(join(tmpdir(), 'init-err-'));
+      temps.push(root);
+      const dir = join(root, 'app');
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      const open = spyOn(fs, 'openSync').mockImplementation(() => {
+        const err = new Error('permission denied') as NodeJS.ErrnoException;
+        err.code = 'EACCES';
+        throw err;
+      });
+      try {
+        expect(() => scaffoldApp({ dir, name: 'app', force: false })).toThrow('permission denied');
+      } finally {
+        open.mockRestore();
         log.mockRestore();
       }
     });
