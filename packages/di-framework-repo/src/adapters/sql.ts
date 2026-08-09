@@ -1,4 +1,4 @@
-import type { ConditionalStorageAdapter, StorageAdapter } from '../adapter';
+import type { ConditionalStorageAdapter, StorageAdapter } from '../adapter.js';
 
 type Row = Record<string, unknown>;
 export interface SqlMapping<E> {

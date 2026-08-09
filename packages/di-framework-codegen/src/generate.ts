@@ -193,10 +193,7 @@ export async function generate(options: GenerateOptions = {}): Promise<GenerateR
   if (!isCheckMode) {
     for (const f of files) {
       if (f.status === 'created' || f.status === 'updated') {
-        const dir = dirname(f.path);
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
-        }
+        mkdirSync(dirname(f.path), { recursive: true });
         writeFileSync(f.path, f.content, 'utf-8');
       }
     }

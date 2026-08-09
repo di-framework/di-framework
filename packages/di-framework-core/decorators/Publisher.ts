@@ -1,4 +1,4 @@
-import { defineMetadata, getOwnMetadata, PUBLISHER_METADATA_KEY } from '../container';
+import { defineMetadata, getOwnMetadata, PUBLISHER_METADATA_KEY } from '../container.js';
 
 /**
  * Options for the @Publisher decorator

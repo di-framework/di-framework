@@ -30,7 +30,8 @@
     "oauth.ts",
     "http.ts",
     "graphql.ts",
-    "repo.ts"
+    "repo.ts",
+    "server.ts"
   ],
   "exclude": ["**/*.test.ts", "tests/**/*", "node_modules", "dist"]
 }

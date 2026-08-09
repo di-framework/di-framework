@@ -462,7 +462,7 @@ export class Container {
             if (options.logging) {
               const duration = payload.endTime - payload.startTime;
               const status = error
-                ? `ERROR: ${error && (error as any).message ? (error as any).message : String(error)}`
+                ? `ERROR: ${(error as any).message ? (error as any).message : String(error)}`
                 : 'SUCCESS';
               console.log(
                 `[Publisher] ${className}.${methodName} -> '${options.event}' - ${status} (${duration}ms)`,

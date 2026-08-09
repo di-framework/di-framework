@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/events",
-  "version": "4.1.3",
+  "version": "4.2.2",
   "description": "Bridge di-framework container events to external brokers (Kafka, NATS) via pluggable transports.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -8,22 +8,26 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./memory": {
-      "bun": "./memory.ts",
+      "types": "./dist/memory.d.ts",
+      "bun": "./dist/memory.js",
       "import": "./dist/memory.js",
       "default": "./dist/memory.js"
     },
     "./kafka": {
-      "bun": "./kafka.ts",
+      "types": "./dist/kafka.d.ts",
+      "bun": "./dist/kafka.js",
       "import": "./dist/kafka.js",
       "default": "./dist/kafka.js"
     },
     "./nats": {
-      "bun": "./nats.ts",
+      "types": "./dist/nats.d.ts",
+      "bun": "./dist/nats.js",
       "import": "./dist/nats.js",
       "default": "./dist/nats.js"
     }
@@ -51,12 +55,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "memory.ts",
-    "kafka.ts",
-    "nats.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./memory.ts ./kafka.ts ./nats.ts --outdir ./dist --target node --external @di-framework/core --external kafkajs --external nats && tsc --emitDeclarationOnly --declaration --outDir dist",

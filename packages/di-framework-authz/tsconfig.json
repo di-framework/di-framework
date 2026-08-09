@@ -18,6 +18,6 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src/**/*", "index.ts", "http.ts"],
+  "include": ["src/**/*", "index.ts", "http.ts", "graphql.ts"],
   "exclude": ["tests/**/*", "node_modules", "dist"]
 }

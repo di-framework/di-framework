@@ -293,4 +293,28 @@ export const Order = {
     );
     expect(existsSync(fakeStalePath)).toBe(true);
   });
+
+  it('loads config from explicit string path and handles automatic manifest discovery in generate()', async () => {
+    const { testDir, manifest } = setupTestWorkspace();
+    const manifestPath = join(testDir, 'src', 'contracts', 'orders.manifest.ts');
+    writeFileSync(manifestPath, `export default ${JSON.stringify(manifest)};`, 'utf-8');
+
+    const configPath = join(testDir, 'custom.codegen.ts');
+    writeFileSync(
+      configPath,
+      `export default { manifests: ['./src/contracts/orders.manifest.ts'], outDir: './src/generated' };`,
+      'utf-8',
+    );
+
+    const { loadConfig } = await import('../src/config.ts');
+    const resolved = await loadConfig(configPath, testDir);
+    expect(resolved.configFilePath).toBe(configPath);
+
+    // Call generate without explicit manifests option to exercise loadManifests branch
+    const genRes = await generate({
+      cwd: testDir,
+      config: configPath,
+    });
+    expect(genRes.success).toBe(true);
+  });
 });

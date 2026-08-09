@@ -1,6 +1,6 @@
-import type { ConditionalStorageAdapter } from './adapter';
-import { EntityRepository } from './repository';
-import type { EntityId, PaginatedResult } from './types';
+import type { ConditionalStorageAdapter } from './adapter.js';
+import { EntityRepository } from './repository.js';
+import type { EntityId, PaginatedResult } from './types.js';
 
 export class InMemoryRepository<E extends { id: ID }, ID extends string | number = EntityId>
   extends EntityRepository<E, ID>

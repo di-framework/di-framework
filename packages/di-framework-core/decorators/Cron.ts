@@ -1,4 +1,4 @@
-import { CRON_METADATA_KEY, defineMetadata, getOwnMetadata } from '../container';
+import { CRON_METADATA_KEY, defineMetadata, getOwnMetadata } from '../container.js';
 
 /**
  * Marks a method to run on a cron schedule.
