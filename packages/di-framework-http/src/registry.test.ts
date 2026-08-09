@@ -14,12 +14,14 @@ describe('HTTP Registry', () => {
     expect(targets instanceof Set).toBe(true);
   });
 
-  it('constructs an isolated Registry instance', () => {
+  it('constructs an isolated Registry instance and clears targets', () => {
     const local = new RegistryClass();
     const target = class Isolated {};
     local.addTarget(target);
     expect(local.getTargets().has(target)).toBe(true);
     expect(Registry.getTargets().has(target)).toBe(false);
+    local.clear();
+    expect(local.getTargets().size).toBe(0);
   });
 });
 

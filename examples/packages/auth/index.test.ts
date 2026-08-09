@@ -1,7 +1,11 @@
-import { describe, expect, it, spyOn } from 'bun:test';
-import { auth, opaAuthorizationManager, router, runAuthMain } from './index.ts';
+import { beforeEach, describe, expect, it, spyOn } from 'bun:test';
+import { useContainer } from '@di-framework/core/container';
+import { auth, NotesController, opaAuthorizationManager, router, runAuthMain } from './index.ts';
 
 describe('auth example', () => {
+  beforeEach(() => {
+    useContainer().register(NotesController);
+  });
   it('refuses an unauthenticated request', async () => {
     const response = await router.fetch(new Request('https://api.example.com/notes'));
     expect(response.status).toBe(401);
@@ -146,6 +150,12 @@ describe('auth example', () => {
     expect(
       await rejected.authorize(undefined, { transport: 'http', metadata: { action: 'read' } }),
     ).toEqual({ allowed: false, reason: 'Policy agent returned a non-allow decision' });
+  });
+
+  it('covers NotesController methods directly', () => {
+    const controller = new NotesController();
+    expect(controller.list('user1')).toEqual([]);
+    expect(controller.add('user1', 'note 1')).toEqual(['note 1']);
   });
 
   // Runs the full walkthrough via the injectable CLI gate (covers `main()` and
