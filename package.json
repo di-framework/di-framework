@@ -16,7 +16,7 @@
     "build": "bun run packages/di-framework-cli/main.ts mx build",
     "check-packaging": "bun scripts/check-package-tarballs.ts",
     "check-package-tarballs": "bun scripts/check-package-tarballs.ts",
-    "test:all": "bun --filter=* run test",
+    "test:all": "bun --filter=* --sequential run test",
     "test": "bun test",
     "publish": "bun run packages/di-framework-cli/main.ts mx publish",
     "link-cli": "(cd packages/di-framework-cli && bun link >/dev/null 2>&1)",

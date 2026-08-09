@@ -34,7 +34,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./src/cli.ts --outdir ./dist --target node --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./src/cli.ts --outdir ./dist --target node --external @di-framework/core --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "npm run build",
     "dev": "bun ../../examples/http-router/index.ts",
     "test": "bun test"

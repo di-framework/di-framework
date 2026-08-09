@@ -126,6 +126,7 @@ describe('HTTP authorization', () => {
     const manager: AuthorizationManager = { authorize: () => authorizationAllowed() };
     registerAuth({ csrf: false, authorization: manager });
     expect(resolveAuthorizationManager({ container: useContainer() as any })).toBe(manager);
+    useContainer().clear();
   });
 
   it('covers deferred authorization binding branches on routes', async () => {
