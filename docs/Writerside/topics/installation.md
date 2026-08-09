@@ -16,7 +16,7 @@ bun x @di-framework/cli init my-api
 cd my-api && bun install && bun run dev
 ```
 
-That writes a decorator-ready `tsconfig.json`, `package.json`, and a sample `src/index.ts`. See [CLI](cli.md) for `check` / `build` and options.
+That writes a `tsconfig.json` with `@di-framework/tsc` (`plugins`), TypeScript 7+, `ttsc`, and sample `src/index.ts`. Runtime parameter checks are injected on `ttsc --emit` (`bun run build`). See [CLI](cli.md) for `check` / `build` and [Runtime type checks](tsc.md).
 
 ## Install the Package
 
@@ -54,6 +54,7 @@ Ensure your `tsconfig.json` has the following settings:
 }
 ```
 
+Apps from `di-framework init` also include `plugins: [{ "transform": "@di-framework/tsc" }]` and emit via `ttsc`. For manual setup of runtime parameter checks, see [Runtime type checks](tsc.md).
 ### SWC Configuration
 
 If you're using SWC, ensure your `.swcrc` has decorator support enabled:
@@ -129,7 +130,7 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 | Package | Docs |
 | --- | --- |
 | `@di-framework/cli` | [CLI](cli.md) |
-| `@di-framework/tsc` | [Runtime type checks](tsc.md) |
+| `@di-framework/tsc` | [Runtime type checks](tsc.md) (default in `init`) |
 | `@di-framework/repo` | [Repositories](repositories.md) |
 | `@di-framework/http` | [HTTP Router](http-router.md) |
 | `@di-framework/graphql` | [GraphQL](graphql.md) |

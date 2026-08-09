@@ -165,7 +165,7 @@ console.log(user);
 ## Next Steps
 
 - [CLI](cli.md) - App `init` / `check` / `build` and maintainer `mx`
-- [Runtime type checks](tsc.md) - Optional emit-time parameter guards
+- [Runtime type checks](tsc.md) - Emit-time parameter guards (`init` wires `@di-framework/tsc`)
 - [API Reference](api-reference.md) - Learn about all available APIs and options
 - [Advanced Usage](advanced-usage.md) - Explore advanced patterns like transient services and factory functions
 - [Best Practices](best-practices.md) - Learn recommended patterns and approaches

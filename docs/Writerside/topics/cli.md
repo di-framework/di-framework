@@ -23,9 +23,9 @@ di-framework <command> [args...]
 
 | Command | Description |
 | --- | --- |
-| **`init [name]`** | Scaffold a new app (`package.json`, decorator-ready `tsconfig`, sample `src/index.ts`) |
-| **`build`** | Run the project’s `build` script, or `tsc -p tsconfig.json` if none |
-| **`check`** | Typecheck with the nearest `tsconfig.json` (`tsc --noEmit`) |
+| **`init [name]`** | Scaffold a new app (`package.json`, `tsconfig` with `@di-framework/tsc`, sample `src/index.ts`) |
+| **`build`** | Run the project’s `build` script, or `ttsc --emit` / `tsc -p tsconfig.json` if none |
+| **`check`** | Run the project’s `check` script, or `tsc --noEmit` against the nearest `tsconfig.json` |
 
 ```bash
 di-framework init my-api
@@ -34,6 +34,8 @@ cd my-api && bun install && bun run dev
 di-framework check
 di-framework build
 ```
+
+`init` installs TypeScript 7+, `ttsc`, and `@di-framework/tsc` by default, and sets `plugins: [{ "transform": "@di-framework/tsc" }]`. Runtime checks are injected on `ttsc --emit` (`build` / `start`). `dev` runs source with Bun (no emit). First `ttsc` build needs a Go toolchain — see [Runtime type checks](tsc.md).
 
 ### `init` options
 
@@ -67,4 +69,4 @@ Legacy top-level `test` / `typecheck` / `publish` still redirect to `mx` with a 
 
 - [Installation](installation.md) - Core package setup
 - [Quick Start](quick-start.md) - Basics after scaffolding
-- [Runtime type checks](tsc.md) - Optional `ttsc` transform (`@di-framework/tsc`)
+- [Runtime type checks](tsc.md) - `ttsc` transform (`@di-framework/tsc`; wired by `init`)

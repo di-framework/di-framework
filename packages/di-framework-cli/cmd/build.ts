@@ -26,7 +26,8 @@ Usage:
 
 Runs, in order of preference:
   1. package.json "build" script  (bun run build / npm run build)
-  2. tsc -p tsconfig.json         if tsconfig exists and no build script
+  2. ttsc --emit -p tsconfig.json if ttsc is installed (or declared)
+  3. tsc -p tsconfig.json         if tsconfig exists and no build script
 
 Maintainer monorepo build: di-framework mx build
 `);
@@ -37,6 +38,17 @@ export function detectPackageManager(cwd: string): 'bun' | 'npm' | 'pnpm' | 'yar
   if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(join(cwd, 'yarn.lock'))) return 'yarn';
   return existsSync(join(cwd, 'package-lock.json')) ? 'npm' : 'bun';
+}
+
+export function hasTtsc(
+  cwd: string,
+  pkg?: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  },
+): boolean {
+  if (pkg?.dependencies?.ttsc || pkg?.devDependencies?.ttsc) return true;
+  return existsSync(join(cwd, 'node_modules', 'ttsc'));
 }
 
 export async function buildApp(
@@ -57,6 +69,8 @@ export async function buildApp(
 
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
     scripts?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
   };
   const hasBuildScript = Boolean(pkg.scripts?.build);
   const tsconfig = join(opts.cwd, 'tsconfig.json');
@@ -78,8 +92,13 @@ export async function buildApp(
   }
 
   if (existsSync(tsconfig)) {
-    console.log('No "build" script; running tsc -p tsconfig.json…');
-    await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
+    if (hasTtsc(opts.cwd, pkg)) {
+      console.log('No "build" script; running ttsc --emit -p tsconfig.json…');
+      await shell`bun x ttsc --emit -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
+    } else {
+      console.log('No "build" script; running tsc -p tsconfig.json…');
+      await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
+    }
     console.log('✅ Build finished');
     return;
   }

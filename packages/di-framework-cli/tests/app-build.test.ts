@@ -82,6 +82,47 @@ describe('app build command', () => {
     }
   }, 60_000);
 
+  it('falls back to ttsc --emit when ttsc is declared and no build script', async () => {
+    const { hasTtsc } = await import('../cmd/build');
+    const root = mkdtempSync(join(tmpdir(), 'app-build-ttsc-'));
+    temps.push(root);
+    await Bun.write(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'x',
+        devDependencies: { ttsc: '>=0.25.0' },
+      }) + '\n',
+    );
+    await Bun.write(join(root, 'tsconfig.json'), '{}\n');
+    expect(hasTtsc(root, { devDependencies: { ttsc: '>=0.25.0' } })).toBe(true);
+
+    const seen: string[] = [];
+    const fakeShell = ((strings: TemplateStringsArray, ...exprs: unknown[]) => {
+      const cmd = strings.reduce((acc, s, i) => acc + s + (exprs[i] ?? ''), '');
+      seen.push(cmd);
+      return {
+        cwd: () => Promise.resolve(),
+      };
+    }) as unknown as import('../cmd/build').BuildShell;
+
+    const log = spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await buildApp({ cwd: root, passthrough: [] }, fakeShell);
+      expect(seen.some((c) => c.includes('ttsc') && c.includes('--emit'))).toBe(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('hasTtsc detects node_modules/ttsc', async () => {
+    const { hasTtsc } = await import('../cmd/build');
+    const root = mkdtempSync(join(tmpdir(), 'app-build-ttsc-nm-'));
+    temps.push(root);
+    mkdirSync(join(root, 'node_modules', 'ttsc'), { recursive: true });
+    expect(hasTtsc(root)).toBe(true);
+    expect(hasTtsc(root, {})).toBe(true);
+  });
+
   it('handleBuildFailure exits 1', () => {
     const err = spyOn(console, 'error').mockImplementation(() => {});
     const originalExit = process.exit;

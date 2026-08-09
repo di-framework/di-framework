@@ -6,6 +6,8 @@ Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit
 
 > MVP: function declarations with required identifier params; primitives + plain object/interface props. See [Limitations](#limitations).
 
+`di-framework init` wires this by default. Use the steps below for an existing app.
+
 ## Install
 
 ```bash

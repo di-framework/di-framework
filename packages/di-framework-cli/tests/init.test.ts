@@ -118,12 +118,25 @@ describe('init command', () => {
 
         const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
         expect(pkg.dependencies['@di-framework/core']).toBe('latest');
-        expect(pkg.scripts.build).toBeDefined();
-        expect(pkg.scripts.check).toBeDefined();
+        expect(pkg.devDependencies['@di-framework/tsc']).toBe('latest');
+        expect(pkg.devDependencies.ttsc).toBe('>=0.25.0');
+        expect(pkg.devDependencies.typescript).toBe('^7.0.0');
+        expect(pkg.scripts.build).toBe('ttsc --emit');
+        expect(pkg.scripts.check).toBe('ttsc --noEmit');
+        expect(pkg.scripts.start).toBe('node dist/index.js');
 
         const ts = JSON.parse(readFileSync(join(dir, 'tsconfig.json'), 'utf-8'));
         expect(ts.compilerOptions.experimentalDecorators).toBe(true);
         expect(ts.compilerOptions.emitDecoratorMetadata).toBe(false);
+        expect(ts.compilerOptions.outDir).toBe('dist');
+        expect(ts.compilerOptions.rootDir).toBe('src');
+        expect(ts.compilerOptions.plugins).toEqual([{ transform: '@di-framework/tsc' }]);
+        expect(ts.compilerOptions.noEmit).toBeUndefined();
+        expect(ts.compilerOptions.allowImportingTsExtensions).toBeUndefined();
+
+        const readme = readFileSync(join(dir, 'README.md'), 'utf-8');
+        expect(readme).toContain('@di-framework/tsc');
+        expect(readme).toContain('ttsc --emit');
 
         const src = readFileSync(join(dir, 'src', 'index.ts'), 'utf-8');
         expect(src).toContain('@Container()');

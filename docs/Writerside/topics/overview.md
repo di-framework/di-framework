@@ -24,7 +24,7 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 - **RPC**: Decorator-generated JSON-RPC and per-method gRPC with a typed client via `@di-framework/rpc` — the same service over memory, HTTP, sockets, and Connect / gRPC.
 - **AI**: Annotation-driven chat, tools, RAG, MCP, and agents with `@di-framework/ai` (OpenAI-compatible and Anthropic HTTP adapters).
 - **App CLI**: Scaffold, typecheck, and build apps with `@di-framework/cli` (`init`, `check`, `build`); monorepo maintainers use `mx`.
-- **Runtime type checks**: Optional `ttsc` transform `@di-framework/tsc` injects parameter guards from TypeScript types at emit time.
+- **Runtime type checks**: `ttsc` transform `@di-framework/tsc` injects parameter guards from TypeScript types at emit time (`di-framework init` wires this by default).
 
 ## Why Use This Framework?
 
@@ -115,7 +115,7 @@ userService.getUser('123');
 - [Installation](installation.md) - Set up the framework in your project
 - [Quick Start](quick-start.md) - Learn the basics with simple examples
 - [CLI](cli.md) - App `init` / `check` / `build` and maintainer `mx`
-- [Runtime type checks](tsc.md) - Optional emit-time parameter guards (`@di-framework/tsc`)
+- [Runtime type checks](tsc.md) - Emit-time parameter guards (`@di-framework/tsc`; wired by `init`)
 - [HTTP Router](http-router.md) - Type-safe routes and OpenAPI generation
 - [GraphQL](graphql.md) - Domain classes as a GraphQL schema
 - [Events](events.md) - Bridge container events to Kafka / NATS / memory
