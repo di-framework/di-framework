@@ -132,9 +132,7 @@ describe('app build command', () => {
 
   it('treats @di-framework/tsc as implying ttsc', async () => {
     const { hasTtsc } = await import('../cmd/build');
-    expect(
-      hasTtsc('/tmp', { devDependencies: { '@di-framework/tsc': 'latest' } }),
-    ).toBe(true);
+    expect(hasTtsc('/tmp', { devDependencies: { '@di-framework/tsc': 'latest' } })).toBe(true);
   });
 
   it('hasTtsc detects node_modules/ttsc', async () => {

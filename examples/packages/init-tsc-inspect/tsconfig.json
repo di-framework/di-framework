@@ -1,14 +1,10 @@
 {
   "compilerOptions": {
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": [
-      "bun"
-    ],
+    "types": ["bun"],
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
@@ -21,7 +17,5 @@
       }
     ]
   },
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src/**/*"]
 }

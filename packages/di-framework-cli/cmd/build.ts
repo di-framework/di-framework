@@ -28,7 +28,7 @@ Runs, in order of preference:
   1. ttsc --emit -p tsconfig.json  if ttsc is installed (or declared)
   2. tsc -p tsconfig.json          if tsconfig.json exists
 
-Init scaffolds \`\"build\": \"di-framework build\"\` so \`bun run build\` delegates here.
+Init scaffolds \`"build": "di-framework build"\` so \`bun run build\` delegates here.
 
 Maintainer monorepo build: di-framework mx build
 `);
@@ -87,9 +87,7 @@ export async function buildApp(
 
   const tsconfig = join(opts.cwd, 'tsconfig.json');
   if (!existsSync(tsconfig)) {
-    throw new Error(
-      'Nothing to build: add a tsconfig.json, or scaffold with `di-framework init`.',
-    );
+    throw new Error('Nothing to build: add a tsconfig.json, or scaffold with `di-framework init`.');
   }
 
   if (hasTtsc(opts.cwd, pkg)) {
