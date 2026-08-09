@@ -564,7 +564,8 @@ describe('registerAuth', () => {
       secret: SECRET,
       jwt: { issuer: 'https://iss', audience: 'api', accessTtlSeconds: 60 },
     });
-    const { token, expiresIn } = await runtime.tokens?.issueAccessToken({ subject: 'u1' });
+    const access = await runtime.tokens!.issueAccessToken({ subject: 'u1' });
+    const { token, expiresIn } = access;
     expect(expiresIn).toBe(60);
 
     const result = await runtime.strategy.authenticate(
@@ -578,8 +579,8 @@ describe('registerAuth', () => {
       secret: SECRET,
       jwt: { issuer: 'https://iss', audience: 'api', symmetric: true },
     });
-    const first = await runtime.tokens?.issueAccessToken({ subject: 'u1' });
-    const second = await runtime.tokens?.issueAccessToken({ subject: 'u2' });
+    const first = await runtime.tokens!.issueAccessToken({ subject: 'u1' });
+    const second = await runtime.tokens!.issueAccessToken({ subject: 'u2' });
     expect(typeof first.token).toBe('string');
     expect(first.token.split('.')).toHaveLength(3);
     expect(second.token).not.toBe(first.token);
@@ -1043,7 +1044,9 @@ describe('OpenAPI security', () => {
       security: secured('bearerAuth'),
     }) as unknown as Record<string, unknown>;
     const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
-    const operation = paths['/public']?.get!;
+    const operation = paths['/public']?.get;
+    expect(operation).toBeDefined();
+    if (!operation) throw new Error('expected /public GET operation');
     expect(operation.security).toEqual([]);
   });
 });

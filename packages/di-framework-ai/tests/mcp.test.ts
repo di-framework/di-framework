@@ -342,11 +342,11 @@ describe('McpToolCallbackProvider', () => {
     });
 
     const tools = await mcpToolCallbacks(session);
+    const toolName = tools[0]?.toolDefinition.name;
+    expect(toolName).toBeDefined();
     const model = new ScriptedChatModel([
       {
-        respond: toolCallResponse([
-          toolCall('c1', tools[0]?.toolDefinition.name, { city: 'Yorktown' }),
-        ]),
+        respond: toolCallResponse([toolCall('c1', toolName!, { city: 'Yorktown' })]),
       },
       { respond: '68F in Yorktown' },
     ]);

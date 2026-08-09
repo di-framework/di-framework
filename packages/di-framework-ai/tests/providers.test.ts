@@ -188,7 +188,8 @@ describe('toAnthropicMessages edge cases', () => {
     const badMapped = toAnthropicMessages([
       assistantMessage(null, { toolCalls: [toolCall('t2', 'x', 'not-json')] }),
     ]);
-    const block = (badMapped.messages[0]?.content as { input?: unknown }[])[0];
+    const content = badMapped.messages[0]?.content as { input?: unknown }[] | undefined;
+    const block = content?.[0];
     expect(block?.input).toEqual({ _raw: 'not-json' });
   });
 
@@ -424,8 +425,10 @@ describe('OpenAiChatModel', () => {
     const response = await model.call(new Prompt('weather?', { toolCallbacks: [weather] }));
 
     expect(Array.isArray(seenBody.tools)).toBe(true);
-    expect(hasToolCalls(response.getResult()?.output)).toBe(true);
-    expect(response.getResult()?.output.toolCalls[0]?.name).toBe('getWeather');
+    const output = response.getResult()?.output;
+    expect(output).toBeDefined();
+    expect(hasToolCalls(output!)).toBe(true);
+    expect(output!.toolCalls[0]?.name).toBe('getWeather');
   });
 
   test('maps HTTP 401 to authentication AiError', async () => {
@@ -477,7 +480,7 @@ describe('OpenAiChatModel', () => {
 
     const model = new OpenAiChatModel({ apiKey: 'sk', fetch: fetchImpl });
     const chunks: string[] = [];
-    for await (const chunk of model.stream?.(new Prompt('hi'))) {
+    for await (const chunk of model.stream(new Prompt('hi'))) {
       chunks.push(chunk.content);
     }
     expect(chunks.at(-1)).toBe('Hello');
@@ -522,7 +525,7 @@ describe('OpenAiChatModel', () => {
 
     const model = new OpenAiChatModel({ apiKey: 'sk', fetch: fetchImpl });
     let last: Awaited<ReturnType<typeof model.call>> | undefined;
-    for await (const chunk of model.stream?.(new Prompt('weather?'))) {
+    for await (const chunk of model.stream(new Prompt('weather?'))) {
       last = chunk;
     }
     expect(last?.getResult()?.output.toolCalls).toEqual([
@@ -674,7 +677,7 @@ describe('AnthropicChatModel', () => {
 
     const model = new AnthropicChatModel({ apiKey: 'k', fetch: fetchImpl });
     let last = '';
-    for await (const chunk of model.stream?.(new Prompt('hi'))) {
+    for await (const chunk of model.stream(new Prompt('hi'))) {
       last = chunk.content;
     }
     expect(last).toBe('Hey!');
@@ -709,7 +712,7 @@ describe('AnthropicChatModel', () => {
 
     const model = new AnthropicChatModel({ apiKey: 'k', fetch: fetchImpl });
     let last: Awaited<ReturnType<typeof model.call>> | undefined;
-    for await (const chunk of model.stream?.(new Prompt('weather?'))) {
+    for await (const chunk of model.stream(new Prompt('weather?'))) {
       last = chunk;
     }
     expect(last?.getResult()?.output.toolCalls).toEqual([

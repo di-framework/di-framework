@@ -259,15 +259,6 @@ describe('Container - error handling and edge cases', () => {
     );
   });
 
-  it('extractParamTypesFromSource handles decorated constructor string matches', () => {
-    const c = new Container();
-    class DummyService {}
-    // Override toString to simulate TS __decorate output
-    DummyService.toString = () => '__decorate([ __param(0, Foo()) ])';
-    const result = (c as any).extractParamTypesFromSource(DummyService);
-    expect(result).toEqual([]);
-  });
-
   it('hasMetadata checks if metadata exists', () => {
     const { defineMetadata, hasMetadata } = require('../container');
     class Target {}

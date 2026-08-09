@@ -25,7 +25,7 @@ jobs:
         run: bun run test
 
       - name: Build packages
-        run: bun run packages/di-framework-cli/cmd/build.ts
+        run: bun run packages/di-framework-cli/cmd/mx/build.ts
 
       - uses: actions/setup-node@v7
         with:
@@ -38,9 +38,7 @@ jobs:
       - name: Publish packages to npm
         run: |
           set -euo pipefail
-          # Must stay in step with PACKAGES in packages/di-framework-cli/cmd/build.ts.
-          # `events` and `config` were missing here since they were added, so they
-          # have been version-bumped and built by CI but never published.
+          # Must stay in step with PACKAGES in packages/di-framework-cli/cmd/mx/build.ts.
           for pkg in packages/di-framework-core \
           packages/di-framework-repo \
           packages/di-framework-http \
@@ -53,7 +51,8 @@ jobs:
           packages/di-framework-rpc \
           packages/di-framework-ai \
           packages/di-framework-codegen \
-          packages/di-framework-cli; do
+          packages/di-framework-cli \
+          packages/di-framework-tsc; do
             name=$(node -p "require('./$pkg/package.json').name")
             version=$(node -p "require('./$pkg/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then

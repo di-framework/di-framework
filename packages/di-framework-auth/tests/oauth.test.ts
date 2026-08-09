@@ -357,8 +357,9 @@ describe('presets', () => {
     expect(provider.issuer).toBeUndefined();
     expect(provider.userinfoEndpoint).toBe('https://api.github.com/user');
     const profile = provider.profileMap?.(null, { id: 42, login: 'ada', email: 'a@b.c' });
-    expect(profile.subject).toBe('42');
-    expect(profile.name).toBe('ada');
+    expect(profile).toBeDefined();
+    expect(profile!.subject).toBe('42');
+    expect(profile!.name).toBe('ada');
   });
 
   it('configures a generic OIDC provider by issuer, defaulting clientAuth from clientSecret', () => {

@@ -145,7 +145,7 @@ describe('connectionFromSlice', () => {
     });
     expect(result.totalCount).toBe(99);
     expect(result.pageInfo.hasNextPage).toBe(true);
-    expect(decodeCursor(result.edges[0]?.cursor)).toBe('id:x');
+    expect(decodeCursor(result.edges[0]!.cursor)).toBe('id:x');
   });
 });
 
