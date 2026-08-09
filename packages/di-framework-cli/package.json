@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/cli",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "CLI for di-framework apps (init, build, check, generate) and monorepo maintainers (mx)",
   "private": false,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/graphql",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "Radically object-oriented, decorator-driven GraphQL for di-framework. Domain objects are the schema; decorators declare semantic exposure, ownership and boundaries.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

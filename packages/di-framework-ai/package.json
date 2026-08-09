@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/ai",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "Declarative library for building AI applications",
   "main": "./src/index.ts",
   "module": "./src/index.ts",

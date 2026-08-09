@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/tsc",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "ttsc transform that injects runtime parameter checks from TypeScript types (assertAll)",
   "author": "@di-framework Contributors",
   "license": "(MIT OR Apache-2.0)",

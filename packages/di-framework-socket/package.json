@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/socket",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "Decorator-driven WebSocket, TCP, and UDP for di-framework — @SocketGateway / @OnMessage with a WebCrypto secure channel",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
