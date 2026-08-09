@@ -5,7 +5,14 @@ import { createGrpcRoutes, grpcTransport } from '../src/adapters/grpc.ts';
 import { createHttpRpcHandler, httpTransport } from '../src/adapters/http.ts';
 import { memoryPair } from '../src/adapters/memory.ts';
 import { createRpcClient } from '../src/client.ts';
-import { RpcField, RpcMessage, RpcMethod, RpcService } from '../src/decorators.ts';
+import {
+  RpcField,
+  RpcMessage,
+  RpcMethod,
+  RpcService,
+  RpcStream,
+  Stream,
+} from '../src/decorators.ts';
 import { createRpcDispatcher } from '../src/dispatcher.ts';
 import registry from '../src/registry.ts';
 import { createRpcServer } from '../src/server.ts';
@@ -271,6 +278,82 @@ describe('http.ts - transport & handler edge cases', () => {
     const body = (await response.json()) as { error: { message: string } };
     expect(body.error.message).toBe('DI container failure');
   });
+
+  it('httpTransport drains a trailing SSE buffer without a final newline', async () => {
+    const frames: unknown[] = [];
+    const transport = httpTransport({
+      url: 'http://x.test/rpc',
+      fetch: async () =>
+        new Response('data: {"jsonrpc":"2.0","id":1,"result":{"ok":true}}', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+    });
+    transport.subscribe((frame) => {
+      frames.push(frame);
+    });
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'any',
+      params: {},
+    });
+    expect(frames).toEqual([{ jsonrpc: '2.0', id: 1, result: { ok: true } }]);
+  });
+
+  it('httpTransport ignores invalid JSON left in the trailing SSE buffer', async () => {
+    const frames: unknown[] = [];
+    const transport = httpTransport({
+      url: 'http://x.test/rpc',
+      fetch: async () =>
+        new Response('data: not-json', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+    });
+    transport.subscribe((frame) => {
+      frames.push(frame);
+    });
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'any',
+      params: {},
+    });
+    expect(frames).toEqual([]);
+  });
+
+  it('createHttpRpcHandler catch path surfaces Response.json failures from the success branch', async () => {
+    defineUsers();
+    const originalJson = Response.json.bind(Response);
+    let calls = 0;
+    Response.json = ((body: unknown, init?: ResponseInit) => {
+      calls += 1;
+      if (calls === 1) throw new Error('json serialization boom');
+      return originalJson(body, init);
+    }) as typeof Response.json;
+
+    try {
+      const handler = createHttpRpcHandler();
+      const response = await handler(
+        new Request('http://x.test/rpc', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 7,
+            method: 'gaps.v1.UserService/Get',
+            params: { id: '1' },
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { error: { message: string } };
+      expect(body.error.message).toBe('json serialization boom');
+    } finally {
+      Response.json = originalJson;
+    }
+  });
 });
 
 describe('grpc.ts - error mapping, JSON-RPC code translation, and transport lifecycle', () => {
@@ -434,5 +517,260 @@ describe('grpc.ts - error mapping, JSON-RPC code translation, and transport life
     const client = createRpcClient(UserService, grpcTransport({ transport: connect }));
     await expect(client.get({ id: '1' })).resolves.toEqual({ id: '1', name: 'Ada' });
     expect(order).toEqual(['first-before', 'second-before', 'second-after', 'first-after']);
+  });
+
+  it('throws "is not callable" for missing server/client/bidi streaming handlers', async () => {
+    @RpcMessage()
+    class Item {
+      @RpcField(1)
+      value!: string;
+    }
+
+    @RpcService({ package: 'streamgaps.v1' })
+    class StreamGapsService {
+      @RpcMethod({ input: () => Item, output: () => Item })
+      async *serverStream(_req: Item): AsyncIterable<Item> {
+        yield { value: 's' };
+      }
+
+      @RpcMethod({ input: () => Stream(Item), output: () => Item })
+      async clientStream(_items: AsyncIterable<Item>): Promise<Item> {
+        return { value: 'c' };
+      }
+
+      @RpcStream({ input: () => Stream(Item), output: () => Stream(Item) })
+      async *bidiStream(_items: AsyncIterable<Item>): AsyncIterable<Item> {
+        yield { value: 'b' };
+      }
+    }
+
+    const instance = useContainer().resolve(StreamGapsService) as unknown as Record<
+      string,
+      unknown
+    >;
+    instance.serverStream = undefined;
+    instance.clientStream = undefined;
+    instance.bidiStream = undefined;
+
+    const connect = createRouterTransport(createGrpcRoutes());
+    const client = createRpcClient(StreamGapsService, grpcTransport({ transport: connect }));
+
+    await expect(
+      (async () => {
+        for await (const _ of client.serverStream({ value: 'x' })) {
+          // should reject before yielding
+        }
+      })(),
+    ).rejects.toThrow(/is not callable/);
+
+    await expect(
+      client.clientStream(
+        (async function* () {
+          yield { value: 'x' };
+        })(),
+      ),
+    ).rejects.toThrow(/is not callable/);
+
+    await expect(
+      (async () => {
+        for await (const _ of client.bidiStream(
+          (async function* () {
+            yield { value: 'x' };
+          })(),
+        )) {
+          // should reject before yielding
+        }
+      })(),
+    ).rejects.toThrow(/is not callable/);
+  });
+
+  it('emits stream error frames when gRPC streaming RPCs fail on the wire', async () => {
+    @RpcMessage()
+    class Item {
+      @RpcField(1)
+      value!: string;
+    }
+
+    @RpcService({ package: 'streamfail.v1' })
+    class StreamFailService {
+      @RpcMethod({ input: () => Item, output: () => Item })
+      async *serverFail(_req: Item): AsyncIterable<Item> {
+        yield { value: 'one' };
+        throw new Error('server-stream boom');
+      }
+
+      @RpcMethod({ input: () => Stream(Item), output: () => Item })
+      async clientFail(_items: AsyncIterable<Item>): Promise<Item> {
+        throw new Error('client-stream boom');
+      }
+
+      @RpcStream({ input: () => Stream(Item), output: () => Stream(Item) })
+      async *bidiFail(items: AsyncIterable<Item>): AsyncIterable<Item> {
+        for await (const item of items) {
+          yield { value: item.value };
+          throw new Error('bidi-stream boom');
+        }
+      }
+    }
+    void StreamFailService;
+
+    const connect = createRouterTransport(createGrpcRoutes());
+    const transport = grpcTransport({ transport: connect });
+    const frames: unknown[] = [];
+    transport.subscribe((frame) => {
+      frames.push(frame);
+    });
+
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 's1',
+      method: 'streamfail.v1.StreamFailService/ServerFail',
+      params: { value: 'x' },
+    });
+    await Bun.sleep(30);
+    expect(frames.some((f) => (f as { stream?: string }).stream === 'error')).toBe(true);
+
+    frames.length = 0;
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'c1',
+      method: 'streamfail.v1.StreamFailService/ClientFail',
+      params: {},
+    });
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'c1',
+      stream: 'complete',
+    });
+    await Bun.sleep(30);
+    expect(
+      frames.some(
+        (f) =>
+          typeof f === 'object' &&
+          f !== null &&
+          'error' in f &&
+          String((f as { error: { message: string } }).error.message).includes(
+            'client-stream boom',
+          ),
+      ),
+    ).toBe(true);
+
+    frames.length = 0;
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'b1',
+      method: 'streamfail.v1.StreamFailService/BidiFail',
+      params: {},
+    });
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'b1',
+      stream: 'next',
+      params: { value: 'ping' },
+    });
+    await Bun.sleep(30);
+    expect(frames.some((f) => (f as { stream?: string }).stream === 'error')).toBe(true);
+  });
+
+  it('grpcTransport.send batch arrays fan out stream frames and JSON-RPC calls', async () => {
+    @RpcMessage()
+    class Item {
+      @RpcField(1)
+      value!: string;
+    }
+
+    @RpcService({ package: 'streambatch.v1' })
+    class StreamBatchService {
+      @RpcMethod({ input: () => Stream(Item), output: () => Item })
+      async clientStream(items: AsyncIterable<Item>): Promise<Item> {
+        const acc: string[] = [];
+        for await (const item of items) {
+          acc.push(item.value);
+        }
+        return { value: acc.join(',') };
+      }
+
+      @RpcMethod({ input: () => Item, output: () => Item })
+      echo(req: Item): Item {
+        return req;
+      }
+    }
+    void StreamBatchService;
+
+    const connect = createRouterTransport(createGrpcRoutes());
+    const transport = grpcTransport({ transport: connect });
+    const frames: unknown[] = [];
+    transport.subscribe((frame) => {
+      frames.push(frame);
+    });
+
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'batch-stream',
+      method: 'streambatch.v1.StreamBatchService/ClientStream',
+      params: {},
+    });
+
+    await transport.send([
+      {
+        jsonrpc: '2.0',
+        id: 'batch-stream',
+        stream: 'next',
+        params: { value: 'a' },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 'batch-stream',
+        stream: 'next',
+        result: { value: 'b' },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 'batch-stream',
+        stream: 'complete',
+      },
+      {
+        jsonrpc: '2.0',
+        id: 'batch-unary',
+        method: 'streambatch.v1.StreamBatchService/Echo',
+        params: { value: 'z' },
+      },
+    ]);
+    await Bun.sleep(30);
+
+    expect(
+      frames.some(
+        (f) =>
+          typeof f === 'object' &&
+          f !== null &&
+          'result' in f &&
+          (f as { result?: { value?: string } }).result?.value === 'a,b',
+      ),
+    ).toBe(true);
+    expect(
+      frames.some(
+        (f) =>
+          typeof f === 'object' &&
+          f !== null &&
+          'result' in f &&
+          (f as { result?: { value?: string } }).result?.value === 'z',
+      ),
+    ).toBe(true);
+
+    // Cover the stream error branch against an active client-stream session.
+    await transport.send({
+      jsonrpc: '2.0',
+      id: 'batch-err',
+      method: 'streambatch.v1.StreamBatchService/ClientStream',
+      params: {},
+    });
+    await transport.send([
+      {
+        jsonrpc: '2.0',
+        id: 'batch-err',
+        stream: 'error',
+        error: { code: -32000, message: 'client aborted' },
+      },
+    ]);
   });
 });

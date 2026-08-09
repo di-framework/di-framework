@@ -350,6 +350,8 @@ export async function runAdvancedExamples(): Promise<void> {
 
   // Example 7: Telemetry
   console.log('--- Example 7: Telemetry and Event Monitoring ---\n');
+  // Resolve the listener first so @TelemetryListener is wired before the call.
+  container.resolve(AnalyticsService);
   const processor = container.resolve(PaymentProcessor);
   await processor.processPayment(49.99);
   console.log();

@@ -6,8 +6,11 @@ import {
   RpcMessage,
   RpcMethod,
   RpcService,
+  RpcStream,
+  Stream,
   startRpcServices,
   stopRpcServices,
+  unwrapStream,
 } from '../src/decorators.ts';
 import registry from '../src/registry.ts';
 import type { RpcServiceHost } from '../src/types.ts';
@@ -232,5 +235,90 @@ describe('@RpcService - $startRpc idempotency and $stopRpc', () => {
     expect(handle1.started).toBe(false);
     // Calling stop again with no active handle is a no-op.
     await instance.$stopRpc();
+  });
+});
+
+describe('unwrapStream / RpcStream decorator branches', () => {
+  it('unwraps Stream wrappers, constructors, factories, non-functions, and prototype-throwing proxies', () => {
+    @RpcMessage()
+    class Msg {
+      @RpcField(1)
+      id!: string;
+    }
+
+    expect(unwrapStream(Stream(Msg))).toBe(Msg);
+    expect(unwrapStream(Msg)).toBe(Msg);
+    expect(unwrapStream(() => Msg)).toBe(Msg);
+    expect(unwrapStream(Stream(() => Msg))).toBe(Msg);
+    expect(unwrapStream(Msg as unknown)).toBe(Msg);
+    // Non-function, non-stream value takes the final return path.
+    expect(unwrapStream('plain' as never) as unknown).toBe('plain');
+
+    const throwingProto = new Proxy(function ThrowingProto() {}, {
+      get(target, prop, receiver) {
+        if (prop === 'prototype') throw new Error('prototype blocked');
+        return Reflect.get(target, prop, receiver);
+      },
+      apply() {
+        return Msg;
+      },
+    }) as unknown as () => typeof Msg;
+
+    expect(unwrapStream(throwingProto)).toBe(Msg);
+  });
+
+  it('accepts a non-function output value and updates streaming flags via @RpcStream', () => {
+    @RpcMessage()
+    class Req {
+      @RpcField(1)
+      id!: string;
+    }
+    @RpcMessage()
+    class Res {
+      @RpcField(1)
+      id!: string;
+    }
+
+    @RpcService({ package: 'decgaps.v1', autoStart: false })
+    class DecGapsService {
+      // Stream(...) is an object (not a function), covering the non-function output branch.
+      @RpcMethod({ input: () => Req, output: Stream(Res) as never })
+      streamedOut(req: Req): Res {
+        return req;
+      }
+
+      // Bottom decorator runs first: register via @RpcMethod, then @RpcStream updates flags.
+      @RpcStream({ clientStreaming: true, serverStreaming: true } as never)
+      @RpcMethod({ input: () => Req, output: () => Res })
+      go(req: Req): Res {
+        return req;
+      }
+
+      @RpcStream()
+      @RpcMethod({ input: () => Req, output: () => Res })
+      bare(req: Req): Res {
+        return req;
+      }
+
+      @RpcStream({ input: () => Req, output: () => Res })
+      direct(req: Req): Res {
+        return req;
+      }
+    }
+
+    const service = registry.getService(DecGapsService);
+    const streamedOut = service?.methods.find((m) => m.propertyKey === 'streamedOut');
+    expect(streamedOut?.serverStreaming).toBe(true);
+
+    const go = service?.methods.find((m) => m.propertyKey === 'go');
+    expect(go?.clientStreaming).toBe(true);
+    expect(go?.serverStreaming).toBe(true);
+    expect(go?.output).toBeDefined();
+
+    const bare = service?.methods.find((m) => m.propertyKey === 'bare');
+    expect(bare).toBeDefined();
+
+    const direct = service?.methods.find((m) => m.propertyKey === 'direct');
+    expect(direct).toBeDefined();
   });
 });
