@@ -277,4 +277,4 @@ Prefer `@SocketGateway({ server: … })` for process servers; on CF use the work
 
 ## License
 
-MIT
+Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.

@@ -6,7 +6,7 @@
   "types": "./dist/container.d.ts",
   "module": "./dist/container.js",
   "author": "@di-framework Contributors",
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "private": false,
   "type": "module",
   "repository": {

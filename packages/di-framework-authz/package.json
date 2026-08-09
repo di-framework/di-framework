@@ -59,6 +59,6 @@
     "url": "https://github.com/di-framework/di-framework",
     "directory": "packages/di-framework-authz"
   },
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "private": false
 }
