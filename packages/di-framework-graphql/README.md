@@ -402,4 +402,4 @@ A three-context worked example — batching, boundaries, entity actions, subscri
 
 ## License
 
-MIT
+Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.

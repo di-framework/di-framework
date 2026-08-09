@@ -205,4 +205,4 @@ Method or property decorator that attaches OpenAPI metadata.
 
 ## License
 
-MIT
+Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.

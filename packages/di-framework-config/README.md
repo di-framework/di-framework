@@ -125,4 +125,4 @@ YAML/TOML loaders, remote config providers, live reload / watch, and secret mana
 
 ## License
 
-MIT
+Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.

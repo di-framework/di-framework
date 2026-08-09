@@ -4,7 +4,7 @@
   "module": "build.ts",
   "type": "module",
   "author": "@di-framework Contributors",
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "repository": "https://github.com/di-framework/di-framework",
   "private": true,
   "workspaces": [

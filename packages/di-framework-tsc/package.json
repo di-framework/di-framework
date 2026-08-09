@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "ttsc transform that injects runtime parameter checks from TypeScript types (assertAll)",
   "author": "@di-framework Contributors",
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "private": false,
   "type": "commonjs",
   "main": "plugin.cjs",
@@ -23,7 +23,9 @@
     "plugin.cjs",
     "plugin",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
   ],
   "engines": {
     "node": ">=18"

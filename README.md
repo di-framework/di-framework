@@ -88,4 +88,4 @@ di-framework mx build   # maintainers only
 
 ## License
 
-MIT
+Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
