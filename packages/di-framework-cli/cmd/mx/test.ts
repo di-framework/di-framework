@@ -1,4 +1,4 @@
-import { unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
@@ -6,12 +6,13 @@ import { $ } from 'bun';
 import E2E_SCRIPT from '../../scripts/e2e-test.sh' with { type: 'text' };
 
 export async function test(script: string = E2E_SCRIPT) {
-  const tmp = join(tmpdir(), `di-framework-e2e-${process.pid}.sh`);
+  const dir = mkdtempSync(join(tmpdir(), 'di-e2e-'));
+  const tmp = join(dir, 'test.sh');
   writeFileSync(tmp, script, { mode: 0o755 });
   try {
     await $`bash ${tmp}`.env(process.env);
   } finally {
-    unlinkSync(tmp);
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 

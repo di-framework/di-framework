@@ -16,9 +16,7 @@ export function initializeCompanions(
 
       if (!existsSync(handlerPath)) {
         const handlerDir = dirname(handlerPath);
-        if (!existsSync(handlerDir)) {
-          mkdirSync(handlerDir, { recursive: true });
-        }
+        mkdirSync(handlerDir, { recursive: true });
 
         const inputSchemaObj = manifest.schemas[op.inputSchemaName]!;
 
@@ -66,9 +64,7 @@ export class ${op.handler.exportName} {
 
         if (!existsSync(policyPath)) {
           const policyDir = dirname(policyPath);
-          if (!existsSync(policyDir)) {
-            mkdirSync(policyDir, { recursive: true });
-          }
+          mkdirSync(policyDir, { recursive: true });
 
           const policyClassName = `${capitalize(op.authorization.resource)}Policy`;
 
