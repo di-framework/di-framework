@@ -1,4 +1,4 @@
-# DI Framework
+# di-framework
 
 A lightweight, type-safe dependency injection framework for TypeScript, plus companion packages for common application concerns. The core automatically manages service instantiation, dependency resolution, and lifecycle management.
 
@@ -30,7 +30,7 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 
 Traditional dependency injection requires manual service instantiation and wiring, which becomes error-prone and difficult to maintain as your application grows. This framework eliminates that complexity:
 
-**Without DI Framework:**
+**Without di-framework:**
 
 ```typescript
 const createServerContext = (env, ctx) => {
@@ -51,7 +51,7 @@ const createServerContext = (env, ctx) => {
 };
 ```
 
-**With DI Framework:**
+**With di-framework:**
 
 ```typescript
 @Container()

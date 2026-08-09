@@ -1,6 +1,6 @@
 # Quick Start
 
-This guide will walk you through the basic concepts of the DI framework with simple examples.
+This guide will walk you through the basic concepts of di-framework with simple examples.
 
 To scaffold a ready-to-run app instead of pasting these snippets by hand:
 

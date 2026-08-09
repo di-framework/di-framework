@@ -417,4 +417,4 @@ class Container {
 
 - [Advanced Usage](advanced-usage.md) - Learn advanced patterns and techniques
 - [Error Handling](error-handling.md) - Understand error scenarios and how to handle them
-- [Testing](testing.md) - Learn how to test services with the DI framework
+- [Testing](testing.md) - Learn how to test services with di-framework

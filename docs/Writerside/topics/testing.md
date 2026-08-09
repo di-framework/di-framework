@@ -1,6 +1,6 @@
 # Testing
 
-Learn how to test services effectively with the DI framework.
+Learn how to test services effectively with di-framework.
 
 ## Basic Testing Setup
 
