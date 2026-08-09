@@ -297,11 +297,7 @@ export const Order = {
   it('loads config from explicit string path and handles automatic manifest discovery in generate()', async () => {
     const { testDir, manifest } = setupTestWorkspace();
     const manifestPath = join(testDir, 'src', 'contracts', 'orders.manifest.ts');
-    writeFileSync(
-      manifestPath,
-      `export default ${JSON.stringify(manifest)};`,
-      'utf-8',
-    );
+    writeFileSync(manifestPath, `export default ${JSON.stringify(manifest)};`, 'utf-8');
 
     const configPath = join(testDir, 'custom.codegen.ts');
     writeFileSync(

@@ -41,7 +41,9 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
 
   it('extracts package slugs from file paths', () => {
     expect(getPackageSlugFromPath('packages/di-framework-core/container.ts')).toBe('core');
-    expect(getPackageSlugFromPath('packages/di-framework-auth/src/webauthn/service.ts')).toBe('auth');
+    expect(getPackageSlugFromPath('packages/di-framework-auth/src/webauthn/service.ts')).toBe(
+      'auth',
+    );
     expect(getPackageSlugFromPath('packages/di-framework-cli/cmd/build.ts')).toBe('cli');
     expect(getPackageSlugFromPath('packages/di-framework-codegen/index.ts')).toBe('codegen');
     expect(getPackageSlugFromPath('examples/packages/basic/index.ts')).toBeNull();
