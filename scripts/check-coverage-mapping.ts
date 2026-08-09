@@ -68,6 +68,12 @@ for (const pkg of packages) {
     );
   }
 
+  // Verify badge file exists in repository
+  const badgePath = resolve(cwd, `coverage/badges/${pkg.slug}.json`);
+  if (!existsSync(badgePath)) {
+    errors.push(`Coverage badge file 'coverage/badges/${pkg.slug}.json' is missing from repository.`);
+  }
+
   // Verify presence in COVERAGE.md
   if (
     !coverageMdContent.includes(pkg.name) &&
