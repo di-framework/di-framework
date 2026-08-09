@@ -69,7 +69,7 @@ Runs, in order of preference:
   1. ttsc --noEmit -p <tsconfig>  if ttsc is installed (or declared)
   2. tsc --noEmit -p <tsconfig>   nearest tsconfig.json (or the path given)
 
-Init scaffolds \`\"check\": \"di-framework check\"\` so \`bun run check\` delegates here.
+Init scaffolds \`"check": "di-framework check"\` so \`bun run check\` delegates here.
 
 Maintainer monorepo typecheck: di-framework mx typecheck
 `);
