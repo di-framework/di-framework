@@ -5,10 +5,11 @@ import {
   type AuthorizationManager,
   authorizationAllowed,
   authorizationDenied,
+  resolveAuthorizationManager,
 } from '../src/authorization.ts';
 import { authorize, requireAuthz, runAuthorizationGuard } from '../src/http/authorization.ts';
 import { getPrincipal, setPrincipal } from '../src/http/request.ts';
-import { withAuthRoutes } from '../src/http/router.ts';
+import { DEFERRED_AUTHORIZATION, withAuthRoutes } from '../src/http/router.ts';
 import { createPrincipal } from '../src/principal.ts';
 import { registerAuth } from '../src/register.ts';
 import { authenticated } from '../src/result.ts';
@@ -119,5 +120,47 @@ describe('HTTP authorization', () => {
     expect(response.status).toBe(200);
     expect((await response.json()) as { sub: string }).toEqual({ sub: 'u1' });
     expect(getPrincipal(req)?.sub).toBe('u1');
+  });
+
+  it('resolves a registered authorization manager directly from container', () => {
+    const manager: AuthorizationManager = { authorize: () => authorizationAllowed() };
+    registerAuth({ csrf: false, authorization: manager });
+    expect(resolveAuthorizationManager({ container: useContainer() as any })).toBe(manager);
+  });
+
+  it('covers deferred authorization binding branches on routes', async () => {
+    const router = TypedRouter();
+    const secure = withAuthRoutes(router, {
+      strategy: { name: 'stub', authenticate: async () => authenticated(principal) },
+    });
+    const handler = secure.get('/deferred', (req) => Response.json({ ok: true }) as never);
+
+    const bindFn = (handler as any)[DEFERRED_AUTHORIZATION];
+    expect(bindFn).toBeFunction();
+
+    // Bind deferred authorization guard
+    bindFn({
+      manager: { authorize: () => authorizationDenied('deferred deny') },
+    });
+
+    // Test rejection when deferred authorization runs
+    const response = await router.fetch(new Request('https://app.example.com/deferred'));
+    expect(response.status).toBe(403);
+
+    // Test error when binding second time
+    expect(() =>
+      bindFn({ manager: { authorize: () => authorizationAllowed() } }),
+    ).toThrow(/already bound/);
+
+    // Test error when binding on a route with route-level authorization
+    const router2 = TypedRouter();
+    const secure2 = withAuthRoutes(router2);
+    const handler2 = secure2.get('/conflict', () => Response.json({ ok: true }) as never, {
+      authorization: { manager: { authorize: () => authorizationAllowed() } },
+    });
+    const bindFn2 = (handler2 as any)[DEFERRED_AUTHORIZATION];
+    expect(() =>
+      bindFn2({ manager: { authorize: () => authorizationAllowed() } }),
+    ).toThrow(/conflicts with deferred authorization/);
   });
 });

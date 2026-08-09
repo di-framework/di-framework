@@ -31,6 +31,12 @@ jobs:
       - name: Enforce 100% line coverage
         run: bun scripts/check-line-coverage.ts
 
+      - name: Verify coverage mapping
+        run: bun scripts/check-coverage-mapping.ts
+
+      - name: Generate coverage badges
+        run: bun scripts/generate-coverage-badges.ts
+
       - name: Link CLI
         run: cd packages/di-framework-cli && bun link
 
