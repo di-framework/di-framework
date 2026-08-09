@@ -104,7 +104,8 @@ describe('mountGraphQL', () => {
     mountGraphQL(router, api);
 
     const response = await handler?.(new Request('http://localhost/graphql?query={ok}'));
-    expect(response.status).toBe(200);
+    expect(response).toBeDefined();
+    expect(response!.status).toBe(200);
   });
 });
 
@@ -186,16 +187,17 @@ describe('createGraphQLSSEHandler', () => {
 
     const response = await handler(new Request('http://localhost/sse?query={tick}'));
     const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
     const decoder = new TextDecoder();
     let text = '';
     // Read until we've seen at least one heartbeat or the stream closes.
     for (let i = 0; i < 50 && !text.includes('heartbeat'); i += 1) {
-      const { value, done } = await reader.read();
+      const { value, done } = await reader!.read();
       if (done) break;
       text += decoder.decode(value);
       if (!text.includes('heartbeat')) await new Promise((r) => setTimeout(r, 5));
     }
-    await reader.cancel();
+    await reader!.cancel();
     expect(text).toContain(': heartbeat');
   });
 
@@ -221,8 +223,9 @@ describe('createGraphQLSSEHandler', () => {
 
     const response = await handler(new Request('http://localhost/sse?query={tick}'));
     const reader = response.body?.getReader();
-    await reader.read();
-    await reader.cancel();
+    expect(reader).toBeDefined();
+    await reader!.read();
+    await reader!.cancel();
 
     expect(returned).toBe(true);
   });

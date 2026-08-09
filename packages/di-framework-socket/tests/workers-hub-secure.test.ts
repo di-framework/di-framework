@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { createMemoryDuplexPair, SecureSession, type SecureSessionSnapshot } from '../index.ts';
+import { createMemoryDuplexPair, SecureSession } from '../index.ts';
 import {
   type DurableObjectStateLike,
   type HibernatableAttachment,
@@ -67,10 +67,11 @@ describe('HibernatableSocketHub secure rehydrate', () => {
       hub as unknown as { live: Map<HibernatableWebSocket, { session?: SecureSession }> }
     ).live.get(ws);
     expect(live?.session).toBeTruthy();
-    const again: SecureSessionSnapshot = live?.session?.exportSnapshot();
-    expect(again.sessionId).toBe(serverSnap.sessionId);
-    expect(again.sendCounter).toBe(serverSnap.sendCounter);
-    expect(again.recvCounter).toBe(serverSnap.recvCounter);
+    const again = live?.session?.exportSnapshot();
+    expect(again).toBeDefined();
+    expect(again!.sessionId).toBe(serverSnap.sessionId);
+    expect(again!.sendCounter).toBe(serverSnap.sendCounter);
+    expect(again!.recvCounter).toBe(serverSnap.recvCounter);
     void clientSnap;
     void pair2;
     void conn;

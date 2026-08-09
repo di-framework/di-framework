@@ -8,4 +8,4 @@ export type ToolExecutionEligibilityChecker = (chatResponse: ChatResponse | unde
 
 export const defaultToolExecutionEligibilityChecker: ToolExecutionEligibilityChecker = (
   chatResponse,
-) => chatResponse?.hasToolCalls();
+) => chatResponse?.hasToolCalls() ?? false;

@@ -194,7 +194,8 @@ describe('@Tool decorator', () => {
     expect(callbacks).toHaveLength(1);
     expect(callbacks[0]?.toolDefinition.name).toBe('add');
     const result = await callbacks[0]?.call(JSON.stringify({ a: 2, b: 3 }));
-    expect(JSON.parse(result)).toBe(5);
+    expect(result).toBeDefined();
+    expect(JSON.parse(result!)).toBe(5);
   });
 
   test('toolCallbacksFromBean throws for a null/non-object instance', () => {

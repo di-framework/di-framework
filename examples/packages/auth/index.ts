@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   // A cookie-authenticated mutation needs a CSRF token bound to this session.
   // Bearer and API-key requests do not — they carry no ambient credential and so
   // cannot be forged cross-site.
-  const csrfToken = await auth.csrf?.issue(session.record.id);
+  const csrfToken = await auth.csrf!.issue(session.record.id);
   await show(
     'POST /notes            (session + CSRF)',
     await router.fetch(
@@ -205,7 +205,7 @@ async function main(): Promise<void> {
   );
 
   // 3. A machine client uses a bearer token against the same routes.
-  const access = await auth.tokens?.issueAccessToken({ subject: principal.sub });
+  const access = await auth.tokens!.issueAccessToken({ subject: principal.sub });
   await show(
     '\nGET  /notes            (bearer token)',
     await router.fetch(
@@ -233,11 +233,11 @@ async function main(): Promise<void> {
     `  regenerated → old id resolves: ${(await auth.sessions.resolve(session.token)).state}`,
   );
   console.log(
-    `               new id resolves: ${(await auth.sessions.resolve(rotated?.token)).state}`,
+    `               new id resolves: ${(await auth.sessions.resolve(rotated!.token)).state}`,
   );
 
   await auth.sessions.revokeAllForSubject(principal.sub);
-  console.log(`  revoked all  → ${(await auth.sessions.resolve(rotated?.token)).state}`);
+  console.log(`  revoked all  → ${(await auth.sessions.resolve(rotated!.token)).state}`);
 
   // 6. Login failures are throttled and never distinguish "no such user" from
   //    "wrong password".

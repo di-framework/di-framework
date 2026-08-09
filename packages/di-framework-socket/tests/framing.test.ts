@@ -24,7 +24,7 @@ describe('LengthPrefixFramer', () => {
     expect(out[0]?.kind).toBe('text');
     expect(out[0]?.text).toBe('hello');
     expect(out[1]?.kind).toBe('binary');
-    expect([...out[1]?.data]).toEqual([1, 2, 3, 4]);
+    expect([...(out[1]?.data ?? [])]).toEqual([1, 2, 3, 4]);
   });
 
   it('rejects oversized frames', () => {

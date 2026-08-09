@@ -31,6 +31,10 @@ class MockAdapter<E, ID> implements StorageAdapter<E, ID> {
 }
 
 class UserRepository extends BaseRepository<User, string> {
+  constructor(adapter: StorageAdapter<User, string>) {
+    super(adapter);
+  }
+
   // Expose protected methods for testing
   public testNormalizeId(id: any) {
     return this.normalizeId(id);
@@ -132,6 +136,10 @@ interface SoftUser {
 }
 
 class MySoftDeleteRepo extends SoftDeleteRepository<SoftUser, string> {
+  constructor(adapter: StorageAdapter<SoftUser, string>) {
+    super(adapter);
+  }
+
   softDelete = mock(async (_id: string) => true);
   restore = mock(async (_id: string) => true);
   findActive = mock(async () => []);
@@ -141,7 +149,11 @@ class MySoftDeleteRepo extends SoftDeleteRepository<SoftUser, string> {
 
 describe('EntityRepository', () => {
   test('can be extended and constructed through BaseRepository', async () => {
-    class ConcreteEntityRepo extends EntityRepository<User, string> {}
+    class ConcreteEntityRepo extends EntityRepository<User, string> {
+      constructor(adapter: StorageAdapter<User, string>) {
+        super(adapter);
+      }
+    }
 
     const adapter = new MockAdapter<User, string>();
     const repo = new ConcreteEntityRepo(adapter);

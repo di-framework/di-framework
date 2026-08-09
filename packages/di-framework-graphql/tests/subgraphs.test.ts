@@ -234,16 +234,19 @@ describe('subgraphs as SDL artifacts and executable schemas', () => {
     );
 
     const catalog = await subgraphs.Catalog?.execute({ query: '{ book { id title } }' });
-    expect(catalog.errors).toBeUndefined();
-    expect(catalog.data?.book).toEqual({ id: 'b1', title: 'Title b1' });
+    expect(catalog).toBeDefined();
+    expect(catalog!.errors).toBeUndefined();
+    expect(catalog!.data?.book).toEqual({ id: 'b1', title: 'Title b1' });
 
     const lending = await subgraphs.Lending?.execute({ query: '{ loan { book { id onLoan } } }' });
-    expect(lending.errors).toBeUndefined();
-    expect((lending.data as any).loan.book).toEqual({ id: 'b1', onLoan: 'b1 is available' });
+    expect(lending).toBeDefined();
+    expect(lending!.errors).toBeUndefined();
+    expect((lending!.data as any).loan.book).toEqual({ id: 'b1', onLoan: 'b1 is available' });
 
     // The stub does not expose the owning context's fields.
     const leak = await subgraphs.Lending?.execute({ query: '{ loan { book { title } } }' });
-    expect(leak.errors?.[0]?.message).toContain('Cannot query field "title"');
+    expect(leak).toBeDefined();
+    expect(leak!.errors?.[0]?.message).toContain('Cannot query field "title"');
   });
 
   it('resolves the shared entity by key from the owning subgraph', async () => {
@@ -254,8 +257,9 @@ describe('subgraphs as SDL artifacts and executable schemas', () => {
       query:
         '{ _entities(representations: [{ __typename: "Book", id: "b9" }]) { ... on Book { title } } }',
     });
-    expect(result.errors).toBeUndefined();
-    expect((result.data as any)._entities).toEqual([{ title: 'Title b9' }]);
+    expect(result).toBeDefined();
+    expect(result!.errors).toBeUndefined();
+    expect((result!.data as any)._entities).toEqual([{ title: 'Title b9' }]);
   });
 
   it('slices the same way whether one context or several are selected', () => {

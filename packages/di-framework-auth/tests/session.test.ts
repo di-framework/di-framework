@@ -265,7 +265,7 @@ describe('sessionManager', () => {
     expect(second).not.toBeNull();
     expect(second?.token).not.toBe(first.token);
     expect((await sessions.resolve(first.token)).state).toBe('not-found');
-    expect((await sessions.resolve(second?.token)).state).toBe('active');
+    expect((await sessions.resolve(second!.token)).state).toBe('active');
   });
 
   it('preserves authTime across regeneration', async () => {
@@ -467,11 +467,9 @@ describe('passwordService', () => {
       hasher: pbkdf2Hasher({ iterations: 1_000 }),
     });
     await weak.createUser({ identifier: 'ada@example.com', password: 'correct horse battery' });
-    const before = (await credentials.findPassword(
-      (
-        await users.findByIdentifier('ada@example.com')
-      )?.id,
-    ))!;
+    const weakUser = await users.findByIdentifier('ada@example.com');
+    expect(weakUser).toBeDefined();
+    const before = (await credentials.findPassword(weakUser!.id))!;
     expect(before.hash).toContain('i=1000');
 
     const strong = passwordService({
@@ -480,11 +478,9 @@ describe('passwordService', () => {
       hasher: pbkdf2Hasher({ iterations: 5_000 }),
     });
     await strong.login('ada@example.com', 'correct horse battery');
-    const after = (await credentials.findPassword(
-      (
-        await users.findByIdentifier('ada@example.com')
-      )?.id,
-    ))!;
+    const strongUser = await users.findByIdentifier('ada@example.com');
+    expect(strongUser).toBeDefined();
+    const after = (await credentials.findPassword(strongUser!.id))!;
     expect(after.hash).toContain('i=5000');
   });
 
