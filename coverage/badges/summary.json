@@ -1,0 +1,198 @@
+{
+  "ai": {
+    "name": "@di-framework/ai",
+    "slug": "ai",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 7690,
+    "lf": 7690,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "auth": {
+    "name": "@di-framework/auth",
+    "slug": "auth",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 5602,
+    "lf": 5602,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "authz": {
+    "name": "@di-framework/authz",
+    "slug": "authz",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 675,
+    "lf": 675,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "cli": {
+    "name": "@di-framework/cli",
+    "slug": "cli",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 778,
+    "lf": 778,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "codegen": {
+    "name": "@di-framework/codegen",
+    "slug": "codegen",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 869,
+    "lf": 869,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "config": {
+    "name": "@di-framework/config",
+    "slug": "config",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 313,
+    "lf": 313,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "core": {
+    "name": "@di-framework/core",
+    "slug": "core",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 595,
+    "lf": 595,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "events": {
+    "name": "@di-framework/events",
+    "slug": "events",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 660,
+    "lf": 660,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "graphql": {
+    "name": "@di-framework/graphql",
+    "slug": "graphql",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 2775,
+    "lf": 2775,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "http": {
+    "name": "@di-framework/http",
+    "slug": "http",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 372,
+    "lf": 372,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "repo": {
+    "name": "@di-framework/repo",
+    "slug": "repo",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 917,
+    "lf": 917,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "rpc": {
+    "name": "@di-framework/rpc",
+    "slug": "rpc",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 2416,
+    "lf": 2416,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "socket": {
+    "name": "@di-framework/socket",
+    "slug": "socket",
+    "isMeasured": true,
+    "coverage": "100%",
+    "lh": 2405,
+    "lf": 2405,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "100%",
+      "color": "brightgreen"
+    }
+  },
+  "tsc": {
+    "name": "@di-framework/tsc",
+    "slug": "tsc",
+    "isMeasured": false,
+    "coverage": "N/A",
+    "lh": 0,
+    "lf": 0,
+    "badge": {
+      "schemaVersion": 1,
+      "label": "coverage",
+      "message": "N/A",
+      "color": "lightgrey"
+    }
+  }
+}

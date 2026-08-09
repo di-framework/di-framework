@@ -32,14 +32,7 @@ if (!existsSync(readmePath)) {
   process.exit(1);
 }
 
-const coverageMdPath = resolve(cwd, 'COVERAGE.md');
-if (!existsSync(coverageMdPath)) {
-  console.error('[FAIL] Missing COVERAGE.md at repository root.');
-  process.exit(1);
-}
-
 const readmeContent = readFileSync(readmePath, 'utf8');
-const coverageMdContent = readFileSync(coverageMdPath, 'utf8');
 
 const errors: string[] = [];
 
@@ -68,12 +61,12 @@ for (const pkg of packages) {
     );
   }
 
-  // Verify presence in COVERAGE.md
-  if (
-    !coverageMdContent.includes(pkg.name) &&
-    !coverageMdContent.includes(`id="di-framework${pkg.slug}"`)
-  ) {
-    errors.push(`Package '${pkg.name}' is missing from COVERAGE.md documentation.`);
+  // Verify badge file exists in repository
+  const badgePath = resolve(cwd, `coverage/badges/${pkg.slug}.json`);
+  if (!existsSync(badgePath)) {
+    errors.push(
+      `Coverage badge file 'coverage/badges/${pkg.slug}.json' is missing from repository.`,
+    );
   }
 }
 
@@ -114,7 +107,7 @@ if (errors.length > 0) {
     console.error(`  - ${err}`);
   }
   console.error(
-    '\nAction Required: Ensure every published @di-framework/* package in packages/ is mapped in scripts/coverage-mapping.ts, has a dynamic badge in README.md, and is documented in COVERAGE.md.\n',
+    '\nAction Required: Ensure every published @di-framework/* package in packages/ is mapped in scripts/coverage-mapping.ts and has a dynamic badge in README.md.\n',
   );
   process.exit(1);
 }
