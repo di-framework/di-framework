@@ -48,37 +48,39 @@ for (const pkg of packages) {
   // Check if unmeasured package is explicitly registered
   if (!pkg.isMeasured && !(pkg.name in UNMEASURED_PACKAGES)) {
     errors.push(
-      `Package '${pkg.name}' is marked as unmeasured but lacks an explicit reason in UNMEASURED_PACKAGES.`
+      `Package '${pkg.name}' is marked as unmeasured but lacks an explicit reason in UNMEASURED_PACKAGES.`,
     );
   }
 
   // Verify presence in README.md packages table
   if (!readmeContent.includes(`\`${pkg.name}\``)) {
-    errors.push(
-      `Package '${pkg.name}' is missing from the packages table in README.md.`
-    );
+    errors.push(`Package '${pkg.name}' is missing from the packages table in README.md.`);
   }
 
   // Verify README uses dynamic endpoint badge URL for this package
   const expectedBadge = `https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdi-framework%2Fdi-framework%2Fmain%2Fcoverage%2Fbadges%2F${pkg.slug}.json`;
-  if (!readmeContent.includes(expectedBadge) && !readmeContent.includes(`coverage/badges/${pkg.slug}.json`)) {
+  if (
+    !readmeContent.includes(expectedBadge) &&
+    !readmeContent.includes(`coverage/badges/${pkg.slug}.json`)
+  ) {
     errors.push(
-      `Package '${pkg.name}' in README.md does not use the dynamic coverage badge URL format (expected badge for '${pkg.slug}').`
+      `Package '${pkg.name}' in README.md does not use the dynamic coverage badge URL format (expected badge for '${pkg.slug}').`,
     );
   }
 
   // Verify presence in COVERAGE.md
-  if (!coverageMdContent.includes(pkg.name) && !coverageMdContent.includes(`id="di-framework${pkg.slug}"`)) {
-    errors.push(
-      `Package '${pkg.name}' is missing from COVERAGE.md documentation.`
-    );
+  if (
+    !coverageMdContent.includes(pkg.name) &&
+    !coverageMdContent.includes(`id="di-framework${pkg.slug}"`)
+  ) {
+    errors.push(`Package '${pkg.name}' is missing from COVERAGE.md documentation.`);
   }
 }
 
 // 2. Check for hard-coded coverage badges in README.md
 if (readmeContent.includes('img.shields.io/badge/coverage-100%25-brightgreen')) {
   errors.push(
-    `README.md still contains hard-coded coverage-100% badges. Replace with dynamic badge endpoints.`
+    `README.md still contains hard-coded coverage-100% badges. Replace with dynamic badge endpoints.`,
   );
 }
 
@@ -95,13 +97,15 @@ if (existsSync(lcovPath)) {
       console.log(`  [UNMEASURED] ${m.name.padEnd(25)} -> Status: N/A (${m.unmeasuredReason})`);
     } else {
       console.log(
-        `  [MEASURED]   ${m.name.padEnd(25)} -> Coverage: ${m.status.padStart(6)} (${m.lh}/${m.lf} lines)`
+        `  [MEASURED]   ${m.name.padEnd(25)} -> Coverage: ${m.status.padStart(6)} (${m.lh}/${m.lf} lines)`,
       );
     }
   }
   console.log('--------------------------------------------------\n');
 } else {
-  console.log('[INFO] coverage/lcov.info not found; checked mapping definitions and README schema.');
+  console.log(
+    '[INFO] coverage/lcov.info not found; checked mapping definitions and README schema.',
+  );
 }
 
 if (errors.length > 0) {
@@ -110,7 +114,7 @@ if (errors.length > 0) {
     console.error(`  - ${err}`);
   }
   console.error(
-    '\nAction Required: Ensure every published @di-framework/* package in packages/ is mapped in scripts/coverage-mapping.ts, has a dynamic badge in README.md, and is documented in COVERAGE.md.\n'
+    '\nAction Required: Ensure every published @di-framework/* package in packages/ is mapped in scripts/coverage-mapping.ts, has a dynamic badge in README.md, and is documented in COVERAGE.md.\n',
   );
   process.exit(1);
 }

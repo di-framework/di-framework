@@ -148,9 +148,9 @@ describe('HTTP authorization', () => {
     expect(response.status).toBe(403);
 
     // Test error when binding second time
-    expect(() =>
-      bindFn({ manager: { authorize: () => authorizationAllowed() } }),
-    ).toThrow(/already bound/);
+    expect(() => bindFn({ manager: { authorize: () => authorizationAllowed() } })).toThrow(
+      /already bound/,
+    );
 
     // Test error when binding on a route with route-level authorization
     const router2 = TypedRouter();
@@ -159,8 +159,8 @@ describe('HTTP authorization', () => {
       authorization: { manager: { authorize: () => authorizationAllowed() } },
     });
     const bindFn2 = (handler2 as any)[DEFERRED_AUTHORIZATION];
-    expect(() =>
-      bindFn2({ manager: { authorize: () => authorizationAllowed() } }),
-    ).toThrow(/conflicts with deferred authorization/);
+    expect(() => bindFn2({ manager: { authorize: () => authorizationAllowed() } })).toThrow(
+      /conflicts with deferred authorization/,
+    );
   });
 });

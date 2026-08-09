@@ -21,9 +21,7 @@ function main() {
     const lcovPath = resolve(cwd, 'coverage/lcov.info');
 
     if (!existsSync(lcovPath)) {
-      console.warn(
-        '[WARN] coverage/lcov.info not found. Skipping coverage badge generation.'
-      );
+      console.warn('[WARN] coverage/lcov.info not found. Skipping coverage badge generation.');
       process.exit(0);
     }
 
@@ -56,17 +54,17 @@ function main() {
     writeFileSync(
       resolve(badgesDir, 'summary.json'),
       JSON.stringify(summary, null, 2) + '\n',
-      'utf8'
+      'utf8',
     );
 
     console.log(
-      `[SUCCESS] Generated coverage badge JSON files for ${metrics.length} package(s) in coverage/badges/`
+      `[SUCCESS] Generated coverage badge JSON files for ${metrics.length} package(s) in coverage/badges/`,
     );
   } catch (err) {
     console.warn(
       `[WARN] Coverage badge generation encountered a non-fatal error: ${
         err instanceof Error ? err.message : String(err)
-      }`
+      }`,
     );
     // Degrade gracefully for forks / Dependabot
     process.exit(0);

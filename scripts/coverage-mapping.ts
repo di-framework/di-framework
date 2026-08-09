@@ -101,8 +101,8 @@ export function getPackageSlugFromPath(filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, '/');
   if (normalized.includes('examples/')) return null;
   const match =
-    normalized.match(/(?:^|\/)packages\/di-framework-([^\/]+)\//) ||
-    normalized.match(/(?:^|\/)packages\/([^\/]+)\//);
+    normalized.match(/(?:^|\/)packages\/di-framework-([^/]+)\//) ||
+    normalized.match(/(?:^|\/)packages\/([^/]+)\//);
   if (!match || !match[1]) return null;
   const raw = match[1];
   return raw.startsWith('di-framework-') ? raw.replace('di-framework-', '') : raw;
@@ -123,10 +123,8 @@ export function isSourceFile(filePath: string): boolean {
   )
     return false;
   if (sf.includes('/dist/') || sf.includes('\\dist\\')) return false;
-  if (sf.endsWith('.test.ts') || sf.endsWith('.test.js') || sf.endsWith('.test.tsx'))
-    return false;
-  if (sf.endsWith('.spec.ts') || sf.endsWith('.spec.js') || sf.endsWith('.spec.tsx'))
-    return false;
+  if (sf.endsWith('.test.ts') || sf.endsWith('.test.js') || sf.endsWith('.test.tsx')) return false;
+  if (sf.endsWith('.spec.ts') || sf.endsWith('.spec.js') || sf.endsWith('.spec.tsx')) return false;
   if (sf.includes('preload-wasm-mock')) return false;
   if (sf.includes('/scripts/') || sf.includes('\\scripts\\')) return false;
   return sf.endsWith('.ts') || sf.endsWith('.js') || sf.endsWith('.tsx');
@@ -180,7 +178,7 @@ export function parseLcov(lcovContent: string): FileCoverageRecord[] {
  */
 export function calculatePackageMetrics(
   packages: PackageInfo[],
-  records: FileCoverageRecord[]
+  records: FileCoverageRecord[],
 ): PackageMetric[] {
   return packages.map((pkg) => {
     if (!pkg.isMeasured) {
