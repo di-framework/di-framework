@@ -4,12 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "dependencies": {
     "@di-framework/auth": "workspace:*",
     "@di-framework/authz": "workspace:*",
     "@di-framework/core": "workspace:*",
     "@di-framework/http": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*"
   }
 }

@@ -31,6 +31,12 @@ type transformResult struct {
 	TypeScript  map[string]string `json:"typescript"`
 }
 
+type tsconfigFile struct {
+	CompilerOptions struct {
+		RootDir string `json:"rootDir"`
+	} `json:"compilerOptions"`
+}
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -67,7 +73,7 @@ func runTransform(args []string) int {
 	}
 	defer prog.Close()
 
-	injectProgram(prog)
+	injectProgram(prog, projectRoot(opts))
 
 	// Host treats typescript[path] as opaque text — print the mutated AST.
 	printer := shimprinter.NewPrinter(
@@ -102,7 +108,7 @@ func runBuild(args []string) int {
 	}
 	defer prog.Close()
 
-	injectProgram(prog)
+	injectProgram(prog, projectRoot(opts))
 	if opts.noEmit {
 		return 0
 	}
@@ -143,10 +149,28 @@ func loadProgram(opts options) (*driver.Program, bool) {
 	return prog, true
 }
 
-func injectProgram(prog *driver.Program) {
+func projectRoot(opts options) string {
+	root := opts.cwd
+	data, err := os.ReadFile(opts.tsconfig)
+	if err != nil {
+		return root
+	}
+	var config tsconfigFile
+	if json.Unmarshal(data, &config) != nil || config.CompilerOptions.RootDir == "" {
+		return root
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(opts.tsconfig), config.CompilerOptions.RootDir))
+}
+
+func isWithinRoot(fileName string, root string) bool {
+	rel, err := filepath.Rel(root, fileName)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func injectProgram(prog *driver.Program, root string) {
 	factory := shimast.NewNodeFactory(shimast.NodeFactoryHooks{})
 	for _, file := range prog.SourceFiles() {
-		if file == nil || file.IsDeclarationFile {
+		if file == nil || file.IsDeclarationFile || !isWithinRoot(file.FileName(), root) {
 			continue
 		}
 		injectFile(factory, file, prog.Checker)
@@ -262,6 +286,22 @@ func stmtsFromCheckerType(
 	path string,
 	t *shimchecker.Type,
 ) []*shimast.Node {
+	return stmtsFromCheckerTypeSeen(factory, checker, path, t, make(map[*shimchecker.Type]bool), 0)
+}
+
+func stmtsFromCheckerTypeSeen(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	seen map[*shimchecker.Type]bool,
+	depth int,
+) []*shimast.Node {
+	// Platform and application interfaces can be recursive. Runtime guards are
+	// deliberately bounded so a cyclic type graph cannot make compilation hang.
+	if depth > 8 || seen[t] {
+		return nil
+	}
 	flags := t.Flags()
 	switch {
 	case flags&shimchecker.TypeFlagsString != 0:
@@ -273,6 +313,8 @@ func stmtsFromCheckerType(
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "bigint")}
 	case flags&shimchecker.TypeFlagsObject != 0:
+		seen[t] = true
+		defer delete(seen, t)
 		props := shimchecker.Checker_getApparentProperties(checker, t)
 		if len(props) == 0 {
 			return nil
@@ -293,11 +335,13 @@ func stmtsFromCheckerType(
 			if propType == nil {
 				continue
 			}
-			out = append(out, stmtsFromCheckerType(
+			out = append(out, stmtsFromCheckerTypeSeen(
 				factory,
 				checker,
 				path+"."+propName,
 				propType,
+				seen,
+				depth+1,
 			)...)
 		}
 		return out

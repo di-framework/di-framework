@@ -1,5 +1,7 @@
 declare module 'cloudflare:workers' {
   export class DurableObject<Env> {
+    protected readonly ctx: DurableObjectState;
+    protected readonly env: Env;
     constructor(state: DurableObjectState, env: Env, ctx: ExecutionContext);
   }
 }

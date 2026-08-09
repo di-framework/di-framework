@@ -6,12 +6,16 @@
   "scripts": {
     "start": "bun run index.ts",
     "serve": "bun run server.ts",
-    "sdl": "bun run emit-sdl.ts"
+    "sdl": "bun run emit-sdl.ts",
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "devDependencies": {
+    "@di-framework/cli": "workspace:*",
     "@di-framework/core": "workspace:*",
     "@di-framework/graphql": "workspace:*",
     "@di-framework/socket": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
     "graphql": "^17.0.2"
   }
 }

@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "types": ["bun"],
-    "rootDir": ".",
+    "rootDir": "..",
     "outDir": "dist",
     "strict": true,
     "skipLibCheck": true,
@@ -13,6 +13,6 @@
     "emitDecoratorMetadata": false,
     "plugins": [{ "transform": "@di-framework/tsc" }]
   },
-  "include": ["*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": ["./**/*.ts", "../services/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "../services/**/*.test.ts"]
 }

@@ -4,11 +4,15 @@
   "private": true,
   "scripts": {
     "start": "bun run index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "devDependencies": {
     "@di-framework/auth": "workspace:*",
+    "@di-framework/cli": "workspace:*",
     "@di-framework/core": "workspace:*",
-    "@di-framework/http": "workspace:*"
+    "@di-framework/http": "workspace:*",
+    "@di-framework/tsc": "workspace:*"
   }
 }

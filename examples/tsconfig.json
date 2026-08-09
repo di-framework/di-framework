@@ -1,16 +1,16 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "paths": {
-      "@di-framework/core": ["../packages/di-framework/container.ts"],
-      "@di-framework/core/*": ["../packages/di-framework-core/*"],
-      "@di-framework/http": ["../packages/di-framework-http/index.ts"],
-      "@di-framework/http/*": ["../packages/di-framework-http/*"],
-      "@di-framework/graphql": ["../packages/di-framework-graphql/index.ts"],
-      "@di-framework/graphql/*": ["../packages/di-framework-graphql/*"],
-      "@di-framework/ai": ["../packages/di-framework-ai/index.ts"],
-      "@di-framework/ai/*": ["../packages/di-framework-ai/*"]
-    }
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["bun"],
+    "outDir": "dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "plugins": [{ "transform": "@di-framework/tsc" }]
   },
   "include": [
     "packages/advanced/**/*.ts",
@@ -20,7 +20,19 @@
     "packages/services/**/*.ts",
     "packages/test-example/**/*.ts",
     "packages/cf-worker/**/*.ts",
-    "packages/ai-chat/**/*.ts"
+    "packages/ai-chat/**/*.ts",
+    "packages/auth/**/*.ts",
+    "packages/authz/**/*.ts",
+    "packages/config/**/*.ts",
+    "packages/events/**/*.ts",
+    "packages/docs-search/**/*.ts",
+    "packages/init-tsc-inspect/**/*.ts"
   ],
-  "exclude": ["node_modules", "packages/deno-http/**/*", "packages/deno-sandboxes/**/*"]
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "**/*.test.ts",
+    "packages/deno-http/**/*",
+    "packages/deno-sandboxes/**/*"
+  ]
 }

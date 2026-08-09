@@ -2,8 +2,14 @@
   "name": "di-http-router-example",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "build": "di-framework build",
+    "check": "di-framework check"
+  },
   "devDependencies": {
+    "@di-framework/cli": "workspace:*",
     "@di-framework/core": "workspace:*",
-    "@di-framework/http": "workspace:*"
+    "@di-framework/http": "workspace:*",
+    "@di-framework/tsc": "workspace:*"
   }
 }

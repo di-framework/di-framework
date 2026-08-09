@@ -9,8 +9,10 @@
     "dev": "wrangler dev",
     "deploy": "bun run corpus && wrangler deploy",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "typecheck": "di-framework check",
+    "cf-typegen": "wrangler types",
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "dependencies": {
     "@di-framework/core": "workspace:*",
@@ -19,6 +21,8 @@
     "jose": "^6.0.11"
   },
   "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5",
     "wrangler": "latest"

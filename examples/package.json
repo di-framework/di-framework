@@ -8,14 +8,17 @@
   ],
   "private": true,
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "for dir in packages/*; do if [ -f \"$dir/package.json\" ]; then (cd \"$dir\" && bun run build) || exit $?; elif [ -f \"$dir/deno.json\" ]; then (cd \"$dir\" && deno task --no-lock build) || exit $?; fi; done",
+    "check": "di-framework check",
     "test": "bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@di-framework/cli": "workspace:*",
     "@di-framework/core": "workspace:*",
+    "@di-framework/graphql": "workspace:*",
     "@di-framework/http": "workspace:*",
-    "@di-framework/graphql": "workspace:*"
+    "@di-framework/tsc": "workspace:*",
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
