@@ -43,7 +43,7 @@ class AuditService {
 | --- | --- |
 | [`@di-framework/core`](packages/di-framework-core) | DI container and decorators |
 | [`@di-framework/cli`](packages/di-framework-cli) | App CLI: `init`, `build`, `check` |
-| [`@di-framework/tsc`](packages/di-framework-tsc) | Optional `ttsc` runtime parameter checks |
+| [`@di-framework/tsc`](packages/di-framework-tsc) | `ttsc` runtime parameter checks (wired by `init`) |
 | [`@di-framework/repo`](packages/di-framework-repo) | Data access / repositories |
 | [`@di-framework/http`](packages/di-framework-http) | HTTP routing and OpenAPI |
 | [`@di-framework/graphql`](packages/di-framework-graphql) | GraphQL schema from domain objects |
@@ -67,9 +67,9 @@ bun x @di-framework/cli <command>
 
 | Command | Description |
 | --- | --- |
-| `init` | Scaffold a new application |
-| `check` | Typecheck the current app |
-| `build` | Build the current app |
+| `init` | Scaffold a new application (`@di-framework/tsc` + `ttsc` by default) |
+| `check` | Typecheck via `check` script or `tsc --noEmit` |
+| `build` | Build via `build` script or `ttsc` / `tsc` |
 
 **Maintainers** (this monorepo)
 

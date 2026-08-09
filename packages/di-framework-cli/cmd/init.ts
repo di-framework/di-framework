@@ -112,16 +112,18 @@ export function scaffoldApp(opts: InitOptions): void {
         type: 'module',
         scripts: {
           dev: 'bun run src/index.ts',
-          start: 'bun run src/index.ts',
-          build: 'bun build ./src/index.ts --outdir ./dist --target bun',
-          check: 'tsc --noEmit',
+          build: 'ttsc --emit',
+          start: 'node dist/index.js',
+          check: 'ttsc --noEmit',
         },
         dependencies: {
           '@di-framework/core': 'latest',
         },
         devDependencies: {
+          '@di-framework/tsc': 'latest',
           '@types/bun': 'latest',
-          typescript: '^5',
+          ttsc: '>=0.25.0',
+          typescript: '^7.0.0',
         },
       },
       null,
@@ -137,17 +139,15 @@ export function scaffoldApp(opts: InitOptions): void {
         compilerOptions: {
           lib: ['ESNext'],
           target: 'ESNext',
-          module: 'ESNext',
-          moduleDetection: 'force',
-          moduleResolution: 'bundler',
-          allowImportingTsExtensions: true,
-          verbatimModuleSyntax: true,
-          noEmit: true,
+          module: 'Node16',
+          moduleResolution: 'Node16',
+          rootDir: 'src',
+          outDir: 'dist',
           strict: true,
           skipLibCheck: true,
           experimentalDecorators: true,
           emitDecoratorMetadata: false,
-          types: ['bun'],
+          plugins: [{ transform: '@di-framework/tsc' }],
         },
         include: ['src/**/*'],
       },
@@ -190,6 +190,8 @@ app.run();
 
 di-framework application scaffolded with \`di-framework init\`.
 
+Includes [\`@di-framework/tsc\`](https://www.npmjs.com/package/@di-framework/tsc) for emit-time runtime parameter checks (\`ttsc\`). The first \`ttsc\` build compiles a Go sidecar (needs a Go toolchain; see [ttsc](https://ttsc.dev)).
+
 ## Setup
 
 \`\`\`bash
@@ -199,15 +201,17 @@ bun run dev
 
 ## Scripts
 
-| Script    | Description                          |
-| --------- | ------------------------------------ |
-| \`dev\`   | Run \`src/index.ts\` with Bun        |
-| \`build\` | Bundle to \`dist/\`                  |
-| \`check\` | Typecheck with \`tsc --noEmit\`      |
+| Script    | Description |
+| --------- | ----------- |
+| \`dev\`   | Run \`src/index.ts\` with Bun (no emit; runtime checks not injected) |
+| \`build\` | Emit to \`dist/\` with \`ttsc --emit\` (injects runtime checks) |
+| \`start\` | Run emitted \`dist/index.js\` |
+| \`check\` | Typecheck with \`ttsc --noEmit\` |
 
 ## Learn more
 
 - [Documentation](https://docs.di-framework.dev)
+- [Runtime type checks](https://docs.di-framework.dev/tsc.html)
 - Add packages: \`bun add @di-framework/http\` (or graphql, auth, config, …)
 `,
     force,

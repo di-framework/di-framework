@@ -96,6 +96,77 @@ describe('check command', () => {
       await expect(checkApp({ cwd: root, pretty: false })).rejects.toThrow('tsconfig');
     });
 
+    it('prefers package.json check script when no explicit tsconfig path', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'check-script-'));
+      temps.push(root);
+      await Bun.write(
+        join(root, 'package.json'),
+        JSON.stringify({
+          name: 'x',
+          scripts: { check: 'mkdir -p dist && echo ok > dist/checked.txt' },
+        }) + '\n',
+      );
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        await checkApp({ cwd: root, pretty: false });
+        expect(await Bun.file(join(root, 'dist', 'checked.txt')).text()).toContain('ok');
+      } finally {
+        log.mockRestore();
+      }
+    }, 30_000);
+
+    it('skips check script when an explicit tsconfig path is given', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'check-explicit-'));
+      temps.push(root);
+      mkdirSync(join(root, 'src'), { recursive: true });
+      await Bun.write(
+        join(root, 'package.json'),
+        JSON.stringify({
+          name: 'x',
+          scripts: { check: 'echo should-not-run && exit 1' },
+        }) + '\n',
+      );
+      await Bun.write(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            module: 'esnext',
+            target: 'esnext',
+            moduleResolution: 'bundler',
+          },
+          include: ['src/**/*.ts'],
+        }) + '\n',
+      );
+      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        await checkApp({ cwd: root, tsconfigPath: 'tsconfig.json', pretty: false });
+      } finally {
+        log.mockRestore();
+      }
+    }, 60_000);
+
+    it('throws when package check script fails', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'check-script-fail-'));
+      temps.push(root);
+      await Bun.write(
+        join(root, 'package.json'),
+        JSON.stringify({
+          name: 'x',
+          scripts: { check: 'exit 1' },
+        }) + '\n',
+      );
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        await expect(checkApp({ cwd: root, pretty: false })).rejects.toThrow('Typecheck failed');
+      } finally {
+        log.mockRestore();
+      }
+    }, 30_000);
+
     it('throws when tsc reports type errors', async () => {
       const root = mkdtempSync(join(tmpdir(), 'check-fail-'));
       temps.push(root);
