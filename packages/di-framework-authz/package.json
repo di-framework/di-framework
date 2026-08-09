@@ -8,28 +8,27 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./http": {
-      "bun": "./http.ts",
+      "types": "./dist/http.d.ts",
+      "bun": "./dist/http.js",
       "import": "./dist/http.js",
       "default": "./dist/http.js"
     },
     "./graphql": {
-      "bun": "./graphql.ts",
+      "types": "./dist/graphql.d.ts",
+      "bun": "./dist/graphql.js",
       "import": "./dist/graphql.js",
       "default": "./dist/graphql.js"
     }
   },
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "http.ts",
-    "graphql.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./http.ts ./graphql.ts --outdir ./dist --target node --splitting --external @di-framework/core --external @di-framework/auth && tsc --emitDeclarationOnly --declaration --outDir dist",

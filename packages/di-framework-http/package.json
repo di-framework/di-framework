@@ -8,7 +8,8 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
@@ -30,9 +31,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./src/cli.ts --outdir ./dist --target node --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",

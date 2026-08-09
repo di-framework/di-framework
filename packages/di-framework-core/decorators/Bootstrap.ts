@@ -1,5 +1,5 @@
-import { type Container as DIContainer, defineMetadata, useContainer } from '../container';
-import { INJECTABLE_METADATA_KEY } from './keys';
+import { type Container as DIContainer, defineMetadata, useContainer } from '../container.js';
+import { INJECTABLE_METADATA_KEY } from './keys.js';
 
 /**
  * Eagerly resolves a class once at definition time.

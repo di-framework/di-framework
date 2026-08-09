@@ -8,27 +8,32 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./memory": {
-      "bun": "./memory.ts",
+      "types": "./dist/memory.d.ts",
+      "bun": "./dist/memory.js",
       "import": "./dist/memory.js",
       "default": "./dist/memory.js"
     },
     "./http": {
-      "bun": "./http.ts",
+      "types": "./dist/http.d.ts",
+      "bun": "./dist/http.js",
       "import": "./dist/http.js",
       "default": "./dist/http.js"
     },
     "./socket": {
-      "bun": "./socket.ts",
+      "types": "./dist/socket.d.ts",
+      "bun": "./dist/socket.js",
       "import": "./dist/socket.js",
       "default": "./dist/socket.js"
     },
     "./grpc": {
-      "bun": "./grpc.ts",
+      "types": "./dist/grpc.d.ts",
+      "bun": "./dist/grpc.js",
       "import": "./dist/grpc.js",
       "default": "./dist/grpc.js"
     }
@@ -43,13 +48,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "memory.ts",
-    "http.ts",
-    "socket.ts",
-    "grpc.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./memory.ts ./http.ts ./socket.ts ./grpc.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/socket --external @connectrpc/connect --external @connectrpc/connect-node --external @bufbuild/protobuf && tsc --emitDeclarationOnly --declaration --outDir dist",

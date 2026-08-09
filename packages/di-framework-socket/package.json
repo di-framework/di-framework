@@ -8,27 +8,32 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./node": {
-      "bun": "./node.ts",
+      "types": "./dist/node.d.ts",
+      "bun": "./dist/node.js",
       "import": "./dist/node.js",
       "default": "./dist/node.js"
     },
     "./bun": {
-      "bun": "./bun.ts",
+      "types": "./dist/bun.d.ts",
+      "bun": "./dist/bun.js",
       "import": "./dist/bun.js",
       "default": "./dist/bun.js"
     },
     "./graphql": {
-      "bun": "./graphql.ts",
+      "types": "./dist/graphql.d.ts",
+      "bun": "./dist/graphql.js",
       "import": "./dist/graphql.js",
       "default": "./dist/graphql.js"
     },
     "./workers": {
-      "bun": "./workers.ts",
+      "types": "./dist/workers.d.ts",
+      "bun": "./dist/workers.js",
       "import": "./dist/workers.js",
       "default": "./dist/workers.js"
     }
@@ -58,13 +63,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "node.ts",
-    "bun.ts",
-    "graphql.ts",
-    "workers.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./node.ts ./bun.ts ./graphql.ts ./workers.ts --outdir ./dist --target node --external @di-framework/core --external ws && tsc --emitDeclarationOnly --declaration --outDir dist",

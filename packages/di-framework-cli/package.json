@@ -22,7 +22,8 @@
   "files": [
     "main.ts",
     "cmd",
-    "scripts"
+    "scripts",
+    "README.md"
   ],
   "scripts": {
     "build": "bun -e \"console.log('@di-framework/cli: source bin, no compile step')\""

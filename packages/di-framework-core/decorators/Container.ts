@@ -4,8 +4,8 @@ import {
   getMetadata,
   getOwnMetadata,
   useContainer,
-} from '../container';
-import { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys';
+} from '../container.js';
+import { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys.js';
 
 /**
  * Marks a class as injectable and registers it with the DI container

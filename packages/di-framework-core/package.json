@@ -26,29 +26,34 @@
   ],
   "exports": {
     ".": {
-      "bun": "./container.ts",
+      "types": "./dist/container.d.ts",
+      "bun": "./dist/container.js",
       "import": "./dist/container.js",
-      "types": "./dist/container.d.ts"
+      "default": "./dist/container.js"
     },
     "./container": {
-      "bun": "./container.ts",
+      "types": "./dist/container.d.ts",
+      "bun": "./dist/container.js",
       "import": "./dist/container.js",
-      "types": "./dist/container.d.ts"
+      "default": "./dist/container.js"
     },
     "./decorators": {
-      "bun": "./decorators/index.ts",
+      "types": "./dist/decorators/index.d.ts",
+      "bun": "./dist/decorators/index.js",
       "import": "./dist/decorators/index.js",
-      "types": "./dist/decorators/index.d.ts"
+      "default": "./dist/decorators/index.js"
     },
     "./decorators/*": {
-      "bun": "./decorators/*.ts",
+      "types": "./dist/decorators/*.d.ts",
+      "bun": "./dist/decorators/*.js",
       "import": "./dist/decorators/*.js",
-      "types": "./dist/decorators/*.d.ts"
+      "default": "./dist/decorators/*.js"
     },
     "./types": {
-      "bun": "./types.ts",
+      "types": "./dist/types.d.ts",
+      "bun": "./dist/types.js",
       "import": "./dist/types.js",
-      "types": "./dist/types.d.ts"
+      "default": "./dist/types.js"
     }
   },
   "bugs": {
@@ -69,8 +74,7 @@
   "files": [
     "dist",
     "README.md",
-    "MIGRATION_GUIDE.md",
-    "*.ts",
-    "decorators/*.ts"
+    "LICENSE*",
+    "MIGRATION_GUIDE.md"
   ]
 }

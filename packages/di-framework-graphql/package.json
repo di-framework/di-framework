@@ -8,12 +8,14 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./core": {
-      "bun": "./core.ts",
+      "types": "./dist/core.d.ts",
+      "bun": "./dist/core.js",
       "import": "./dist/core.js",
       "default": "./dist/core.js"
     }
@@ -41,10 +43,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "core.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./core.ts --outdir ./dist --target node --external graphql --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",

@@ -8,12 +8,14 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./zod": {
-      "bun": "./zod.ts",
+      "types": "./dist/zod.d.ts",
+      "bun": "./dist/zod.js",
       "import": "./dist/zod.js",
       "default": "./dist/zod.js"
     }
@@ -41,10 +43,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "zod.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./zod.ts --outdir ./dist --target node --external @di-framework/core --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",

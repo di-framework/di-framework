@@ -8,37 +8,44 @@
   "private": false,
   "exports": {
     ".": {
-      "bun": "./index.ts",
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./webauthn": {
-      "bun": "./webauthn.ts",
+      "types": "./dist/webauthn.d.ts",
+      "bun": "./dist/webauthn.js",
       "import": "./dist/webauthn.js",
       "default": "./dist/webauthn.js"
     },
     "./oauth": {
-      "bun": "./oauth.ts",
+      "types": "./dist/oauth.d.ts",
+      "bun": "./dist/oauth.js",
       "import": "./dist/oauth.js",
       "default": "./dist/oauth.js"
     },
     "./http": {
-      "bun": "./http.ts",
+      "types": "./dist/http.d.ts",
+      "bun": "./dist/http.js",
       "import": "./dist/http.js",
       "default": "./dist/http.js"
     },
     "./graphql": {
-      "bun": "./graphql.ts",
+      "types": "./dist/graphql.d.ts",
+      "bun": "./dist/graphql.js",
       "import": "./dist/graphql.js",
       "default": "./dist/graphql.js"
     },
     "./repo": {
-      "bun": "./repo.ts",
+      "types": "./dist/repo.d.ts",
+      "bun": "./dist/repo.js",
       "import": "./dist/repo.js",
       "default": "./dist/repo.js"
     },
     "./server": {
-      "bun": "./server.ts",
+      "types": "./dist/server.d.ts",
+      "bun": "./dist/server.js",
       "import": "./dist/server.js",
       "default": "./dist/server.js"
     }
@@ -72,15 +79,7 @@
   "type": "module",
   "files": [
     "dist",
-    "README.md",
-    "index.ts",
-    "webauthn.ts",
-    "oauth.ts",
-    "http.ts",
-    "graphql.ts",
-    "repo.ts",
-    "server.ts",
-    "src"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build ./index.ts ./webauthn.ts ./oauth.ts ./http.ts ./graphql.ts ./repo.ts ./server.ts --outdir ./dist --target node --external @di-framework/core --external @di-framework/http --external @di-framework/graphql --external @di-framework/repo --external graphql --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
