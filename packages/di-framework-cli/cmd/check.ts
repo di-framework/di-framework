@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { $ } from 'bun';
-import { detectPackageManager } from './build';
+import { hasTtsc, readPkgJson } from './build';
 
 export type CheckOptions = {
   cwd: string;
@@ -66,43 +66,16 @@ Options:
   --help, -h               Show this help
 
 Runs, in order of preference:
-  1. package.json "check" script  (when no explicit tsconfig path is given)
+  1. ttsc --noEmit -p <tsconfig>  if ttsc is installed (or declared)
   2. tsc --noEmit -p <tsconfig>   nearest tsconfig.json (or the path given)
+
+Init scaffolds \`\"check\": \"di-framework check\"\` so \`bun run check\` delegates here.
 
 Maintainer monorepo typecheck: di-framework mx typecheck
 `);
 }
 
-async function runCheckScript(cwd: string): Promise<void> {
-  const pm = detectPackageManager(cwd);
-  console.log(`ℹ️  Checking with ${pm} run check…`);
-  const proc =
-    pm === 'pnpm'
-      ? await $`pnpm run check`.cwd(cwd).nothrow()
-      : pm === 'yarn'
-        ? await $`yarn run check`.cwd(cwd).nothrow()
-        : pm === 'npm'
-          ? await $`npm run check`.cwd(cwd).nothrow()
-          : await $`bun run check`.cwd(cwd).nothrow();
-
-  if (proc.exitCode !== 0) {
-    throw new Error(`Typecheck failed (exit ${proc.exitCode})`);
-  }
-  console.log('✅ Check passed');
-}
-
 export async function checkApp(opts: CheckOptions): Promise<void> {
-  const pkgPath = join(opts.cwd, 'package.json');
-  if (!opts.tsconfigPath && existsSync(pkgPath)) {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
-      scripts?: Record<string, string>;
-    };
-    if (pkg.scripts?.check) {
-      await runCheckScript(opts.cwd);
-      return;
-    }
-  }
-
   const tsconfigPath = opts.tsconfigPath
     ? resolve(opts.cwd, opts.tsconfigPath)
     : findNearestTsconfig(opts.cwd);
@@ -113,13 +86,17 @@ export async function checkApp(opts: CheckOptions): Promise<void> {
     );
   }
 
-  console.log(`ℹ️  Checking with ${tsconfigPath}`);
+  const pkg = readPkgJson(opts.cwd);
+  const useTtsc = hasTtsc(opts.cwd, pkg ?? undefined);
+  const tool = useTtsc ? 'ttsc' : 'tsc';
+  console.log(`ℹ️  Checking with ${tool} --noEmit -p ${tsconfigPath}`);
 
   const prettyFlag = opts.pretty ? [] : ['--pretty', 'false'];
-  const proc = await $`bun x tsc --noEmit -p ${tsconfigPath} ${prettyFlag}`.cwd(opts.cwd).nothrow();
+  const proc = useTtsc
+    ? await $`bun x ttsc --noEmit -p ${tsconfigPath} ${prettyFlag}`.cwd(opts.cwd).nothrow()
+    : await $`bun x tsc --noEmit -p ${tsconfigPath} ${prettyFlag}`.cwd(opts.cwd).nothrow();
 
   if (proc.exitCode !== 0) {
-    // tsc already printed diagnostics to stdout/stderr via inherit default
     throw new Error(`Typecheck failed (exit ${proc.exitCode})`);
   }
 

@@ -25,9 +25,10 @@ Usage:
   di-framework build [args...]
 
 Runs, in order of preference:
-  1. package.json "build" script  (bun run build / npm run build)
-  2. ttsc --emit -p tsconfig.json if ttsc is installed (or declared)
-  3. tsc -p tsconfig.json         if tsconfig exists and no build script
+  1. ttsc --emit -p tsconfig.json  if ttsc is installed (or declared)
+  2. tsc -p tsconfig.json          if tsconfig.json exists
+
+Init scaffolds \`\"build\": \"di-framework build\"\` so \`bun run build\` delegates here.
 
 Maintainer monorepo build: di-framework mx build
 `);
@@ -48,7 +49,24 @@ export function hasTtsc(
   },
 ): boolean {
   if (pkg?.dependencies?.ttsc || pkg?.devDependencies?.ttsc) return true;
-  return existsSync(join(cwd, 'node_modules', 'ttsc'));
+  if (pkg?.dependencies?.['@di-framework/tsc'] || pkg?.devDependencies?.['@di-framework/tsc']) {
+    return true;
+  }
+  if (existsSync(join(cwd, 'node_modules', 'ttsc'))) return true;
+  if (existsSync(join(cwd, 'node_modules', '@di-framework', 'tsc'))) return true;
+  return existsSync(join(cwd, 'node_modules', '@di-framework', 'tsc', 'node_modules', 'ttsc'));
+}
+
+export function readPkgJson(cwd: string): {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+} | null {
+  const pkgPath = join(cwd, 'package.json');
+  if (!existsSync(pkgPath)) return null;
+  return JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
 }
 
 export async function buildApp(
@@ -60,53 +78,28 @@ export async function buildApp(
     return;
   }
 
-  const pkgPath = join(opts.cwd, 'package.json');
-  if (!existsSync(pkgPath)) {
+  const pkg = readPkgJson(opts.cwd);
+  if (!pkg) {
     throw new Error(
       `No package.json in ${opts.cwd}. Run \`di-framework init\` first, or cd into your app.`,
     );
   }
 
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
-    scripts?: Record<string, string>;
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
-  const hasBuildScript = Boolean(pkg.scripts?.build);
   const tsconfig = join(opts.cwd, 'tsconfig.json');
-  const pm = detectPackageManager(opts.cwd);
-
-  if (hasBuildScript) {
-    console.log(`Building with ${pm} run build…`);
-    if (pm === 'bun') {
-      await shell`bun run build ${opts.passthrough}`.cwd(opts.cwd);
-    } else if (pm === 'pnpm') {
-      await shell`pnpm run build ${opts.passthrough}`.cwd(opts.cwd);
-    } else if (pm === 'yarn') {
-      await shell`yarn run build ${opts.passthrough}`.cwd(opts.cwd);
-    } else {
-      await shell`npm run build -- ${opts.passthrough}`.cwd(opts.cwd);
-    }
-    console.log('✅ Build finished');
-    return;
+  if (!existsSync(tsconfig)) {
+    throw new Error(
+      'Nothing to build: add a tsconfig.json, or scaffold with `di-framework init`.',
+    );
   }
 
-  if (existsSync(tsconfig)) {
-    if (hasTtsc(opts.cwd, pkg)) {
-      console.log('No "build" script; running ttsc --emit -p tsconfig.json…');
-      await shell`bun x ttsc --emit -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
-    } else {
-      console.log('No "build" script; running tsc -p tsconfig.json…');
-      await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
-    }
-    console.log('✅ Build finished');
-    return;
+  if (hasTtsc(opts.cwd, pkg)) {
+    console.log('Building with ttsc --emit -p tsconfig.json…');
+    await shell`bun x ttsc --emit -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
+  } else {
+    console.log('Building with tsc -p tsconfig.json…');
+    await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
   }
-
-  throw new Error(
-    'Nothing to build: add a "build" script to package.json or a tsconfig.json. ' +
-      'Or scaffold with `di-framework init`.',
-  );
+  console.log('✅ Build finished');
 }
 
 export async function build(args: string[] = process.argv.slice(3)): Promise<void> {

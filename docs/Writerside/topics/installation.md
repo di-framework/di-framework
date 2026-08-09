@@ -16,7 +16,7 @@ bun x @di-framework/cli init my-api
 cd my-api && bun install && bun run dev
 ```
 
-That writes a `tsconfig.json` with `@di-framework/tsc` (`plugins`), TypeScript 7+, `ttsc`, and sample `src/index.ts`. Runtime parameter checks are injected on `ttsc --emit` (`bun run build`). See [CLI](cli.md) for `check` / `build` and [Runtime type checks](tsc.md).
+That writes a `tsconfig.json` with `@di-framework/tsc` (`plugins`), `@di-framework/cli`, and sample `src/index.ts` (`ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Scripts call `di-framework build` / `di-framework check` (which run `ttsc`). Runtime parameter checks are injected on emit (`bun run build`). See [CLI](cli.md) for `check` / `build` and [Runtime type checks](tsc.md).
 
 ## Install the Package
 

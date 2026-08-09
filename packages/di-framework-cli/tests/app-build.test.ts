@@ -34,26 +34,42 @@ describe('app build command', () => {
     await expect(buildApp({ cwd: root, passthrough: [] })).rejects.toThrow('No package.json');
   });
 
-  it('runs package.json build script', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'app-build-script-'));
+  it('ignores package.json build script and runs tsc', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'app-build-ignore-script-'));
     temps.push(root);
+    mkdirSync(join(root, 'src'), { recursive: true });
     await Bun.write(
       join(root, 'package.json'),
       JSON.stringify({
         name: 'x',
-        scripts: { build: 'mkdir -p dist && echo ok > dist/out.txt' },
+        scripts: { build: 'echo should-not-run && exit 1' },
       }) + '\n',
     );
+    await Bun.write(
+      join(root, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          outDir: 'dist',
+          rootDir: 'src',
+          module: 'esnext',
+          target: 'esnext',
+          skipLibCheck: true,
+          noEmit: false,
+        },
+        include: ['src/**/*.ts'],
+      }) + '\n',
+    );
+    await Bun.write(join(root, 'src', 'index.ts'), 'export const n = 1;\n');
     const log = spyOn(console, 'log').mockImplementation(() => {});
     try {
       await buildApp({ cwd: root, passthrough: [] });
-      expect(await Bun.file(join(root, 'dist', 'out.txt')).text()).toContain('ok');
+      expect(await Bun.file(join(root, 'dist', 'index.js')).exists()).toBe(true);
     } finally {
       log.mockRestore();
     }
-  }, 30_000);
+  }, 60_000);
 
-  it('falls back to tsc when no build script', async () => {
+  it('runs tsc when no ttsc', async () => {
     const root = mkdtempSync(join(tmpdir(), 'app-build-tsc-'));
     temps.push(root);
     mkdirSync(join(root, 'src'), { recursive: true });
@@ -82,7 +98,7 @@ describe('app build command', () => {
     }
   }, 60_000);
 
-  it('falls back to ttsc --emit when ttsc is declared and no build script', async () => {
+  it('runs ttsc --emit when ttsc is declared', async () => {
     const { hasTtsc } = await import('../cmd/build');
     const root = mkdtempSync(join(tmpdir(), 'app-build-ttsc-'));
     temps.push(root);
@@ -112,6 +128,13 @@ describe('app build command', () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  it('treats @di-framework/tsc as implying ttsc', async () => {
+    const { hasTtsc } = await import('../cmd/build');
+    expect(
+      hasTtsc('/tmp', { devDependencies: { '@di-framework/tsc': 'latest' } }),
+    ).toBe(true);
   });
 
   it('hasTtsc detects node_modules/ttsc', async () => {
@@ -162,69 +185,57 @@ describe('app build command', () => {
     await buildApp({ cwd: '/tmp', passthrough: ['-h'] });
   });
 
-  it('throws when package.json has neither build script nor tsconfig', async () => {
+  it('throws when package.json has no tsconfig', async () => {
     const root = mkdtempSync(join(tmpdir(), 'app-build-empty-'));
     temps.push(root);
     await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
     await expect(buildApp({ cwd: root, passthrough: [] })).rejects.toThrow('Nothing to build');
   });
 
-  it('detects pnpm, yarn, and npm via lockfiles and runs matching installers', async () => {
+  it('detectPackageManager reads lockfiles', async () => {
     const { detectPackageManager } = await import('../cmd/build');
-    const log = spyOn(console, 'log').mockImplementation(() => {});
-    const seen: string[] = [];
-    const fakeShell = ((strings: TemplateStringsArray, ...exprs: unknown[]) => {
-      const cmd = strings.reduce((acc, s, i) => acc + s + (exprs[i] ?? ''), '');
-      seen.push(cmd);
-      return {
-        cwd: () => Promise.resolve(),
-      };
-    }) as unknown as import('../cmd/build').BuildShell;
-
-    try {
-      for (const [lock, expectedPm, needle] of [
-        ['pnpm-lock.yaml', 'pnpm', 'pnpm run build'],
-        ['yarn.lock', 'yarn', 'yarn run build'],
-        ['package-lock.json', 'npm', 'npm run build'],
-      ] as const) {
-        const root = mkdtempSync(join(tmpdir(), `app-build-${lock}-`));
-        temps.push(root);
-        await Bun.write(join(root, lock), '# lock\n');
-        await Bun.write(
-          join(root, 'package.json'),
-          JSON.stringify({
-            name: 'x',
-            scripts: { build: 'echo ok' },
-          }) + '\n',
-        );
-        expect(detectPackageManager(root)).toBe(expectedPm);
-        await buildApp({ cwd: root, passthrough: [] }, fakeShell);
-        expect(seen.some((c) => c.includes(needle))).toBe(true);
-      }
-    } finally {
-      log.mockRestore();
+    for (const [lock, expectedPm] of [
+      ['pnpm-lock.yaml', 'pnpm'],
+      ['yarn.lock', 'yarn'],
+      ['package-lock.json', 'npm'],
+      ['bun.lock', 'bun'],
+    ] as const) {
+      const root = mkdtempSync(join(tmpdir(), `app-build-${lock}-`));
+      temps.push(root);
+      await Bun.write(join(root, lock), '# lock\n');
+      expect(detectPackageManager(root)).toBe(expectedPm);
     }
   });
 
   it('build without flags runs buildApp', async () => {
     const root = mkdtempSync(join(tmpdir(), 'app-build-default-'));
     temps.push(root);
+    mkdirSync(join(root, 'src'), { recursive: true });
+    await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
     await Bun.write(
-      join(root, 'package.json'),
+      join(root, 'tsconfig.json'),
       JSON.stringify({
-        name: 'x',
-        scripts: { build: 'mkdir -p dist && echo ok > dist/out.txt' },
+        compilerOptions: {
+          outDir: 'dist',
+          rootDir: 'src',
+          module: 'esnext',
+          target: 'esnext',
+          skipLibCheck: true,
+          noEmit: false,
+        },
+        include: ['src/**/*.ts'],
       }) + '\n',
     );
+    await Bun.write(join(root, 'src', 'index.ts'), 'export const n = 1;\n');
     const log = spyOn(console, 'log').mockImplementation(() => {});
     const cwd = process.cwd();
     try {
       process.chdir(root);
       await build([]);
-      expect(await Bun.file(join(root, 'dist', 'out.txt')).text()).toContain('ok');
+      expect(await Bun.file(join(root, 'dist', 'index.js')).exists()).toBe(true);
     } finally {
       process.chdir(cwd);
       log.mockRestore();
     }
-  }, 30_000);
+  }, 60_000);
 });

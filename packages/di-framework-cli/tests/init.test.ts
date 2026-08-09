@@ -118,11 +118,12 @@ describe('init command', () => {
 
         const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
         expect(pkg.dependencies['@di-framework/core']).toBe('latest');
+        expect(pkg.devDependencies['@di-framework/cli']).toBe('latest');
         expect(pkg.devDependencies['@di-framework/tsc']).toBe('latest');
-        expect(pkg.devDependencies.ttsc).toBe('>=0.25.0');
-        expect(pkg.devDependencies.typescript).toBe('^7.0.0');
-        expect(pkg.scripts.build).toBe('ttsc --emit');
-        expect(pkg.scripts.check).toBe('ttsc --noEmit');
+        expect(pkg.devDependencies.ttsc).toBeUndefined();
+        expect(pkg.devDependencies.typescript).toBeUndefined();
+        expect(pkg.scripts.build).toBe('di-framework build');
+        expect(pkg.scripts.check).toBe('di-framework check');
         expect(pkg.scripts.start).toBe('node dist/index.js');
 
         const ts = JSON.parse(readFileSync(join(dir, 'tsconfig.json'), 'utf-8'));
@@ -130,17 +131,22 @@ describe('init command', () => {
         expect(ts.compilerOptions.emitDecoratorMetadata).toBe(false);
         expect(ts.compilerOptions.outDir).toBe('dist');
         expect(ts.compilerOptions.rootDir).toBe('src');
+        expect(ts.compilerOptions.types).toEqual(['bun']);
+        expect(ts.compilerOptions.module).toBe('NodeNext');
+        expect(ts.compilerOptions.moduleResolution).toBe('NodeNext');
         expect(ts.compilerOptions.plugins).toEqual([{ transform: '@di-framework/tsc' }]);
         expect(ts.compilerOptions.noEmit).toBeUndefined();
         expect(ts.compilerOptions.allowImportingTsExtensions).toBeUndefined();
 
         const readme = readFileSync(join(dir, 'README.md'), 'utf-8');
         expect(readme).toContain('@di-framework/tsc');
-        expect(readme).toContain('ttsc --emit');
+        expect(readme).toContain('di-framework build');
+        expect(readme).toContain('di-framework check');
 
         const src = readFileSync(join(dir, 'src', 'index.ts'), 'utf-8');
         expect(src).toContain('@Container()');
         expect(src).toContain('@di-framework/core');
+        expect(src).toContain('function greet(name: string)');
       } finally {
         log.mockRestore();
       }
