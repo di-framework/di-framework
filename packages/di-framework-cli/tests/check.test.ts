@@ -115,6 +115,34 @@ describe('check command', () => {
       }
     }, 30_000);
 
+    it('falls through to tsc when package.json has no check script', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'check-no-script-'));
+      temps.push(root);
+      mkdirSync(join(root, 'src'), { recursive: true });
+      await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
+      await Bun.write(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            module: 'esnext',
+            target: 'esnext',
+            moduleResolution: 'bundler',
+          },
+          include: ['src/**/*.ts'],
+        }) + '\n',
+      );
+      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        await checkApp({ cwd: root, pretty: false });
+      } finally {
+        log.mockRestore();
+      }
+    }, 60_000);
+
     it('skips check script when an explicit tsconfig path is given', async () => {
       const root = mkdtempSync(join(tmpdir(), 'check-explicit-'));
       temps.push(root);
