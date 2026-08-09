@@ -68,8 +68,8 @@ bun x @di-framework/cli <command>
 | Command | Description |
 | --- | --- |
 | `init` | Scaffold a new application (`@di-framework/tsc` + `ttsc` by default) |
-| `check` | Typecheck via `check` script or `tsc --noEmit` |
-| `build` | Build via `build` script or `ttsc` / `tsc` |
+| `check` | Typecheck with `ttsc --noEmit` or `tsc --noEmit` |
+| `build` | Emit with `ttsc --emit` or `tsc` |
 
 **Maintainers** (this monorepo)
 

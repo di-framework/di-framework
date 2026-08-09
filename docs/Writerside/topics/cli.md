@@ -24,8 +24,8 @@ di-framework <command> [args...]
 | Command | Description |
 | --- | --- |
 | **`init [name]`** | Scaffold a new app (`package.json`, `tsconfig` with `@di-framework/tsc`, sample `src/index.ts`) |
-| **`build`** | Run the project’s `build` script, or `ttsc --emit` / `tsc -p tsconfig.json` if none |
-| **`check`** | Run the project’s `check` script, or `tsc --noEmit` against the nearest `tsconfig.json` |
+| **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
+| **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
 
 ```bash
 di-framework init my-api
@@ -35,7 +35,7 @@ di-framework check
 di-framework build
 ```
 
-`init` installs TypeScript 7+, `ttsc`, and `@di-framework/tsc` by default, and sets `plugins: [{ "transform": "@di-framework/tsc" }]`. Runtime checks are injected on `ttsc --emit` (`build` / `start`). `dev` runs source with Bun (no emit). First `ttsc` build needs a Go toolchain — see [Runtime type checks](tsc.md).
+`init` installs `@di-framework/tsc` and `@di-framework/cli` by default, sets `plugins: [{ "transform": "@di-framework/tsc" }]`, and wires `"build"` / `"check"` to `di-framework` (`ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Runtime checks are injected on `ttsc --emit` (`build` / `start`). `dev` runs source with Bun (no emit). First `ttsc` build needs a Go toolchain — see [Runtime type checks](tsc.md).
 
 ### `init` options
 

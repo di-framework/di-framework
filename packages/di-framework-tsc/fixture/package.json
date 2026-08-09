@@ -8,8 +8,6 @@
     "smoke:dtsc": "rm -rf dist && dtsc --emit && node ../scripts/check-emit.cjs"
   },
   "devDependencies": {
-    "@di-framework/tsc": "file:..",
-    "ttsc": ">=0.25.0",
-    "typescript": "^7.0.2"
+    "@di-framework/tsc": "file:.."
   }
 }

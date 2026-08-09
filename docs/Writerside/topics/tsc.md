@@ -6,15 +6,15 @@ Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit
 
 > MVP: function declarations with required identifier params; primitives + plain object/interface props. See [Limitations](#limitations).
 
-`di-framework init` wires this by default (TypeScript 7+, `ttsc`, `@di-framework/tsc`, and `plugins` in `tsconfig`). Use the steps below for an existing app.
+`di-framework init` wires this by default (`@di-framework/tsc` and `plugins` in `tsconfig`; `ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Use the steps below for an existing app.
 
 ## Installation
 
 ```bash
-npm i -D ttsc typescript @di-framework/tsc
+npm i -D @di-framework/tsc
 ```
 
-Consumers supply `ttsc` and TypeScript 7+; this package is the transform only.
+Pulls in `ttsc` and TypeScript 7+ transitively.
 
 The first build compiles a Go sidecar (cached afterward). Needs a Go toolchain (`go` 1.26+ recommended; `ttsc` can pin via `TTSC_GO_BINARY`).
 
@@ -84,7 +84,7 @@ Skipped today:
 
 ## Monorepo note
 
-`@di-framework/tsc` is isolated from the monorepo’s TypeScript 5.x `tsc` graph (package `build` is a no-op). Peers `ttsc` and TypeScript 7+ stay out of root / `@di-framework/*` core packages.
+`@di-framework/tsc` is isolated from the monorepo’s TypeScript 5.x `tsc` graph (package `build` is a no-op). `ttsc` and TypeScript 7+ are dependencies of `@di-framework/tsc` (kept out of root / other `@di-framework/*` packages).
 
 ## Next Steps
 

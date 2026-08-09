@@ -11,10 +11,10 @@ Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit
 ## Install
 
 ```bash
-npm i -D ttsc typescript @di-framework/tsc
+npm i -D @di-framework/tsc
 ```
 
-Consumers supply `ttsc` and TypeScript 7+; this package is the transform only.
+Pulls in `ttsc` and TypeScript 7+ transitively.
 
 First build compiles the Go sidecar (cached afterward). Needs a Go toolchain (`go` 1.26+ recommended; `ttsc` can pin via `TTSC_GO_BINARY`).
 
@@ -84,9 +84,9 @@ Skipped today:
 
 ## Monorepo
 
-Workspace package at `packages/di-framework-tsc`. It is listed in the CLI build/publish allowlists; `build` is a no-op (plugin.cjs + Go sidecar, not the TS5 `tsc` graph). Peers `ttsc` and TypeScript 7+ stay out of root/`@di-framework/*` core packages.
+Workspace package at `packages/di-framework-tsc`. It is listed in the CLI build/publish allowlists; `build` is a no-op (plugin.cjs + Go sidecar, not the TS5 `tsc` graph). `ttsc` and TypeScript 7+ are dependencies of this package (kept out of root / other `@di-framework/*` packages).
 
-Isolated smoke fixture (installs its own ttsc + TS7):
+Isolated smoke fixture (pulls ttsc + TS7 via `@di-framework/tsc`):
 
 ```bash
 cd packages/di-framework-tsc/fixture
@@ -109,7 +109,7 @@ Smoke-test a packed tarball in another project:
 ```bash
 npm pack
 cd /path/to/other-project
-npm i -D ttsc typescript /path/to/di-framework-tsc-0.1.0.tgz
+npm i -D /path/to/di-framework-tsc-0.1.0.tgz
 # add plugins: [{ "transform": "@di-framework/tsc" }]
 npx ttsc --emit
 ```

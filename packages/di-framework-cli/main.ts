@@ -26,7 +26,7 @@ const COMMANDS: Record<string, Command> = {
     run: (args) => generateCommand(args),
   },
   build: {
-    description: 'Build the current application (package.json script or tsc)',
+    description: 'Build the current application (ttsc or tsc)',
     run: (args) => build(args),
   },
   check: {

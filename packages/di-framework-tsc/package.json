@@ -47,17 +47,9 @@
     "url": "https://github.com/di-framework/di-framework/issues"
   },
   "homepage": "https://github.com/di-framework/di-framework#readme",
-  "peerDependencies": {
+  "dependencies": {
     "ttsc": ">=0.25.0",
-    "typescript": ">=7.0.0"
-  },
-  "peerDependenciesMeta": {
-    "ttsc": {
-      "optional": false
-    },
-    "typescript": {
-      "optional": false
-    }
+    "typescript": "^7.0.0"
   },
   "publishConfig": {
     "access": "public"

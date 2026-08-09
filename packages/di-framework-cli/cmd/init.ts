@@ -112,18 +112,17 @@ export function scaffoldApp(opts: InitOptions): void {
         type: 'module',
         scripts: {
           dev: 'bun run src/index.ts',
-          build: 'ttsc --emit',
+          build: 'di-framework build',
           start: 'node dist/index.js',
-          check: 'ttsc --noEmit',
+          check: 'di-framework check',
         },
         dependencies: {
           '@di-framework/core': 'latest',
         },
         devDependencies: {
+          '@di-framework/cli': 'latest',
           '@di-framework/tsc': 'latest',
           '@types/bun': 'latest',
-          ttsc: '>=0.25.0',
-          typescript: '^7.0.0',
         },
       },
       null,
@@ -139,8 +138,9 @@ export function scaffoldApp(opts: InitOptions): void {
         compilerOptions: {
           lib: ['ESNext'],
           target: 'ESNext',
-          module: 'Node16',
-          moduleResolution: 'Node16',
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          types: ['bun'],
           rootDir: 'src',
           outDir: 'dist',
           strict: true,
@@ -162,10 +162,16 @@ export function scaffoldApp(opts: InitOptions): void {
     `import { useContainer } from '@di-framework/core/container';
 import { Component, Container } from '@di-framework/core/decorators';
 
+// Top-level function declarations get runtime checks from @di-framework/tsc on emit.
+// Class methods are not transformed yet (MVP limitation).
+function greet(name: string): string {
+  return \`Hello, \${name}!\`;
+}
+
 @Container()
 class Greeter {
-  greet(name: string) {
-    return \`Hello, \${name}!\`;
+  hello(name: string) {
+    return greet(name);
   }
 }
 
@@ -174,7 +180,7 @@ class App {
   constructor(@Component(Greeter) private greeter: Greeter) {}
 
   run() {
-    console.log(this.greeter.greet('di-framework'));
+    console.log(this.greeter.hello('di-framework'));
   }
 }
 
@@ -204,9 +210,9 @@ bun run dev
 | Script    | Description |
 | --------- | ----------- |
 | \`dev\`   | Run \`src/index.ts\` with Bun (no emit; runtime checks not injected) |
-| \`build\` | Emit to \`dist/\` with \`ttsc --emit\` (injects runtime checks) |
+| \`build\` | \`di-framework build\` → \`ttsc --emit\` (injects runtime checks) |
 | \`start\` | Run emitted \`dist/index.js\` |
-| \`check\` | Typecheck with \`ttsc --noEmit\` |
+| \`check\` | \`di-framework check\` → \`ttsc --noEmit\` |
 
 ## Learn more
 

@@ -1,0 +1,20 @@
+{
+  "name": "init-tsc-inspect",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "di-framework build",
+    "start": "node dist/index.js",
+    "check": "di-framework check"
+  },
+  "dependencies": {
+    "@di-framework/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
+    "@types/bun": "latest"
+  }
+}
