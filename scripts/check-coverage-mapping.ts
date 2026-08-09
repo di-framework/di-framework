@@ -49,6 +49,14 @@ for (const pkg of packages) {
   if (!readmeContent.includes(`\`${pkg.name}\``)) {
     errors.push(`Package '${pkg.name}' is missing from the packages table in README.md.`);
   }
+
+  // Verify README uses GitHub Commit Status dynamic badge URL for this package
+  const expectedBadge = `https://img.shields.io/github/commit-status/di-framework/di-framework/main/coverage%2Fbadges%2F${pkg.slug}?label=line%20coverage`;
+  if (!readmeContent.includes(expectedBadge)) {
+    errors.push(
+      `Package '${pkg.name}' in README.md does not use the expected dynamic commit-status badge URL format.`,
+    );
+  }
 }
 
 // 2. Check for hard-coded coverage badges in README.md

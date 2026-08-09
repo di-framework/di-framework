@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   build-and-test:
@@ -42,6 +43,8 @@ jobs:
 
       - name: Export coverage to GitHub context & summary
         id: coverage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun -e '
             import { readFileSync, existsSync, appendFileSync } from "node:fs";
@@ -57,9 +60,32 @@ jobs:
               const metrics = calculatePackageMetrics(packages, records);
 
               let md = "### 📊 Code Coverage Summary\n\n| Package | Line Coverage | Lines Hit / Total |\n| --- | --- | --- |\n";
+              
+              const token = process.env.GITHUB_TOKEN;
+              const repo = process.env.GITHUB_REPOSITORY;
+              const sha = process.env.GITHUB_SHA;
+
               for (const m of metrics) {
                 const details = m.isMeasured ? `${m.lh}/${m.lf}` : "N/A (" + m.unmeasuredReason + ")";
                 md += `| \`${m.name}\` | **${m.status}** | ${details} |\n`;
+
+                if (token && repo && sha && process.env.CI) {
+                  const payload = {
+                    state: "success",
+                    context: `coverage/badges/${m.slug}`,
+                    description: m.status,
+                    target_url: `https://github.com/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+                  };
+                  fetch(`https://api.github.com/repos/${repo}/statuses/${sha}`, {
+                    method: "POST",
+                    headers: {
+                      "Authorization": `token ${token}`,
+                      "Accept": "application/vnd.github.v3+json",
+                      "User-Agent": "bun-script"
+                    },
+                    body: JSON.stringify(payload)
+                  }).catch(err => console.error("Failed to post commit status:", err));
+                }
               }
 
               if (process.env.GITHUB_STEP_SUMMARY) {
