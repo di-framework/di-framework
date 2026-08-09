@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/codegen",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "Code generation engine for @di-framework schema manifests",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

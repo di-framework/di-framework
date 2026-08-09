@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/rpc",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "description": "Decorator-centric JSON-RPC and per-method gRPC for di-framework",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
