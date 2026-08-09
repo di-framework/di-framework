@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-and-test:
@@ -40,46 +40,43 @@ jobs:
       - name: Verify coverage mapping
         run: bun scripts/check-coverage-mapping.ts
 
-      - name: Generate coverage badges
-        run: bun scripts/generate-coverage-badges.ts
-
       - name: Export coverage to GitHub context & summary
         id: coverage
         run: |
           bun -e '
-            import { readFileSync, appendFileSync } from "node:fs";
-            const summary = JSON.parse(readFileSync("coverage/badges/summary.json", "utf8"));
+            import { readFileSync, existsSync, appendFileSync } from "node:fs";
+            import { resolve } from "node:path";
+            import { getWorkspacePackages, parseLcov, calculatePackageMetrics } from "./scripts/coverage-mapping";
+
+            const packages = getWorkspacePackages(resolve(process.cwd(), "packages"));
+            const lcovPath = resolve(process.cwd(), "coverage/lcov.info");
             
-            let md = "### 📊 Code Coverage Summary\n\n| Package | Line Coverage | Lines Hit / Total |\n| --- | --- | --- |\n";
-            for (const [slug, info] of Object.entries(summary)) {
-              const details = info.isMeasured ? `${info.lh}/${info.lf}` : "N/A";
-              md += `| \`${info.name}\` | **${info.coverage}** | ${details} |\n`;
-            }
-            if (process.env.GITHUB_STEP_SUMMARY) {
-              appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
-            }
-            
-            const totalLines = Object.values(summary).reduce((acc, s) => acc + (s.lf || 0), 0);
-            const totalHits = Object.values(summary).reduce((acc, s) => acc + (s.lh || 0), 0);
-            const pct = totalLines > 0 ? ((totalHits / totalLines) * 100).toFixed(1) : "0";
-            
-            if (process.env.GITHUB_OUTPUT) {
-              appendFileSync(process.env.GITHUB_OUTPUT, `total_lines=${totalLines}\n`);
-              appendFileSync(process.env.GITHUB_OUTPUT, `total_hits=${totalHits}\n`);
-              appendFileSync(process.env.GITHUB_OUTPUT, `coverage_percentage=${pct}%\n`);
+            if (existsSync(lcovPath)) {
+              const lcovContent = readFileSync(lcovPath, "utf8");
+              const records = parseLcov(lcovContent);
+              const metrics = calculatePackageMetrics(packages, records);
+
+              let md = "### 📊 Code Coverage Summary\n\n| Package | Line Coverage | Lines Hit / Total |\n| --- | --- | --- |\n";
+              for (const m of metrics) {
+                const details = m.isMeasured ? `${m.lh}/${m.lf}` : "N/A (" + m.unmeasuredReason + ")";
+                md += `| \`${m.name}\` | **${m.status}** | ${details} |\n`;
+              }
+
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+              }
+
+              const totalLines = metrics.reduce((acc, s) => acc + (s.lf || 0), 0);
+              const totalHits = metrics.reduce((acc, s) => acc + (s.lh || 0), 0);
+              const pct = totalLines > 0 ? ((totalHits / totalLines) * 100).toFixed(1) : "0";
+
+              if (process.env.GITHUB_OUTPUT) {
+                appendFileSync(process.env.GITHUB_OUTPUT, `total_lines=${totalLines}\n`);
+                appendFileSync(process.env.GITHUB_OUTPUT, `total_hits=${totalHits}\n`);
+                appendFileSync(process.env.GITHUB_OUTPUT, `coverage_percentage=${pct}%\n`);
+              }
             }
           '
-
-      - name: Commit updated coverage badges
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add coverage/badges/*.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(coverage): update dynamic coverage badges [skip ci]"
-            git push
-          fi
 
       - name: Link CLI
         run: cd packages/di-framework-cli && bun link

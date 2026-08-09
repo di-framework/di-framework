@@ -49,25 +49,6 @@ for (const pkg of packages) {
   if (!readmeContent.includes(`\`${pkg.name}\``)) {
     errors.push(`Package '${pkg.name}' is missing from the packages table in README.md.`);
   }
-
-  // Verify README uses dynamic endpoint badge URL for this package
-  const expectedBadge = `https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdi-framework%2Fdi-framework%2Fmain%2Fcoverage%2Fbadges%2F${pkg.slug}.json`;
-  if (
-    !readmeContent.includes(expectedBadge) &&
-    !readmeContent.includes(`coverage/badges/${pkg.slug}.json`)
-  ) {
-    errors.push(
-      `Package '${pkg.name}' in README.md does not use the dynamic coverage badge URL format (expected badge for '${pkg.slug}').`,
-    );
-  }
-
-  // Verify badge file exists in repository
-  const badgePath = resolve(cwd, `coverage/badges/${pkg.slug}.json`);
-  if (!existsSync(badgePath)) {
-    errors.push(
-      `Coverage badge file 'coverage/badges/${pkg.slug}.json' is missing from repository.`,
-    );
-  }
 }
 
 // 2. Check for hard-coded coverage badges in README.md
