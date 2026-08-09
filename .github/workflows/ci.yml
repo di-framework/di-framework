@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-and-test:
@@ -42,6 +42,17 @@ jobs:
 
       - name: Generate coverage badges
         run: bun scripts/generate-coverage-badges.ts
+
+      - name: Commit updated coverage badges
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage/badges/*.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(coverage): update dynamic coverage badges [skip ci]"
+            git push
+          fi
 
       - name: Link CLI
         run: cd packages/di-framework-cli && bun link
