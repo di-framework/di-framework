@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { getWorkspacePackages } from './coverage-mapping';
 
 interface PackedFile {
   path: string;
@@ -17,23 +18,6 @@ interface PackJsonResult {
   entryCount: number;
   files: PackedFile[];
 }
-
-const PACKAGES = [
-  'di-framework-core',
-  'di-framework-repo',
-  'di-framework-http',
-  'di-framework-graphql',
-  'di-framework-events',
-  'di-framework-config',
-  'di-framework-auth',
-  'di-framework-authz',
-  'di-framework-socket',
-  'di-framework-rpc',
-  'di-framework-ai',
-  'di-framework-codegen',
-  'di-framework-cli',
-  'di-framework-tsc',
-];
 
 // Packages allowed to include raw .ts source implementation files
 const RAW_TS_ALLOWED_PACKAGES = new Set([
@@ -73,7 +57,7 @@ function matchesPath(expectedPath: string, packedFileSet: Set<string>): boolean 
   if (packedFileSet.has(norm)) return true;
 
   if (norm.includes('*')) {
-    const regexPattern = `^${norm.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`;
+    const regexPattern = `^${norm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*')}$`;
     const regex = new RegExp(regexPattern);
     for (const file of packedFileSet) {
       if (regex.test(file)) return true;
@@ -84,13 +68,16 @@ function matchesPath(expectedPath: string, packedFileSet: Set<string>): boolean 
 }
 
 export function checkPackageTarballs(): boolean {
-  console.log('📦 Auditing packaging tarballs for all 14 published packages...\n');
+  const workspacePackages = getWorkspacePackages();
+  console.log(
+    `📦 Auditing packaging tarballs for all ${workspacePackages.length} published packages...\n`,
+  );
 
   let totalErrors = 0;
   const cwd = process.cwd();
 
-  for (const pkgDirName of PACKAGES) {
-    const pkgDirPath = path.join(cwd, 'packages', pkgDirName);
+  for (const pkg of workspacePackages) {
+    const pkgDirPath = path.join(cwd, pkg.relPath);
     const pkgJsonPath = path.join(pkgDirPath, 'package.json');
 
     if (!fs.existsSync(pkgJsonPath)) {
@@ -100,9 +87,9 @@ export function checkPackageTarballs(): boolean {
     }
 
     const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-    const pkgName: string = pkgJson.name;
+    const pkgName: string = pkgJson.name || pkg.name;
 
-    console.log(`Checking ${pkgName} (${pkgDirName})...`);
+    console.log(`Checking ${pkgName} (${pkg.dirName})...`);
 
     let packData: PackJsonResult;
     try {
@@ -157,7 +144,9 @@ export function checkPackageTarballs(): boolean {
         file.startsWith('examples/') ||
         file.includes('/examples/')
       ) {
-        console.error(`  ❌ [${pkgName}] Packed file contains forbidden test/example file: "${file}"`);
+        console.error(
+          `  ❌ [${pkgName}] Packed file contains forbidden test/example file: "${file}"`,
+        );
         totalErrors++;
       }
 
@@ -176,7 +165,9 @@ export function checkPackageTarballs(): boolean {
     return false;
   }
 
-  console.log('\n✨ Packaging audit completed successfully! All 14 packages verified.');
+  console.log(
+    `\n✨ Packaging audit completed successfully! All ${workspacePackages.length} packages verified.`,
+  );
   return true;
 }
 
