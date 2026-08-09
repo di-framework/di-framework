@@ -1,6 +1,6 @@
 # Advanced Usage
 
-Learn advanced patterns and techniques for using the DI framework effectively.
+Learn advanced patterns and techniques for using di-framework effectively.
 
 ## Transient (Non-Singleton) Services
 

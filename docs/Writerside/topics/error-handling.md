@@ -1,6 +1,6 @@
 # Error Handling
 
-Understanding and handling errors in the DI framework.
+Understanding and handling errors in di-framework.
 
 ## Common Errors
 

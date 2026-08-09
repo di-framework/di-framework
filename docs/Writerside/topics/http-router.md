@@ -15,7 +15,7 @@ Lightweight TypeScript decorators and a type-safe router for [itty-router](https
 ## Installation
 
 ```bash
-# Install the HTTP package and the core DI framework (peer dependency)
+# Install the HTTP package and core di-framework (peer dependency)
 bun add @di-framework/http @di-framework/core
 # or
 npm install @di-framework/http @di-framework/core

@@ -107,7 +107,7 @@ import { useContainer } from '@di-framework/core/container';
 @Container()
 class TestService {
   getMessage() {
-    return 'DI Framework is working!';
+    return 'di-framework is working!';
   }
 }
 
@@ -120,7 +120,7 @@ Run the file with your TypeScript runner (ts-node, tsx, bun, etc.):
 
 ```bash
 bun run test.ts
-# Output: DI Framework is working!
+# Output: di-framework is working!
 ```
 
 ## Optional Packages

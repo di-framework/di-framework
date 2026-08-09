@@ -1,6 +1,6 @@
 # Best Practices
 
-Recommended patterns and approaches for using the DI framework effectively.
+Recommended patterns and approaches for using di-framework effectively.
 
 ## 1. Mark All Services with @Container()
 
