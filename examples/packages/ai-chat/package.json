@@ -6,13 +6,17 @@
   "description": "Annotation-first chat, tools, and RAG example for @di-framework/ai",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "di-framework check",
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "dependencies": {
     "@di-framework/ai": "workspace:*",
     "@di-framework/core": "workspace:*"
   },
   "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5"
   }

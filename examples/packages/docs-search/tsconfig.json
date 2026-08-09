@@ -1,27 +1,19 @@
 {
   "compilerOptions": {
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ESNext"],
-    "types": ["@cloudflare/workers-types", "@types/bun"],
+    "types": ["bun"],
+    "rootDir": ".",
+    "outDir": "dist",
     "strict": true,
     "skipLibCheck": true,
-    "noEmit": true,
+    "resolveJsonModule": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": false,
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true,
-    "allowImportingTsExtensions": true,
-    "baseUrl": ".",
-    "paths": {
-      "@di-framework/core": ["../../../packages/di-framework-core/container.ts"],
-      "@di-framework/core/*": ["../../../packages/di-framework-core/*"],
-      "@di-framework/http": ["../../../packages/di-framework-http/index.ts"],
-      "@di-framework/http/*": ["../../../packages/di-framework-http/*"],
-      "@di-framework/repo": ["../../../packages/di-framework-repo/src/index.ts"],
-      "@di-framework/repo/*": ["../../../packages/di-framework-repo/src/*"]
-    }
+    "plugins": [{ "transform": "@di-framework/tsc" }]
   },
-  "include": ["src/**/*", "scripts/**/*", "data/**/*.json"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "worker-configuration.d.ts", "data/**/*.json"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

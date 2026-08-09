@@ -13,6 +13,7 @@
     "@types/deno": "npm:@types/deno"
   },
   "tasks": {
+    "build": "deno check --no-lock --sloppy-imports src/main.ts",
     "dev": "deno run -A src/main.ts",
     "test": "deno test -A --sloppy-imports --coverage=lcov src/test.main.ts"
   }

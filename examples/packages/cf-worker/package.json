@@ -7,11 +7,14 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",
-    "build": ""
+    "build": "di-framework build",
+    "check": "di-framework check"
   },
   "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
     "typescript": "latest",
-    "wrangler": "latest",
-    "@di-framework/core": "workspace:*"
+    "wrangler": "latest"
   }
 }
