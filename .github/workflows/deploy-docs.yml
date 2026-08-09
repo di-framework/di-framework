@@ -157,6 +157,8 @@ jobs:
           p.write_text(json.dumps(cfg, separators=(",", ":")))
           print("config.json:", p.read_text())
           PY
+          cp docs/Writerside/images/favicon.png dir/favicon.png
+          cp docs/Writerside/images/favicon.png dir/favicon.ico
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v5
