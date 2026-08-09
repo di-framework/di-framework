@@ -4,6 +4,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "customConditions": ["bun"],
     "types": ["bun"],
     "outDir": "dist",
     "strict": true,
