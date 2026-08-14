@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
@@ -73,19 +73,19 @@ export function assertPathAllowed(
   for (const allowed of roots) {
     if (!isContained(target, allowed)) continue;
 
-    if (!existsSync(allowed)) {
+    if (!fs.existsSync(allowed)) {
       return { ok: true, path: target };
     }
 
     try {
-      const realAllowed = realpathSync(allowed);
+      const realAllowed = fs.realpathSync(allowed);
       const existing = nearestExisting(target);
       if (existing == null) {
         return { ok: true, path: target };
       }
       let realExisting: string;
       try {
-        realExisting = realpathSync(existing);
+        realExisting = fs.realpathSync(existing);
       } catch {
         return {
           ok: false,
@@ -118,15 +118,21 @@ function isContained(target: string, root: string): boolean {
 
 function nearestExisting(target: string): string | undefined {
   let current = target;
-  while (true) {
+  let parent = resolve(current, '..');
+  while (current !== parent) {
     try {
-      lstatSync(current);
+      fs.lstatSync(current);
       return current;
     } catch {
-      const parent = resolve(current, '..');
-      if (parent === current) return undefined;
       current = parent;
+      parent = resolve(current, '..');
     }
+  }
+  try {
+    fs.lstatSync(current);
+    return current;
+  } catch {
+    return undefined;
   }
 }
 

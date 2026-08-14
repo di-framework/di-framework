@@ -11,7 +11,7 @@ export function parseYaml(text: string): YamlValue {
   if (lines.length === 0) return {};
   const first = lines[0];
   if (first == null) return {};
-  if (first.text.startsWith('- ')) {
+  if (first.text === '-' || first.text.startsWith('- ')) {
     const parsed = parseSequence(lines, 0, first.indent);
     return parsed.value;
   }
@@ -127,10 +127,10 @@ function parseSequence(
     if (line.indent > indent) {
       throw new Error(`Unexpected indentation at "${line.text}"`);
     }
-    if (!line.text.startsWith('- ')) {
+    if (line.text !== '-' && !line.text.startsWith('- ')) {
       break;
     }
-    const rest = line.text.slice(2).trim();
+    const rest = line.text === '-' ? '' : line.text.slice(2).trim();
     const nextLine = lines[i + 1];
     if (rest === '' || rest === '|' || rest === '>') {
       if (rest === '|' || rest === '>') {

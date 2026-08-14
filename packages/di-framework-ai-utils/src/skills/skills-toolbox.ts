@@ -59,33 +59,22 @@ export interface SkillsToolboxOptions extends SkillsToolOptions {
   readonly perSkillSandbox?: boolean;
 }
 
-export class SkillsToolbox {
+export interface SkillsToolbox {
   readonly skills: readonly AgentSkill[];
   readonly allowedDirectories: readonly string[];
   readonly tools: readonly ToolCallback[];
   readonly runtime: SkillsRuntime;
-
-  constructor(init: {
-    readonly skills: readonly AgentSkill[];
-    readonly allowedDirectories: readonly string[];
-    readonly tools: readonly ToolCallback[];
-    readonly runtime: SkillsRuntime;
-  }) {
-    this.skills = init.skills;
-    this.allowedDirectories = init.allowedDirectories;
-    this.tools = init.tools;
-    this.runtime = init.runtime;
-  }
-
-  /** Preferred entry: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
-  static builder(): SkillsToolboxBuilder {
-    return new SkillsToolboxBuilder();
-  }
-
-  static of(options: SkillsToolboxOptions = {}): SkillsToolbox {
-    return createSkillsToolbox(options);
-  }
 }
+
+/** Preferred factory: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
+export const SkillsToolbox = {
+  builder(): SkillsToolboxBuilder {
+    return new SkillsToolboxBuilder();
+  },
+  of(options: SkillsToolboxOptions = {}): SkillsToolbox {
+    return createSkillsToolbox(options);
+  },
+};
 
 export class SkillsToolboxBuilder extends SkillsFluent<SkillsToolboxBuilder> {
   build(): SkillsToolbox {
@@ -195,7 +184,7 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
   }
 
   const tools = raw.map((tool) => gateToolCallback(tool, runtime));
-  return new SkillsToolbox({ skills: collected, allowedDirectories, tools, runtime });
+  return { skills: collected, allowedDirectories, tools, runtime };
 }
 
 function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {
@@ -206,9 +195,7 @@ function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {
     return [...options.directories.map(expandUserPath), ...fromPackages];
   }
   const hasExplicitSkills = (options.files?.length ?? 0) > 0 || (options.skills?.length ?? 0) > 0;
-  if (hasExplicitSkills) {
-    return fromPackages;
-  }
+  if (hasExplicitSkills) return fromPackages;
   return [...existingSkillDirectories(), ...fromPackages];
 }
 
