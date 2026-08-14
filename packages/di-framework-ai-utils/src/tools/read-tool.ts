@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import {
   type AllowedDirectories,
   resolveAllowedDirectories,
 } from '../sandbox/allowed-directories.ts';
+import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
 
 export const DEFAULT_READ_LIMIT = 2000;
@@ -60,13 +61,6 @@ Usage:
       );
       if (!access.ok) return access.error;
 
-      if (!existsSync(access.path)) {
-        return `Error: File does not exist: ${filePath}`;
-      }
-      if (statSync(access.path).isDirectory()) {
-        return `Error: Path is a directory, not a file: ${filePath}`;
-      }
-
       const startLine = Math.max(1, input?.offset ?? 1);
       const maxLines = Math.max(1, input?.limit ?? DEFAULT_READ_LIMIT);
 
@@ -74,8 +68,14 @@ Usage:
       try {
         content = readFileSync(access.path, 'utf8');
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return `Error reading file: ${message}`;
+        const code = nodeErrnoCode(error);
+        if (code === 'ENOENT') {
+          return `Error: File does not exist: ${filePath}`;
+        }
+        if (code === 'EISDIR') {
+          return `Error: Path is a directory, not a file: ${filePath}`;
+        }
+        return `Error reading file: ${errorMessage(error)}`;
       }
 
       const allLines = content.split(/\r?\n/);

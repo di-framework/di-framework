@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assertPathAllowed, expandUserPath, uniqueResolvedRoots } from '../src/index.ts';
+import { errorMessage, nodeErrnoCode } from '../src/sandbox/fs-error.ts';
 
 describe('assertPathAllowed', () => {
   test('allows a file inside an allowed root', () => {
@@ -59,5 +60,17 @@ describe('assertPathAllowed', () => {
     expect(expandUserPath('~/skills').startsWith(expandUserPath('~'))).toBe(true);
     const roots = uniqueResolvedRoots(['/tmp/a', '/tmp/a/']);
     expect(roots).toHaveLength(1);
+  });
+});
+
+describe('nodeErrnoCode', () => {
+  test('reads string codes and ignores everything else', () => {
+    expect(nodeErrnoCode(null)).toBeUndefined();
+    expect(nodeErrnoCode('enoent')).toBeUndefined();
+    expect(nodeErrnoCode({})).toBeUndefined();
+    expect(nodeErrnoCode({ code: 2 })).toBeUndefined();
+    expect(nodeErrnoCode({ code: 'ENOENT' })).toBe('ENOENT');
+    expect(errorMessage(new Error('boom'))).toBe('boom');
+    expect(errorMessage('plain')).toBe('plain');
   });
 });

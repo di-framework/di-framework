@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import {
   type AllowedDirectories,
   resolveAllowedDirectories,
 } from '../sandbox/allowed-directories.ts';
+import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
 
 export interface WriteToolOptions {
@@ -48,21 +49,26 @@ Usage:
       );
       if (!access.ok) return access.error;
 
-      if (existsSync(access.path) && statSync(access.path).isDirectory()) {
-        return `Error: Path is a directory, not a file: ${filePath}`;
-      }
-
-      const existed = existsSync(access.path);
+      const content = input?.content ?? '';
       try {
         mkdirSync(dirname(access.path), { recursive: true });
-        const content = input?.content ?? '';
-        writeFileSync(access.path, content, 'utf8');
+        writeFileSync(access.path, content, { encoding: 'utf8', flag: 'wx' });
         const bytes = Buffer.byteLength(content, 'utf8');
-        const verb = existed ? 'overwrote' : 'created';
-        return `Successfully ${verb} file: ${access.path} (${bytes} bytes)`;
+        return `Successfully created file: ${access.path} (${bytes} bytes)`;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return `Error writing file: ${message}`;
+        if (nodeErrnoCode(error) === 'EEXIST') {
+          try {
+            writeFileSync(access.path, content, 'utf8');
+            const bytes = Buffer.byteLength(content, 'utf8');
+            return `Successfully overwrote file: ${access.path} (${bytes} bytes)`;
+          } catch (overwriteError) {
+            if (nodeErrnoCode(overwriteError) === 'EISDIR') {
+              return `Error: Path is a directory, not a file: ${filePath}`;
+            }
+            return `Error writing file: ${errorMessage(overwriteError)}`;
+          }
+        }
+        return `Error writing file: ${errorMessage(error)}`;
       }
     },
   });

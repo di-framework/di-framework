@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { relative } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import {
@@ -108,12 +108,14 @@ Usage:
 
       const access = assertPathAllowed(searchRoot, roots);
       if (!access.ok) return access.error;
-      if (!existsSync(access.path)) {
-        return `Error: Path does not exist: ${searchRoot}`;
-      }
 
       const files: string[] = [];
-      const stat = statSync(access.path);
+      let stat: ReturnType<typeof statSync>;
+      try {
+        stat = statSync(access.path);
+      } catch {
+        return `Error: Path does not exist: ${searchRoot}`;
+      }
       if (stat.isFile()) {
         files.push(access.path);
       } else if (stat.isDirectory()) {

@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import {
   type AllowedDirectories,
   resolveAllowedDirectories,
 } from '../sandbox/allowed-directories.ts';
+import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
 import { DEFAULT_MAX_LINE_CHARS } from './read-tool.ts';
 
@@ -64,19 +65,18 @@ Usage:
       );
       if (!access.ok) return access.error;
 
-      if (!existsSync(access.path)) {
-        return `Error: File does not exist: ${filePath}`;
-      }
-      if (statSync(access.path).isDirectory()) {
-        return `Error: Path is a directory, not a file: ${filePath}`;
-      }
-
       let content: string;
       try {
         content = readFileSync(access.path, 'utf8');
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return `Error reading file: ${message}`;
+        const code = nodeErrnoCode(error);
+        if (code === 'ENOENT') {
+          return `Error: File does not exist: ${filePath}`;
+        }
+        if (code === 'EISDIR') {
+          return `Error: Path is a directory, not a file: ${filePath}`;
+        }
+        return `Error reading file: ${errorMessage(error)}`;
       }
 
       const occurrences = countOccurrences(content, oldString);
@@ -94,8 +94,7 @@ Usage:
       try {
         writeFileSync(access.path, next, 'utf8');
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return `Error writing file: ${message}`;
+        return `Error writing file: ${errorMessage(error)}`;
       }
 
       const snippet = numberedSnippet(next, newString);
