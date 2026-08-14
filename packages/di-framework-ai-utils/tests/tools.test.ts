@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bashTool, globTool, readTool } from '../src/index.ts';
+import { bashTool, editTool, globTool, grepTool, readTool, writeTool } from '../src/index.ts';
 
 describe('readTool', () => {
   test('returns numbered lines and paginates', async () => {
@@ -68,6 +68,79 @@ describe('globTool', () => {
   });
 });
 
+describe('grepTool', () => {
+  test('finds content, files, and counts', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-grep-'));
+    mkdirSync(join(root, 'src'));
+    writeFileSync(join(root, 'src', 'a.ts'), 'const TODO = 1;\nconst ok = 2;\n');
+    writeFileSync(join(root, 'src', 'b.md'), 'TODO later\n');
+    writeFileSync(join(root, 'src', 'c.ts'), 'nothing here\n');
+    const tool = grepTool({ allowedDirectories: [root], workingDirectory: root });
+
+    const content = await tool.call(JSON.stringify({ pattern: 'TODO', glob: '**/*.ts' }));
+    expect(content).toContain('a.ts:1:');
+    expect(content).not.toContain('b.md');
+
+    const files = await tool.call(
+      JSON.stringify({ pattern: 'TODO', outputMode: 'files_with_matches' }),
+    );
+    expect(files).toContain('a.ts');
+    expect(files).toContain('b.md');
+
+    const counts = await tool.call(JSON.stringify({ pattern: 'TODO', outputMode: 'count' }));
+    expect(counts).toMatch(/a\.ts:1/);
+  });
+
+  test('rejects a search path outside allowed roots', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-grep-'));
+    const tool = grepTool({ allowedDirectories: [root] });
+    const result = await tool.call(JSON.stringify({ pattern: 'x', path: '/tmp' }));
+    expect(result).toContain('outside the allowed directories');
+  });
+});
+
+describe('writeTool and editTool', () => {
+  test('creates, overwrites, and edits inside the sandbox', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-write-'));
+    const writer = writeTool({ allowedDirectories: [root] });
+    const editor = editTool({ allowedDirectories: [root] });
+    const file = join(root, 'nested', 'note.txt');
+
+    const created = await writer.call(JSON.stringify({ filePath: file, content: 'hello world' }));
+    expect(created).toContain('created');
+    const overwritten = await writer.call(
+      JSON.stringify({ filePath: file, content: 'hello world' }),
+    );
+    expect(overwritten).toContain('overwrote');
+
+    const edited = await editor.call(
+      JSON.stringify({ filePath: file, oldString: 'world', newString: 'there' }),
+    );
+    expect(edited).toContain('has been updated');
+    expect(await Bun.file(file).text()).toBe('hello there');
+
+    await writer.call(JSON.stringify({ filePath: file, content: 'aa aa' }));
+    const ambiguous = await editor.call(
+      JSON.stringify({ filePath: file, oldString: 'aa', newString: 'bb' }),
+    );
+    expect(ambiguous).toContain('appears 2 times');
+    const all = await editor.call(
+      JSON.stringify({ filePath: file, oldString: 'aa', newString: 'bb', replaceAll: true }),
+    );
+    expect(all).toContain('has been updated');
+    expect(await Bun.file(file).text()).toBe('bb bb');
+  });
+
+  test('denies writes outside the sandbox', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-write-'));
+    const writer = writeTool({ allowedDirectories: [root] });
+    const result = await writer.call(
+      JSON.stringify({ filePath: '/tmp/outside-ai-utils.txt', content: 'nope' }),
+    );
+    expect(result).toContain('outside the allowed directories');
+  });
+});
+
 describe('bashTool', () => {
   test('runs a command inside the allowed cwd', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-bash-'));
@@ -76,6 +149,17 @@ describe('bashTool', () => {
     const out = await tool.call(JSON.stringify({ command: 'cat hello.txt' }));
     expect(out).toContain('exit: 0');
     expect(out).toContain('hi');
+  });
+
+  test('HITL confirm can reject a command', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-bash-'));
+    const tool = bashTool({
+      allowedDirectories: [root],
+      workingDirectory: root,
+      confirm: () => false,
+    });
+    const out = await tool.call(JSON.stringify({ command: 'echo hi' }));
+    expect(out).toContain('not approved');
   });
 
   test('rejects a cwd outside the sandbox', async () => {

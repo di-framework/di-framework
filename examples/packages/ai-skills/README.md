@@ -8,6 +8,6 @@ The bundled skill is `.claude/skills/code-reviewer/`:
 - `references/checklist.md` — loaded with `Read` after the skill activates
 - `scripts/count-lines.sh` — optional `Bash` (`shell: true`)
 
-`Bash` is **opt-in** and is not a container sandbox. The process can still reach the network or other paths. Prefer a container for untrusted skills.
+`Write`/`Edit`/`Bash` are **opt-in**. `ListDirectory` and `TodoWrite` are on by default. `Bash` is not a container sandbox — the process can still reach the network or other paths. Prefer a container for untrusted skills.
 
 Tests use `ScriptedChatModel` and do not need an API key.

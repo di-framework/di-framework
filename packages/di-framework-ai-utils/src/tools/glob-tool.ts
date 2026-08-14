@@ -1,14 +1,19 @@
-import { readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { statSync } from 'node:fs';
+import { relative } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import {
+  type AllowedDirectories,
+  resolveAllowedDirectories,
+} from '../sandbox/allowed-directories.ts';
 import { assertPathAllowed, uniqueResolvedRoots } from '../sandbox/paths.ts';
+import { compileGlob } from './glob-match.ts';
+import { walkFiles } from './walk-files.ts';
 
-const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist', 'coverage']);
 const DEFAULT_MAX_RESULTS = 200;
 const DEFAULT_MAX_DEPTH = 20;
 
 export interface GlobToolOptions {
-  readonly allowedDirectories: readonly string[];
+  readonly allowedDirectories: AllowedDirectories;
   readonly workingDirectory?: string;
   readonly maxResults?: number;
   readonly maxDepth?: number;
@@ -22,10 +27,9 @@ export interface GlobInput {
 export function globTool(options: GlobToolOptions): ToolCallback {
   const maxResults = options.maxResults ?? DEFAULT_MAX_RESULTS;
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const roots = uniqueResolvedRoots(options.allowedDirectories);
   const defaultRoot = options.workingDirectory
     ? uniqueResolvedRoots([options.workingDirectory])[0]
-    : roots[0];
+    : undefined;
 
   return functionToolCallback<GlobInput, string>({
     name: 'Glob',
@@ -49,7 +53,8 @@ Supports globs like "**/*.md" or "scripts/*". Returns matching paths sorted by n
       const pattern = input?.pattern?.trim() ?? '';
       if (!pattern) return 'Error: The glob pattern must not be empty';
 
-      const searchRoot = input?.path?.trim() || defaultRoot;
+      const roots = uniqueResolvedRoots(resolveAllowedDirectories(options.allowedDirectories));
+      const searchRoot = input?.path?.trim() || defaultRoot || roots[0];
       if (!searchRoot) return 'Error: No search directory configured';
 
       const access = assertPathAllowed(searchRoot, roots);
@@ -65,7 +70,7 @@ Supports globs like "**/*.md" or "scripts/*". Returns matching paths sorted by n
 
       const matcher = compileGlob(pattern);
       const matches: string[] = [];
-      walk(access.path, 0, maxDepth, (file) => {
+      walkFiles(access.path, 0, maxDepth, (file) => {
         const rel = relative(access.path, file).split('\\').join('/');
         if (matcher(rel) || matcher(file.split('\\').join('/'))) {
           matches.push(file);
@@ -81,50 +86,4 @@ Supports globs like "**/*.md" or "scripts/*". Returns matching paths sorted by n
       return clipped.join('\n') + suffix;
     },
   });
-}
-
-function walk(dir: string, depth: number, maxDepth: number, visit: (file: string) => void): void {
-  if (depth > maxDepth) return;
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (SKIP_DIR_NAMES.has(entry.name)) continue;
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full, depth + 1, maxDepth, visit);
-      } else if (entry.isFile()) {
-        visit(full);
-      }
-    }
-  } catch {
-    // Unreadable directories are skipped.
-  }
-}
-
-function compileGlob(pattern: string): (value: string) => boolean {
-  const normalized = pattern.replace(/\\/g, '/');
-  let regex = '^';
-  for (let i = 0; i < normalized.length; i += 1) {
-    const char = normalized.charAt(i);
-    if (char === '*' && normalized[i + 1] === '*') {
-      const after = normalized[i + 2];
-      if (after === '/') {
-        regex += '(?:.*/)?';
-        i += 2;
-      } else {
-        regex += '.*';
-        i += 1;
-      }
-    } else if (char === '*') {
-      regex += '[^/]*';
-    } else if (char === '?') {
-      regex += '[^/]';
-    } else if ('\\.[]{}()+-^$|'.includes(char)) {
-      regex += `\\${char}`;
-    } else {
-      regex += char;
-    }
-  }
-  regex += '$';
-  const re = new RegExp(regex);
-  return (value) => re.test(value.replace(/\\/g, '/'));
 }

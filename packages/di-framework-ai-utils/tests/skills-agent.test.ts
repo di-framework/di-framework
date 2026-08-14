@@ -9,7 +9,7 @@ import {
   toolCall,
   toolCallResponse,
 } from '@di-framework/ai';
-import { SkillsTool } from '../src/index.ts';
+import { agentSkill, SkillsTool } from '../src/index.ts';
 
 describe('ChatAgent + SkillsTool', () => {
   test('agent loads a SKILL.md when the model invokes Skill', async () => {
@@ -70,14 +70,7 @@ description: Reviews TypeScript for nulls and Spring-style conventions. Use when
     const client = ChatClient.builder(model)
       .defaultTools(
         SkillsTool.of({
-          skills: [
-            {
-              name: 'only',
-              content: 'only this',
-              basePath: '.',
-              frontMatter: { name: 'only' },
-            },
-          ],
+          skills: [agentSkill({ name: 'only', content: 'only this' })],
         }),
       )
       .build();

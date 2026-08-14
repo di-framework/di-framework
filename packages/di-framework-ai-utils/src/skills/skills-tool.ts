@@ -37,6 +37,7 @@ export interface SkillsToolOptions {
   readonly files?: readonly string[];
   readonly toolName?: string;
   readonly toolDescriptionTemplate?: string;
+  readonly onActivate?: (skill: AgentSkill) => void;
 }
 
 /**
@@ -112,6 +113,7 @@ export function skillsTool(options: SkillsToolOptions): ToolCallback {
       if (!skill) {
         return formatSkillNotFound(command);
       }
+      options.onActivate?.(skill);
       return formatSkillLoadResult(skill);
     },
   });

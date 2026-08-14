@@ -1,0 +1,144 @@
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import {
+  type AllowedDirectories,
+  resolveAllowedDirectories,
+} from '../sandbox/allowed-directories.ts';
+import { assertPathAllowed } from '../sandbox/paths.ts';
+import { DEFAULT_MAX_LINE_CHARS } from './read-tool.ts';
+
+export interface EditToolOptions {
+  readonly allowedDirectories: AllowedDirectories;
+}
+
+export interface EditInput {
+  readonly filePath?: string;
+  readonly oldString?: string;
+  readonly newString?: string;
+  readonly replaceAll?: boolean;
+}
+
+export function editTool(options: EditToolOptions): ToolCallback {
+  return functionToolCallback<EditInput, string>({
+    name: 'Edit',
+    description: `Performs an exact string replacement in a file inside the allowed directories.
+
+Usage:
+- oldString must match the file text exactly (not Read line-number prefixes)
+- If oldString appears more than once, either widen the context or set replaceAll
+- newString must differ from oldString
+- Read the file first so indentation is exact`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'The path to edit (absolute preferred)',
+        },
+        oldString: {
+          type: 'string',
+          description: 'Exact text to replace',
+        },
+        newString: {
+          type: 'string',
+          description: 'Replacement text',
+        },
+        replaceAll: {
+          type: 'boolean',
+          description: 'Replace every occurrence (default false)',
+        },
+      },
+      required: ['filePath', 'oldString', 'newString'],
+    },
+    call: (input) => {
+      const filePath = input?.filePath?.trim() ?? '';
+      const oldString = input?.oldString ?? '';
+      const newString = input?.newString ?? '';
+      if (oldString === newString) {
+        return 'Error: oldString and newString must be different';
+      }
+
+      const access = assertPathAllowed(
+        filePath,
+        resolveAllowedDirectories(options.allowedDirectories),
+      );
+      if (!access.ok) return access.error;
+
+      if (!existsSync(access.path)) {
+        return `Error: File does not exist: ${filePath}`;
+      }
+      if (statSync(access.path).isDirectory()) {
+        return `Error: Path is a directory, not a file: ${filePath}`;
+      }
+
+      let content: string;
+      try {
+        content = readFileSync(access.path, 'utf8');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return `Error reading file: ${message}`;
+      }
+
+      const occurrences = countOccurrences(content, oldString);
+      if (occurrences === 0) {
+        return `Error: oldString was not found in ${filePath}`;
+      }
+      if (occurrences > 1 && !input?.replaceAll) {
+        return `Error: oldString appears ${occurrences} times in the file. Either provide a larger string with more surrounding context to make it unique or use replaceAll=true to change all instances.`;
+      }
+
+      const next = input?.replaceAll
+        ? content.split(oldString).join(newString)
+        : content.replace(oldString, newString);
+
+      try {
+        writeFileSync(access.path, next, 'utf8');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return `Error writing file: ${message}`;
+      }
+
+      const snippet = numberedSnippet(next, newString);
+      return `The file ${access.path} has been updated. Here's the result of running \`cat -n\` on a snippet of the edited file:\n${snippet}`;
+    },
+  });
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let from = 0;
+  while (from <= haystack.length) {
+    const index = haystack.indexOf(needle, from);
+    if (index === -1) break;
+    count += 1;
+    from = index + needle.length;
+  }
+  return count;
+}
+
+function numberedSnippet(content: string, focus: string): string {
+  const lines = content.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  const focusLine = content.indexOf(focus);
+  let start = 0;
+  if (focusLine >= 0) {
+    const before = content.slice(0, focusLine);
+    const lineIndex = before.split(/\r?\n/).length - 1;
+    start = Math.max(0, lineIndex - 2);
+  }
+  const end = Math.min(lines.length, start + 7);
+  return lines
+    .slice(start, end)
+    .map((line, index) => {
+      const text =
+        line.length > DEFAULT_MAX_LINE_CHARS
+          ? `${line.slice(0, DEFAULT_MAX_LINE_CHARS)}... (line truncated)`
+          : line;
+      const n = start + index + 1;
+      return `${String(n).padStart(6, ' ')}\t${text}`;
+    })
+    .join('\n');
+}
