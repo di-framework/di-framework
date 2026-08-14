@@ -134,6 +134,16 @@ describe('publish command', () => {
       expect(PACKAGES).toEqual(BUILD_PACKAGES);
     });
 
+    it('matches the Release workflow publish list', async () => {
+      const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
+      const loop = workflow.match(/for pkg in([\s\S]*?); do/);
+      expect(loop).toBeTruthy();
+      const listed = [...(loop?.[1] ?? '').matchAll(/packages\/di-framework-[a-z0-9-]+/g)].map(
+        (match) => match[0],
+      );
+      expect(listed).toEqual([...PACKAGES]);
+    });
+
     it('every package directory exists', async () => {
       for (const pkg of PACKAGES) {
         expect(await Bun.file(join(REPO_ROOT, pkg, 'package.json')).exists()).toBe(true);
