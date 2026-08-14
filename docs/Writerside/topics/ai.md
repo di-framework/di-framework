@@ -238,6 +238,29 @@ const { answer } = await PlannerExecutorWorkflow.of(chatClient).run(goal, {
 
 Uses `@modelcontextprotocol/sdk`. Adapt an SDK client and expose remote tools as `ToolCallback`s, or mark beans with `@McpClient` / `@McpTool`. Token: `AiTokens.MCP_CLIENT`.
 
+## Agent Skills
+
+Reusable `SKILL.md` folders (name + description at discovery, full instructions on invoke) live in **`@di-framework/ai-utils`**, not this package. Attach the `Skill` tool to any `ChatAgent` or `ChatClient`:
+
+```bash
+bun add @di-framework/ai-utils
+```
+
+```typescript
+import { ChatAgent, OpenAiChatModel } from '@di-framework/ai';
+import { SkillsTool } from '@di-framework/ai-utils';
+
+const agent = ChatAgent.create({
+  chatModel: new OpenAiChatModel({ model: 'gpt-4o-mini' }),
+  system: 'You help with code review.',
+  tools: [SkillsTool.builder().addSkillsDirectory('.claude/skills').build()],
+});
+
+await agent.chat('Review src/UserController.ts');
+```
+
+This is the generic, model-agnostic pattern (same idea as Spring’s `spring-ai-agent-utils` `SkillsTool`). It is not Anthropic’s hosted document Skills API.
+
 ## Providers
 
 ```typescript

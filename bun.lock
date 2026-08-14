@@ -210,6 +210,19 @@
         "@di-framework/auth",
       ],
     },
+    "packages/di-framework-ai-utils": {
+      "name": "@di-framework/ai-utils",
+      "version": "4.2.3",
+      "devDependencies": {
+        "@di-framework/ai": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@di-framework/ai": "workspace:*",
+        "typescript": "^5",
+      },
+    },
     "packages/di-framework-auth": {
       "name": "@di-framework/auth",
       "version": "4.2.3",
@@ -472,6 +485,8 @@
     "@di-framework/ai": ["@di-framework/ai@workspace:packages/di-framework-ai"],
 
     "@di-framework/ai-chat-example": ["@di-framework/ai-chat-example@workspace:examples/packages/ai-chat"],
+
+    "@di-framework/ai-utils": ["@di-framework/ai-utils@workspace:packages/di-framework-ai-utils"],
 
     "@di-framework/auth": ["@di-framework/auth@workspace:packages/di-framework-auth"],
 
