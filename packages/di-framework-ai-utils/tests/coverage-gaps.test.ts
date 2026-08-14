@@ -344,12 +344,13 @@ describe('file and web tools remaining branches', () => {
 
     const original = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('throw')) throw new Error('net');
-      if (url.includes('search.brave.com') && url.includes('failsearch')) {
-        return new Response('nope', { status: 500 });
-      }
-      if (url.includes('search.brave.com')) {
+      const parsed =
+        input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+      if (parsed.pathname.includes('throw')) throw new Error('net');
+      if (parsed.hostname === 'api.search.brave.com') {
+        if (parsed.searchParams.get('q') === 'failsearch') {
+          return new Response('nope', { status: 500 });
+        }
         return new Response(
           JSON.stringify({
             web: { results: [{ title: 'T', url: 'https://ex', description: 'd' }] },
@@ -506,6 +507,21 @@ describe('file and web tools remaining branches', () => {
     ).toContain('Error writing file');
     writeFail.mockRestore();
 
+    let writeCalls = 0;
+    const overwriteFail = spyOn(fs, 'writeFileSync').mockImplementation((() => {
+      writeCalls += 1;
+      if (writeCalls === 1) {
+        const exists = new Error('exists') as NodeJS.ErrnoException;
+        exists.code = 'EEXIST';
+        throw exists;
+      }
+      throw new Error('overwrite fail');
+    }) as typeof fs.writeFileSync);
+    expect(
+      await write.call(JSON.stringify({ filePath: join(root, 'd.txt'), content: 'y' })),
+    ).toContain('Error writing file');
+    overwriteFail.mockRestore();
+
     const read = readTool({ allowedDirectories: [root] });
     const readFail = spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
       throw new Error('read fail');
@@ -577,11 +593,24 @@ describe('file and web tools remaining branches', () => {
 
   test('memory list, empty tree, and system prompt', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-mem2-'));
-    const [view] = memoryTools({ directory: root });
-    if (!view) throw new Error('missing view');
+    const [view, write, edit, del, rename] = memoryTools({ directory: root });
+    if (!view || !write || !edit || !del || !rename) throw new Error('missing view');
     expect(await view.call(JSON.stringify({}))).toContain('Empty memory directory');
     writeFileSync(join(root, 'a.md'), 'x');
+    mkdirSync(join(root, 'nested'));
     expect(await view.call(JSON.stringify({}))).toContain('a.md');
+    expect(await view.call(JSON.stringify({ path: 'nested' }))).toContain('Empty memory directory');
+    expect(await view.call(JSON.stringify({ path: 'missing.md' }))).toContain('does not exist');
+    expect(
+      await edit.call(JSON.stringify({ path: 'missing.md', oldString: 'a', newString: 'b' })),
+    ).toContain('does not exist');
+    expect(
+      await edit.call(JSON.stringify({ path: 'a.md', oldString: 'zzz', newString: 'b' })),
+    ).toContain('oldString was not found');
+    expect(await del.call(JSON.stringify({ path: 'missing.md' }))).toContain('does not exist');
+    expect(await rename.call(JSON.stringify({ from: 'missing.md', to: 'b.md' }))).toContain(
+      'does not exist',
+    );
     expect(formatMemorySystemPrompt('/mem')).toContain('/mem');
   });
 });

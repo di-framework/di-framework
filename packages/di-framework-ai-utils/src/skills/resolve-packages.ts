@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { expandUserPath } from '../sandbox/paths.ts';
@@ -24,10 +24,10 @@ function skillDirectoriesForPackage(spec: string, fromDirectory: string): string
   const root = resolvePackageRoot(spec, fromDirectory);
   const declared = readPackageSkillsField(root);
   if (declared.length > 0) {
-    return declared.filter((dir) => existsSync(dir) && statSync(dir).isDirectory());
+    return declared.filter((dir) => isExistingDirectory(dir));
   }
-  return [join(root, '.claude', 'skills'), join(root, 'skills')].filter(
-    (dir) => existsSync(dir) && statSync(dir).isDirectory(),
+  return [join(root, '.claude', 'skills'), join(root, 'skills')].filter((dir) =>
+    isExistingDirectory(dir),
   );
 }
 
@@ -44,9 +44,16 @@ function resolvePackageRoot(spec: string, fromDirectory: string): string {
   }
 }
 
+function isExistingDirectory(dir: string): boolean {
+  try {
+    return statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function readPackageSkillsField(packageRoot: string): string[] {
   const pkgPath = join(packageRoot, 'package.json');
-  if (!existsSync(pkgPath)) return [];
   let parsed: { skills?: unknown };
   try {
     parsed = JSON.parse(readFileSync(pkgPath, 'utf8')) as { skills?: unknown };

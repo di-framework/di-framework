@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { expandUserPath } from '../sandbox/paths.ts';
 import { type AgentSkill, parseSkillMarkdown } from './parse-skill-markdown.ts';
 
@@ -13,10 +14,13 @@ const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist', 'coverage']);
  */
 export function loadSkillsDirectory(rootDirectory: string): AgentSkill[] {
   const rootPath = resolve(rootDirectory);
-  if (!existsSync(rootPath)) {
+  let isDirectory = false;
+  try {
+    isDirectory = statSync(rootPath).isDirectory();
+  } catch {
     throw new Error(`Root directory does not exist: ${rootDirectory}`);
   }
-  if (!statSync(rootPath).isDirectory()) {
+  if (!isDirectory) {
     throw new Error(`Path is not a directory: ${rootDirectory}`);
   }
 
@@ -48,8 +52,12 @@ export function existingSkillDirectories(
   const out: string[] = [];
   for (const candidate of candidates) {
     const resolved = resolve(expandUserPath(candidate));
-    if (existsSync(resolved) && statSync(resolved).isDirectory()) {
-      out.push(resolved);
+    try {
+      if (statSync(resolved).isDirectory()) {
+        out.push(resolved);
+      }
+    } catch {
+      // Missing or unreadable candidates are skipped.
     }
   }
   return out;
@@ -61,13 +69,15 @@ export function existingSkillDirectories(
  */
 export function loadSkillFile(skillMdPath: string): AgentSkill {
   const absolute = resolve(skillMdPath);
-  if (!existsSync(absolute)) {
+  let markdown: string;
+  try {
+    markdown = readFileSync(absolute, 'utf8');
+  } catch (error) {
+    if (nodeErrnoCode(error) === 'EISDIR') {
+      throw new Error(`Path is not a file: ${skillMdPath}`);
+    }
     throw new Error(`SKILL.md does not exist: ${skillMdPath}`);
   }
-  if (!statSync(absolute).isFile()) {
-    throw new Error(`Path is not a file: ${skillMdPath}`);
-  }
-  const markdown = readFileSync(absolute, 'utf8');
   const basePath = dirname(absolute);
   return parseSkillMarkdown(markdown, {
     basePath,

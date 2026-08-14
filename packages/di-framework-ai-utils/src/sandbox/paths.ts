@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { errorMessage, nodeErrnoCode } from './fs-error.ts';
 
 export interface PathAccessOk {
   readonly ok: true;
@@ -73,10 +74,6 @@ export function assertPathAllowed(
   for (const allowed of roots) {
     if (!isContained(target, allowed)) continue;
 
-    if (!fs.existsSync(allowed)) {
-      return { ok: true, path: target };
-    }
-
     try {
       const realAllowed = fs.realpathSync(allowed);
       const existing = nearestExisting(target);
@@ -96,6 +93,9 @@ export function assertPathAllowed(
         return { ok: true, path: target };
       }
     } catch (error) {
+      if (nodeErrnoCode(error) === 'ENOENT') {
+        return { ok: true, path: target };
+      }
       return { ok: false, error: `Error validating path: ${errorMessage(error)}` };
     }
   }
@@ -134,8 +134,4 @@ function nearestExisting(target: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

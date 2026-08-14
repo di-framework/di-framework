@@ -1,15 +1,7 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import { nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed, expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
 
 export const MEMORY_SYSTEM_PROMPT = `You have a long-term memory directory at {MEMORIES_ROOT}.
@@ -48,9 +40,14 @@ export function memoryTools(options: MemoryToolsOptions): ToolCallback[] {
       }
       const access = resolveMemory(rel);
       if (!access.ok) return access.error;
-      if (!existsSync(access.path)) return `Error: Memory does not exist: ${rel}`;
-      if (statSync(access.path).isDirectory()) return listTree(access.path);
-      return readFileSync(access.path, 'utf8');
+      try {
+        return readFileSync(access.path, 'utf8');
+      } catch (error) {
+        if (nodeErrnoCode(error) === 'EISDIR') {
+          return listTree(access.path);
+        }
+        return `Error: Memory does not exist: ${rel}`;
+      }
     },
   });
 
@@ -92,8 +89,12 @@ export function memoryTools(options: MemoryToolsOptions): ToolCallback[] {
     call: (input) => {
       const access = resolveMemory(input?.path ?? '');
       if (!access.ok) return access.error;
-      if (!existsSync(access.path)) return `Error: Memory does not exist: ${input?.path}`;
-      const current = readFileSync(access.path, 'utf8');
+      let current: string;
+      try {
+        current = readFileSync(access.path, 'utf8');
+      } catch {
+        return `Error: Memory does not exist: ${input?.path}`;
+      }
       const oldString = input?.oldString ?? '';
       if (!current.includes(oldString)) return 'Error: oldString was not found';
       writeFileSync(access.path, current.replace(oldString, input?.newString ?? ''), 'utf8');
@@ -112,8 +113,11 @@ export function memoryTools(options: MemoryToolsOptions): ToolCallback[] {
     call: (input) => {
       const access = resolveMemory(input?.path ?? '');
       if (!access.ok) return access.error;
-      if (!existsSync(access.path)) return `Error: Memory does not exist: ${input?.path}`;
-      rmSync(access.path, { recursive: false, force: false });
+      try {
+        rmSync(access.path, { recursive: false, force: false });
+      } catch {
+        return `Error: Memory does not exist: ${input?.path}`;
+      }
       return `Deleted ${relative(root, access.path)}`;
     },
   });
@@ -131,9 +135,12 @@ export function memoryTools(options: MemoryToolsOptions): ToolCallback[] {
       const to = resolveMemory(input?.to ?? '');
       if (!from.ok) return from.error;
       if (!to.ok) return to.error;
-      if (!existsSync(from.path)) return `Error: Memory does not exist: ${input?.from}`;
-      mkdirSync(dirname(to.path), { recursive: true });
-      renameSync(from.path, to.path);
+      try {
+        mkdirSync(dirname(to.path), { recursive: true });
+        renameSync(from.path, to.path);
+      } catch {
+        return `Error: Memory does not exist: ${input?.from}`;
+      }
       return `Renamed ${relative(root, from.path)} → ${relative(root, to.path)}`;
     },
   });
