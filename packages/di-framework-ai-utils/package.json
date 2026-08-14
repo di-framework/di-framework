@@ -19,7 +19,7 @@
   "license": "(MIT OR Apache-2.0)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/di-framework/di-framework",
+    "url": "git+https://github.com/di-framework/di-framework.git",
     "directory": "packages/di-framework-ai-utils"
   },
   "bugs": {
