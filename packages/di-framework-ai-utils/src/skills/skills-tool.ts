@@ -125,6 +125,7 @@ export class SkillsToolBuilder {
   private files: string[] = [];
   private name = DEFAULT_SKILL_TOOL_NAME;
   private template?: string;
+  private activate?: (skill: AgentSkill) => void;
 
   toolName(name: string): this {
     this.name = name;
@@ -161,6 +162,11 @@ export class SkillsToolBuilder {
     return this;
   }
 
+  onActivate(handler: (skill: AgentSkill) => void): this {
+    this.activate = handler;
+    return this;
+  }
+
   build(): ToolCallback {
     return skillsTool({
       skills: this.skills,
@@ -168,12 +174,13 @@ export class SkillsToolBuilder {
       files: this.files,
       toolName: this.name,
       toolDescriptionTemplate: this.template,
+      onActivate: this.activate,
     });
   }
 }
 
 /**
- * Spring-style factory. Prefer {@link skillsTool} or {@link SkillsTool.builder}.
+ * Spring-style factory. Prefer {@link SkillsTool.builder}.
  */
 export const SkillsTool = {
   builder(): SkillsToolBuilder {

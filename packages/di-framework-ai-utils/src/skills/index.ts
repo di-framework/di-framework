@@ -1,5 +1,10 @@
 export type { CreateSkillsAgentOptions, SkillsAgentBundle } from './create-skills-agent.ts';
-export { createSkillsAgent, createSkillsAgentBundle } from './create-skills-agent.ts';
+export {
+  createSkillsAgent,
+  createSkillsAgentBundle,
+  SkillsAgent,
+  SkillsAgentBuilder,
+} from './create-skills-agent.ts';
 export {
   DEFAULT_SKILL_DIRECTORY_CANDIDATES,
   existingSkillDirectories,
@@ -15,6 +20,7 @@ export type {
 } from './parse-skill-markdown.ts';
 export { agentSkill, parseAllowedTools, parseSkillMarkdown } from './parse-skill-markdown.ts';
 export { resolveSkillPackageDirectories } from './resolve-packages.ts';
+export { SkillsFluent } from './skills-fluent.ts';
 export type { SkillsRuntime, SkillsRuntimeOptions } from './skills-runtime.ts';
 export { createSkillsRuntime } from './skills-runtime.ts';
 export type { SkillsInput, SkillsToolOptions } from './skills-tool.ts';
@@ -29,13 +35,17 @@ export {
   skillToXml,
 } from './skills-tool.ts';
 export type {
-  SkillsToolbox,
   SkillsToolboxMemoriesOptions,
   SkillsToolboxOptions,
   SkillsToolboxTaskOptions,
   SkillsToolboxWebOptions,
 } from './skills-toolbox.ts';
-export { createSkillsToolbox, skillsToolbox } from './skills-toolbox.ts';
+export {
+  createSkillsToolbox,
+  SkillsToolbox,
+  SkillsToolboxBuilder,
+  skillsToolbox,
+} from './skills-toolbox.ts';
 export type { ValidateSkillOptions } from './validate-skill.ts';
 export {
   validateSkill,

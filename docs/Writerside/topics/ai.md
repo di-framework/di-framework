@@ -247,24 +247,22 @@ bun add @di-framework/ai-utils
 ```
 
 ```typescript
-import { ChatAgent, OpenAiChatModel } from '@di-framework/ai';
-import { skillsToolbox } from '@di-framework/ai-utils';
+import { OpenAiChatModel } from '@di-framework/ai';
+import { SkillsAgent } from '@di-framework/ai-utils';
 
-const agent = ChatAgent.create({
-  chatModel: new OpenAiChatModel({ model: 'gpt-4o-mini' }),
-  system: 'You help with code review.',
-  tools: skillsToolbox({
-    directories: ['.claude/skills'],
-    workspace: process.cwd(),
-    write: true,
-    shell: true,
-  }),
-});
+const agent = SkillsAgent.builder()
+  .chatModel(new OpenAiChatModel({ model: 'gpt-4o-mini' }))
+  .system('You help with code review.')
+  .addSkillsDirectory('.claude/skills')
+  .workspace(process.cwd())
+  .write()
+  .shell()
+  .build();
 
 await agent.chat('Review src/UserController.ts');
 ```
 
-`skillsToolbox()` / `createSkillsAgent()` attach `Skill`, `Read`, `ListDirectory`, `Glob`, `Grep`, `TodoWrite`, and opt-in `Write`/`Edit`/`Bash`, plus optional `AskUserQuestion`, web, memory, and `Task`. File tools are limited to the workspace and skill folders. After a skill with `allowed-tools` is activated, other tools are gated. `Bash` jails `cwd` only — it is not a container sandbox. When `directories` is omitted, existing `.claude/skills` and `~/.claude/skills` are loaded. npm packages can be passed as `packages`. Skills stay in `@di-framework/ai-utils`; `configureAi` / `@Agent` are unchanged.
+`SkillsAgent.builder()` / `SkillsToolbox.builder()` attach `Skill`, `Read`, `ListDirectory`, `Glob`, `Grep`, `TodoWrite`, and opt-in `Write`/`Edit`/`Bash`, plus optional `AskUserQuestion`, web, memory, and `Task`. File tools are limited to the workspace and skill folders. After a skill with `allowed-tools` is activated, other tools are gated. `Bash` jails `cwd` only — it is not a container sandbox. When `directories` is omitted, existing `.claude/skills` and `~/.claude/skills` are loaded. npm packages can be passed as `packages`. Skills stay in `@di-framework/ai-utils`; `configureAi` / `@Agent` are unchanged.
 
 This is the generic, model-agnostic pattern (same idea as Spring’s `spring-ai-agent-utils` `SkillsTool`). It is not Anthropic’s hosted document Skills API.
 

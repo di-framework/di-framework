@@ -18,7 +18,7 @@ and `deno task --no-lock build` for Deno examples.
 | --- | --- | --- | --- |
 | [`advanced`](packages/advanced) | Advanced container and DI behavior | `build`, `check` | Tests exist, but there is no package `test` script; use `bun test`. |
 | [`ai-chat`](packages/ai-chat) | AI services, tools, RAG, and workflows | `build`, `check`, `typecheck`, `test` | `typecheck` aliases `di-framework check`. Tests use fake models and need no API key; real providers require credentials. |
-| [`ai-skills`](packages/ai-skills) | Agent Skills (`SKILL.md`) with `skillsToolbox` | `build`, `check`, `typecheck`, `test` | Tests use `ScriptedChatModel` and need no API key. `Bash` is opt-in and not a container sandbox. |
+| [`ai-skills`](packages/ai-skills) | Agent Skills (`SKILL.md`) with `SkillsToolbox.builder` | `build`, `check`, `typecheck`, `test` | Tests use `ScriptedChatModel` and need no API key. `Bash` is opt-in and not a container sandbox. |
 | [`auth`](packages/auth) | Authentication with HTTP integration | `build`, `check`, `test`, `start` | `start` runs TypeScript directly with Bun, so it does not apply emit-time transformations. |
 | [`authz`](packages/authz) | Authorization policies layered on auth and HTTP | `build`, `check`, `test` | There is no `start` script; build output is emitted to `dist/`. |
 | [`basic`](packages/basic) | Minimal DI usage | `build`, `check` | It also compiles the sibling `services` sources, so its emitted output has a nested multi-package layout. Run tests with `bun test`. |

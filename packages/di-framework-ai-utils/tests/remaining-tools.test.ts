@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
 import {
   askUserQuestionTool,
-  createSkillsAgent,
   createSkillsToolbox,
   listDirectoryTool,
   memoryTools,
   resolveSkillPackageDirectories,
+  SkillsAgent,
   skillsToolbox,
   skillsToolboxAsMcp,
   taskTool,
@@ -198,12 +198,12 @@ describe('createSkillsAgent', () => {
         },
       },
     ]);
-    const agent = createSkillsAgent({
-      chatModel: model,
-      directories: [root],
-      workspace: root,
-      todos: false,
-    });
+    const agent = SkillsAgent.builder()
+      .chatModel(model)
+      .addSkillsDirectory(root)
+      .workspace(root)
+      .todos(false)
+      .build();
     const { content } = await agent.chat('review');
     expect(content).toBe('done');
   });

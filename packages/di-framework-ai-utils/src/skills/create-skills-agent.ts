@@ -9,6 +9,7 @@ import {
   type ToolSource,
 } from '@di-framework/ai';
 import { formatMemorySystemPrompt } from '../tools/memory-tools.ts';
+import { SkillsFluent } from './skills-fluent.ts';
 import {
   createSkillsToolbox,
   type SkillsToolbox,
@@ -32,9 +33,95 @@ export interface SkillsAgentBundle {
   readonly toolbox: SkillsToolbox;
 }
 
+export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
+  private systemText?: string;
+  private extraToolSources?: readonly ToolSource[];
+  private client?: ChatClient;
+  private chatOptions?: ChatOptions;
+  private advisorList?: readonly Advisor[];
+  private memory?: ChatMemory;
+  private conversationId?: string;
+  private clientBuilder?: ChatClientBuilderOptions;
+
+  system(text: string): this {
+    this.systemText = text;
+    return this;
+  }
+
+  extraTools(...tools: ToolSource[]): this {
+    this.extraToolSources = [...(this.extraToolSources ?? []), ...tools];
+    return this;
+  }
+
+  chatClient(client: ChatClient): this {
+    this.client = client;
+    return this;
+  }
+
+  defaultOptions(options: ChatOptions): this {
+    this.chatOptions = options;
+    return this;
+  }
+
+  advisors(...advisors: Advisor[]): this {
+    this.advisorList = [...(this.advisorList ?? []), ...advisors];
+    return this;
+  }
+
+  conversationMemory(memory: ChatMemory): this {
+    this.memory = memory;
+    return this;
+  }
+
+  defaultConversationId(id: string): this {
+    this.conversationId = id;
+    return this;
+  }
+
+  clientBuilderOptions(options: ChatClientBuilderOptions): this {
+    this.clientBuilder = options;
+    return this;
+  }
+
+  build(): ChatAgent {
+    return this.buildBundle().agent;
+  }
+
+  buildBundle(): SkillsAgentBundle {
+    return createSkillsAgentBundle(this.toAgentOptions());
+  }
+
+  toAgentOptions(): CreateSkillsAgentOptions {
+    return {
+      ...this.toOptions(),
+      system: this.systemText,
+      extraTools: this.extraToolSources,
+      chatClient: this.client,
+      defaultOptions: this.chatOptions,
+      advisors: this.advisorList,
+      conversationMemory: this.memory,
+      defaultConversationId: this.conversationId,
+      builder: this.clientBuilder,
+    };
+  }
+}
+
+/**
+ * Preferred factory: {@code SkillsAgent.builder().chatModel(model).addSkillsDirectory(...).build()}.
+ */
+export const SkillsAgent = {
+  builder(): SkillsAgentBuilder {
+    return new SkillsAgentBuilder();
+  },
+  of(options: CreateSkillsAgentOptions): ChatAgent {
+    return createSkillsAgent(options);
+  },
+};
+
 /**
  * ChatAgent with {@link createSkillsToolbox} attached. Skills stay in this
  * package — {@code configureAi} / {@code @Agent} are unchanged.
+ * Prefer {@link SkillsAgent.builder}.
  */
 export function createSkillsAgent(options: CreateSkillsAgentOptions): ChatAgent {
   return createSkillsAgentBundle(options).agent;
