@@ -19,7 +19,6 @@ export const PACKAGES = [
   'packages/di-framework-rpc',
   'packages/di-framework-ai',
   'packages/di-framework-ai-utils',
-  'packages/di-framework-sandboxes',
   'packages/di-framework-codegen',
   'packages/di-framework-cli',
   // plugin.cjs + Go sidecar; package.json "build" is a no-op (not tsc/bun compile)

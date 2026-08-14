@@ -128,7 +128,7 @@ Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `name` and `descr
 
 File tools are limited to `workspace` ∪ skill folders (and extras). After a skill with `allowed-tools` activates, other tools are denied by name.
 
-**`Bash` jails `cwd` only.** It is not a container: the process can still use the network or `cd` elsewhere. For an isolated Linux guest, use [`@di-framework/sandboxes`](../di-framework-sandboxes) (not wired into this toolbox). Use `confirmShell` when a human should approve commands.
+**`Bash` jails `cwd` only.** It is not a container: the process can still use the network or `cd` elsewhere. Prefer a container for untrusted skills. Use `confirmShell` when a human should approve commands.
 
 ## Discovery
 
