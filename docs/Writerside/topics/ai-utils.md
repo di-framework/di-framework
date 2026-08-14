@@ -60,7 +60,7 @@ const tools = SkillsToolbox.builder()
 const client = ChatClient.builder(model).defaultTools(...tools).build();
 ```
 
-The [`ai-skills`](https://github.com/di-framework/di-framework/tree/main/examples/packages/ai-skills) example uses `ScriptedChatModel` and needs no API key.
+The [`ai-skills`](https://github.com/di-framework/di-framework/tree/main/examples/packages/ai-skills) example has scripted tests (no API key) and a live `bun start` path that reviews `fixtures/sample-user.ts` with `OpenAiChatModel` (`process.env.OPENAI_API_KEY`).
 
 ## Skill folders
 
@@ -180,5 +180,6 @@ const mcp = skillsToolboxAsMcp({
 ## Related
 
 - [AI](ai.md) — chat, tools, RAG, MCP, and agents (`@di-framework/ai`)
+- [Sandboxes](sandboxes.md) — isolated Linux guests (`@di-framework/sandboxes`). Opt-in `Bash` in this package still runs on the host.
 - [Package README](https://github.com/di-framework/di-framework/blob/main/packages/di-framework-ai-utils/README.md)
 - [Example](https://github.com/di-framework/di-framework/tree/main/examples/packages/ai-skills)

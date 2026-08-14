@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Agent Skills example for @di-framework/ai-utils",
   "scripts": {
+    "start": "bun src/main.ts",
     "test": "bun test",
     "typecheck": "di-framework check",
     "build": "di-framework build",

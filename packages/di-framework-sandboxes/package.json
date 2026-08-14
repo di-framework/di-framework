@@ -1,0 +1,73 @@
+{
+  "name": "@di-framework/sandboxes",
+  "version": "4.2.3",
+  "description": "Execute untrusted code in isolated Linux sandboxes backed by the di-framework control service.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "private": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "author": "@di-framework Contributors",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-sandboxes"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "keywords": [
+    "sandbox",
+    "untrusted-code",
+    "isolation",
+    "v86",
+    "linux",
+    "di-framework",
+    "typescript"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build ./index.ts --outdir ./dist --target node --external openapi-fetch && tsc --emitDeclarationOnly --declaration --outDir dist && mkdir -p dist/src/generated && cp src/generated/schema.d.ts dist/src/generated/schema.d.ts",
+    "prepublishOnly": "bun run build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "pack:check": "bun run build && npm pack --dry-run"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.14.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

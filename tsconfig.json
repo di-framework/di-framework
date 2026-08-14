@@ -55,7 +55,9 @@
       "@di-framework/ai-utils": ["packages/di-framework-ai-utils/src/index.ts"],
       "@di-framework/ai-utils/*": ["packages/di-framework-ai-utils/src/*"],
       "@di-framework/codegen": ["packages/di-framework-codegen/index.ts"],
-      "@di-framework/codegen/*": ["packages/di-framework-codegen/*"]
+      "@di-framework/codegen/*": ["packages/di-framework-codegen/*"],
+      "@di-framework/sandboxes": ["packages/di-framework-sandboxes/index.ts"],
+      "@di-framework/sandboxes/*": ["packages/di-framework-sandboxes/*"]
     }
   },
   "exclude": [
@@ -63,6 +65,7 @@
     "examples/packages/deno-sandboxes/**/*",
     "examples/packages/deno-http/**/*",
     "packages/di-framework-tsc/fixture/**/*",
-    "references/**/*"
+    "references/**/*",
+    "examples/packages/ai-skills/fixtures/**/*"
   ]
 }
