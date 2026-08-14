@@ -52,6 +52,21 @@
         "typescript": "^5",
       },
     },
+    "examples/packages/ai-skills": {
+      "name": "@di-framework/ai-skills-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@di-framework/ai": "workspace:*",
+        "@di-framework/ai-utils": "workspace:*",
+        "@di-framework/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@di-framework/cli": "workspace:*",
+        "@di-framework/tsc": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "examples/packages/auth": {
       "name": "di-auth-example",
       "version": "0.0.0",
@@ -485,6 +500,8 @@
     "@di-framework/ai": ["@di-framework/ai@workspace:packages/di-framework-ai"],
 
     "@di-framework/ai-chat-example": ["@di-framework/ai-chat-example@workspace:examples/packages/ai-chat"],
+
+    "@di-framework/ai-skills-example": ["@di-framework/ai-skills-example@workspace:examples/packages/ai-skills"],
 
     "@di-framework/ai-utils": ["@di-framework/ai-utils@workspace:packages/di-framework-ai-utils"],
 

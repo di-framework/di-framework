@@ -16,3 +16,11 @@ export {
   skillsTool,
   skillToXml,
 } from './skills-tool.ts';
+export type { SkillsToolbox, SkillsToolboxOptions } from './skills-toolbox.ts';
+export { createSkillsToolbox, skillsToolbox } from './skills-toolbox.ts';
+export type { ValidateSkillOptions } from './validate-skill.ts';
+export {
+  validateSkill,
+  validateSkillDescription,
+  validateSkillName,
+} from './validate-skill.ts';

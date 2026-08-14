@@ -248,16 +248,22 @@ bun add @di-framework/ai-utils
 
 ```typescript
 import { ChatAgent, OpenAiChatModel } from '@di-framework/ai';
-import { SkillsTool } from '@di-framework/ai-utils';
+import { skillsToolbox } from '@di-framework/ai-utils';
 
 const agent = ChatAgent.create({
   chatModel: new OpenAiChatModel({ model: 'gpt-4o-mini' }),
   system: 'You help with code review.',
-  tools: [SkillsTool.builder().addSkillsDirectory('.claude/skills').build()],
+  tools: skillsToolbox({
+    directories: ['.claude/skills'],
+    workspace: process.cwd(),
+    shell: true,
+  }),
 });
 
 await agent.chat('Review src/UserController.ts');
 ```
+
+`skillsToolbox()` attaches `Skill`, `Read`, `Glob`, and opt-in `Bash`. File tools are limited to the workspace and skill folders. `Bash` jails `cwd` only — it is not a container sandbox.
 
 This is the generic, model-agnostic pattern (same idea as Spring’s `spring-ai-agent-utils` `SkillsTool`). It is not Anthropic’s hosted document Skills API.
 
