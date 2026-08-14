@@ -428,6 +428,23 @@
         "@di-framework/socket",
       ],
     },
+    "packages/di-framework-sandboxes": {
+      "name": "@di-framework/sandboxes",
+      "version": "4.2.3",
+      "dependencies": {
+        "openapi-fetch": "^0.14.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+      "optionalPeers": [
+        "typescript",
+      ],
+    },
     "packages/di-framework-socket": {
       "name": "@di-framework/socket",
       "version": "4.2.3",
@@ -532,6 +549,8 @@
     "@di-framework/repo": ["@di-framework/repo@workspace:packages/di-framework-repo"],
 
     "@di-framework/rpc": ["@di-framework/rpc@workspace:packages/di-framework-rpc"],
+
+    "@di-framework/sandboxes": ["@di-framework/sandboxes@workspace:packages/di-framework-sandboxes"],
 
     "@di-framework/socket": ["@di-framework/socket@workspace:packages/di-framework-socket"],
 
@@ -934,6 +953,10 @@
     "on-finished": ["on-finished@2.4.1", "", { "dependencies": { "ee-first": "1.1.1" } }, "sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg=="],
 
     "once": ["once@1.4.0", "", { "dependencies": { "wrappy": "1" } }, "sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w=="],
+
+    "openapi-fetch": ["openapi-fetch@0.14.1", "", { "dependencies": { "openapi-typescript-helpers": "^0.0.15" } }, "sha512-l7RarRHxlEZYjMLd/PR0slfMVse2/vvIAGm75/F7J6MlQ8/b9uUQmUF2kCPrQhJqMXSxmYWObVgeYXbFYzZR+A=="],
+
+    "openapi-typescript-helpers": ["openapi-typescript-helpers@0.0.15", "", {}, "sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw=="],
 
     "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
 
