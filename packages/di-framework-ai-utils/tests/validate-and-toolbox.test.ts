@@ -6,6 +6,8 @@ import { ChatAgent, ScriptedChatModel, toolCall, toolCallResponse } from '@di-fr
 import {
   agentSkill,
   createSkillsToolbox,
+  SkillsAgent,
+  SkillsToolbox,
   skillsToolbox,
   validateSkill,
   validateSkillName,
@@ -166,6 +168,41 @@ describe('skillsToolbox', () => {
       ],
     });
     expect(box.skills.map((s) => s.name)).toEqual(['xlsx']);
+  });
+
+  test('SkillsToolbox.builder and SkillsAgent.builder are the preferred factories', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    writeValidSkill(root, 'code-reviewer');
+    const box = SkillsToolbox.builder()
+      .addSkillsDirectory(root)
+      .workspace(root)
+      .write()
+      .shell()
+      .todos(false)
+      .build();
+    expect(box.tools.map((t) => t.toolDefinition.name)).toEqual([
+      'Skill',
+      'Read',
+      'ListDirectory',
+      'Glob',
+      'Grep',
+      'Write',
+      'Edit',
+      'Bash',
+    ]);
+    expect(SkillsToolbox.of({ directories: [root], workspace: root }).skills).toHaveLength(1);
+
+    const model = new ScriptedChatModel([
+      { respond: toolCallResponse([toolCall('c1', 'Skill', { command: 'code-reviewer' })]) },
+      { respond: () => 'ok' },
+    ]);
+    const agent = SkillsAgent.builder()
+      .chatModel(model)
+      .addSkillsDirectory(root)
+      .workspace(root)
+      .todos(false)
+      .build();
+    expect((await agent.chat('review')).content).toBe('ok');
   });
 
   test('createSkillsToolbox exposes allowed directories including skill bases', () => {

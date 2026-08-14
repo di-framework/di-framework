@@ -4,7 +4,7 @@ Agentic extras for [`@di-framework/ai`](../di-framework-ai). **Agent Skills** (`
 
 This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils) — LLM-agnostic skills that run in your process, not Anthropic’s native cloud Skills API.
 
-Skills stay in this package. `@di-framework/ai` `configureAi` / `@Agent` are unchanged; attach a toolbox or use `createSkillsAgent()`.
+Skills stay in this package. `@di-framework/ai` `configureAi` / `@Agent` are unchanged. Prefer `SkillsAgent.builder()` / `SkillsToolbox.builder()`.
 
 ## Installation
 
@@ -47,26 +47,26 @@ metadata:
 Discovery loads only `name` + `description` into the `Skill` tool description. Activation returns the full body plus the skill base directory. After activation, `allowed-tools` (if set) gates the rest of the toolbox, and file tools jail to workspace ∪ that skill folder.
 
 ```ts
-import { createSkillsAgent } from '@di-framework/ai-utils';
+import { SkillsAgent } from '@di-framework/ai-utils';
 import { OpenAiChatModel } from '@di-framework/ai';
 
-const agent = createSkillsAgent({
-  chatModel: new OpenAiChatModel({ model: 'gpt-4o-mini' }),
-  directories: ['.claude/skills'],
-  workspace: process.cwd(),
-  write: true,
-  shell: true,
-  confirmShell: ({ command }) => command.startsWith('cat '),
-  askUser: async (questions) => ({ [questions[0].question]: 'Day.js' }),
-  web: { fetch: true },
-  memories: { directory: '.memory' },
-  task: true, // nested ChatAgent; uses chatModel
-});
+const agent = SkillsAgent.builder()
+  .chatModel(new OpenAiChatModel({ model: 'gpt-4o-mini' }))
+  .addSkillsDirectory('.claude/skills')
+  .workspace(process.cwd())
+  .write()
+  .shell()
+  .confirmShell(({ command }) => command.startsWith('cat '))
+  .askUser(async (questions) => ({ [questions[0].question]: 'Day.js' }))
+  .web({ fetch: true })
+  .memories({ directory: '.memory' })
+  .task(true)
+  .build();
 
 await agent.chat('Review src/UserController.ts');
 ```
 
-`skillsToolbox()` (also used by `createSkillsAgent`) includes:
+`SkillsToolbox.builder()` (also used by `SkillsAgent.builder()`) includes:
 
 | Included by default | Opt-in |
 | --- | --- |
@@ -81,22 +81,22 @@ Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `allowed-tools` i
 In-memory skills (tests, no filesystem):
 
 ```ts
-import { agentSkill, skillsTool } from '@di-framework/ai-utils';
+import { agentSkill, SkillsTool } from '@di-framework/ai-utils';
 
-const tool = skillsTool({
-  skills: [
+const tool = SkillsTool.builder()
+  .addSkill(
     agentSkill({
       name: 'xlsx',
       description: 'Build spreadsheets',
       content: 'Prefer a real .xlsx over a description.',
     }),
-  ],
-});
+  )
+  .build();
 ```
 
-`ChatClient.builder(model).defaultTools(...skillsToolbox(opts))` works the same way.
+`ChatClient.builder(model).defaultTools(...SkillsToolbox.builder().addSkillsDirectory('.claude/skills').buildTools())` works the same way.
 
-MCP: `skillsToolboxAsMcp(opts)` returns descriptor + handler pairs from `@di-framework/ai` `toolCallbackAsMcpTool`.
+MCP: `skillsToolboxAsMcp(opts)` returns descriptor + handler pairs from `@di-framework/ai` `toolCallbackAsMcpTool`. Free-function aliases (`skillsToolbox`, `createSkillsAgent`, `skillsTool`) remain.
 
 This is not Anthropic’s `AnthropicSkill` / code-execution container.
 
@@ -106,9 +106,9 @@ See [`examples/packages/ai-skills`](../../examples/packages/ai-skills) for a ski
 
 | Export | Role |
 | --- | --- |
-| `createSkillsAgent` / `createSkillsAgentBundle` | `ChatAgent` + toolbox |
-| `skillsToolbox` / `createSkillsToolbox` | Full tool set |
-| `skillsTool` / `SkillsTool.of` / `SkillsTool.builder` | `Skill` only |
+| `SkillsAgent.builder` / `SkillsAgent.of` | Preferred `ChatAgent` + toolbox |
+| `SkillsToolbox.builder` / `SkillsToolbox.of` | Preferred full tool set |
+| `SkillsTool.builder` / `SkillsTool.of` | `Skill` only |
 | `skillsToolboxAsMcp` | MCP descriptors + handlers |
 | File / shell tools | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |

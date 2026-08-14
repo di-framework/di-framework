@@ -17,6 +17,7 @@ import { writeTool } from '../tools/write-tool.ts';
 import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import { resolveSkillPackageDirectories } from './resolve-packages.ts';
+import { SkillsFluent } from './skills-fluent.ts';
 import { createSkillsRuntime, type SkillsRuntime } from './skills-runtime.ts';
 import type { SkillsToolOptions } from './skills-tool.ts';
 import { collectSkills, skillsTool } from './skills-tool.ts';
@@ -58,18 +59,50 @@ export interface SkillsToolboxOptions extends SkillsToolOptions {
   readonly perSkillSandbox?: boolean;
 }
 
-export interface SkillsToolbox {
+export class SkillsToolbox {
   readonly skills: readonly AgentSkill[];
   readonly allowedDirectories: readonly string[];
   readonly tools: readonly ToolCallback[];
   readonly runtime: SkillsRuntime;
+
+  constructor(init: {
+    readonly skills: readonly AgentSkill[];
+    readonly allowedDirectories: readonly string[];
+    readonly tools: readonly ToolCallback[];
+    readonly runtime: SkillsRuntime;
+  }) {
+    this.skills = init.skills;
+    this.allowedDirectories = init.allowedDirectories;
+    this.tools = init.tools;
+    this.runtime = init.runtime;
+  }
+
+  /** Preferred entry: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
+  static builder(): SkillsToolboxBuilder {
+    return new SkillsToolboxBuilder();
+  }
+
+  static of(options: SkillsToolboxOptions = {}): SkillsToolbox {
+    return createSkillsToolbox(options);
+  }
+}
+
+export class SkillsToolboxBuilder extends SkillsFluent<SkillsToolboxBuilder> {
+  build(): SkillsToolbox {
+    return SkillsToolbox.of(this.toOptions());
+  }
+
+  buildTools(): ToolCallback[] {
+    return this.build().tools as ToolCallback[];
+  }
 }
 
 /**
  * Skill + file tools + optional mutation / HITL / web / memory / task tools.
+ * Prefer {@link SkillsToolbox.builder}.
  */
 export function skillsToolbox(options: SkillsToolboxOptions = {}): ToolCallback[] {
-  return createSkillsToolbox(options).tools as ToolCallback[];
+  return SkillsToolbox.of(options).tools as ToolCallback[];
 }
 
 export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsToolbox {
@@ -162,7 +195,7 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
   }
 
   const tools = raw.map((tool) => gateToolCallback(tool, runtime));
-  return { skills: collected, allowedDirectories, tools, runtime };
+  return new SkillsToolbox({ skills: collected, allowedDirectories, tools, runtime });
 }
 
 function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {

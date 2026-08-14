@@ -167,7 +167,7 @@ configureAi({
 
 Imperative APIs are unchanged: `functionToolCallback`, `MessageChatMemoryAdvisor`, `RetrievalAugmentationAdvisor`, MCP adapters, and `ChainWorkflow` / `RoutingWorkflow` / … See source tests under `tests/` for examples.
 
-**Agent Skills** (`SKILL.md`, progressive disclosure) are not in this package. Use [`@di-framework/ai-utils`](../di-framework-ai-utils) `skillsToolbox()` on `ChatAgent` / `ChatClient`.
+**Agent Skills** (`SKILL.md`, progressive disclosure) are not in this package. Use [`@di-framework/ai-utils`](../di-framework-ai-utils) `SkillsAgent.builder()` / `SkillsToolbox.builder()`.
 
 ### Tool Execution Authorization & Interception
 

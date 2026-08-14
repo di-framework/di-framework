@@ -1,6 +1,6 @@
 # Agent Skills example
 
-`@di-framework/ai-utils` `skillsToolbox()` attached to a `ChatAgent`.
+`@di-framework/ai-utils` `SkillsAgent.builder()` / `SkillsToolbox.builder()`.
 
 The bundled skill is `.claude/skills/code-reviewer/`:
 
