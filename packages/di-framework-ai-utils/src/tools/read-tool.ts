@@ -1,12 +1,16 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import {
+  type AllowedDirectories,
+  resolveAllowedDirectories,
+} from '../sandbox/allowed-directories.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
 
 export const DEFAULT_READ_LIMIT = 2000;
 export const DEFAULT_MAX_LINE_CHARS = 2000;
 
 export interface ReadToolOptions {
-  readonly allowedDirectories: readonly string[];
+  readonly allowedDirectories: AllowedDirectories;
   readonly maxLineChars?: number;
 }
 
@@ -50,7 +54,10 @@ Usage:
     },
     call: (input) => {
       const filePath = input?.filePath?.trim() ?? '';
-      const access = assertPathAllowed(filePath, options.allowedDirectories);
+      const access = assertPathAllowed(
+        filePath,
+        resolveAllowedDirectories(options.allowedDirectories),
+      );
       if (!access.ok) return access.error;
 
       if (!existsSync(access.path)) {

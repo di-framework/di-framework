@@ -256,6 +256,7 @@ const agent = ChatAgent.create({
   tools: skillsToolbox({
     directories: ['.claude/skills'],
     workspace: process.cwd(),
+    write: true,
     shell: true,
   }),
 });
@@ -263,7 +264,7 @@ const agent = ChatAgent.create({
 await agent.chat('Review src/UserController.ts');
 ```
 
-`skillsToolbox()` attaches `Skill`, `Read`, `Glob`, and opt-in `Bash`. File tools are limited to the workspace and skill folders. `Bash` jails `cwd` only — it is not a container sandbox.
+`skillsToolbox()` / `createSkillsAgent()` attach `Skill`, `Read`, `ListDirectory`, `Glob`, `Grep`, `TodoWrite`, and opt-in `Write`/`Edit`/`Bash`, plus optional `AskUserQuestion`, web, memory, and `Task`. File tools are limited to the workspace and skill folders. After a skill with `allowed-tools` is activated, other tools are gated. `Bash` jails `cwd` only — it is not a container sandbox. When `directories` is omitted, existing `.claude/skills` and `~/.claude/skills` are loaded. npm packages can be passed as `packages`. Skills stay in `@di-framework/ai-utils`; `configureAi` / `@Agent` are unchanged.
 
 This is the generic, model-agnostic pattern (same idea as Spring’s `spring-ai-agent-utils` `SkillsTool`). It is not Anthropic’s hosted document Skills API.
 

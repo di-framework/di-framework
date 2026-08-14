@@ -1,16 +1,27 @@
 import { spawn } from 'node:child_process';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import {
+  type AllowedDirectories,
+  resolveAllowedDirectories,
+} from '../sandbox/allowed-directories.ts';
 import { assertPathAllowed, expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
 
 export const DEFAULT_BASH_TIMEOUT_MS = 120_000;
 export const MAX_BASH_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_OUTPUT_CHARS = 24_000;
 
+export interface BashConfirmInput {
+  readonly command: string;
+  readonly cwd: string;
+}
+
 export interface BashToolOptions {
-  readonly allowedDirectories: readonly string[];
+  readonly allowedDirectories: AllowedDirectories;
   readonly workingDirectory?: string;
   readonly timeoutMs?: number;
   readonly maxOutputChars?: number;
+  /** Human-in-the-loop gate. Return false to reject the command. */
+  readonly confirm?: (input: BashConfirmInput) => boolean | Promise<boolean>;
 }
 
 export interface BashInput {
@@ -32,10 +43,9 @@ export function bashTool(options: BashToolOptions): ToolCallback {
     MAX_BASH_TIMEOUT_MS,
   );
   const maxOutputChars = options.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS;
-  const roots = uniqueResolvedRoots(options.allowedDirectories);
   const defaultCwd = options.workingDirectory
     ? uniqueResolvedRoots([options.workingDirectory])[0]
-    : roots[0];
+    : undefined;
 
   return functionToolCallback<BashInput, string>({
     name: 'Bash',
@@ -70,11 +80,19 @@ Usage:
       const command = input?.command?.trim() ?? '';
       if (!command) return 'Error: command is required';
 
-      const cwdInput = input?.cwd?.trim() || defaultCwd;
+      const roots = uniqueResolvedRoots(resolveAllowedDirectories(options.allowedDirectories));
+      const cwdInput = input?.cwd?.trim() || defaultCwd || roots[0];
       if (!cwdInput) return 'Error: No working directory configured';
 
       const access = assertPathAllowed(cwdInput, roots);
       if (!access.ok) return access.error;
+
+      if (options.confirm) {
+        const approved = await options.confirm({ command, cwd: access.path });
+        if (!approved) {
+          return `Error: Command was not approved: ${command}`;
+        }
+      }
 
       const timeout = Math.min(Math.max(1, input?.timeout ?? defaultTimeout), MAX_BASH_TIMEOUT_MS);
 

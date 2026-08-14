@@ -1,6 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { expandUserPath } from '../sandbox/paths.ts';
 import { type AgentSkill, parseSkillMarkdown } from './parse-skill-markdown.ts';
+
+/** Claude-style locations scanned when no directories are given. */
+export const DEFAULT_SKILL_DIRECTORY_CANDIDATES = ['.claude/skills', '~/.claude/skills'] as const;
 
 const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist', 'coverage']);
 
@@ -32,6 +36,23 @@ export function loadSkillsDirectories(rootDirectories: readonly string[]): Agent
     skills.push(...loadSkillsDirectory(root));
   }
   return skills;
+}
+
+/**
+ * Candidates that exist as directories. Missing paths are skipped so default
+ * {@code ~/.claude/skills} does not fail closed on a fresh machine.
+ */
+export function existingSkillDirectories(
+  candidates: readonly string[] = DEFAULT_SKILL_DIRECTORY_CANDIDATES,
+): string[] {
+  const out: string[] = [];
+  for (const candidate of candidates) {
+    const resolved = resolve(expandUserPath(candidate));
+    if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+      out.push(resolved);
+    }
+  }
+  return out;
 }
 
 /**

@@ -72,6 +72,20 @@ body
     expect(skill.frontMatter.note).toBe('a:b:c');
   });
 
+  test('parses allowed-tools as a comma list', () => {
+    const skill = parseSkillMarkdown(
+      `---
+name: code-reviewer
+description: Reviews code when asked to review.
+allowed-tools: Read, Grep, Bash
+---
+
+body
+`,
+    );
+    expect(skill.allowedTools).toEqual(['Read', 'Grep', 'Bash']);
+  });
+
   test('treats a document without a closing delimiter as body', () => {
     const skill = parseSkillMarkdown('---\nname: nope\nno close', { fallbackName: 'folder' });
     expect(skill.name).toBe('folder');
@@ -311,6 +325,7 @@ describe('skillsTool', () => {
   test('collectSkills and skillToXml are exported helpers', () => {
     const skill = agentSkill({ name: 'n', description: 'd', content: 'c' });
     expect(collectSkills({ skills: [skill] })).toHaveLength(1);
+    expect(collectSkills({ directories: [] })).toHaveLength(0);
     expect(skillToXml(skill)).toContain('<description>d</description>');
   });
 });

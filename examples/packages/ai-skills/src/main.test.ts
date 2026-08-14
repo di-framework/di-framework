@@ -15,7 +15,14 @@ const checklist = join(
 test('toolbox loads the committed example skill', () => {
   const box = exampleSkillsToolbox();
   expect(box.skills.map((s) => s.name)).toEqual(['code-reviewer']);
-  expect(box.tools.map((t) => t.toolDefinition.name)).toEqual(['Skill', 'Read', 'Glob']);
+  expect(box.tools.map((t) => t.toolDefinition.name)).toEqual([
+    'Skill',
+    'Read',
+    'ListDirectory',
+    'Glob',
+    'Grep',
+    'TodoWrite',
+  ]);
 });
 
 test('agent loads the skill then the checklist via Read', async () => {

@@ -76,21 +76,39 @@ describe('validateSkill', () => {
 });
 
 describe('skillsToolbox', () => {
-  test('builds Skill, Read, Glob, and optional Bash', () => {
+  test('builds Skill, Read, Glob, Grep, and optional Write/Edit/Bash', () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
     writeValidSkill(root, 'code-reviewer');
     const withoutShell = skillsToolbox({
       directories: [root],
       workspace: root,
     });
-    expect(withoutShell.map((t) => t.toolDefinition.name)).toEqual(['Skill', 'Read', 'Glob']);
+    expect(withoutShell.map((t) => t.toolDefinition.name)).toEqual([
+      'Skill',
+      'Read',
+      'ListDirectory',
+      'Glob',
+      'Grep',
+      'TodoWrite',
+    ]);
 
-    const withShell = skillsToolbox({
+    const withMutators = skillsToolbox({
       directories: [root],
       workspace: root,
+      write: true,
       shell: true,
     });
-    expect(withShell.map((t) => t.toolDefinition.name)).toEqual(['Skill', 'Read', 'Glob', 'Bash']);
+    expect(withMutators.map((t) => t.toolDefinition.name)).toEqual([
+      'Skill',
+      'Read',
+      'ListDirectory',
+      'Glob',
+      'Grep',
+      'Write',
+      'Edit',
+      'Bash',
+      'TodoWrite',
+    ]);
   });
 
   test('fails closed when a loaded skill is invalid', () => {
@@ -133,6 +151,21 @@ describe('skillsToolbox', () => {
     });
     const { content } = await agent.chat('Review this file.');
     expect(content).toBe('Review done using the checklist.');
+  });
+
+  test('in-memory skills do not load default disk directories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    const box = createSkillsToolbox({
+      workspace: root,
+      skills: [
+        agentSkill({
+          name: 'xlsx',
+          description: 'Build spreadsheets when asked to make a spreadsheet.',
+          content: 'Prefer a real .xlsx.',
+        }),
+      ],
+    });
+    expect(box.skills.map((s) => s.name)).toEqual(['xlsx']);
   });
 
   test('createSkillsToolbox exposes allowed directories including skill bases', () => {
