@@ -1,0 +1,24 @@
+{
+  "name": "@di-framework/ai-skills-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Skills example for @di-framework/ai-utils",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "di-framework check",
+    "build": "di-framework build",
+    "check": "di-framework check"
+  },
+  "dependencies": {
+    "@di-framework/ai": "workspace:*",
+    "@di-framework/ai-utils": "workspace:*",
+    "@di-framework/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

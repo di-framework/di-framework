@@ -1,0 +1,145 @@
+import { describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ChatAgent, ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
+import {
+  agentSkill,
+  createSkillsToolbox,
+  skillsToolbox,
+  validateSkill,
+  validateSkillName,
+} from '../src/index.ts';
+
+function writeValidSkill(root: string, name: string, extra?: { reference?: string }): string {
+  const dir = join(root, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, 'SKILL.md'),
+    `---
+name: ${name}
+description: Use when reviewing ${name} files. Trigger words include review and audit.
+---
+
+# ${name}
+
+Read references/checklist.md for the checklist.
+`,
+  );
+  if (extra?.reference) {
+    mkdirSync(join(dir, 'references'));
+    writeFileSync(join(dir, 'references', 'checklist.md'), extra.reference);
+  }
+  return dir;
+}
+
+describe('validateSkill', () => {
+  test('accepts a spec-compliant name and description', () => {
+    expect(() =>
+      validateSkill(
+        agentSkill({
+          name: 'code-reviewer',
+          description: 'Reviews TypeScript. Use when the user asks to review code.',
+          content: 'Be thorough.',
+          basePath: '.',
+        }),
+        { matchDirectoryName: false },
+      ),
+    ).not.toThrow();
+  });
+
+  test('rejects invalid names and missing descriptions', () => {
+    expect(validateSkillName('PDF-Processing')).toBeDefined();
+    expect(validateSkillName('-pdf')).toBeDefined();
+    expect(validateSkillName('pdf--processing')).toBeDefined();
+    expect(validateSkillName('a'.repeat(65))).toBeDefined();
+    expect(() =>
+      validateSkill(agentSkill({ name: 'ok', content: 'x' }), { matchDirectoryName: false }),
+    ).toThrow(/description is required/);
+  });
+
+  test('requires the directory basename to match the name', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-val-'));
+    const dir = join(root, 'other-name');
+    mkdirSync(dir);
+    expect(() =>
+      validateSkill(
+        agentSkill({
+          name: 'code-reviewer',
+          description: 'Reviews code when asked to review.',
+          content: 'x',
+          basePath: dir,
+        }),
+      ),
+    ).toThrow(/must match the skill directory name/);
+  });
+});
+
+describe('skillsToolbox', () => {
+  test('builds Skill, Read, Glob, and optional Bash', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    writeValidSkill(root, 'code-reviewer');
+    const withoutShell = skillsToolbox({
+      directories: [root],
+      workspace: root,
+    });
+    expect(withoutShell.map((t) => t.toolDefinition.name)).toEqual(['Skill', 'Read', 'Glob']);
+
+    const withShell = skillsToolbox({
+      directories: [root],
+      workspace: root,
+      shell: true,
+    });
+    expect(withShell.map((t) => t.toolDefinition.name)).toEqual(['Skill', 'Read', 'Glob', 'Bash']);
+  });
+
+  test('fails closed when a loaded skill is invalid', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    const dir = join(root, 'bad-skill');
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: bad-skill\n---\n# no description\n');
+    expect(() => skillsToolbox({ directories: [root], workspace: root })).toThrow(
+      /description is required/,
+    );
+  });
+
+  test('ChatAgent can Skill then Read a reference file', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    const skillDir = writeValidSkill(root, 'code-reviewer', {
+      reference: '- Check for nulls\n- Prefer early return',
+    });
+    const checklist = join(skillDir, 'references', 'checklist.md');
+
+    const model = new ScriptedChatModel([
+      {
+        respond: toolCallResponse([toolCall('c1', 'Skill', { command: 'code-reviewer' })]),
+      },
+      {
+        respond: toolCallResponse([toolCall('c2', 'Read', { filePath: checklist })]),
+      },
+      {
+        respond: (prompt) => {
+          const blob = JSON.stringify(prompt.messages);
+          expect(blob).toContain('# code-reviewer');
+          expect(blob).toContain('Check for nulls');
+          return 'Review done using the checklist.';
+        },
+      },
+    ]);
+
+    const agent = ChatAgent.create({
+      chatModel: model,
+      tools: skillsToolbox({ directories: [root], workspace: root }),
+    });
+    const { content } = await agent.chat('Review this file.');
+    expect(content).toBe('Review done using the checklist.');
+  });
+
+  test('createSkillsToolbox exposes allowed directories including skill bases', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
+    const skillDir = writeValidSkill(root, 'code-reviewer');
+    const box = createSkillsToolbox({ directories: [root], workspace: root });
+    expect(box.skills).toHaveLength(1);
+    expect(box.allowedDirectories.some((d) => d === skillDir)).toBe(true);
+  });
+});
