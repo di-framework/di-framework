@@ -387,7 +387,8 @@ describe('file and web tools remaining branches', () => {
     }
 
     const fmt = webSearchTool({ apiKey: 'k' });
-    globalThis.fetch = (async () => new Response('not-json', { status: 200 })) as unknown as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response('not-json', { status: 200 })) as unknown as typeof fetch;
     try {
       expect(await fmt.call(JSON.stringify({ query: 'q' }))).toContain('not-json');
       globalThis.fetch = (async () =>
