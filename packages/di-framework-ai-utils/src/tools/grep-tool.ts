@@ -131,9 +131,9 @@ Usage:
       const fileHits: { file: string; count: number; lines: string[] }[] = [];
       for (const file of files) {
         const rel = relative(access.path, file).split('\\').join('/') || file;
-        if (globFilter && !globFilter(rel) && !globFilter(file.split('\\').join('/'))) {
-          continue;
-        }
+        const skipGlob =
+          globFilter != null && !globFilter(rel) && !globFilter(file.split('\\').join('/'));
+        if (skipGlob) continue;
         let text: string;
         try {
           text = readFileSync(file, 'utf8');

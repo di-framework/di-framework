@@ -135,10 +135,13 @@ export async function runLiveExample(chatModel?: ChatModel): Promise<LiveExample
   return { content, usedTools };
 }
 
-/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
-export async function runAiSkillsMain(isMain = import.meta.main): Promise<void> {
+/** CLI main gate — `isMain` and `live` are injectable so tests can cover the entry path. */
+export async function runAiSkillsMain(
+  isMain = import.meta.main,
+  live: () => Promise<LiveExampleResult> = runLiveExample,
+): Promise<void> {
   if (!isMain) return;
-  const result = await runLiveExample();
+  const result = await live();
   console.log(`tools: ${result.usedTools.join(', ') || '(none)'}`);
   console.log(result.content);
 }

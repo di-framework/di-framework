@@ -87,11 +87,8 @@ Usage:
       const access = assertPathAllowed(cwdInput, roots);
       if (!access.ok) return access.error;
 
-      if (options.confirm) {
-        const approved = await options.confirm({ command, cwd: access.path });
-        if (!approved) {
-          return `Error: Command was not approved: ${command}`;
-        }
+      if (options.confirm && !(await options.confirm({ command, cwd: access.path }))) {
+        return `Error: Command was not approved: ${command}`;
       }
 
       const timeout = Math.min(Math.max(1, input?.timeout ?? defaultTimeout), MAX_BASH_TIMEOUT_MS);

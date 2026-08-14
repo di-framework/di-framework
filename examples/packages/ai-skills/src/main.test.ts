@@ -1,8 +1,11 @@
 import { expect, spyOn, test } from 'bun:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ChatAgent, ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
 import {
   createLiveReviewAgent,
+  createOpenAiChatModel,
   createReviewAgent,
   exampleRoot,
   exampleSkillsToolbox,
@@ -100,6 +103,35 @@ test('loadEnvSecrets finds the repo .env.secrets when present', () => {
   }
 });
 
+test('loadEnvSecrets walks off the filesystem root and parses quoted values', () => {
+  expect(loadEnvSecrets('/')).toBeUndefined();
+  const dir = mkdtempSync(join(tmpdir(), 'ai-skills-env-'));
+  writeFileSync(
+    join(dir, '.env.secrets'),
+    ['# comment', 'NOTKEY', 'QUOTED="value"', "SINGLE='x'", 'EMPTY=', 'ALREADY=keep'].join('\n'),
+  );
+  const previous = {
+    QUOTED: process.env.QUOTED,
+    SINGLE: process.env.SINGLE,
+    EMPTY: process.env.EMPTY,
+    ALREADY: process.env.ALREADY,
+  };
+  process.env.ALREADY = 'keep';
+  process.env.EMPTY = '';
+  try {
+    expect(loadEnvSecrets(dir)).toBe(join(dir, '.env.secrets'));
+    expect(process.env.QUOTED).toBe('value');
+    expect(process.env.SINGLE).toBe('x');
+    expect(process.env.EMPTY).toBe('');
+    expect(process.env.ALREADY).toBe('keep');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('CLI main gate is a no-op when isMain is false', async () => {
   const log = spyOn(console, 'log').mockImplementation(() => {});
   try {
@@ -110,7 +142,72 @@ test('CLI main gate is a no-op when isMain is false', async () => {
   }
 });
 
-test.skipIf(!hasOpenAiKey)(
+test('CLI main gate prints a live result when isMain is true', async () => {
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    await runAiSkillsMain(true, async () => ({ content: 'review', usedTools: ['Skill'] }));
+    expect(log).toHaveBeenCalled();
+  } finally {
+    log.mockRestore();
+  }
+});
+
+test('createLiveReviewAgent and createOpenAiChatModel require a key', () => {
+  const previous = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'sk-test';
+  try {
+    expect(createOpenAiChatModel()).toBeDefined();
+    expect(createLiveReviewAgent(new ScriptedChatModel([{ respond: 'ok' }]))).toBeInstanceOf(
+      ChatAgent,
+    );
+    expect(requireOpenAiApiKey()).toBe('sk-test');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previous;
+  }
+});
+
+test('requireOpenAiApiKey loads .env.secrets when process env is empty', () => {
+  const previous = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  try {
+    const key = requireOpenAiApiKey();
+    if (previous || loadEnvSecrets()) {
+      expect(key.length).toBeGreaterThan(0);
+    }
+  } catch (error) {
+    expect(String(error)).toMatch(/OPENAI_API_KEY is not set/);
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previous;
+  }
+});
+
+test('runLiveExample without a model uses OpenAiChatModel', async () => {
+  const previous = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'sk-test';
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        id: 'c',
+        choices: [
+          { message: { role: 'assistant', content: 'mocked review' }, finish_reason: 'stop' },
+        ],
+      }),
+      { status: 200 },
+    )) as unknown as typeof fetch;
+  try {
+    const result = await runLiveExample();
+    expect(result.content).toContain('mocked review');
+  } finally {
+    globalThis.fetch = original;
+    if (previous === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previous;
+  }
+});
+
+test.skipIf(!hasOpenAiKey || process.env.CI === 'true' || process.env.RUN_LIVE_SKILLS !== '1')(
   'live OpenAI review uses Skill + Read and flags the sample null access',
   async () => {
     expect(createLiveReviewAgent()).toBeInstanceOf(ChatAgent);
