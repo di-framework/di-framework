@@ -142,7 +142,6 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 | `@di-framework/authz` | [Resource Authorization](authorization.md) |
 | `@di-framework/ai` | [AI](ai.md) |
 | `@di-framework/ai-utils` | [Agent Skills](ai-utils.md) — `SKILL.md`, jailed file tools, opt-in Bash |
-| `@di-framework/sandboxes` | [Sandboxes](sandboxes.md) — untrusted code in isolated Linux guests (v86) |
 
 ## Next Steps
 

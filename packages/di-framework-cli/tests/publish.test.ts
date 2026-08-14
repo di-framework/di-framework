@@ -124,7 +124,6 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-rpc');
       expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-ai-utils');
-      expect(PACKAGES).toContain('packages/di-framework-sandboxes');
       expect(PACKAGES).toContain('packages/di-framework-codegen');
       expect(PACKAGES).toContain('packages/di-framework-cli');
       expect(PACKAGES).toContain('packages/di-framework-tsc');

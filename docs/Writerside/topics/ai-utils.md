@@ -180,6 +180,5 @@ const mcp = skillsToolboxAsMcp({
 ## Related
 
 - [AI](ai.md) — chat, tools, RAG, MCP, and agents (`@di-framework/ai`)
-- [Sandboxes](sandboxes.md) — isolated Linux guests (`@di-framework/sandboxes`). Opt-in `Bash` in this package still runs on the host.
 - [Package README](https://github.com/di-framework/di-framework/blob/main/packages/di-framework-ai-utils/README.md)
 - [Example](https://github.com/di-framework/di-framework/tree/main/examples/packages/ai-skills)

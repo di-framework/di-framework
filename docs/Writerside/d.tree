@@ -22,7 +22,6 @@
     <toc-element topic="authorization.md"/>
     <toc-element topic="ai.md"/>
     <toc-element topic="ai-utils.md"/>
-    <toc-element topic="sandboxes.md"/>
     <toc-element topic="api-reference.md"/>
     <toc-element topic="advanced-usage.md"/>
     <toc-element topic="error-handling.md"/>
