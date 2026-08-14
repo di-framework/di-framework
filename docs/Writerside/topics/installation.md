@@ -141,7 +141,7 @@ The core package stands alone. Companion packages add data access, HTTP, GraphQL
 | `@di-framework/auth` | [Authentication](auth.md) |
 | `@di-framework/authz` | [Resource Authorization](authorization.md) |
 | `@di-framework/ai` | [AI](ai.md) |
-| `@di-framework/ai-utils` | [AI](ai.md#agent-skills) — Agent Skills (`SKILL.md`) |
+| `@di-framework/ai-utils` | [Agent Skills](ai-utils.md) — `SKILL.md`, jailed file tools, opt-in Bash |
 
 ## Next Steps
 
