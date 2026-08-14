@@ -24,6 +24,7 @@ const RAW_TS_ALLOWED_PACKAGES = new Set([
   '@di-framework/cli',
   '@di-framework/tsc',
   '@di-framework/ai',
+  '@di-framework/ai-utils',
 ]);
 
 function extractPathsFromExports(exportsObj: unknown): string[] {

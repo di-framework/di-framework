@@ -22,7 +22,7 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 - **Resource Authorization**: Decorator-authored policies, EBNF interchange, DI resource providers, and fail-closed HTTP controller bindings with `@di-framework/authz`.
 - **Sockets**: Security-first WebSocket, TCP, and UDP with a WebCrypto secure channel via `@di-framework/socket` (network I/O — distinct from the in-process event bus).
 - **RPC**: Decorator-generated JSON-RPC and per-method gRPC with a typed client via `@di-framework/rpc` — the same service over memory, HTTP, sockets, and Connect / gRPC.
-- **AI**: Annotation-driven chat, tools, RAG, MCP, and agents with `@di-framework/ai` (OpenAI-compatible and Anthropic HTTP adapters).
+- **AI**: Annotation-driven chat, tools, RAG, MCP, and agents with `@di-framework/ai` (OpenAI-compatible and Anthropic HTTP adapters). Agent Skills (`SKILL.md`) live in `@di-framework/ai-utils`.
 - **App CLI**: Scaffold, typecheck, and build apps with `@di-framework/cli` (`init`, `check`, `build`); monorepo maintainers use `mx`.
 - **Runtime type checks**: `ttsc` transform `@di-framework/tsc` injects parameter guards from TypeScript types at emit time (`di-framework init` wires this by default).
 
@@ -124,7 +124,7 @@ userService.getUser('123');
 - [Configuration](config.md) - Typed config from env/files via DI
 - [Authentication](auth.md) - Sessions, JWT, OAuth2/OIDC, and passkeys
 - [Resource Authorization](authorization.md) - Declarative policies and HTTP resource enforcement
-- [AI](ai.md) - Chat, tools, RAG, MCP, and agents with `@di-framework/ai`
+- [AI](ai.md) - Chat, tools, RAG, MCP, and agents with `@di-framework/ai`; Agent Skills in `@di-framework/ai-utils`
 - [Repositories](repositories.md) - Standardized data access with `@di-framework/repo`
 - [API Reference](api-reference.md) - Complete API documentation
 - [Advanced Usage](advanced-usage.md) - Learn advanced patterns and techniques
