@@ -6,6 +6,7 @@ import {
   DEFAULT_SKILLS_INDEX_CHUNK_TOKENS,
   parseSkillsIndexCliArgs,
   runSkillsIndexCli,
+  type SkillEmbedder,
 } from '../src/index.ts';
 
 describe('di-skills-index', () => {
@@ -49,6 +50,8 @@ describe('di-skills-index', () => {
       /smaller/,
     );
     expect(() => parseSkillsIndexCliArgs(['--unknown'])).toThrow(/Unknown option/);
+    expect(() => parseSkillsIndexCliArgs(['--threshold', '-1'])).toThrow(/non-negative integer/);
+    expect(() => parseSkillsIndexCliArgs(['--limit', '0'])).toThrow(/positive integer/);
   });
 
   test('builds metadata without loading Transformers.js below the threshold', async () => {
@@ -82,5 +85,49 @@ describe('di-skills-index', () => {
     await expect(runSkillsIndexCli(['--skills-dir', 'missing'], io, root)).rejects.toThrow(
       /No skill source/,
     );
+  });
+
+  test('reports embedding progress and reuses an unchanged generated index', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-index-cli-large-'));
+    const skillDirectory = join(root, 'skills', 'alpha');
+    mkdirSync(skillDirectory, { recursive: true });
+    writeFileSync(
+      join(skillDirectory, 'SKILL.md'),
+      '---\nname: alpha\ndescription: Use for alpha work.\n---\n\nDo alpha work.\n',
+    );
+    const embedder: SkillEmbedder = {
+      id: 'cli-test@1',
+      model: 'cli-test',
+      revision: '1',
+      async split() {
+        return Array.from({ length: 300 }, (_, index) => `chunk ${index}`);
+      },
+      async embed(texts) {
+        return texts.map(() => new Float32Array([1, 0]));
+      },
+    };
+    const logs: string[] = [];
+    const io = { log: (message: string) => logs.push(message), error: () => undefined };
+    const args = [
+      '--skills-dir',
+      'skills',
+      '--output',
+      'generated/skills.jsonl',
+      '--threshold',
+      '0',
+    ];
+
+    await expect(runSkillsIndexCli(args, io, root, { embedder })).resolves.toMatchObject({
+      indexed: true,
+      chunkCount: 300,
+    });
+    expect(logs.join('\n')).toContain('embedded 256/300 chunks');
+    expect(logs.join('\n')).toContain('300 chunks x 2 dimensions');
+
+    logs.length = 0;
+    await expect(runSkillsIndexCli(args, io, root, { embedder })).resolves.toMatchObject({
+      unchanged: true,
+    });
+    expect(logs.join('\n')).toContain('unchanged');
   });
 });

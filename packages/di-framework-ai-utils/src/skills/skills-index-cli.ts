@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expandUserPath } from '../sandbox/paths.ts';
 import { DEFAULT_SKILL_DIRECTORY_CANDIDATES } from './load-skills.ts';
+import type { SkillEmbedder } from './skill-embedder.ts';
 import {
   type BuildSkillsIndexResult,
   DEFAULT_SKILLS_INDEX_BATCH_SIZE,
@@ -30,6 +31,10 @@ export interface SkillsIndexCliOptions {
 export interface SkillsIndexCliIo {
   log(message: string): void;
   error(message: string): void;
+}
+
+export interface SkillsIndexCliRuntime {
+  readonly embedder?: SkillEmbedder;
 }
 
 export const SKILLS_INDEX_CLI_HELP = `Build a semantic Agent Skills index
@@ -134,6 +139,7 @@ export async function runSkillsIndexCli(
   args: readonly string[] = process.argv.slice(2),
   io: SkillsIndexCliIo = console,
   cwd = process.cwd(),
+  runtime: SkillsIndexCliRuntime = {},
 ): Promise<BuildSkillsIndexResult | undefined> {
   const options = parseSkillsIndexCliArgs(args);
   if (options.help) {
@@ -157,7 +163,7 @@ export async function runSkillsIndexCli(
 
   let lastReported = 0;
   const started = performance.now();
-  const result = await SkillsIndex.builder()
+  const builder = SkillsIndex.builder()
     .addSkillsDirectories(directories)
     .addSkillsFiles(files)
     .outputFile(resolve(cwd, expandUserPath(options.outputFile)))
@@ -166,7 +172,9 @@ export async function runSkillsIndexCli(
     .batchSize(options.batchSize)
     .chunkTokens(options.chunkTokens)
     .chunkOverlapTokens(options.chunkOverlapTokens)
-    .force(options.force)
+    .force(options.force);
+  if (runtime.embedder) builder.embedder(runtime.embedder);
+  const result = await builder
     .onProgress((completed, total) => {
       if (completed === total || completed - lastReported >= 256) {
         io.log(`embedded ${completed}/${total} chunks`);

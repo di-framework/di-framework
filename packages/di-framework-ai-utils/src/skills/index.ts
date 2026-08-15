@@ -70,7 +70,11 @@ export {
   searchSkillsIndex,
   skillIndexText,
 } from './skills-index.ts';
-export type { SkillsIndexCliIo, SkillsIndexCliOptions } from './skills-index-cli.ts';
+export type {
+  SkillsIndexCliIo,
+  SkillsIndexCliOptions,
+  SkillsIndexCliRuntime,
+} from './skills-index-cli.ts';
 export {
   parseSkillsIndexCliArgs,
   runSkillsIndexCli,

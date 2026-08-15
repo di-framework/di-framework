@@ -2,7 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type ChatModel, ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
+import {
+  type CallAdvisorChain,
+  type ChatModel,
+  ChatResponse,
+  chatClientRequest,
+  chatClientResponse,
+  Prompt,
+  ScriptedChatModel,
+  type StreamAdvisorChain,
+  toolCall,
+  toolCallResponse,
+} from '@di-framework/ai';
 import {
   agentSkill,
   assertSkillsIndexCurrent,
@@ -13,9 +24,11 @@ import {
   type SkillEmbedder,
   SkillsAgent,
   SkillsIndex,
+  SkillsRetrievalAdvisor,
   type SkillTokenChunkOptions,
   scoreSkillsIndexEntry,
   searchSkillsIndex,
+  skillsTool,
 } from '../src/index.ts';
 
 class TestEmbedder implements SkillEmbedder {
@@ -83,11 +96,13 @@ describe('buildSkillsIndex', () => {
     const outputFile = join(directory, 'skills.jsonl');
     const embedder = new TestEmbedder();
     const progress: Array<[number, number]> = [];
+    const [firstSkill, ...remainingSkills] = testSkills();
+    if (!firstSkill) throw new Error('missing test skill');
 
     const builder = SkillsIndex.builder()
-      .addSkill(testSkills()[0]!)
-      .addSkills(testSkills().slice(1, 2))
-      .addSkills(testSkills().slice(2))
+      .addSkill(firstSkill)
+      .addSkills(remainingSkills.slice(0, 1))
+      .addSkills(remainingSkills.slice(1))
       .addSkillsDirectories([])
       .addSkillsFiles([])
       .outputFile(outputFile)
@@ -109,6 +124,9 @@ describe('buildSkillsIndex', () => {
       chunkOverlapTokens: 16,
       force: true,
     });
+    expect(
+      SkillsIndex.builder().addSkillsDirectory('directory').addSkillsFile('skill.md').toOptions(),
+    ).toMatchObject({ directories: ['directory'], files: ['skill.md'] });
     expect(await builder.build()).toMatchObject({ indexed: true, skillCount: 3, chunkCount: 3 });
     expect(progress).toEqual([
       [2, 3],
@@ -264,6 +282,60 @@ describe('skill index retrieval', () => {
 });
 
 describe('SkillsAgent semantic discovery', () => {
+  test('default retrieval advisor tool creation supports call and stream chains', async () => {
+    const fixture = await indexedFixture();
+    const advisor = new SkillsRetrievalAdvisor({
+      index: fixture.index,
+      skills: fixture.skills,
+      embedder: fixture.embedder,
+      limit: 2,
+    });
+    const request = chatClientRequest(
+      new Prompt('xpdf-reader then use pdf-reader', {
+        toolCallbacks: [skillsTool({ skills: fixture.skills })],
+      }),
+    );
+    const assertSelected = (nextRequest: typeof request) => {
+      const description =
+        nextRequest.prompt.options?.toolCallbacks?.[0]?.toolDefinition.description;
+      expect(description).toContain('<name>pdf-reader</name>');
+      expect(nextRequest.context.get('skills_retrieval')).toBeDefined();
+    };
+    const callChain: CallAdvisorChain = {
+      callAdvisors: [],
+      async nextCall(nextRequest) {
+        assertSelected(nextRequest);
+        return chatClientResponse(ChatResponse.of('call'));
+      },
+    };
+    expect((await advisor.adviseCall(request, callChain)).chatResponse?.content).toBe('call');
+
+    const streamChain: StreamAdvisorChain = {
+      streamAdvisors: [],
+      async *nextStream(nextRequest) {
+        assertSelected(nextRequest);
+        yield chatClientResponse(ChatResponse.of('stream'));
+      },
+    };
+    const streamed = [];
+    for await (const response of advisor.adviseStream(request, streamChain)) {
+      streamed.push(response.chatResponse?.content);
+    }
+    expect(streamed).toEqual(['stream']);
+  });
+
+  test('fails clearly when semantic discovery is explicit and the index is missing', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'skills-index-missing-'));
+    expect(() =>
+      SkillsAgent.builder()
+        .chatModel(new ScriptedChatModel([]))
+        .addSkills(testSkills())
+        .workspace(workspace)
+        .semanticDiscovery()
+        .build(),
+    ).toThrow(/Skills index does not exist/);
+  });
+
   test('shows only top-k skills to the model and can still activate the selected body', async () => {
     const fixture = await indexedFixture();
     const model: ChatModel = new ScriptedChatModel([

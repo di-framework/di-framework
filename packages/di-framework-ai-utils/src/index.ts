@@ -33,6 +33,7 @@ export type {
   SkillsIndexChunkSource,
   SkillsIndexCliIo,
   SkillsIndexCliOptions,
+  SkillsIndexCliRuntime,
   SkillsIndexEntry,
   SkillsIndexEntryScore,
   SkillsIndexMatch,

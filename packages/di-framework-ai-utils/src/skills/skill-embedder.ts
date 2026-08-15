@@ -44,6 +44,8 @@ export interface TransformersJsSkillEmbedderOptions {
   readonly pooling?: 'mean' | 'cls';
   /** Retrieval models such as BGE recommend a prefix for queries only. */
   readonly queryPrefix?: string;
+  /** Override module loading for alternate runtimes or deterministic tests. */
+  readonly loadTransformers?: () => Promise<unknown>;
 }
 
 type FeatureExtractionOutput = {
@@ -91,6 +93,7 @@ export class TransformersJsSkillEmbedder implements SkillEmbedder {
   readonly queryPrefix: string;
   private tokenizerPromise?: Promise<TransformersTokenizer>;
   private extractorPromise?: Promise<FeatureExtractor>;
+  private readonly transformersImporter?: () => Promise<unknown>;
 
   constructor(options: TransformersJsSkillEmbedderOptions = {}) {
     this.model = options.model ?? DEFAULT_SKILL_EMBEDDING_MODEL;
@@ -99,6 +102,7 @@ export class TransformersJsSkillEmbedder implements SkillEmbedder {
     const usesDefaultModel = this.model === DEFAULT_SKILL_EMBEDDING_MODEL;
     this.pooling = options.pooling ?? (usesDefaultModel ? DEFAULT_SKILL_EMBEDDING_POOLING : 'mean');
     this.queryPrefix = options.queryPrefix ?? (usesDefaultModel ? DEFAULT_SKILL_QUERY_PREFIX : '');
+    this.transformersImporter = options.loadTransformers;
     this.id = `transformers.js@4.2.0:${this.model}@${this.revision}:dtype=${this.dtype}:pooling=${this.pooling}:query-prefix=${JSON.stringify(this.queryPrefix)}:l2`;
   }
 
@@ -174,29 +178,31 @@ export class TransformersJsSkillEmbedder implements SkillEmbedder {
   }
 
   private tokenizer(): Promise<TransformersTokenizer> {
-    this.tokenizerPromise ??= loadTransformersJs().then((transformers) =>
+    this.tokenizerPromise ??= loadTransformersJs(this.transformersImporter).then((transformers) =>
       transformers.AutoTokenizer.from_pretrained(this.model, { revision: this.revision }),
     );
     return this.tokenizerPromise;
   }
 
   private extractor(): Promise<FeatureExtractor> {
-    this.extractorPromise ??= loadTransformersJs().then(async (transformers) => {
-      // Construct the pipeline from pinned components. Transformers.js 4.2's
-      // high-level pipeline performs an unpinned metadata probe before loading.
-      const [tokenizer, model] = await Promise.all([
-        this.tokenizer(),
-        transformers.AutoModel.from_pretrained(this.model, {
-          revision: this.revision,
-          dtype: this.dtype,
-        }),
-      ]);
-      return new transformers.FeatureExtractionPipeline({
-        task: 'feature-extraction',
-        tokenizer,
-        model,
-      });
-    });
+    this.extractorPromise ??= loadTransformersJs(this.transformersImporter).then(
+      async (transformers) => {
+        // Construct the pipeline from pinned components. Transformers.js 4.2's
+        // high-level pipeline performs an unpinned metadata probe before loading.
+        const [tokenizer, model] = await Promise.all([
+          this.tokenizer(),
+          transformers.AutoModel.from_pretrained(this.model, {
+            revision: this.revision,
+            dtype: this.dtype,
+          }),
+        ]);
+        return new transformers.FeatureExtractionPipeline({
+          task: 'feature-extraction',
+          tokenizer,
+          model,
+        });
+      },
+    );
     return this.extractorPromise;
   }
 }
@@ -215,11 +221,15 @@ function nonNegativeInteger(value: number, name: string): number {
   return value;
 }
 
-async function loadTransformersJs(): Promise<TransformersJsModule> {
-  try {
+export async function loadTransformersJs(
+  importer: () => Promise<unknown> = async () => {
     // Keep this dependency out of the normal skill path and library bundle.
     const packageName = '@huggingface/transformers';
-    return (await import(packageName)) as unknown as TransformersJsModule;
+    return import(packageName);
+  },
+): Promise<TransformersJsModule> {
+  try {
+    return (await importer()) as TransformersJsModule;
   } catch (error) {
     const detail = error instanceof Error ? ` (${error.message})` : '';
     throw new Error(
