@@ -32,7 +32,7 @@ export async function publish(shell: PublishShell = defaultShell) {
 
   // 2. Build
   console.log('🏗️  Building packages...');
-  await shell`bun run packages/di-framework-cli/cmd/mx/build.ts`;
+  await shell`bun run packages/di-framework-cli/cmd/mx/build.ts --sync-versions`;
 
   // 3. Publish
   for (const pkgDir of PACKAGES) {

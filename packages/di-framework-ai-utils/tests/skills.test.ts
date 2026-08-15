@@ -36,8 +36,7 @@ function writeSkill(
 
 describe('parseSkillMarkdown', () => {
   test('extracts front matter and body', () => {
-    const skill = parseSkillMarkdown(
-      `---
+    const markdown = `---
 name: code-reviewer
 description: Reviews Java code
 ---
@@ -45,14 +44,14 @@ description: Reviews Java code
 # Code Reviewer
 
 Check for nulls.
-`,
-      { basePath: '/tmp/code-reviewer' },
-    );
+`;
+    const skill = parseSkillMarkdown(markdown, { basePath: '/tmp/code-reviewer' });
     expect(skill.name).toBe('code-reviewer');
     expect(skill.description).toBe('Reviews Java code');
     expect(skill.basePath).toBe('/tmp/code-reviewer');
     expect(skill.content).toContain('# Code Reviewer');
     expect(skill.frontMatter.name).toBe('code-reviewer');
+    expect(skill.source).toBe(markdown);
   });
 
   test('strips surrounding quotes and keeps values after the first colon', () => {

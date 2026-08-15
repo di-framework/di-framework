@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
 import type { ChatModel, ToolCallback } from '@di-framework/ai';
 import { expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
 import { askUserQuestionTool, type QuestionHandler } from '../tools/ask-user-question-tool.ts';
@@ -17,10 +19,13 @@ import { writeTool } from '../tools/write-tool.ts';
 import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import { resolveSkillPackageDirectories } from './resolve-packages.ts';
+import type { SkillEmbedder } from './skill-embedder.ts';
 import { SkillsFluent } from './skills-fluent.ts';
+import { DEFAULT_SKILLS_INDEX_FILE, loadSkillsIndex } from './skills-index.ts';
+import { SkillsRetrievalAdvisor } from './skills-retrieval-advisor.ts';
 import { createSkillsRuntime, type SkillsRuntime } from './skills-runtime.ts';
 import type { SkillsToolOptions } from './skills-tool.ts';
-import { collectSkills, skillsTool } from './skills-tool.ts';
+import { collectSkills, DEFAULT_SKILL_TOOL_NAME, skillsTool } from './skills-tool.ts';
 import { validateSkill } from './validate-skill.ts';
 
 export interface SkillsToolboxWebOptions {
@@ -36,6 +41,15 @@ export interface SkillsToolboxMemoriesOptions {
 export interface SkillsToolboxTaskOptions {
   readonly chatModel: ChatModel;
   readonly system?: string;
+}
+
+export interface SkillsSemanticDiscoveryOptions {
+  /** Generated JSONL path. Relative paths resolve from {@link workspace}. */
+  readonly indexFile?: string;
+  readonly limit?: number;
+  readonly minScore?: number;
+  readonly recentUserMessages?: number;
+  readonly embedder?: SkillEmbedder;
 }
 
 export interface SkillsToolboxOptions extends SkillsToolOptions {
@@ -57,6 +71,11 @@ export interface SkillsToolboxOptions extends SkillsToolOptions {
   readonly task?: boolean | SkillsToolboxTaskOptions;
   readonly chatModel?: ChatModel;
   readonly perSkillSandbox?: boolean;
+  /**
+   * Retrieve a small Skill catalog from a build-time semantic index. When
+   * omitted, the default index is used automatically if it exists.
+   */
+  readonly semanticDiscovery?: boolean | SkillsSemanticDiscoveryOptions;
 }
 
 export interface SkillsToolbox {
@@ -64,6 +83,7 @@ export interface SkillsToolbox {
   readonly allowedDirectories: readonly string[];
   readonly tools: readonly ToolCallback[];
   readonly runtime: SkillsRuntime;
+  readonly retrievalAdvisor?: SkillsRetrievalAdvisor;
 }
 
 /** Preferred factory: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
@@ -119,19 +139,22 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
   });
   const dirs = () => runtime.fileDirectories();
 
-  const raw: ToolCallback[] = [
-    skillsTool({
-      ...options,
-      skills: collected,
-      directories: undefined,
-      files: undefined,
-      onActivate: (skill) => {
-        runtime.activate(skill);
-        options.onActivate?.(skill);
-      },
-    }),
-    readTool({ allowedDirectories: dirs }),
-  ];
+  const buildSkillTool = (skills: readonly AgentSkill[]): ToolCallback =>
+    gateToolCallback(
+      skillsTool({
+        ...options,
+        skills,
+        directories: undefined,
+        files: undefined,
+        onActivate: (skill) => {
+          runtime.activate(skill);
+          options.onActivate?.(skill);
+        },
+      }),
+      runtime,
+    );
+
+  const raw: ToolCallback[] = [buildSkillTool(collected), readTool({ allowedDirectories: dirs })];
 
   if (options.list !== false) {
     raw.push(listDirectoryTool({ allowedDirectories: dirs, workingDirectory: workspace }));
@@ -183,8 +206,59 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
     );
   }
 
-  const tools = raw.map((tool) => gateToolCallback(tool, runtime));
-  return { skills: collected, allowedDirectories, tools, runtime };
+  const tools = raw.map((tool) =>
+    tool.toolDefinition.name === (options.toolName ?? DEFAULT_SKILL_TOOL_NAME)
+      ? tool
+      : gateToolCallback(tool, runtime),
+  );
+  const retrievalAdvisor = createRetrievalAdvisor(options, workspace, collected, buildSkillTool);
+  return { skills: collected, allowedDirectories, tools, runtime, retrievalAdvisor };
+}
+
+function createRetrievalAdvisor(
+  options: SkillsToolboxOptions,
+  workspace: string,
+  skills: readonly AgentSkill[],
+  buildSkillTool: (skills: readonly AgentSkill[]) => ToolCallback,
+): SkillsRetrievalAdvisor | undefined {
+  if (options.semanticDiscovery === false) return undefined;
+  const discovery =
+    options.semanticDiscovery && typeof options.semanticDiscovery === 'object'
+      ? options.semanticDiscovery
+      : {};
+  const configuredPath = discovery.indexFile ?? DEFAULT_SKILLS_INDEX_FILE;
+  const indexFile = isAbsolute(configuredPath)
+    ? resolve(expandUserPath(configuredPath))
+    : resolve(workspace, configuredPath);
+  const explicit =
+    options.semanticDiscovery === true || typeof options.semanticDiscovery === 'object';
+  if (!existsSync(indexFile)) {
+    if (explicit) {
+      throw new Error(
+        `Skills index does not exist: ${indexFile}. Build it with SkillsIndex.builder()`,
+      );
+    }
+    return undefined;
+  }
+
+  const index = loadSkillsIndex(indexFile);
+  if (!index.metadata.indexed) return undefined;
+  return new SkillsRetrievalAdvisor({
+    index,
+    skills,
+    embedder: discovery.embedder,
+    limit: discovery.limit,
+    minScore: discovery.minScore,
+    recentUserMessages: discovery.recentUserMessages,
+    toolName: options.toolName,
+    toolOptions: {
+      toolName: options.toolName,
+      toolDescriptionTemplate: options.toolDescriptionTemplate,
+      onActivate: options.onActivate,
+    },
+    // buildSkillTool already includes activation and the runtime gate.
+    createTool: buildSkillTool,
+  });
 }
 
 function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {

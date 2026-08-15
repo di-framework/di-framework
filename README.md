@@ -77,7 +77,7 @@ bun x @di-framework/cli <command>
 
 | Command | Description |
 | --- | --- |
-| `mx build` | Build packages and sync versions |
+| `mx build` | Build packages (`--sync-versions` before publish) |
 | `mx test` | Run the monorepo E2E suite |
 | `mx typecheck` | Typecheck the workspace |
 | `mx publish` | Test, build, and publish to npm |

@@ -146,7 +146,9 @@ export function createSkillsAgentBundle(options: CreateSkillsAgentOptions): Skil
     system: systemParts.length > 0 ? systemParts.join('\n\n') : undefined,
     tools: [...toolbox.tools, ...(options.extraTools ?? [])],
     defaultOptions: options.defaultOptions,
-    advisors: options.advisors,
+    advisors: [toolbox.retrievalAdvisor, ...(options.advisors ?? [])].filter(
+      (advisor): advisor is Advisor => advisor != null,
+    ),
     memory: options.conversationMemory,
     defaultConversationId: options.defaultConversationId,
     builder: options.builder,

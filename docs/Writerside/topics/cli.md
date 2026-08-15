@@ -57,7 +57,8 @@ Existing files are skipped unless `--force` is set.
 Used only inside the **di-framework monorepo** (package graph build, E2E, publish):
 
 ```bash
-di-framework mx build       # build packages + sync versions
+di-framework mx build                     # compile packages
+di-framework mx build --sync-versions     # also align package.json versions (release)
 di-framework mx test        # monorepo E2E suite
 di-framework mx typecheck   # language-service typecheck
 di-framework mx publish     # test → build → npm publish

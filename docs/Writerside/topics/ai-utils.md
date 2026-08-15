@@ -154,6 +154,28 @@ If you never add directories, files, in-memory skills, or packages, existing **`
 
 `addPackage('@scope/pack')` resolves the package from the workspace, then uses `package.json` `skills` or falls back to `.claude/skills` and `skills` under the package root.
 
+### Large catalogs
+
+Normal discovery places every skill name and description in the `Skill` tool. For catalogs above the default threshold of 50, generate a semantic index during the application build:
+
+```bash
+di-skills-index --skills-dir .claude/skills
+```
+
+Or call the same package implementation programmatically:
+
+```typescript
+import { SkillsIndex } from '@di-framework/ai-utils';
+
+await SkillsIndex.builder()
+  .addSkillsDirectory('.claude/skills')
+  .build();
+```
+
+This writes `.di-framework/skills-index.jsonl`. Enable fail-closed retrieval with `.semanticDiscovery()` on `SkillsAgent.builder()` or `SkillsToolbox.builder()`. The default index is also detected automatically when present.
+
+The default indexer uses the optional `@huggingface/transformers` peer. Install it only for large-catalog indexing (`bun add @huggingface/transformers@4.2.0`); small catalogs and custom embedders do not need it. Transformers.js tokenizes each exact `SKILL.md` into overlapping model-token chunks and embeds them locally with a pinned quantized BGE model. Runtime ranks skills using chunk cosine scores and sends only the top 10 names/descriptions to the chat model. Chunks and vectors do not enter the prompt; the full body remains lazy until activation. At or below the threshold, Transformers.js is not initialized and normal discovery remains active.
+
 ## Skill-only and MCP
 
 ```typescript

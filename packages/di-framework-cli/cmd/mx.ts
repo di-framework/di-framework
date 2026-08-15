@@ -2,13 +2,16 @@
  * Maintainer tooling for the di-framework monorepo (`mx` = maintainer).
  * App authors should use top-level `init` / `build` / `check` instead.
  */
-import { build } from './mx/build';
+import { build, parseMxBuildArgs } from './mx/build';
 import { publish } from './mx/publish';
 import { test } from './mx/test';
 import { typecheck } from './mx/typecheck';
 
 export const MX_COMMANDS: Record<string, { description: string; run: () => Promise<void> }> = {
-  build: { description: 'Build all monorepo packages and sync versions', run: build },
+  build: {
+    description: 'Build all monorepo packages (--sync-versions aligns package.json to the root)',
+    run: () => build(parseMxBuildArgs()),
+  },
   test: { description: 'Run the monorepo E2E test suite', run: test },
   typecheck: { description: 'Typecheck the monorepo with the language service', run: typecheck },
   publish: { description: 'Test, build, and publish all packages to npm', run: publish },

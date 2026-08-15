@@ -69,6 +69,20 @@ describe('build command', () => {
     }
   });
 
+  describe('parseMxBuildArgs', () => {
+    it('defaults to no version sync', async () => {
+      const { parseMxBuildArgs } = await import('../cmd/mx/build');
+      expect(parseMxBuildArgs([])).toEqual({ syncVersions: false });
+      expect(parseMxBuildArgs(['--watch'])).toEqual({ syncVersions: false });
+    });
+
+    it('enables version sync for --sync-versions', async () => {
+      const { parseMxBuildArgs } = await import('../cmd/mx/build');
+      expect(parseMxBuildArgs(['--sync-versions'])).toEqual({ syncVersions: true });
+      expect(parseMxBuildArgs(['--force', '--sync-versions'])).toEqual({ syncVersions: true });
+    });
+  });
+
   describe('PACKAGES', () => {
     it('includes all expected packages', () => {
       expect(PACKAGES).toContain('packages/di-framework-core');
@@ -102,7 +116,7 @@ describe('build command', () => {
   });
 
   describe('build()', () => {
-    it('syncs versions, cleans dist, and builds each package', async () => {
+    it('cleans dist and builds each package without rewriting versions', async () => {
       const root = await makeFakeWorkspace();
       temps.push(root);
       const log = spyOn(console, 'log').mockImplementation(() => {});
@@ -115,9 +129,33 @@ describe('build command', () => {
         for (const pkgDir of PACKAGES) {
           // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
           const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
+          expect(pkgJson.version).toBe('0.0.0');
+        }
+        expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
+        expect(log.mock.calls.some((c) => String(c[0]).includes('Using version'))).toBe(false);
+      } finally {
+        process.chdir(REPO_ROOT);
+        log.mockRestore();
+      }
+    }, 30_000);
+
+    it('syncs versions when --sync-versions is set', async () => {
+      const root = await makeFakeWorkspace();
+      temps.push(root);
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+
+      try {
+        process.chdir(root);
+        const { build } = await import('../cmd/mx/build');
+        await build({ syncVersions: true });
+
+        for (const pkgDir of PACKAGES) {
+          // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
+          const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
           expect(pkgJson.version).toBe('9.9.9');
         }
         expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
+        expect(log.mock.calls.some((c) => String(c[0]).includes('Using version 9.9.9'))).toBe(true);
       } finally {
         process.chdir(REPO_ROOT);
         log.mockRestore();
@@ -148,9 +186,25 @@ describe('build command', () => {
       try {
         process.chdir(root);
         const { build } = await import('../cmd/mx/build');
-        await build();
+        await build({ syncVersions: true });
         expect(await Bun.file(join(root, PACKAGES[1]!, 'package.json')).exists()).toBe(false);
         expect(await Bun.file(join(root, PACKAGES[1]!, 'dist', 'index.js')).exists()).toBe(true);
+      } finally {
+        process.chdir(REPO_ROOT);
+        log.mockRestore();
+      }
+    }, 30_000);
+
+    it('rethrows non-ENOENT errors while syncing versions', async () => {
+      const root = await makeFakeWorkspace();
+      temps.push(root);
+      await Bun.write(join(root, PACKAGES[1]!, 'package.json'), '{');
+
+      const log = spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        process.chdir(root);
+        const { build } = await import('../cmd/mx/build');
+        await expect(build({ syncVersions: true })).rejects.toThrow();
       } finally {
         process.chdir(REPO_ROOT);
         log.mockRestore();
@@ -195,11 +249,14 @@ describe('build command', () => {
       temps.push(empty);
       await Bun.write(join(empty, 'package.json'), '{'); // invalid JSON → build throws
 
-      const proc = Bun.spawn(['bun', join(import.meta.dir, '..', 'cmd', 'mx', 'build.ts')], {
-        cwd: empty,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
+      const proc = Bun.spawn(
+        ['bun', join(import.meta.dir, '..', 'cmd', 'mx', 'build.ts'), '--sync-versions'],
+        {
+          cwd: empty,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+      );
       expect(await proc.exited).toBe(1);
       expect(await new Response(proc.stderr).text()).toContain('Build failed');
     });

@@ -6,6 +6,15 @@ function isErrno(err: unknown, code: string): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
 }
 
+export type MxBuildOptions = {
+  /** Copy the workspace root version into each package.json. Off by default so install/CI compile does not dirty trees. */
+  syncVersions?: boolean;
+};
+
+export function parseMxBuildArgs(args: string[] = process.argv.slice(2)): MxBuildOptions {
+  return { syncVersions: args.includes('--sync-versions') };
+}
+
 export const PACKAGES = [
   'packages/di-framework-core',
   'packages/di-framework-repo',
@@ -25,25 +34,31 @@ export const PACKAGES = [
   'packages/di-framework-tsc',
 ];
 
-export async function build() {
+export async function build(options: MxBuildOptions = {}) {
   console.log('🚀 Starting build process...');
 
-  const rootPkgPath = join(process.cwd(), 'package.json');
-  const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
-  const version = rootPkg.version;
-  console.log(`📌 Using version ${version} from workspace root`);
+  const syncVersions = options.syncVersions === true;
+  let version: string | undefined;
+  if (syncVersions) {
+    const rootPkgPath = join(process.cwd(), 'package.json');
+    const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
+    version = rootPkg.version;
+    console.log(`📌 Using version ${version} from workspace root`);
+  }
 
   for (const pkgDir of PACKAGES) {
     console.log(`\n📦 Building ${pkgDir}...`);
     const fullPath = join(process.cwd(), pkgDir);
 
-    // Sync version (read-or-skip; no existsSync TOCTOU before write)
-    const pkgJsonPath = join(fullPath, 'package.json');
-    try {
-      const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-      writeFileSync(pkgJsonPath, JSON.stringify({ ...pkgJson, version }, null, 2) + '\n');
-    } catch (err) {
-      if (!isErrno(err, 'ENOENT')) throw err;
+    // Sync version only when requested (publish / release). Read-or-skip; no existsSync TOCTOU.
+    if (syncVersions && version !== undefined) {
+      const pkgJsonPath = join(fullPath, 'package.json');
+      try {
+        const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
+        writeFileSync(pkgJsonPath, JSON.stringify({ ...pkgJson, version }, null, 2) + '\n');
+      } catch (err) {
+        if (!isErrno(err, 'ENOENT')) throw err;
+      }
     }
 
     // 1. Clean dist
@@ -72,7 +87,7 @@ export function handleBuildFailure(err: unknown): never {
 /** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
 export function runBuildMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => build().catch(handleBuildFailure),
+  start: () => Promise<void> = () => build(parseMxBuildArgs()).catch(handleBuildFailure),
 ): void {
   if (isMain) {
     void start();

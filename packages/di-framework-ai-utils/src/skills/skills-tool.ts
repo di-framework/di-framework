@@ -61,7 +61,10 @@ export function collectSkills(options: SkillsToolOptions): AgentSkill[] {
 }
 
 export function skillToXml(skill: AgentSkill): string {
-  const entries = Object.entries(skill.frontMatter)
+  const entries = [
+    ['name', skill.name] as const,
+    ...(skill.description == null ? [] : ([['description', skill.description]] as const)),
+  ]
     .map(([key, value]) => `  <${key}>${escapeXml(value)}</${key}>`)
     .join('\n');
   return `<skill>\n${entries}\n</skill>`;
