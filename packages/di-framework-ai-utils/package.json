@@ -50,12 +50,12 @@
     "@di-framework/ai": "workspace:*",
     "@huggingface/transformers": "4.2.0",
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/ai": "workspace:*",
     "@huggingface/transformers": "4.2.0",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependenciesMeta": {
     "@huggingface/transformers": {
