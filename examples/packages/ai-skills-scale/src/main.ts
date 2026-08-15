@@ -303,9 +303,12 @@ function readEnvValue(text: string, wantedKey: string): string | undefined {
   return undefined;
 }
 
-export async function runAiSkillsScaleMain(isMain = import.meta.main): Promise<void> {
+export async function runAiSkillsScaleMain(
+  isMain = import.meta.main,
+  args: readonly string[] = process.argv.slice(2),
+): Promise<void> {
   if (!isMain) return;
-  await runScaleExample(parseCliOptions(process.argv.slice(2)));
+  await runScaleExample(parseCliOptions(args));
 }
 
 await runAiSkillsScaleMain();
