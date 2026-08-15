@@ -3,6 +3,7 @@ import type { QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import type { BashConfirmInput } from '../tools/bash-tool.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import type {
+  SkillsSemanticDiscoveryOptions,
   SkillsToolboxMemoriesOptions,
   SkillsToolboxOptions,
   SkillsToolboxTaskOptions,
@@ -159,6 +160,11 @@ export class SkillsFluent<T extends SkillsFluent<T>> {
 
   perSkillSandbox(enabled = true): T {
     this.draft.perSkillSandbox = enabled;
+    return this.self();
+  }
+
+  semanticDiscovery(enabledOrOptions: boolean | SkillsSemanticDiscoveryOptions = true): T {
+    this.draft.semanticDiscovery = enabledOrOptions;
     return this.self();
   }
 

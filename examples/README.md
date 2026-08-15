@@ -1,8 +1,9 @@
 # Examples
 
-The Bun/npm examples use `@di-framework/cli` for application builds and checks,
-with `@di-framework/tsc` configured as the TypeScript transformer. From this
-directory, run the aggregate type check with:
+Most Bun/npm examples use `@di-framework/cli` for application builds and checks,
+with `@di-framework/tsc` configured as the TypeScript transformer. Examples
+without DI decorators may use plain `tsc`. From this directory, run the aggregate
+type check with:
 
 ```bash
 bun run check
@@ -19,6 +20,7 @@ and `deno task --no-lock build` for Deno examples.
 | [`advanced`](packages/advanced) | Advanced container and DI behavior | `build`, `check` | Tests exist, but there is no package `test` script; use `bun test`. |
 | [`ai-chat`](packages/ai-chat) | AI services, tools, RAG, and workflows | `build`, `check`, `typecheck`, `test` | `typecheck` aliases `di-framework check`. Tests use fake models and need no API key; real providers require credentials. |
 | [`ai-skills`](packages/ai-skills) | Agent Skills (`SKILL.md`) with `SkillsAgent.builder` | `start`, `build`, `check`, `typecheck`, `test` | Scripted tests need no API key. `bun start` and the live test use `OPENAI_API_KEY`. `Bash` is opt-in and not a container sandbox. |
+| [`ai-skills-scale`](packages/ai-skills-scale) | Large-catalog Agent Skills selection and semantic retrieval experiment | `fetch`, `index`, `retrieve`, `start`, `live`, `build`, `check`, `typecheck`, `test` | Uses plain `tsc` because it has no DI decorators. `fetch` downloads a gitignored GitHub corpus; `index` uses Transformers.js locally; live trials require `OPENAI_API_KEY`. |
 | [`auth`](packages/auth) | Authentication with HTTP integration | `build`, `check`, `test`, `start` | `start` runs TypeScript directly with Bun, so it does not apply emit-time transformations. |
 | [`authz`](packages/authz) | Authorization policies layered on auth and HTTP | `build`, `check`, `test` | There is no `start` script; build output is emitted to `dist/`. |
 | [`basic`](packages/basic) | Minimal DI usage | `build`, `check` | It also compiles the sibling `services` sources, so its emitted output has a nested multi-package layout. Run tests with `bun test`. |

@@ -16,6 +16,8 @@ export interface AgentSkill {
   readonly basePath: string;
   readonly frontMatter: Readonly<Record<string, string>>;
   readonly yaml: Readonly<YamlMap>;
+  /** Complete SKILL.md source used by build-time semantic indexing. */
+  readonly source: string;
   readonly content: string;
   /** Parsed from {@code allowed-tools} front matter when present. */
   readonly allowedTools?: readonly string[];
@@ -67,6 +69,7 @@ export function agentSkill(options: AgentSkillCreateOptions): AgentSkill {
     basePath: options.basePath ?? '.',
     frontMatter,
     yaml: { ...frontMatter },
+    source: serializeSkillMarkdown(frontMatter, options.content),
     content: options.content,
     allowedTools: options.allowedTools ?? parseAllowedTools(frontMatter['allowed-tools']),
     license: options.license ?? frontMatter.license,
@@ -99,12 +102,20 @@ export function parseSkillMarkdown(
     basePath: options.basePath ?? '.',
     frontMatter,
     yaml,
+    source: markdown,
     content,
     allowedTools: parseAllowedTools(yaml['allowed-tools'] ?? frontMatter['allowed-tools']),
     license: yamlValueToString(yaml.license),
     compatibility: yamlValueToString(yaml.compatibility),
     metadata,
   };
+}
+
+function serializeSkillMarkdown(frontMatter: Readonly<Record<string, string>>, content: string) {
+  const fields = Object.entries(frontMatter).map(
+    ([key, value]) => `${key}: ${JSON.stringify(value)}`,
+  );
+  return `---\n${fields.join('\n')}\n---\n\n${content}`;
 }
 
 export function parseAllowedTools(value: unknown): readonly string[] | undefined {

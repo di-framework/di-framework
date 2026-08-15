@@ -4,7 +4,7 @@ Agentic extras for [`@di-framework/ai`](../di-framework-ai). **Agent Skills** (`
 
 This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.
 
-Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `SkillsTool.builder()`. Free-function aliases remain. Skills stay in this package — `configureAi` / `@Agent` in `@di-framework/ai` are unchanged.
+Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `SkillsTool.builder()`, `SkillsIndex.builder()`. Free-function aliases remain. Skills stay in this package — `configureAi` / `@Agent` in `@di-framework/ai` are unchanged.
 
 ## Installation
 
@@ -13,6 +13,12 @@ bun add @di-framework/ai-utils @di-framework/ai @di-framework/core
 ```
 
 Peer: `@di-framework/ai`.
+
+`@huggingface/transformers` is an optional peer used only by the default semantic indexer for large skill catalogs. Install it only when needed:
+
+```bash
+bun add @huggingface/transformers@4.2.0
+```
 
 ## Quick start
 
@@ -92,6 +98,7 @@ Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `name` and `descr
 | `SkillsAgent.builder()` | `ChatAgent` + toolbox | Usual entry |
 | `SkillsToolbox.builder()` | Toolbox (`build()` / `buildTools()`) | Attach to an existing `ChatClient` / `ChatAgent` |
 | `SkillsTool.builder()` | `Skill` only | Tests or when you already have Read/Glob |
+| `SkillsIndex.builder()` | Build-time semantic JSONL index | Large skill catalogs |
 
 `.of(options)` on each factory matches the older options-object APIs. Aliases: `createSkillsAgent`, `createSkillsToolbox`, `skillsToolbox`, `skillsTool`.
 
@@ -136,6 +143,40 @@ If you never call `addSkillsDirectory` / `addSkillsFile` / `addSkill` / `addPack
 
 `addPackage('@scope/pack')` resolves `pack/package.json` from the workspace, then uses the `skills` field (string or string[]) or falls back to `.claude/skills` and `skills` under the package root.
 
+### Large catalogs
+
+By default, every skill name and description is placed in the `Skill` tool. For catalogs above the default threshold of 50, build a local semantic index instead:
+
+```bash
+di-skills-index --skills-dir .claude/skills
+```
+
+The equivalent programmatic build API is:
+
+```ts
+import { SkillsIndex } from '@di-framework/ai-utils';
+
+await SkillsIndex.builder()
+  .addSkillsDirectory('.claude/skills')
+  .build();
+```
+
+This writes `.di-framework/skills-index.jsonl`. Put the command in `prebuild` (or call the API from a build script), then enable fail-closed runtime retrieval:
+
+```ts
+const agent = SkillsAgent.builder()
+  .chatModel(model)
+  .addSkillsDirectory('.claude/skills')
+  .semanticDiscovery()
+  .build();
+```
+
+The default index is also detected automatically when present. Explicit `.semanticDiscovery()` throws if it is missing. At or below 50 skills, the build writes metadata only and keeps normal full-catalog discovery.
+
+The default indexer uses the optional `@huggingface/transformers` peer locally. It is loaded only after the catalog exceeds the threshold; small catalogs and custom `SkillEmbedder` implementations do not require it. The indexer tokenizes each exact `SKILL.md` into 256-token chunks with 32-token overlap, embeds them with a pinned quantized BGE model, and stores compact float32/base64 vectors. Runtime scores skills from those chunks and sends only the top 10 names/descriptions to the chat model. Chunk text and vectors never enter the prompt; the chosen body still loads only after `Skill` activation.
+
+Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
+
 ## Skill-only and MCP
 
 ```ts
@@ -174,10 +215,11 @@ const mcp = skillsToolboxAsMcp({
 | `SkillsAgent` / `SkillsAgentBuilder` | Preferred agent factory |
 | `SkillsToolbox` / `SkillsToolboxBuilder` | Preferred toolbox factory |
 | `SkillsTool` / `SkillsToolBuilder` | `Skill` only |
+| `SkillsIndex` / `SkillsIndexBuilder` | Build-time semantic skill index |
 | `skillsToolboxAsMcp` | MCP descriptors + handlers |
 | File / shell | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |
-| Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories` |
+| Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-skills-index` CLI |
 | Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill` |
 
 **Style:** `static of` / `static builder` and free functions for pure helpers. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).

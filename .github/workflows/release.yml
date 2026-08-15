@@ -22,7 +22,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build packages
-        run: bun run build
+        run: bun run packages/di-framework-cli/main.ts mx build --sync-versions
 
       - name: Test
         run: bun run test:all

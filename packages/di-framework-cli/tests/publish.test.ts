@@ -134,6 +134,11 @@ describe('publish command', () => {
       expect(PACKAGES).toEqual(BUILD_PACKAGES);
     });
 
+    it('Release workflow syncs versions before publish', async () => {
+      const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
+      expect(workflow).toContain('mx build --sync-versions');
+    });
+
     it('matches the Release workflow publish list', async () => {
       const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
       const loop = workflow.match(/for pkg in([\s\S]*?); do/);
@@ -171,7 +176,9 @@ describe('publish command', () => {
     it('runs tests before build in the source', async () => {
       const source = await Bun.file(join(import.meta.dir, '..', 'cmd', 'mx', 'publish.ts')).text();
       const testIndex = source.indexOf('bun test');
-      const buildIndex = source.indexOf('bun run packages/di-framework-cli/cmd/mx/build.ts');
+      const buildIndex = source.indexOf(
+        'bun run packages/di-framework-cli/cmd/mx/build.ts --sync-versions',
+      );
       const publishIndex = source.indexOf('bun publish');
 
       expect(testIndex).toBeGreaterThan(-1);
