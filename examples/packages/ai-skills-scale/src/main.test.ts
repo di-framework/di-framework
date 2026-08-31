@@ -1,8 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
+import { agentSkill, buildSkillsIndex, type SkillEmbedder } from '@di-framework/ai-utils';
 import { loadSkillCorpus, measureCatalog, selectCorpus } from './corpus.ts';
 import {
   parseCliOptions,
@@ -13,6 +14,7 @@ import {
   selectionCases,
 } from './main.ts';
 import { retrievalCases } from './retrieval-cases.ts';
+import { parseRetrievalOptions, runRetrievalBenchmark, runRetrieveMain } from './retrieve.ts';
 
 function writeSkill(root: string, directory: string, name = directory): void {
   const skillDirectory = join(root, directory);
@@ -208,6 +210,99 @@ test('retrieval benchmark covers 30 uniquely labeled tasks', () => {
   expect(new Set(retrievalCases.map((item) => item.id)).size).toBe(retrievalCases.length);
   expect(retrievalCases.slice(0, selectionCases.length)).toEqual([...selectionCases]);
 });
+
+test('retrieval reporter CLI accepts deterministic trial and output controls', async () => {
+  expect(
+    parseRetrievalOptions([
+      '--index',
+      '/tmp/index.jsonl',
+      '--json',
+      '/tmp/result.json',
+      '--markdown',
+      '/tmp/result.md',
+      '--trials',
+      '3',
+      '--seed',
+      '8',
+    ]),
+  ).toEqual({
+    indexFile: '/tmp/index.jsonl',
+    jsonFile: '/tmp/result.json',
+    markdownFile: '/tmp/result.md',
+    trials: 3,
+    seed: 8,
+  });
+  expect(() => parseRetrievalOptions(['--trials', '0'])).toThrow(/positive integer/);
+  expect(() => parseRetrievalOptions(['--unknown'])).toThrow(/Unknown option/);
+  await expect(runRetrieveMain(false)).resolves.toBeUndefined();
+});
+
+test('retrieval benchmark ranks a deterministic index and writes both reports', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'retrieval-benchmark-'));
+  const indexFile = join(root, 'skills.jsonl');
+  const jsonFile = join(root, 'results.json');
+  const markdownFile = join(root, 'results.md');
+  const names = retrievalCases.map((item) => item.expectedSkill);
+  const embedder = deterministicRetrievalEmbedder(names);
+  await buildSkillsIndex({
+    skills: names.map((name) =>
+      agentSkill({ name, description: `Routes ${name} requests.`, content: `# ${name}` }),
+    ),
+    outputFile: indexFile,
+    threshold: 0,
+    embedder,
+  });
+  const log = spyOn(console, 'log').mockImplementation(() => undefined);
+  const result = await runRetrievalBenchmark({
+    indexFile,
+    jsonFile,
+    markdownFile,
+    embedder,
+    trials: 2,
+    seed: 9,
+  });
+  log.mockRestore();
+  expect(result?.metrics).toMatchObject({ recallAt1: 1, recallAt10: 1 });
+  expect(JSON.parse(readFileSync(jsonFile, 'utf8')).trials).toHaveLength(60);
+  expect(readFileSync(markdownFile, 'utf8')).toContain('Recall@1: 100.00%');
+});
+
+test('retrieval benchmark rejects a missing index and skips metadata-only indexes', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'retrieval-empty-'));
+  await expect(runRetrievalBenchmark(join(root, 'missing.jsonl'))).rejects.toThrow(/missing/);
+  const indexFile = join(root, 'small.jsonl');
+  await buildSkillsIndex({
+    skills: [agentSkill({ name: 'one', description: 'One skill.', content: '# One' })],
+    outputFile: indexFile,
+  });
+  const log = spyOn(console, 'log').mockImplementation(() => undefined);
+  await expect(runRetrievalBenchmark(indexFile)).resolves.toBeUndefined();
+  expect(log).toHaveBeenCalled();
+  log.mockRestore();
+});
+
+function deterministicRetrievalEmbedder(names: readonly string[]): SkillEmbedder {
+  const vector = (index: number) => {
+    const value = new Float32Array(names.length);
+    value[index] = 1;
+    return value;
+  };
+  return {
+    id: 'deterministic-retrieval-fixture',
+    model: 'fixture',
+    revision: '1',
+    split: async (text) => [text],
+    embed: async (texts, options) =>
+      texts.map((text) => {
+        const index =
+          options?.purpose === 'query'
+            ? retrievalCases.findIndex((item) => item.prompt === text)
+            : names.findIndex((name) => text.includes(name));
+        if (index < 0) throw new Error(`Unknown deterministic retrieval text: ${text}`);
+        return vector(index);
+      }),
+  };
+}
 
 test('live key resolves from the environment or a non-executed secrets file', () => {
   expect(requireOpenAiApiKey({ OPENAI_API_KEY: ' direct ' }, '/')).toBe('direct');

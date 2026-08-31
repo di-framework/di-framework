@@ -10,6 +10,7 @@ export const CORPUS_REPOSITORY = 'github/awesome-copilot';
 export const exampleRoot = join(import.meta.dir, '..');
 export const checkoutDirectory = join(exampleRoot, '.cache', 'awesome-copilot');
 export const defaultSkillsDirectory = join(checkoutDirectory, 'skills');
+export const defaultIndexFile = join(exampleRoot, '.cache', 'skills-index.jsonl');
 
 export interface RejectedSkill {
   readonly name: string;

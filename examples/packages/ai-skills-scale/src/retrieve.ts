@@ -1,13 +1,38 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   loadSkillsIndex,
-  searchSkillsIndex,
+  rankSkillsIndex,
+  type SkillEmbedder,
   TransformersJsSkillEmbedder,
 } from '@di-framework/ai-utils';
-import { defaultIndexFile } from './build-index.ts';
+import { defaultIndexFile, exampleRoot } from './corpus.ts';
+import {
+  formatEvaluationJson,
+  formatEvaluationMarkdown,
+  type RetrievalEvaluationResult,
+  runRetrievalEvaluation,
+} from './evaluation.ts';
 import { retrievalCases } from './retrieval-cases.ts';
 
-export async function runRetrievalBenchmark(indexFile = defaultIndexFile): Promise<void> {
+export const AWESOME_COPILOT_BASELINE_REVISION = 'a80885b76044550770f60f360f8a0e5ae3524a31';
+export const defaultJsonResultsFile = join(exampleRoot, '.cache', 'retrieval-results.json');
+export const defaultMarkdownResultsFile = join(exampleRoot, '.cache', 'retrieval-results.md');
+
+export interface RetrievalBenchmarkOptions {
+  readonly indexFile?: string;
+  readonly jsonFile?: string;
+  readonly markdownFile?: string;
+  readonly trials?: number;
+  readonly seed?: number;
+  readonly embedder?: SkillEmbedder;
+}
+
+export async function runRetrievalBenchmark(
+  options: RetrievalBenchmarkOptions | string = {},
+): Promise<RetrievalEvaluationResult | undefined> {
+  const resolved = typeof options === 'string' ? { indexFile: options } : options;
+  const indexFile = resolved.indexFile ?? defaultIndexFile;
   if (!existsSync(indexFile)) {
     throw new Error('Skills index is missing. Run `bun run index` first.');
   }
@@ -16,48 +41,114 @@ export async function runRetrievalBenchmark(indexFile = defaultIndexFile): Promi
     console.log(
       `Catalog has ${index.metadata.skillCount} skills, at or below threshold ${index.metadata.threshold}; semantic retrieval is disabled.`,
     );
-    return;
+    return undefined;
   }
 
-  const embedder = new TransformersJsSkillEmbedder({
-    model: index.metadata.model,
-    revision: index.metadata.revision,
-  });
-  console.log(
-    `index: ${index.metadata.skillCount} skills, ${index.metadata.dimensions} dimensions`,
-  );
-  console.log(`case\texpected\trank\ttop ${index.metadata.retrievalLimit}`);
-  const ranks: number[] = [];
-  for (const selectionCase of retrievalCases) {
-    const ranked = await searchSkillsIndex(index, selectionCase.prompt, {
-      embedder,
-      limit: index.entries.length,
+  const embedder =
+    resolved.embedder ??
+    new TransformersJsSkillEmbedder({
+      model: index.metadata.model,
+      revision: index.metadata.revision,
     });
-    const rank = ranked.findIndex((match) => match.name === selectionCase.expectedSkill) + 1;
-    ranks.push(rank || Number.POSITIVE_INFINITY);
-    console.log(
-      [
-        selectionCase.id,
-        selectionCase.expectedSkill,
-        rank || '(missing)',
-        ranked
-          .slice(0, index.metadata.retrievalLimit)
-          .map((match) => `${match.name} (${match.score.toFixed(3)})`)
-          .join(', '),
-      ].join('\t'),
-    );
-  }
-  const recall = (limit: number) => ranks.filter((rank) => rank <= limit).length;
-  const reciprocalRank =
-    ranks.reduce((sum, rank) => sum + (Number.isFinite(rank) ? 1 / rank : 0), 0) / ranks.length;
-  console.log(
-    `recall@1 ${recall(1)}/${ranks.length}; recall@5 ${recall(5)}/${ranks.length}; recall@10 ${recall(10)}/${ranks.length}; MRR ${reciprocalRank.toFixed(4)}`,
+  const result = await runRetrievalEvaluation({
+    suite: 'awesome-copilot semantic retrieval baseline',
+    corpus: {
+      id: 'github/awesome-copilot',
+      revision: AWESOME_COPILOT_BASELINE_REVISION,
+      skillCount: index.metadata.skillCount,
+    },
+    cases: retrievalCases.map((item) => ({
+      id: item.id,
+      prompt: item.prompt,
+      relevantSkills: [item.expectedSkill],
+      kind: 'unique' as const,
+    })),
+    trials: resolved.trials,
+    seed: resolved.seed,
+    measurements: { artifactBytes: statSync(indexFile).size },
+    retrieve: async (evaluationCase) => {
+      const embeddingStarted = performance.now();
+      const [query] = await embedder.embed([evaluationCase.prompt], { purpose: 'query' });
+      const embeddingFinished = performance.now();
+      if (!query) throw new Error('Skill embedder did not return a query vector');
+      const searchStarted = performance.now();
+      const candidates = rankSkillsIndex(index, query, { limit: index.entries.length }).map(
+        (match) => ({ name: match.name, score: match.score }),
+      );
+      const searchFinished = performance.now();
+      return {
+        candidates,
+        queryEmbeddingMilliseconds: embeddingFinished - embeddingStarted,
+        searchMilliseconds: searchFinished - searchStarted,
+      };
+    },
+  });
+
+  writeReport(resolved.jsonFile ?? defaultJsonResultsFile, formatEvaluationJson(result));
+  writeReport(
+    resolved.markdownFile ?? defaultMarkdownResultsFile,
+    formatEvaluationMarkdown(result),
   );
+  console.log(formatEvaluationMarkdown(result));
+  return result;
 }
 
-export async function runRetrieveMain(isMain = import.meta.main): Promise<void> {
+function writeReport(file: string, contents: string): void {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, contents);
+}
+
+export async function runRetrieveMain(
+  isMain = import.meta.main,
+  args: readonly string[] = process.argv.slice(2),
+): Promise<void> {
   if (!isMain) return;
-  await runRetrievalBenchmark();
+  await runRetrievalBenchmark(parseRetrievalOptions(args));
+}
+
+export function parseRetrievalOptions(args: readonly string[]): RetrievalBenchmarkOptions {
+  const options: {
+    indexFile?: string;
+    jsonFile?: string;
+    markdownFile?: string;
+    trials?: number;
+    seed?: number;
+  } = {};
+  for (let index = 0; index < args.length; index++) {
+    const flag = args[index];
+    const value = () => {
+      const next = args[++index];
+      if (!next) throw new Error(`${flag} requires a value`);
+      return next;
+    };
+    switch (flag) {
+      case '--index':
+        options.indexFile = value();
+        break;
+      case '--json':
+        options.jsonFile = value();
+        break;
+      case '--markdown':
+        options.markdownFile = value();
+        break;
+      case '--trials':
+        options.trials = positiveInteger(value(), flag);
+        break;
+      case '--seed':
+        options.seed = positiveInteger(value(), flag);
+        break;
+      default:
+        throw new Error(`Unknown option: ${flag}`);
+    }
+  }
+  return options;
+}
+
+function positiveInteger(value: string, flag: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1)
+    throw new Error(`${flag} requires a positive integer`);
+  return parsed;
 }
 
 await runRetrieveMain();
