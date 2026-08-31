@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	shimast "github.com/microsoft/typescript-go/shim/ast"
 	shimchecker "github.com/microsoft/typescript-go/shim/checker"
@@ -187,22 +188,22 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 		switch node.Kind {
 		case shimast.KindFunctionDeclaration:
 			fn := node.AsFunctionDeclaration()
-			injectCallable(factory, checker, fn.Parameters, fn.Body)
+			injectCallable(factory, checker, node, fn.Parameters, fn.Body)
 		case shimast.KindMethodDeclaration:
 			method := node.AsMethodDeclaration()
-			injectCallable(factory, checker, method.Parameters, method.Body)
+			injectCallable(factory, checker, node, method.Parameters, method.Body)
 		case shimast.KindConstructor:
 			ctor := node.AsConstructorDeclaration()
-			injectCallable(factory, checker, ctor.Parameters, ctor.Body)
+			injectCallable(factory, checker, node, ctor.Parameters, ctor.Body)
 		case shimast.KindFunctionExpression:
 			fn := node.AsFunctionExpression()
-			injectCallable(factory, checker, fn.Parameters, fn.Body)
+			injectCallable(factory, checker, node, fn.Parameters, fn.Body)
 		case shimast.KindArrowFunction:
 			arrow := node.AsArrowFunction()
 			if arrow.Body != nil && arrow.Body.Kind == shimast.KindBlock {
-				injectCallable(factory, checker, arrow.Parameters, arrow.Body)
+				injectCallable(factory, checker, node, arrow.Parameters, arrow.Body)
 			} else if arrow.Body != nil {
-				checks := checksForParams(factory, checker, arrow.Parameters)
+				checks := checksForParams(factory, checker, node, arrow.Parameters)
 				if len(checks) > 0 {
 					stmts := append(checks, factory.NewReturnStatement(arrow.Body))
 					arrow.Body = factory.NewBlock(factory.NewNodeList(stmts), true)
@@ -222,7 +223,13 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 	}
 }
 
-func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, params *shimast.NodeList, body *shimast.Node) {
+func injectCallable(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
+	params *shimast.NodeList,
+	body *shimast.Node,
+) {
 	if body == nil || params == nil {
 		return
 	}
@@ -231,7 +238,7 @@ func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, 
 		return
 	}
 
-	checks := checksForParams(factory, checker, params)
+	checks := checksForParams(factory, checker, enclosing, params)
 	if len(checks) == 0 {
 		return
 	}
@@ -245,7 +252,12 @@ func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, 
 	shimast.SetParentInChildren(body)
 }
 
-func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker, params *shimast.NodeList) []*shimast.Node {
+func checksForParams(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
+	params *shimast.NodeList,
+) []*shimast.Node {
 	if params == nil {
 		return nil
 	}
@@ -259,14 +271,14 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 			continue
 		}
 		if p.Name().Kind == shimast.KindObjectBindingPattern || p.Name().Kind == shimast.KindArrayBindingPattern {
-			checks = append(checks, checksForBindingName(factory, checker, p.Name())...)
+			checks = append(checks, checksForBindingName(factory, checker, enclosing, p.Name())...)
 			continue
 		}
 		if p.Name().Kind != shimast.KindIdentifier {
 			continue
 		}
 		name := p.Name().Text()
-		paramChecks := checksForParam(factory, checker, param, name)
+		paramChecks := checksForParam(factory, checker, enclosing, param, name)
 		if len(paramChecks) == 0 {
 			continue
 		}
@@ -280,7 +292,12 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 	return checks
 }
 
-func checksForBindingName(factory *shimast.NodeFactory, checker *shimchecker.Checker, name *shimast.Node) []*shimast.Node {
+func checksForBindingName(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
+	name *shimast.Node,
+) []*shimast.Node {
 	if name == nil || checker == nil {
 		return nil
 	}
@@ -289,7 +306,7 @@ func checksForBindingName(factory *shimast.NodeFactory, checker *shimchecker.Che
 		if t == nil {
 			return nil
 		}
-		return stmtsFromCheckerType(factory, checker, name.Text(), t)
+		return stmtsFromCheckerType(factory, checker, enclosing, name.Text(), t)
 	}
 	if name.Kind != shimast.KindObjectBindingPattern && name.Kind != shimast.KindArrayBindingPattern {
 		return nil
@@ -307,7 +324,7 @@ func checksForBindingName(factory *shimast.NodeFactory, checker *shimchecker.Che
 		if element == nil || element.Name() == nil || element.DotDotDotToken != nil || element.Initializer != nil {
 			continue
 		}
-		out = append(out, checksForBindingName(factory, checker, element.Name())...)
+		out = append(out, checksForBindingName(factory, checker, enclosing, element.Name())...)
 	}
 	return out
 }
@@ -315,6 +332,7 @@ func checksForBindingName(factory *shimast.NodeFactory, checker *shimchecker.Che
 func checksForParam(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	param *shimast.Node,
 	path string,
 ) []*shimast.Node {
@@ -331,7 +349,7 @@ func checksForParam(
 	if t == nil {
 		return nil
 	}
-	return stmtsFromCheckerType(factory, checker, path, t)
+	return stmtsFromCheckerType(factory, checker, enclosing, path, t)
 }
 
 func stmtsFromTypeNode(
@@ -359,10 +377,11 @@ func stmtsFromTypeNode(
 func stmtsFromCheckerType(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 ) []*shimast.Node {
-	return stmtsFromCheckerTypeSeen(factory, checker, path, t, newPredicateState(path), 0)
+	return stmtsFromCheckerTypeSeen(factory, checker, enclosing, path, t, newPredicateState(path), 0)
 }
 
 type predicateState struct {
@@ -412,6 +431,7 @@ func (state *predicateState) freshIdentifier(base string) string {
 func stmtsFromCheckerTypeSeen(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
@@ -424,6 +444,18 @@ func stmtsFromCheckerTypeSeen(
 	}
 	flags := t.Flags()
 	switch {
+	case flags&shimchecker.TypeFlagsEnumLike != 0:
+		invalid, ok := enumInvalidPredicate(factory, path, t)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid enum value")}
+	case classTypeSymbol(t) != nil:
+		invalid, className, ok := classInvalidPredicate(factory, checker, enclosing, path, t)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an instance of "+className)}
 	case flags&shimchecker.TypeFlagsUnion != 0:
 		members := t.Types()
 		if len(members) == 0 || len(members) > 12 {
@@ -431,7 +463,7 @@ func stmtsFromCheckerTypeSeen(
 		}
 		var invalid *shimast.Expression
 		for _, member := range members {
-			memberInvalid, ok := invalidPredicate(factory, checker, path, member, state, depth+1)
+			memberInvalid, ok := invalidPredicate(factory, checker, enclosing, path, member, state, depth+1)
 			if !ok {
 				return nil
 			}
@@ -444,12 +476,12 @@ func stmtsFromCheckerTypeSeen(
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its union type")}
 	case flags&shimchecker.TypeFlagsIntersection != 0:
 		if base, ok := brandedBaseType(checker, t); ok {
-			return stmtsFromCheckerTypeSeen(factory, checker, path, base, state, depth+1)
+			return stmtsFromCheckerTypeSeen(factory, checker, enclosing, path, base, state, depth+1)
 		}
 		if !isStructuralIntersection(checker, t) {
 			return nil
 		}
-		return structuralStatements(factory, checker, path, t, state, depth)
+		return structuralStatements(factory, checker, enclosing, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsNull != 0:
 		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(shimast.KindNullKeyword), "null")}
 	case flags&shimchecker.TypeFlagsUndefined != 0:
@@ -491,19 +523,19 @@ func stmtsFromCheckerTypeSeen(
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "bigint")}
 	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
-		invalid, ok := arrayInvalidPredicate(factory, checker, path, t, state, depth)
+		invalid, ok := arrayInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 		if !ok {
 			return nil
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an array with valid elements")}
 	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
-		invalid, ok := tupleInvalidPredicate(factory, checker, path, t, state, depth)
+		invalid, ok := tupleInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 		if !ok {
 			return nil
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid tuple")}
 	case flags&shimchecker.TypeFlagsObject != 0:
-		return structuralStatements(factory, checker, path, t, state, depth)
+		return structuralStatements(factory, checker, enclosing, path, t, state, depth)
 	default:
 		return nil
 	}
@@ -515,6 +547,7 @@ func stmtsFromCheckerTypeSeen(
 func invalidPredicate(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
@@ -525,6 +558,11 @@ func invalidPredicate(
 	}
 	flags := t.Flags()
 	switch {
+	case flags&shimchecker.TypeFlagsEnumLike != 0:
+		return enumInvalidPredicate(factory, path, t)
+	case classTypeSymbol(t) != nil:
+		invalid, _, ok := classInvalidPredicate(factory, checker, enclosing, path, t)
+		return invalid, ok
 	case flags&shimchecker.TypeFlagsUnion != 0:
 		members := t.Types()
 		if len(members) == 0 || len(members) > 12 {
@@ -532,7 +570,7 @@ func invalidPredicate(
 		}
 		var out *shimast.Expression
 		for _, member := range members {
-			pred, ok := invalidPredicate(factory, checker, path, member, state, depth+1)
+			pred, ok := invalidPredicate(factory, checker, enclosing, path, member, state, depth+1)
 			if !ok {
 				return nil, false
 			}
@@ -545,12 +583,12 @@ func invalidPredicate(
 		return out, true
 	case flags&shimchecker.TypeFlagsIntersection != 0:
 		if base, ok := brandedBaseType(checker, t); ok {
-			return invalidPredicate(factory, checker, path, base, state, depth+1)
+			return invalidPredicate(factory, checker, enclosing, path, base, state, depth+1)
 		}
 		if !isStructuralIntersection(checker, t) {
 			return nil, false
 		}
-		return structuralInvalidPredicate(factory, checker, path, t, state, depth)
+		return structuralInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsNull != 0:
 		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)), true
 	case flags&shimchecker.TypeFlagsUndefined != 0:
@@ -587,11 +625,11 @@ func invalidPredicate(
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("bigint", shimast.TokenFlagsNone)), true
 	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
-		return arrayInvalidPredicate(factory, checker, path, t, state, depth)
+		return arrayInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
-		return tupleInvalidPredicate(factory, checker, path, t, state, depth)
+		return tupleInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsObject != 0:
-		return structuralInvalidPredicate(factory, checker, path, t, state, depth)
+		return structuralInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 	default:
 		return nil, false
 	}
@@ -798,12 +836,13 @@ func isStructuralIntersection(checker *shimchecker.Checker, t *shimchecker.Type)
 func structuralStatements(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
 	depth int,
 ) []*shimast.Node {
-	if _, ok := structuralInvalidPredicate(factory, checker, path, t, state.clone(), depth); !ok {
+	if _, ok := structuralInvalidPredicate(factory, checker, enclosing, path, t, state.clone(), depth); !ok {
 		return nil
 	}
 	state.active[t] = true
@@ -821,6 +860,7 @@ func structuralStatements(
 		out = append(out, stmtsFromCheckerTypeSeen(
 			factory,
 			checker,
+			enclosing,
 			propertyPath(path, propName),
 			propType,
 			state,
@@ -830,7 +870,7 @@ func structuralStatements(
 
 	indexType, hasStringIndex, _ := stringIndexValueType(checker, t)
 	if hasStringIndex {
-		invalid, _ := stringIndexInvalidPredicate(factory, checker, path, indexType, state, depth)
+		invalid, _ := stringIndexInvalidPredicate(factory, checker, enclosing, path, indexType, state, depth)
 		out = append(out, throwIf(factory, invalid, "Expected "+path+" to have valid string-indexed values"))
 	}
 	return out
@@ -841,6 +881,7 @@ func structuralStatements(
 func structuralInvalidPredicate(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
@@ -865,7 +906,7 @@ func structuralInvalidPredicate(
 			continue
 		}
 		propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, sym.Name)
-		pred, ok := invalidPredicate(factory, checker, propertyPath(path, sym.Name), propType, state, depth+1)
+		pred, ok := invalidPredicate(factory, checker, enclosing, propertyPath(path, sym.Name), propType, state, depth+1)
 		if !ok {
 			return nil, false
 		}
@@ -879,7 +920,7 @@ func structuralInvalidPredicate(
 	}
 	if hasStringIndex {
 		hasShape = true
-		invalid, valid := stringIndexInvalidPredicate(factory, checker, path, indexType, state, depth)
+		invalid, valid := stringIndexInvalidPredicate(factory, checker, enclosing, path, indexType, state, depth)
 		if !valid {
 			return nil, false
 		}
@@ -887,6 +928,159 @@ func structuralInvalidPredicate(
 	}
 	if !hasShape {
 		return nil, false
+	}
+	return out, true
+}
+
+// enumInvalidPredicate inlines the checker-known enum member values. This is
+// deliberately independent of the emitted enum object so it also works for
+// const enums. A computed member has a nil checker value; in that case the
+// complete enum guard is skipped instead of rejecting a valid runtime value.
+func enumInvalidPredicate(
+	factory *shimast.NodeFactory,
+	path string,
+	t *shimchecker.Type,
+) (*shimast.Expression, bool) {
+	if t == nil || t.Flags()&shimchecker.TypeFlagsEnumLike == 0 {
+		return nil, false
+	}
+	members := []*shimchecker.Type{t}
+	if t.Flags()&shimchecker.TypeFlagsUnion != 0 {
+		members = t.Types()
+	}
+	if len(members) == 0 {
+		return nil, false
+	}
+
+	seen := make(map[string]bool, len(members))
+	var invalid *shimast.Expression
+	for _, member := range members {
+		if member == nil || member.Flags()&shimchecker.TypeFlagsEnumLike == 0 {
+			return nil, false
+		}
+		value := member.AsLiteralType().Value()
+		if value == nil {
+			return nil, false
+		}
+		var expected *shimast.Expression
+		var key string
+		switch {
+		case member.Flags()&shimchecker.TypeFlagsStringLiteral != 0:
+			text, ok := value.(string)
+			if !ok {
+				return nil, false
+			}
+			expected = factory.NewStringLiteral(text, shimast.TokenFlagsNone)
+			key = "string:" + text
+		case member.Flags()&shimchecker.TypeFlagsNumberLiteral != 0:
+			text := fmt.Sprint(value)
+			expected = factory.NewNumericLiteral(text, shimast.TokenFlagsNone)
+			key = "number:" + text
+		default:
+			return nil, false
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		memberInvalid := binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, expected)
+		if invalid == nil {
+			invalid = memberInvalid
+		} else {
+			invalid = binary(factory, invalid, shimast.KindAmpersandAmpersandToken, memberInvalid)
+		}
+	}
+	return invalid, invalid != nil
+}
+
+func classTypeSymbol(t *shimchecker.Type) *shimast.Symbol {
+	if t == nil || t.Flags()&shimchecker.TypeFlagsObject == 0 {
+		return nil
+	}
+	candidates := []*shimast.Symbol{t.Symbol(), shimchecker.Type_getTypeNameSymbol(t)}
+	if t.ObjectFlags()&shimchecker.ObjectFlagsReference != 0 {
+		target := t.Target()
+		if target != nil {
+			candidates = append(candidates, target.Symbol(), shimchecker.Type_getTypeNameSymbol(target))
+		}
+	}
+	for _, symbol := range candidates {
+		if symbol != nil && symbol.Flags&shimast.SymbolFlagsClass != 0 {
+			return symbol
+		}
+	}
+	return nil
+}
+
+func classInvalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
+	path string,
+	t *shimchecker.Type,
+) (*shimast.Expression, string, bool) {
+	symbol := classTypeSymbol(t)
+	if symbol == nil || !shimchecker.Checker_isSymbolAccessibleAsValue(checker, symbol, enclosing) {
+		return nil, "", false
+	}
+	className := shimchecker.Checker_symbolToValueString(checker, symbol, enclosing)
+	constructor, ok := qualifiedValueExpr(factory, className)
+	if !ok || !hasRuntimeValueBinding(factory, checker, enclosing, className) {
+		return nil, "", false
+	}
+	isInstance := binary(factory, pathExpr(factory, path), shimast.KindInstanceOfKeyword, constructor)
+	return factory.NewPrefixUnaryExpression(shimast.KindExclamationToken, isInstance), className, true
+}
+
+func hasRuntimeValueBinding(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
+	name string,
+) bool {
+	root, _, _ := strings.Cut(name, ".")
+	binding := shimchecker.Checker_resolveEntityName(
+		checker,
+		factory.NewIdentifier(root),
+		shimast.SymbolFlagsValue,
+		true,
+		true,
+		enclosing,
+	)
+	if binding == nil {
+		return false
+	}
+	for _, declaration := range binding.Declarations {
+		if declaration == nil {
+			continue
+		}
+		for current := declaration; current != nil; current = current.Parent {
+			// Emit decides whether an ES import survives from the original
+			// semantic references. A detached predicate added here cannot
+			// reliably retain an alias that was used only as a type, so reject
+			// every imported root rather than risk a dangling constructor name.
+			if current.Kind == shimast.KindImportClause {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// qualifiedValueExpr accepts the identifier/property-access form produced by
+// the checker for ordinary class values. If naming the constructor would need
+// a synthetic import or another expression form, the class guard is skipped.
+func qualifiedValueExpr(factory *shimast.NodeFactory, name string) (*shimast.Expression, bool) {
+	parts := strings.Split(name, ".")
+	if len(parts) == 0 || !isIdentifierSegment(parts[0]) {
+		return nil, false
+	}
+	var out *shimast.Expression = factory.NewIdentifier(parts[0])
+	for _, part := range parts[1:] {
+		if !isIdentifierSegment(part) {
+			return nil, false
+		}
+		out = factory.NewPropertyAccessExpression(out, nil, factory.NewIdentifier(part), 0)
 	}
 	return out, true
 }
@@ -919,13 +1113,14 @@ func stringIndexValueType(checker *shimchecker.Checker, t *shimchecker.Type) (*s
 func stringIndexInvalidPredicate(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	valueType *shimchecker.Type,
 	state *predicateState,
 	depth int,
 ) (*shimast.Expression, bool) {
 	keyName := state.freshIdentifier("__di_key")
-	valueInvalid, ok := invalidPredicate(factory, checker, path+"["+keyName+"]", valueType, state, depth+1)
+	valueInvalid, ok := invalidPredicate(factory, checker, enclosing, path+"["+keyName+"]", valueType, state, depth+1)
 	if !ok {
 		return nil, false
 	}
@@ -941,9 +1136,28 @@ func stringIndexInvalidPredicate(
 	), true
 }
 
+func isIdentifierSegment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i, r := range value {
+		if i == 0 {
+			if r != '_' && r != '$' && !unicode.IsLetter(r) {
+				return false
+			}
+			continue
+		}
+		if r != '_' && r != '$' && !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsMark(r) {
+			return false
+		}
+	}
+	return true
+}
+
 func tupleInvalidPredicate(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
@@ -978,7 +1192,7 @@ func tupleInvalidPredicate(
 		out = binary(factory, out, shimast.KindBarBarToken, binary(factory, tooShort, shimast.KindBarBarToken, tooLong))
 	}
 	for i, element := range elements {
-		pred, ok := invalidPredicate(factory, checker, fmt.Sprintf("%s[%d]", path, i), element, state, depth+1)
+		pred, ok := invalidPredicate(factory, checker, enclosing, fmt.Sprintf("%s[%d]", path, i), element, state, depth+1)
 		if !ok {
 			return nil, false
 		}
@@ -994,6 +1208,7 @@ func tupleInvalidPredicate(
 func arrayInvalidPredicate(
 	factory *shimast.NodeFactory,
 	checker *shimchecker.Checker,
+	enclosing *shimast.Node,
 	path string,
 	t *shimchecker.Type,
 	state *predicateState,
@@ -1004,7 +1219,7 @@ func arrayInvalidPredicate(
 		return nil, false
 	}
 	itemName := state.freshIdentifier("__di_item")
-	itemInvalid, ok := invalidPredicate(factory, checker, itemName, typeArgs[0], state, depth+1)
+	itemInvalid, ok := invalidPredicate(factory, checker, enclosing, itemName, typeArgs[0], state, depth+1)
 	if !ok {
 		return nil, false
 	}

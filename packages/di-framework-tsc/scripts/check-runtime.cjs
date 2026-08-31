@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const fixture = require('../fixture/dist/greet.js');
 const { ApiService, createService } = require('../fixture/dist/service.js');
+const nominal = require('../fixture/dist/nominal.js');
 
 const throwsTypeError = (run) => assert.throws(run, TypeError);
 
@@ -89,6 +90,12 @@ throwsTypeError(() => fixture.templateCollections(['user_first'], false));
 throwsTypeError(() => fixture.sum(1, 'bad'));
 throwsTypeError(() => fixture.destructuredValues({ id: 'bad', name: 'Ada' }, [1, 'ok']));
 throwsTypeError(() => createService({ endpoint: '/api', retries: 'bad' }));
+throwsTypeError(() => nominal.numericEnum(1));
+throwsTypeError(() => nominal.stringEnum('pending'));
+throwsTypeError(() => nominal.constEnum(11));
+throwsTypeError(() => nominal.useToken({ value: 'lookalike' }));
+throwsTypeError(() => nominal.useTokens([new nominal.Token('ok'), { value: 'lookalike' }]));
+throwsTypeError(() => nominal.tokenOrState('pending'));
 
 const service = new ApiService({ endpoint: '/api', retries: 2 });
 throwsTypeError(() => service.execute({ id: 1, tags: [false] }));
@@ -170,5 +177,20 @@ assert.equal(fixture.unsupportedLengthIntersection(123), 123);
 assert.equal(fixture.unsupportedDateIntersection(123), 123);
 assert.equal(fixture.unsupportedCallableIntersection(123), 123);
 assert.deepEqual(service.execute({ id: 1, tags: ['a'] }), [1, '/api:sync:a']);
+assert.equal(nominal.numericEnum(nominal.NumericRole.Guest), nominal.NumericRole.Guest);
+assert.equal(nominal.numericEnum(nominal.NumericRole.Owner), nominal.NumericRole.Owner);
+assert.equal(nominal.stringEnum(nominal.StringState.Ready), nominal.StringState.Ready);
+assert.equal(nominal.constEnum(10), 10);
+assert.equal(nominal.computedEnum(999), 999);
+assert.equal(nominal.useToken(new nominal.Token('direct')), 'direct');
+assert.equal(nominal.useToken(new nominal.DerivedToken('derived')), 'derived');
+assert.deepEqual(nominal.useTokens([new nominal.Token('one')]), ['one']);
+assert.equal(nominal.tokenOrState(new nominal.Token('union')), 'union');
+assert.equal(nominal.tokenOrState(nominal.StringState.Done), nominal.StringState.Done);
+assert.equal(nominal.useTokenShape({ value: 'structural' }), 'structural');
+assert.equal(nominal.typeOnlyToken({ value: 'type-only' }), 'type-only');
+assert.equal(nominal.importedToken({ value: 'value-import' }), 'value-import');
+assert.equal(nominal.namespacedToken(new nominal.Domain.NamespacedToken('namespace')), 'namespace');
+throwsTypeError(() => nominal.namespacedToken({ value: 'lookalike' }));
 
 console.log('check-runtime: ok — injected guards accept valid calls and reject invalid calls');
