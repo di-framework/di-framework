@@ -76,19 +76,23 @@ function greet(user) {
 
 ## Supported boundaries and types
 
-The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, sound bounded unions, plain structural objects, arrays/readonly arrays, and fixed tuples with optional tails.
+The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, sound bounded unions, plain structural objects, non-callable object-only intersections, string index signatures, `Record<string, V>` and literal-key records, arrays/readonly arrays, and fixed tuples with optional tails.
 
 ## Limitations
 
 Unsupported paths are skipped as a whole rather than emitting a predicate that can reject valid input. Current intentional gaps are:
 
 - defaults and rest elements nested inside destructuring patterns
-- variadic tuples, classes, branded types, typia-style tags
+- variadic tuples, classes, callable/constructable intersections, branded types, typia-style tags
+- number-only and symbol index signatures, and advanced mapped/conditional types
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
 
 Arrays and `ReadonlyArray<T>` are checked with `Array.isArray` and a full element scan.
 Fixed tuples enforce their allowed length and validate each position; optional tails are presence-gated.
+Object-only intersections use the checker's flattened apparent properties, validating each required property once. Required properties are checked for presence before their value, including properties whose type admits `undefined`; optional object properties remain unchecked.
+String index signatures and `Record<string, V>` scan every own enumerable string-keyed value with `Object.keys`. Literal-key records instead check each required key, including names that require bracket access.
+Structural traversal keeps a per-path visited set and a maximum depth of eight, so recursive types cannot hang compilation.
 Optional and defaulted parameters are validated only when their runtime value is not `undefined`; `null` is still checked against the declared type.
 Rest parameters use the same full array and element validation as ordinary arrays.
 Simple object, array, and nested destructured bindings are validated using the types of the bound identifiers.

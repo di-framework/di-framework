@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	shimast "github.com/microsoft/typescript-go/shim/ast"
@@ -361,7 +362,51 @@ func stmtsFromCheckerType(
 	path string,
 	t *shimchecker.Type,
 ) []*shimast.Node {
-	return stmtsFromCheckerTypeSeen(factory, checker, path, t, make(map[*shimchecker.Type]bool), 0)
+	return stmtsFromCheckerTypeSeen(factory, checker, path, t, newPredicateState(path), 0)
+}
+
+type predicateState struct {
+	active      map[*shimchecker.Type]bool
+	identifiers map[string]bool
+}
+
+func newPredicateState(path string) *predicateState {
+	rootEnd := strings.IndexAny(path, ".[")
+	if rootEnd < 0 {
+		rootEnd = len(path)
+	}
+	return &predicateState{
+		active:      make(map[*shimchecker.Type]bool),
+		identifiers: map[string]bool{path[:rootEnd]: true},
+	}
+}
+
+func (state *predicateState) clone() *predicateState {
+	clone := &predicateState{
+		active:      make(map[*shimchecker.Type]bool, len(state.active)),
+		identifiers: make(map[string]bool, len(state.identifiers)),
+	}
+	for t, active := range state.active {
+		clone.active[t] = active
+	}
+	for name, used := range state.identifiers {
+		clone.identifiers[name] = used
+	}
+	return clone
+}
+
+func (state *predicateState) freshIdentifier(base string) string {
+	if !state.identifiers[base] {
+		state.identifiers[base] = true
+		return base
+	}
+	for suffix := 1; ; suffix++ {
+		candidate := fmt.Sprintf("%s_%d", base, suffix)
+		if !state.identifiers[candidate] {
+			state.identifiers[candidate] = true
+			return candidate
+		}
+	}
 }
 
 func stmtsFromCheckerTypeSeen(
@@ -369,12 +414,12 @@ func stmtsFromCheckerTypeSeen(
 	checker *shimchecker.Checker,
 	path string,
 	t *shimchecker.Type,
-	seen map[*shimchecker.Type]bool,
+	state *predicateState,
 	depth int,
 ) []*shimast.Node {
 	// Platform and application interfaces can be recursive. Runtime guards are
 	// deliberately bounded so a cyclic type graph cannot make compilation hang.
-	if depth > 8 || seen[t] {
+	if depth > 8 || state.active[t] {
 		return nil
 	}
 	flags := t.Flags()
@@ -386,7 +431,7 @@ func stmtsFromCheckerTypeSeen(
 		}
 		var invalid *shimast.Expression
 		for _, member := range members {
-			memberInvalid, ok := invalidPredicate(factory, checker, path, member, seen, depth+1)
+			memberInvalid, ok := invalidPredicate(factory, checker, path, member, state, depth+1)
 			if !ok {
 				return nil
 			}
@@ -397,6 +442,11 @@ func stmtsFromCheckerTypeSeen(
 			}
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its union type")}
+	case flags&shimchecker.TypeFlagsIntersection != 0:
+		if !isStructuralIntersection(checker, t) {
+			return nil
+		}
+		return structuralStatements(factory, checker, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsNull != 0:
 		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(shimast.KindNullKeyword), "null")}
 	case flags&shimchecker.TypeFlagsUndefined != 0:
@@ -429,50 +479,19 @@ func stmtsFromCheckerTypeSeen(
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "bigint")}
 	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
-		invalid, ok := arrayInvalidPredicate(factory, checker, path, t, seen, depth)
+		invalid, ok := arrayInvalidPredicate(factory, checker, path, t, state, depth)
 		if !ok {
 			return nil
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an array with valid elements")}
 	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
-		invalid, ok := tupleInvalidPredicate(factory, checker, path, t, seen, depth)
+		invalid, ok := tupleInvalidPredicate(factory, checker, path, t, state, depth)
 		if !ok {
 			return nil
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid tuple")}
 	case flags&shimchecker.TypeFlagsObject != 0:
-		seen[t] = true
-		defer delete(seen, t)
-		props := shimchecker.Checker_getApparentProperties(checker, t)
-		if len(props) == 0 {
-			return nil
-		}
-		out := []*shimast.Node{objectCheck(factory, path)}
-		for _, sym := range props {
-			if sym == nil {
-				continue
-			}
-			propName := sym.Name
-			if propName == "" || strings.HasPrefix(propName, "__") {
-				continue
-			}
-			if sym.Flags&shimast.SymbolFlagsOptional != 0 {
-				continue
-			}
-			propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, propName)
-			if propType == nil {
-				continue
-			}
-			out = append(out, stmtsFromCheckerTypeSeen(
-				factory,
-				checker,
-				path+"."+propName,
-				propType,
-				seen,
-				depth+1,
-			)...)
-		}
-		return out
+		return structuralStatements(factory, checker, path, t, state, depth)
 	default:
 		return nil
 	}
@@ -486,10 +505,10 @@ func invalidPredicate(
 	checker *shimchecker.Checker,
 	path string,
 	t *shimchecker.Type,
-	seen map[*shimchecker.Type]bool,
+	state *predicateState,
 	depth int,
 ) (*shimast.Expression, bool) {
-	if t == nil || depth > 8 || seen[t] {
+	if t == nil || depth > 8 || state.active[t] {
 		return nil, false
 	}
 	flags := t.Flags()
@@ -501,7 +520,7 @@ func invalidPredicate(
 		}
 		var out *shimast.Expression
 		for _, member := range members {
-			pred, ok := invalidPredicate(factory, checker, path, member, seen, depth+1)
+			pred, ok := invalidPredicate(factory, checker, path, member, state, depth+1)
 			if !ok {
 				return nil, false
 			}
@@ -512,6 +531,11 @@ func invalidPredicate(
 			}
 		}
 		return out, true
+	case flags&shimchecker.TypeFlagsIntersection != 0:
+		if !isStructuralIntersection(checker, t) {
+			return nil, false
+		}
+		return structuralInvalidPredicate(factory, checker, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsNull != 0:
 		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)), true
 	case flags&shimchecker.TypeFlagsUndefined != 0:
@@ -543,33 +567,187 @@ func invalidPredicate(
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("bigint", shimast.TokenFlagsNone)), true
 	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
-		return arrayInvalidPredicate(factory, checker, path, t, seen, depth)
+		return arrayInvalidPredicate(factory, checker, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
-		return tupleInvalidPredicate(factory, checker, path, t, seen, depth)
+		return tupleInvalidPredicate(factory, checker, path, t, state, depth)
 	case flags&shimchecker.TypeFlagsObject != 0:
-		seen[t] = true
-		defer delete(seen, t)
-		notObject := binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("object", shimast.TokenFlagsNone))
-		out := binary(factory, notObject, shimast.KindBarBarToken, binary(factory, pathExpr(factory, path), shimast.KindEqualsEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)))
-		props := shimchecker.Checker_getApparentProperties(checker, t)
-		if len(props) == 0 {
-			return nil, false
-		}
-		for _, sym := range props {
-			if sym == nil || sym.Name == "" || strings.HasPrefix(sym.Name, "__") || sym.Flags&shimast.SymbolFlagsOptional != 0 {
-				continue
-			}
-			propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, sym.Name)
-			pred, ok := invalidPredicate(factory, checker, path+"."+sym.Name, propType, seen, depth+1)
-			if !ok {
-				return nil, false
-			}
-			out = binary(factory, out, shimast.KindBarBarToken, pred)
-		}
-		return out, true
+		return structuralInvalidPredicate(factory, checker, path, t, state, depth)
 	default:
 		return nil, false
 	}
+}
+
+// isStructuralIntersection keeps primitive/object intersections (including
+// brands) out of this generic structural path. Arrays and tuples intersected
+// with objects also need semantics beyond a flattened property walk.
+func isStructuralIntersection(checker *shimchecker.Checker, t *shimchecker.Type) bool {
+	members := t.Types()
+	if len(members) == 0 ||
+		len(shimchecker.Checker_getSignaturesOfType(checker, t, shimchecker.SignatureKindCall)) > 0 ||
+		len(shimchecker.Checker_getSignaturesOfType(checker, t, shimchecker.SignatureKindConstruct)) > 0 {
+		return false
+	}
+	for _, member := range members {
+		if member == nil ||
+			member.Flags()&shimchecker.TypeFlagsObject == 0 ||
+			checker.IsArrayLikeType(member) ||
+			shimchecker.IsTupleType(member) ||
+			len(shimchecker.Checker_getSignaturesOfType(checker, member, shimchecker.SignatureKindCall)) > 0 ||
+			len(shimchecker.Checker_getSignaturesOfType(checker, member, shimchecker.SignatureKindConstruct)) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// structuralStatements emits readable, per-path checks after first proving
+// that the complete structural predicate is representable. That preflight
+// prevents an unsupported property or index value from producing a partial
+// guard that could reject valid inputs.
+func structuralStatements(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	state *predicateState,
+	depth int,
+) []*shimast.Node {
+	if _, ok := structuralInvalidPredicate(factory, checker, path, t, state.clone(), depth); !ok {
+		return nil
+	}
+	state.active[t] = true
+	defer delete(state.active, t)
+
+	out := []*shimast.Node{objectCheck(factory, path)}
+	propertyNames := make(map[string]bool)
+	for _, sym := range shimchecker.Checker_getApparentProperties(checker, t) {
+		if !isRuntimeProperty(sym, propertyNames) || sym.Flags&shimast.SymbolFlagsOptional != 0 {
+			continue
+		}
+		propName := sym.Name
+		propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, propName)
+		out = append(out, requiredPropertyCheck(factory, path, propName))
+		out = append(out, stmtsFromCheckerTypeSeen(
+			factory,
+			checker,
+			propertyPath(path, propName),
+			propType,
+			state,
+			depth+1,
+		)...)
+	}
+
+	indexType, hasStringIndex, _ := stringIndexValueType(checker, t)
+	if hasStringIndex {
+		invalid, _ := stringIndexInvalidPredicate(factory, checker, path, indexType, state, depth)
+		out = append(out, throwIf(factory, invalid, "Expected "+path+" to have valid string-indexed values"))
+	}
+	return out
+}
+
+// structuralInvalidPredicate composes object, required-property, and string
+// index checks so structural types remain usable inside unions and arrays.
+func structuralInvalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	state *predicateState,
+	depth int,
+) (*shimast.Expression, bool) {
+	if t == nil || depth > 8 || state.active[t] {
+		return nil, false
+	}
+	state.active[t] = true
+	defer delete(state.active, t)
+
+	notObject := binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("object", shimast.TokenFlagsNone))
+	out := binary(factory, notObject, shimast.KindBarBarToken, binary(factory, pathExpr(factory, path), shimast.KindEqualsEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)))
+	hasShape := false
+	propertyNames := make(map[string]bool)
+	for _, sym := range shimchecker.Checker_getApparentProperties(checker, t) {
+		if !isRuntimeProperty(sym, propertyNames) {
+			continue
+		}
+		hasShape = true
+		if sym.Flags&shimast.SymbolFlagsOptional != 0 {
+			continue
+		}
+		propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, sym.Name)
+		pred, ok := invalidPredicate(factory, checker, propertyPath(path, sym.Name), propType, state, depth+1)
+		if !ok {
+			return nil, false
+		}
+		missing := missingPropertyPredicate(factory, path, sym.Name)
+		out = binary(factory, out, shimast.KindBarBarToken, binary(factory, missing, shimast.KindBarBarToken, pred))
+	}
+
+	indexType, hasStringIndex, ok := stringIndexValueType(checker, t)
+	if !ok {
+		return nil, false
+	}
+	if hasStringIndex {
+		hasShape = true
+		invalid, valid := stringIndexInvalidPredicate(factory, checker, path, indexType, state, depth)
+		if !valid {
+			return nil, false
+		}
+		out = binary(factory, out, shimast.KindBarBarToken, invalid)
+	}
+	if !hasShape {
+		return nil, false
+	}
+	return out, true
+}
+
+func isRuntimeProperty(sym *shimast.Symbol, seen map[string]bool) bool {
+	if sym == nil || strings.HasPrefix(sym.Name, "\xFE") || seen[sym.Name] {
+		return false
+	}
+	seen[sym.Name] = true
+	return true
+}
+
+// stringIndexValueType accepts exactly one string index. Number and symbol
+// indexes are skipped as a whole because Object.keys cannot enforce their
+// distinct value semantics soundly.
+func stringIndexValueType(checker *shimchecker.Checker, t *shimchecker.Type) (*shimchecker.Type, bool, bool) {
+	var valueType *shimchecker.Type
+	for _, info := range shimchecker.Checker_getIndexInfosOfType(checker, t) {
+		if info == nil || info.KeyType() == nil || info.KeyType().Flags()&shimchecker.TypeFlagsString == 0 || valueType != nil {
+			return nil, false, false
+		}
+		valueType = info.ValueType()
+		if valueType == nil {
+			return nil, false, false
+		}
+	}
+	return valueType, valueType != nil, true
+}
+
+func stringIndexInvalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	valueType *shimchecker.Type,
+	state *predicateState,
+	depth int,
+) (*shimast.Expression, bool) {
+	keyName := state.freshIdentifier("__di_key")
+	valueInvalid, ok := invalidPredicate(factory, checker, path+"["+keyName+"]", valueType, state, depth+1)
+	if !ok {
+		return nil, false
+	}
+	keys := factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(factory.NewIdentifier("Object"), nil, factory.NewIdentifier("keys"), 0),
+		nil, nil, factory.NewNodeList([]*shimast.Node{pathExpr(factory, path)}), 0,
+	)
+	param := factory.NewParameterDeclaration(nil, nil, factory.NewIdentifier(keyName), nil, nil, nil)
+	arrow := factory.NewArrowFunction(nil, nil, factory.NewNodeList([]*shimast.Node{param}), nil, nil, factory.NewToken(shimast.KindEqualsGreaterThanToken), valueInvalid)
+	return factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(keys, nil, factory.NewIdentifier("some"), 0),
+		nil, nil, factory.NewNodeList([]*shimast.Node{arrow}), 0,
+	), true
 }
 
 func tupleInvalidPredicate(
@@ -577,7 +755,7 @@ func tupleInvalidPredicate(
 	checker *shimchecker.Checker,
 	path string,
 	t *shimchecker.Type,
-	seen map[*shimchecker.Type]bool,
+	state *predicateState,
 	depth int,
 ) (*shimast.Expression, bool) {
 	elements := checker.GetTypeArguments(t)
@@ -609,7 +787,7 @@ func tupleInvalidPredicate(
 		out = binary(factory, out, shimast.KindBarBarToken, binary(factory, tooShort, shimast.KindBarBarToken, tooLong))
 	}
 	for i, element := range elements {
-		pred, ok := invalidPredicate(factory, checker, fmt.Sprintf("%s[%d]", path, i), element, seen, depth+1)
+		pred, ok := invalidPredicate(factory, checker, fmt.Sprintf("%s[%d]", path, i), element, state, depth+1)
 		if !ok {
 			return nil, false
 		}
@@ -627,15 +805,15 @@ func arrayInvalidPredicate(
 	checker *shimchecker.Checker,
 	path string,
 	t *shimchecker.Type,
-	seen map[*shimchecker.Type]bool,
+	state *predicateState,
 	depth int,
 ) (*shimast.Expression, bool) {
 	typeArgs := checker.GetTypeArguments(t)
 	if len(typeArgs) != 1 {
 		return nil, false
 	}
-	itemName := "__di_item"
-	itemInvalid, ok := invalidPredicate(factory, checker, itemName, typeArgs[0], seen, depth+1)
+	itemName := state.freshIdentifier("__di_item")
+	itemInvalid, ok := invalidPredicate(factory, checker, itemName, typeArgs[0], state, depth+1)
 	if !ok {
 		return nil, false
 	}
@@ -658,6 +836,39 @@ func equalityCheck(factory *shimast.NodeFactory, path string, expected *shimast.
 	return throwIf(factory, cond, "Expected "+path+" to equal "+label)
 }
 
+func requiredPropertyCheck(factory *shimast.NodeFactory, path, property string) *shimast.Node {
+	return throwIf(factory, missingPropertyPredicate(factory, path, property), "Expected "+path+" to have required property "+strconv.Quote(property))
+}
+
+func missingPropertyPredicate(factory *shimast.NodeFactory, path, property string) *shimast.Expression {
+	present := binary(
+		factory,
+		factory.NewStringLiteral(property, shimast.TokenFlagsNone),
+		shimast.KindInKeyword,
+		pathExpr(factory, path),
+	)
+	return factory.NewPrefixUnaryExpression(shimast.KindExclamationToken, present)
+}
+
+func propertyPath(path, property string) string {
+	if isSimpleIdentifier(property) {
+		return path + "." + property
+	}
+	return path + "[" + strconv.Quote(property) + "]"
+}
+
+func isSimpleIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i, r := range value {
+		if !(r == '_' || r == '$' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || i > 0 && r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
 // pathExpr builds a fresh expression tree for a dotted path (e.g. "user.id").
 // Each call allocates new nodes — AST nodes are not shareable across parents.
 func pathExpr(factory *shimast.NodeFactory, path string) *shimast.Expression {
@@ -676,12 +887,38 @@ func pathExpr(factory *shimast.NodeFactory, path string) *shimast.Expression {
 			expr = factory.NewPropertyAccessExpression(expr, nil, factory.NewIdentifier(path[start:end]), 0)
 			continue
 		}
-		close := strings.IndexByte(path[end:], ']')
+		start := end + 1
+		if start < len(path) && path[start] == '"' {
+			quotedEnd := start + 1
+			escaped := false
+			for quotedEnd < len(path) {
+				if path[quotedEnd] == '"' && !escaped {
+					break
+				}
+				if path[quotedEnd] == '\\' {
+					escaped = !escaped
+				} else {
+					escaped = false
+				}
+				quotedEnd++
+			}
+			if quotedEnd >= len(path) || quotedEnd+1 >= len(path) || path[quotedEnd+1] != ']' {
+				return expr
+			}
+			property, err := strconv.Unquote(path[start : quotedEnd+1])
+			if err != nil {
+				return expr
+			}
+			expr = factory.NewElementAccessExpression(expr, nil, factory.NewStringLiteral(property, shimast.TokenFlagsNone), 0)
+			end = quotedEnd + 2
+			continue
+		}
+		close := strings.IndexByte(path[start:], ']')
 		if close < 0 {
 			return expr
 		}
-		close += end
-		index := path[end+1 : close]
+		close += start
+		index := path[start:close]
 		// An identifier-shaped synthesized index prints as the numeric token while
 		// avoiding the emitter asking source-text questions of a detached literal.
 		expr = factory.NewElementAccessExpression(expr, nil, factory.NewIdentifier(index), 0)

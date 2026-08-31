@@ -71,6 +71,100 @@ export function optionalValues(required: number, label?: string, count: number =
   return { required, label, count };
 }
 
+type LeftDetails = { left: string; shared: number };
+type RightDetails = { right: boolean; shared: number };
+type NestedIntersection = { item: { id: number } & { 'x-id': string | undefined } };
+type IntersectionAlternative =
+  | ({ kind: 'full' } & { count: number })
+  | { kind: 'fallback'; enabled: boolean };
+
+export function intersectionValues(
+  value: LeftDetails & RightDetails,
+  nested: NestedIntersection,
+  alternative: IntersectionAlternative,
+) {
+  return { value, nested, alternative };
+}
+
+export function intersectionArray(entries: Array<{ left: number } & { right: string }>) {
+  return entries;
+}
+
+type IndexedNumbers = { fixed: number } & { [key: string]: number };
+type FixedNumberRecord = Record<'primary' | 'x-id', number>;
+
+export function recordValues(
+  indexed: IndexedNumbers,
+  record: Record<string, number>,
+  fixed: FixedNumberRecord,
+) {
+  return { indexed, record, fixed };
+}
+
+export function nestedRecord(values: Record<string, Record<string, number>>) {
+  return values;
+}
+
+export function rootKeyRecord(__di_key: Record<string, number>) {
+  return __di_key;
+}
+
+type SpecialKeyRecord = Record<'' | '__id', number>;
+
+export function specialKeyRecord(special: SpecialKeyRecord) {
+  return special;
+}
+
+type CallableIntersection = ((input: string) => string) & { label: string };
+type ConstructableIntersection = (new (value: string) => { value: string }) & { label: string };
+
+export function callableIntersection(callable: CallableIntersection) {
+  return callable;
+}
+
+export function constructableIntersection(constructable: ConstructableIntersection) {
+  return constructable;
+}
+
+interface RecursiveValue {
+  value: number;
+  next?: RecursiveValue;
+}
+
+export function recursiveValue(value: RecursiveValue) {
+  return value;
+}
+
+interface RequiredRecursiveValue {
+  next: RequiredRecursiveValue;
+}
+
+export function requiredRecursiveValue(requiredRecursive: RequiredRecursiveValue) {
+  return requiredRecursive;
+}
+
+type RecursiveIndexValue = { [key: string]: RecursiveIndexValue };
+
+export function recursiveIndexValue(recursiveIndex: RecursiveIndexValue) {
+  return recursiveIndex;
+}
+
+export function optionalObject(value: { label?: string }) {
+  return value;
+}
+
+export function unsupportedNumberIndex(numericValues: { [key: number]: number }) {
+  return numericValues;
+}
+
+export function unsupportedSymbolIndex(symbolValues: { [key: symbol]: number }) {
+  return symbolValues;
+}
+
+export function unsupportedRecordValues(unsupportedValues: Record<string, Date>) {
+  return unsupportedValues;
+}
+
 export function sum(...values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
