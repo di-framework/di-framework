@@ -117,6 +117,7 @@ export {
   skillIndexText,
 } from './skills-index.ts';
 export type {
+  SkillsIndexCliCommand,
   SkillsIndexCliIo,
   SkillsIndexCliOptions,
   SkillsIndexCliRuntime,
@@ -126,7 +127,10 @@ export {
   runSkillsIndexCli,
   SKILLS_INDEX_CLI_HELP,
 } from './skills-index-cli.ts';
-export type { SkillsRetrievalAdvisorOptions } from './skills-retrieval-advisor.ts';
+export type {
+  SkillsRetrievalAdvisorOptions,
+  SkillsRetrievalDiagnostic,
+} from './skills-retrieval-advisor.ts';
 export {
   aggregateSkillChunkMatches,
   DEFAULT_SKILLS_RETRIEVAL_ORDER,

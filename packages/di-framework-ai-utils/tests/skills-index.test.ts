@@ -453,10 +453,12 @@ describe('SkillsAgent semantic discovery', () => {
 
   test('removes the Skill tool when calibrated retrieval abstains', async () => {
     const fixture = await indexedFixture();
+    const diagnostics: unknown[] = [];
     const advisor = new SkillsRetrievalAdvisor({
       index: fixture.index,
       skills: fixture.skills,
       embedder: fixture.embedder,
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
     const request = chatClientRequest(
       new Prompt('compose sonnets about moonlight', {
@@ -466,5 +468,14 @@ describe('SkillsAgent semantic discovery', () => {
     const next = await advisor.before(request);
     expect(next.prompt.options?.toolCallbacks).toEqual([]);
     expect(next.context.get('skills_retrieval')).toEqual({ decision: 'abstained', matches: [] });
+    expect(diagnostics).toMatchObject([
+      {
+        schema: '@di-framework/skills-retrieval-diagnostic',
+        version: 1,
+        decision: 'abstained',
+        backend: 'local',
+        matches: [],
+      },
+    ]);
   });
 });

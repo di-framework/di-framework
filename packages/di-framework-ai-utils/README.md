@@ -189,6 +189,24 @@ records all BM25, reciprocal-rank-fusion, and abstention parameters. A valid
 abstention removes the `Skill` tool for that request; missing, stale, or corrupt
 indexes remain hard errors and never fall back to the full catalog.
 
+### Index operations
+
+Use versioned JSON diagnostics in CI and production troubleshooting:
+
+```bash
+di-skills-index inspect --input .di-framework/skills-index.json --json
+di-skills-index validate --input .di-framework/skills-index.json --skills-dir .claude/skills --json
+di-skills-index query --input .di-framework/skills-index.json --query "review RLS" --json
+di-skills-index migrate --input old-index.jsonl --output skills-index.json --json
+```
+
+`inspect` reports format/model metadata, integrity sizes, scoring configuration,
+load latency, and memory. `validate` additionally reports source drift. `query`
+reports safe names/descriptions, dense and lexical score components, matched
+chunk numbers, and load/embed/search timing. Bodies and vector contents are
+never printed. Runtime retrieval offers an opt-in `onDiagnostic` callback with
+the same selected/abstained/error decisions for local and adapter backends.
+
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 
 Platform runtimes can independently supply `catalogStore`, `vectorSearch`, and a build-time

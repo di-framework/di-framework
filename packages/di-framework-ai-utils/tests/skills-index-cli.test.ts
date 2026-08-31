@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -129,5 +129,104 @@ describe('di-skills-index', () => {
       unchanged: true,
     });
     expect(logs.join('\n')).toContain('unchanged');
+
+    logs.length = 0;
+    await runSkillsIndexCli(['inspect', '--input', 'generated/skills.jsonl', '--json'], io, root, {
+      embedder,
+    });
+    expect(JSON.parse(logs[0] ?? '{}')).toMatchObject({
+      schema: '@di-framework/skills-index-diagnostic',
+      version: 1,
+      command: 'inspect',
+      metadata: { version: 3, skillCount: 1 },
+    });
+    expect(logs[0]).not.toContain('Do alpha work');
+
+    logs.length = 0;
+    await runSkillsIndexCli(
+      ['query', '--input', 'generated/skills.jsonl', '--query', 'alpha', '--json'],
+      io,
+      root,
+      { embedder },
+    );
+    expect(JSON.parse(logs[0] ?? '{}')).toMatchObject({
+      command: 'query',
+      decision: 'selected',
+      matches: [{ name: 'alpha', matchedChunk: 0 }],
+    });
+
+    logs.length = 0;
+    await runSkillsIndexCli(
+      ['validate', '--input', 'generated/skills.jsonl', '--skills-dir', 'skills', '--json'],
+      io,
+      root,
+    );
+    expect(JSON.parse(logs[0] ?? '{}')).toMatchObject({
+      command: 'validate',
+      integrity: 'valid',
+      sourceDrift: null,
+    });
+
+    writeFileSync(join(root, 'skills', 'alpha', 'SKILL.md'), '# Alpha\n\nChanged body.\n');
+    logs.length = 0;
+    await expect(
+      runSkillsIndexCli(
+        ['validate', '--input', 'generated/skills.jsonl', '--skills-dir', 'skills', '--json'],
+        io,
+        root,
+      ),
+    ).rejects.toThrow('stale');
+    expect(JSON.parse(logs[0] ?? '{}')).toMatchObject({
+      command: 'validate',
+      integrity: 'valid',
+    });
+    expect(JSON.parse(logs[0] ?? '{}').sourceDrift).toContain('stale');
+  });
+
+  test('migrates legacy JSONL without exposing bodies', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-index-cli-migrate-'));
+    const vector = Buffer.alloc(8);
+    vector.writeFloatLE(1, 0);
+    const metadata = {
+      kind: '@di-framework/ai-utils/skills-index',
+      version: 2,
+      indexed: true,
+      skillCount: 1,
+      chunkCount: 1,
+      threshold: 0,
+      retrievalLimit: 1,
+      chunkTokens: 256,
+      chunkOverlapTokens: 32,
+      scoring: 'frontmatter-guided-document-cosine-v1',
+      vectorEncoding: 'float32-le-base64',
+      catalogHash: 'legacy',
+      model: 'fixture',
+      revision: '1',
+      embedderId: 'fixture@1',
+      dimensions: 2,
+    };
+    const entry = {
+      kind: 'skill',
+      name: 'legacy',
+      description: 'safe description',
+      documentHash: 'hash',
+      chunks: [{ source: 'document', vector: vector.toString('base64') }],
+    };
+    writeFileSync(
+      join(root, 'v2.jsonl'),
+      `${JSON.stringify(metadata)}\n${JSON.stringify(entry)}\n`,
+    );
+    const logs: string[] = [];
+    await runSkillsIndexCli(
+      ['migrate', '--input', 'v2.jsonl', '--output', 'v3.json', '--json'],
+      { log: (message) => logs.push(message), error: () => undefined },
+      root,
+    );
+    expect(JSON.parse(logs[0] ?? '{}')).toMatchObject({
+      command: 'migrate',
+      fromVersion: 2,
+      toVersion: 3,
+    });
+    expect(JSON.parse(readFileSync(join(root, 'v3.json'), 'utf8')).metadata.version).toBe(3);
   });
 });

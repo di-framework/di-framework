@@ -39,6 +39,21 @@ import {
 export const SKILLS_RETRIEVAL_CONTEXT = 'skills_retrieval';
 export const DEFAULT_SKILLS_RETRIEVAL_ORDER = HIGHEST_PRECEDENCE + 250;
 
+export interface SkillsRetrievalDiagnostic {
+  readonly schema: '@di-framework/skills-retrieval-diagnostic';
+  readonly version: 1;
+  readonly decision: 'selected' | 'abstained' | 'error';
+  readonly backend: 'local' | 'adapter';
+  readonly matches: readonly SkillsIndexMatch[];
+  readonly error?: string;
+  readonly timings: {
+    readonly loadMs: number;
+    readonly embedMs: number;
+    readonly searchMs: number;
+    readonly totalMs: number;
+  };
+}
+
 export interface SkillsRetrievalAdvisorOptions {
   readonly index?: SkillsIndex | string;
   readonly skills?: readonly AgentSkill[];
@@ -56,6 +71,7 @@ export interface SkillsRetrievalAdvisorOptions {
   readonly toolOptions?: Omit<SkillsToolOptions, 'skills' | 'directories' | 'files'>;
   /** Used by SkillsToolbox to preserve activation state and its runtime gate. */
   readonly createTool?: (descriptors: readonly SkillDescriptor[]) => ToolCallback;
+  readonly onDiagnostic?: (diagnostic: SkillsRetrievalDiagnostic) => void;
 }
 
 /**
@@ -80,6 +96,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   private readonly toolName: string;
   private readonly toolOptions: Omit<SkillsToolOptions, 'skills' | 'directories' | 'files'>;
   private readonly createTool: (descriptors: readonly SkillDescriptor[]) => ToolCallback;
+  private readonly onDiagnostic?: (diagnostic: SkillsRetrievalDiagnostic) => void;
 
   constructor(options: SkillsRetrievalAdvisorOptions) {
     this.index = typeof options.index === 'string' ? loadSkillsIndex(options.index) : options.index;
@@ -113,6 +130,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     );
     this.toolName = options.toolName ?? DEFAULT_SKILL_TOOL_NAME;
     this.toolOptions = options.toolOptions ?? {};
+    this.onDiagnostic = options.onDiagnostic;
     this.createTool =
       options.createTool ??
       ((descriptors) => {
@@ -142,14 +160,26 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     if (!callbacks?.some((tool) => tool.toolDefinition.name === this.toolName)) return request;
 
     const task = this.taskText(request);
-    const semantic =
+    const started = performance.now();
+    const backend =
       this.index && !this.catalogStore && this.vectorSearch instanceof LocalSkillVectorSearch
-        ? await searchSkillsIndex(this.index, task, {
-            embedder: this.embedder,
-            limit: this.limit,
-            minScore: this.minScore,
-          })
-        : await this.searchAdapter(task);
+        ? 'local'
+        : 'adapter';
+    let semantic: readonly SkillsIndexMatch[];
+    try {
+      semantic =
+        backend === 'local'
+          ? await searchSkillsIndex(this.index as SkillsIndex, task, {
+              embedder: this.embedder,
+              limit: this.limit,
+              minScore: this.minScore,
+            })
+          : await this.searchAdapter(task);
+    } catch (error) {
+      const totalMs = performance.now() - started;
+      this.emitDiagnostic('error', backend, [], totalMs, error);
+      throw error;
+    }
     const matches = this.pinExplicitSkillNames(task, semantic);
     const descriptorsByName = new Map(
       this.descriptors.map((descriptor) => [descriptor.name, descriptor]),
@@ -159,6 +189,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
       .filter((descriptor): descriptor is SkillDescriptor => descriptor != null);
 
     if (selected.length === 0) {
+      this.emitDiagnostic('abstained', backend, [], performance.now() - started);
       request.context.set(SKILLS_RETRIEVAL_CONTEXT, { decision: 'abstained', matches: [] });
       return copyChatClientRequest(request, {
         prompt: new Prompt(request.prompt.messages, {
@@ -174,12 +205,31 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
       tool.toolDefinition.name === this.toolName ? replacement : tool,
     );
     request.context.set(SKILLS_RETRIEVAL_CONTEXT, matches);
+    this.emitDiagnostic('selected', backend, matches, performance.now() - started);
     return copyChatClientRequest(request, {
       prompt: new Prompt(request.prompt.messages, {
         ...request.prompt.options,
         toolCallbacks,
       }),
       context: request.context,
+    });
+  }
+
+  private emitDiagnostic(
+    decision: SkillsRetrievalDiagnostic['decision'],
+    backend: SkillsRetrievalDiagnostic['backend'],
+    matches: readonly SkillsIndexMatch[],
+    totalMs: number,
+    error?: unknown,
+  ): void {
+    this.onDiagnostic?.({
+      schema: '@di-framework/skills-retrieval-diagnostic',
+      version: 1,
+      decision,
+      backend,
+      matches,
+      error: error == null ? undefined : error instanceof Error ? error.message : String(error),
+      timings: { loadMs: 0, embedMs: 0, searchMs: totalMs, totalMs },
     });
   }
 
