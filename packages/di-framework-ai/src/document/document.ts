@@ -20,6 +20,11 @@ export interface Document {
    * Relevance / similarity score from retrieval (higher = more similar).
    */
   readonly score: number | null;
+  /**
+   * Optional precomputed embedding. When set, vector stores store it instead of
+   * calling {@code EmbeddingModel.embedDocument}.
+   */
+  readonly embedding?: ArrayLike<number> | null;
 }
 
 export interface DocumentOptions {
@@ -28,6 +33,7 @@ export interface DocumentOptions {
   readonly media?: Media | null;
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly score?: number | null;
+  readonly embedding?: ArrayLike<number> | null;
 }
 
 let docIdCounter = 0;
@@ -56,6 +62,7 @@ export function document(options: DocumentOptions = {}): Document {
     media,
     metadata: { ...(options.metadata ?? {}) },
     score: options.score ?? null,
+    ...(options.embedding !== undefined ? { embedding: options.embedding } : {}),
   };
 }
 
@@ -80,6 +87,7 @@ export function withDocumentScore(
     media: overrides.media !== undefined ? overrides.media : doc.media,
     metadata: overrides.metadata ?? doc.metadata,
     score,
+    embedding: overrides.embedding !== undefined ? overrides.embedding : doc.embedding,
   });
 }
 

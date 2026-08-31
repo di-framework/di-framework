@@ -98,7 +98,7 @@ describe('createGraphqlTransportWs', () => {
   it('closes on invalid JSON with 4400', async () => {
     const gtw = createGraphqlTransportWs({
       execute: async () => ({ data: null }),
-      subscribe: async () => ({ errors: [{ message: 'nope' }] }),
+      subscribe: async () => ({ errors: [{ message: 'noop' }] }),
     });
 
     const server = Bun.serve({
@@ -129,7 +129,7 @@ describe('createGraphqlTransportWs', () => {
   it('closes subscribe without id with 4400 (no "undefined" collision)', async () => {
     const gtw = createGraphqlTransportWs({
       execute: async () => ({ data: { ok: true } }),
-      subscribe: async () => ({ errors: [{ message: 'nope' }] }),
+      subscribe: async () => ({ errors: [{ message: 'noop' }] }),
     });
 
     const data = gtw.createData({ acknowledged: true });
@@ -236,7 +236,7 @@ describe('createGraphqlTransportWs', () => {
     );
     expect(closed?.code).toBe(4401);
 
-    gtw.handleMessage(send, data, JSON.stringify({ type: 'nope' }), close);
+    gtw.handleMessage(send, data, JSON.stringify({ type: 'noop' }), close);
     expect(closed?.code).toBe(4400);
 
     const before = inbox.length;

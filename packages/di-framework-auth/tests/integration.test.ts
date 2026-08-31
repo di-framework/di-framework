@@ -429,7 +429,7 @@ describe('api key strategy', () => {
     const strategy = apiKeyStrategy({ credentials, now: () => 10_000 });
 
     const unknown = await strategy.authenticate(
-      makeContext(get(undefined, { 'x-api-key': 'nope' })),
+      makeContext(get(undefined, { 'x-api-key': 'noop' })),
     );
     const { key } = await issueApiKey(credentials, { userId: 'u1', expiresAt: 1 });
     const expired = await strategy.authenticate(makeContext(get(undefined, { 'x-api-key': key })));

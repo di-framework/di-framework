@@ -385,7 +385,7 @@ describe('typecheck command', () => {
         [
           process.execPath,
           join(import.meta.dir, '..', 'cmd', 'mx', 'typecheck.ts'),
-          'nope.json',
+          'noop.json',
           '--pretty=0',
         ],
         { cwd: dir, stdout: 'pipe', stderr: 'pipe' },

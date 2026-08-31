@@ -127,7 +127,7 @@ describe('HTTP API (Controller → Service → Repo)', () => {
   test('unknown path returns 404 JSON', async () => {
     const env = testEnv();
     const res = await worker.fetch(
-      new Request('http://localhost/nope'),
+      new Request('http://localhost/noop'),
       env,
       {} as ExecutionContext,
     );

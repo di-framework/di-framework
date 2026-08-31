@@ -1,6 +1,7 @@
 import type { Document } from '../../document/document.ts';
 import { withDocumentScore } from '../../document/document.ts';
 import type { EmbeddingModel } from '../../embedding/embedding-model.ts';
+import { resolveDocumentEmbedding, resolveQueryEmbedding } from '../resolve-embedding.ts';
 import { type SearchRequest, searchRequest } from '../search-request.ts';
 import type { VectorStore } from '../vector-store.ts';
 export interface PgClient {
@@ -25,18 +26,34 @@ export class PgVectorStore implements VectorStore {
   }
   async add(documents: readonly Document[]) {
     for (const d of documents) {
-      const v = await this.model.embedDocument(d);
+      const v = await resolveDocumentEmbedding(this.model, d);
       await this.c.query(
         `INSERT INTO ${this.table} (id, content, metadata, embedding) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET content=$2, metadata=$3, embedding=$4`,
         [d.id, d.text ?? '', JSON.stringify(d.metadata), `[${v.join(',')}]`],
       );
     }
   }
+  async get(id: string) {
+    const result = await this.c.query<{ id: string; content: string; metadata: unknown }>(
+      `SELECT id, content, metadata FROM ${this.table} WHERE id=$1`,
+      [id],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      text: row.content,
+      media: null,
+      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata ?? {}),
+      score: null,
+    };
+  }
+
   async delete(ids: readonly string[]) {
     for (const id of ids) await this.c.query(`DELETE FROM ${this.table} WHERE id=$1`, [id]);
   }
   async similaritySearch(request: SearchRequest) {
-    const v = await this.model.embed(request.query);
+    const v = await resolveQueryEmbedding(this.model, request);
     const result = await this.c.query<any>(
       `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) AS score FROM ${this.table} ORDER BY embedding <=> $1::vector LIMIT $2`,
       [`[${v.join(',')}]`, request.topK],

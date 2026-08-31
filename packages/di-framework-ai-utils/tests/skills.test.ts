@@ -86,9 +86,9 @@ body
   });
 
   test('treats a document without a closing delimiter as body', () => {
-    const skill = parseSkillMarkdown('---\nname: nope\nno close', { fallbackName: 'folder' });
+    const skill = parseSkillMarkdown('---\nname: noop\nno close', { fallbackName: 'folder' });
     expect(skill.name).toBe('folder');
-    expect(skill.content).toContain('name: nope');
+    expect(skill.content).toContain('name: noop');
   });
 
   test('uses the folder name when front matter has no name', () => {
@@ -163,7 +163,7 @@ Search first.
       `---
 name: ignored
 ---
-nope
+noop
 `,
     );
 

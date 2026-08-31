@@ -56,7 +56,7 @@ describe('parseJsonRpc - array & object edge cases', () => {
 describe('isJsonRpcCall', () => {
   it('rejects non-object and array inputs', () => {
     expect(isJsonRpcCall(null)).toBe(false);
-    expect(isJsonRpcCall('nope')).toBe(false);
+    expect(isJsonRpcCall('noop')).toBe(false);
     expect(isJsonRpcCall([])).toBe(false);
   });
 });

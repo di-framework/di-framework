@@ -77,7 +77,7 @@ describe('mx (maintainer) router', () => {
     };
     const err = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await expect(mx(['nope'])).rejects.toThrow('EXIT_1');
+      await expect(mx(['noop'])).rejects.toThrow('EXIT_1');
     } finally {
       process.exit = originalExit;
       err.mockRestore();

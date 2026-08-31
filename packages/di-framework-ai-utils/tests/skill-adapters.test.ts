@@ -459,7 +459,10 @@ describe('asynchronous skill activation', () => {
     await expect(
       createSkillsToolboxAsync({
         ...options,
-        semanticDiscovery: { ...options.semanticDiscovery, vectorSearch: new InMemorySkillVectorSearch() },
+        semanticDiscovery: {
+          ...options.semanticDiscovery,
+          vectorSearch: new InMemorySkillVectorSearch(),
+        },
       }),
     ).rejects.toMatchObject({ code: 'NOT_READY' });
 

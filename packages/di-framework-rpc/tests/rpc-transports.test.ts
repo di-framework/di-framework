@@ -153,7 +153,7 @@ describe('http.ts - transport & handler edge cases', () => {
   it('throws when the HTTP response is not ok', async () => {
     const transport = httpTransport({
       url: 'http://x.test/rpc',
-      fetch: async () => new Response('nope', { status: 500, statusText: 'Server Error' }),
+      fetch: async () => new Response('noop', { status: 500, statusText: 'Server Error' }),
     });
     await expect(transport.send({ jsonrpc: '2.0', method: 'x' })).rejects.toThrow(
       /HTTP RPC failed with 500/,

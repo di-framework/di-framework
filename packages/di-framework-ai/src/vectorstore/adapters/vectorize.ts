@@ -1,6 +1,7 @@
 import type { Document } from '../../document/document.ts';
 import { withDocumentScore } from '../../document/document.ts';
 import type { EmbeddingModel } from '../../embedding/embedding-model.ts';
+import { resolveDocumentEmbedding, resolveQueryEmbedding } from '../resolve-embedding.ts';
 import { type SearchRequest, searchRequest } from '../search-request.ts';
 import type { VectorStore } from '../vector-store.ts';
 export interface VectorizeIndex {
@@ -31,12 +32,16 @@ export class VectorizeVectorStore implements VectorStore {
   async add(documents: readonly Document[]) {
     const vectors = [];
     for (const doc of documents) {
-      const values = await this.model.embedDocument(doc);
+      const values = await resolveDocumentEmbedding(this.model, doc);
       vectors.push({ id: doc.id, values, metadata: { ...doc.metadata, text: doc.text ?? '' } });
       this.docs.set(doc.id, doc);
     }
     await this.index.upsert(vectors);
   }
+  async get(id: string) {
+    return this.docs.get(id) ?? null;
+  }
+
   async delete(ids: readonly string[]) {
     await this.index.deleteByIds([...ids]);
     for (const id of ids) this.docs.delete(id);
@@ -44,7 +49,7 @@ export class VectorizeVectorStore implements VectorStore {
   async similaritySearch(request: SearchRequest) {
     const matches =
       (
-        await this.index.query(await this.model.embed(request.query), {
+        await this.index.query(await resolveQueryEmbedding(this.model, request), {
           topK: request.topK,
           returnMetadata: true,
         })

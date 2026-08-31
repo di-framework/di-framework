@@ -54,12 +54,12 @@ describe('policy authoring and EBNF', () => {
   it('rejects invalid declarations and EBNF', () => {
     expect(() => Allow()(class X {}, 'x')).toThrow(/actions/);
     expect(() => parsePolicies('allow P x = "read";')).toThrow(/Unknown policy/);
-    expect(() => parsePolicies('policy P = "x"; allow P x = "r", ? nope "x" ?;')).toThrow(
+    expect(() => parsePolicies('policy P = "x"; allow P x = "r", ? noop "x" ?;')).toThrow(
       /Unsupported/,
     );
     expect(() => parsePolicies(String.raw`policy P = "\x";`)).toThrow(/Malformed string/);
     expect(() =>
-      parsePolicies('policy P = "x"; allow P x = "read", ? equals "resource.value" nope ?;'),
+      parsePolicies('policy P = "x"; allow P x = "read", ? equals "resource.value" noop ?;'),
     ).toThrow(/Malformed equals JSON/);
   });
   it('supports isolated registries', () => {

@@ -171,7 +171,7 @@ describe('semantic schema', () => {
   });
 
   it('returns validation errors from subscribe without opening a stream', async () => {
-    const result = await api.subscribe({ query: 'subscription { nope }' });
+    const result = await api.subscribe({ query: 'subscription { noop }' });
     expect(Symbol.asyncIterator in (result as any)).toBe(false);
     expect((result as any).errors?.length).toBeGreaterThan(0);
   });

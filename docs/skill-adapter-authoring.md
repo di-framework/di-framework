@@ -18,6 +18,14 @@ Generic contracts and the in-memory reference adapters have no `node:fs` depende
 `LocalSkillCatalogStore`, `LocalSkillVectorSearch`, and `LocalSkillIndexWriter` contain the
 filesystem/JSONL implementation used by the compatible local APIs.
 
+Durable vector backends use `SkillSearchConnection`, `SkillSearchRepository(connection)`, and
+`SkillSearchIndexer(data, connection)`. Build a connection with
+`SkillSearchConnection.fromVectorStore(store)` (including `BunSqliteVectorStore`) or
+`SkillSearchConnection.fromStorageAdapter(adapter)`. The storage adapter is a structural subset of
+`@di-framework/repo` `StorageAdapter`; `InMemoryRepository` works when the entity is
+`SkillSearchStorageRecord`. Skill-facing types never mention Bun or SQLite. Exact cosine remains
+the small-catalog path; ANN lives inside the vector store.
+
 ## Versioning and readiness
 
 Catalog versions must change whenever a descriptor or body changes. Writer receipts must include

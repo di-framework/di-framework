@@ -5,6 +5,7 @@ import {
   ConcatenationDocumentJoiner,
   ContextualQueryAugmenter,
   cosineSimilarity,
+  document,
   evaluateFilterExpression,
   FakeChatModel,
   FakeEmbeddingModel,
@@ -13,6 +14,7 @@ import {
   filterKey,
   filterValue,
   isFilterExpression,
+  PrecomputedEmbeddingModel,
   parseFilterExpression,
   query,
   RAG_DOCUMENT_CONTEXT,
@@ -164,7 +166,7 @@ describe('Filter expressions', () => {
   });
 
   test('rejects unknown expression types', () => {
-    expect(() => evaluateFilterExpression({ type: 'NOPE' } as never, {})).toThrow(
+    expect(() => evaluateFilterExpression({ type: 'NOOP' } as never, {})).toThrow(
       /Unsupported expression type/,
     );
   });
@@ -389,6 +391,25 @@ describe('SimpleVectorStore', () => {
     );
     // Unrelated doc should not pass a very high threshold
     expect(hits.length).toBe(0);
+  });
+
+  test('stores Document.embedding and searches SearchRequest.queryEmbedding', async () => {
+    const store = SimpleVectorStore.of(new PrecomputedEmbeddingModel(2));
+    await store.add([
+      document({ id: 'east', text: 'east', embedding: [1, 0] }),
+      document({ id: 'north', text: 'north', embedding: [0, 1] }),
+    ]);
+    expect(await store.get('east')).toMatchObject({ id: 'east', embedding: [1, 0] });
+    expect(await store.get('missing')).toBeNull();
+    const hits = await store.similaritySearch(searchRequest({ queryEmbedding: [0, 1], topK: 1 }));
+    expect(hits[0]?.id).toBe('north');
+    expect(() => new PrecomputedEmbeddingModel().embed('noop')).toThrow(/queryEmbedding/);
+    expect(() => new PrecomputedEmbeddingModel().embedDocument(textDocument('x'))).toThrow(
+      /Document.embedding/,
+    );
+    expect(() =>
+      new PrecomputedEmbeddingModel(2).embedDocument(document({ text: 'x', embedding: [1] })),
+    ).toThrow(/dimension mismatch/);
   });
 });
 

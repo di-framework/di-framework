@@ -239,6 +239,15 @@ test('retrieval reporter CLI accepts deterministic trial and output controls', a
       'revision',
       '--min-score',
       '0.4',
+      '--backend',
+      'sqlite',
+      '--sqlite',
+      '/tmp/skills.sqlite',
+      '--synthetic',
+      '100000',
+      '--exact-scan-limit',
+      '8192',
+      '--compare',
     ]),
   ).toEqual({
     indexFile: '/tmp/index.jsonl',
@@ -250,10 +259,16 @@ test('retrieval reporter CLI accepts deterministic trial and output controls', a
     corpusId: 'gitskills-1000',
     corpusRevision: 'revision',
     minScore: 0.4,
+    backend: 'compare',
+    sqliteFile: '/tmp/skills.sqlite',
+    syntheticCount: 100000,
+    exactScanLimit: 8192,
   });
   expect(() => parseRetrievalOptions(['--trials', '0'])).toThrow(/positive integer/);
   expect(() => parseRetrievalOptions(['--unknown'])).toThrow(/Unknown option/);
-  expect(() => parseRetrievalOptions(['--min-score', 'nope'])).toThrow(/requires a number/);
+  expect(() => parseRetrievalOptions(['--min-score', 'noop'])).toThrow(/requires a number/);
+  expect(() => parseRetrievalOptions(['--backend', 'oracle'])).toThrow(/jsonl, sqlite, or compare/);
+  expect(parseRetrievalOptions(['--backend', 'jsonl'])).toEqual({ backend: 'jsonl' });
   await expect(runRetrieveMain(false)).resolves.toBeUndefined();
 });
 
@@ -324,10 +339,75 @@ test('retrieval benchmark ranks a deterministic index and writes both reports', 
     corpus: { id: 'extended-fixture', revision: 'revision-1' },
     measurements: { indexingMilliseconds: 25, artifactBytes: 50 },
   });
-  writeFileSync(labelsFile, JSON.stringify({ nope: [] }));
+  writeFileSync(labelsFile, JSON.stringify({ noop: [] }));
   await expect(runRetrievalBenchmark({ indexFile, labelsFile, embedder })).rejects.toThrow(
     /cases array/,
   );
+  log.mockRestore();
+});
+
+test('retrieval benchmark can compare and search through the sqlite ANN backend', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'retrieval-ann-'));
+  const indexFile = join(root, 'skills.jsonl');
+  const sqliteFile = join(root, 'skills.sqlite');
+  const markdownFile = join(root, 'compare.md');
+  const labelsFile = join(root, 'labels.json');
+  const target = retrievalCases[0];
+  if (!target) throw new Error('expected a retrieval case');
+  const names = [target.expectedSkill, 'other-skill'];
+  const embedder = deterministicRetrievalEmbedder(names);
+  await buildSkillsIndex({
+    skills: names.map((name) =>
+      agentSkill({ name, description: `Routes ${name} requests.`, content: `# ${name}` }),
+    ),
+    outputFile: indexFile,
+    threshold: 0,
+    embedder,
+  });
+  writeFileSync(
+    labelsFile,
+    JSON.stringify({
+      cases: [
+        {
+          id: 'alpha',
+          prompt: target.prompt,
+          relevantSkills: [target.expectedSkill],
+          kind: 'unique',
+        },
+      ],
+    }),
+  );
+  const log = spyOn(console, 'log').mockImplementation(() => undefined);
+  expect(
+    await runRetrievalBenchmark({
+      syntheticCount: 24,
+      sqliteFile,
+      markdownFile,
+      seed: 2,
+      exactScanLimit: 8,
+    }),
+  ).toBeUndefined();
+  expect(readFileSync(markdownFile, 'utf8')).toContain('ANN vs exact');
+  const sqliteResult = await runRetrievalBenchmark({
+    indexFile,
+    labelsFile,
+    embedder,
+    backend: 'sqlite',
+    sqliteFile: join(root, 'labeled.sqlite'),
+    jsonFile: join(root, 'sqlite.json'),
+    markdownFile: join(root, 'sqlite.md'),
+  });
+  expect(sqliteResult?.metrics.recallAt1).toBe(1);
+  const compared = await runRetrievalBenchmark({
+    indexFile,
+    labelsFile,
+    embedder,
+    backend: 'compare',
+    sqliteFile: join(root, 'compare.sqlite'),
+    jsonFile: join(root, 'compare.json'),
+    markdownFile: join(root, 'labeled.md'),
+  });
+  expect(compared?.metrics.recallAt10).toBe(1);
   log.mockRestore();
 });
 

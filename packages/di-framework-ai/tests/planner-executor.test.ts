@@ -197,7 +197,7 @@ describe('PlannerExecutorWorkflow', () => {
   test('AbortSignal cancels before plan', async () => {
     const ac = new AbortController();
     ac.abort();
-    const model = new ScriptedChatModel([{ respond: 'nope' }]);
+    const model = new ScriptedChatModel([{ respond: 'noop' }]);
     await expect(
       PlannerExecutorWorkflow.of(ChatClient.create(model)).run('g', { signal: ac.signal }),
     ).rejects.toMatchObject({ code: 'cancelled' });

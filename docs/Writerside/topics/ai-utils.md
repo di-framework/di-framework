@@ -1,8 +1,8 @@
-# Agent Skills (`@di-framework/ai-utils`)
+# Agents
 
-Agentic extras for [`@di-framework/ai`](ai.md). **Agent Skills** (`SKILL.md`, progressive disclosure) plus jailed file tools, HITL questions, todos, optional web / memory / task, and opt-in `Write` / `Edit` / `Bash`.
+Extras for [`@di-framework/ai`](ai.md). **Agent Skills** (`SKILL.md`, graduated disclosure) with filesystem, HITL questions, todos, optional web / memory / task, and opt-in `Write` / `Edit` / `Bash`.
 
-This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.
+This is a TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.
 
 Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `SkillsTool.builder()`. Free-function aliases remain. Skills stay in this package — `configureAi` / `@Agent` on [AI](ai.md) are unchanged.
 
@@ -175,6 +175,8 @@ await SkillsIndex.builder()
 This writes `.di-framework/skills-index.jsonl`. Enable fail-closed retrieval with `.semanticDiscovery()` on `SkillsAgent.builder()` or `SkillsToolbox.builder()`. The default index is also detected automatically when present.
 
 The default indexer uses the optional `@huggingface/transformers` peer. Install it only for large-catalog indexing (`bun add @huggingface/transformers@4.2.0`); small catalogs and custom embedders do not need it. Transformers.js tokenizes each exact `SKILL.md` into overlapping model-token chunks and embeds them locally with a pinned quantized BGE model. Runtime ranks skills using chunk cosine scores and sends only the top 10 names/descriptions to the chat model. Chunks and vectors do not enter the prompt; the full body remains lazy until activation. At or below the threshold, Transformers.js is not initialized and normal discovery remains active.
+
+Very large catalogs can reuse the same `SkillVectorSearch` contract with `SkillSearchRepository` and `SkillSearchIndexer` over a `SkillSearchConnection`. `SkillSearchConnection.fromVectorStore(new BunSqliteVectorStore({ ... }))` stores float32 embeddings and builds a portable HNSW graph above the exact-scan limit; `fromStorageAdapter` accepts `@di-framework/repo` adapters. JSONL exact cosine stays the default discovery artifact.
 
 ## Decorator DX
 

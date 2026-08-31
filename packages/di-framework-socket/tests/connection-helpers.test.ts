@@ -27,7 +27,7 @@ describe('createPlainConnection', () => {
 
     offMsg();
     offClose();
-    plain.dispatchMessage(textFrame('nope'));
+    plain.dispatchMessage(textFrame('noop'));
     plain.dispatchClose({ code: 1001 });
     expect(messages).toEqual(['hi']);
     expect(closed).toHaveLength(1);

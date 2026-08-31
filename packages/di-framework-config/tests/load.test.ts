@@ -134,7 +134,7 @@ describe('sources', () => {
     writeFileSync(arr, '[]');
     try {
       expect(() => jsonFileSource(arr).load()).toThrow(/must be an object/);
-      expect(() => jsonFileSource(join(dir, 'nope.json')).load()).toThrow();
+      expect(() => jsonFileSource(join(dir, 'noop.json')).load()).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

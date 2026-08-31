@@ -165,7 +165,7 @@ describe('schema/messages - binary wire-format edge cases', () => {
       @RpcField({ number: 1, type: 'string', repeated: true })
       items!: string[];
     }
-    expect(() => encodeRpcMessage(RepMsg, { items: 'nope' as unknown })).toThrow(
+    expect(() => encodeRpcMessage(RepMsg, { items: 'noop' as unknown })).toThrow(
       /must be an array/,
     );
   });
@@ -268,7 +268,7 @@ describe('schema/messages - binary wire-format edge cases', () => {
     }
     expect(() => hydrateRpcMessage(HInput, null)).toThrow(/input must be an object/);
     expect(() => hydrateRpcMessage(HInput, [1, 2])).toThrow(/input must be an object/);
-    expect(() => hydrateRpcMessage(HInput, 'nope')).toThrow(/input must be an object/);
+    expect(() => hydrateRpcMessage(HInput, 'noop')).toThrow(/input must be an object/);
   });
 });
 

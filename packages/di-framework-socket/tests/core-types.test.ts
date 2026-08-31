@@ -13,7 +13,7 @@ describe('SocketCapabilityError', () => {
   });
 
   it('accepts a custom message', () => {
-    const err = new SocketCapabilityError('deno', 'udp', 'nope');
-    expect(err.message).toBe('nope');
+    const err = new SocketCapabilityError('deno', 'udp', 'noop');
+    expect(err.message).toBe('noop');
   });
 });

@@ -147,7 +147,9 @@ describe('parseQueryMethod', () => {
       ['findByLastnameNot', 'neq', 1],
     ];
     for (const [name, op, argc] of cases) {
-      const c = parseQueryMethod(name)?.predicate.conditions[0]!;
+      const parsed = parseQueryMethod(name);
+      expect(parsed).toBeDefined();
+      const c = parsed!.predicate.conditions[0]!;
       expect(c.operator).toBe(op);
       expect(c.argCount).toBe(argc);
     }
@@ -210,7 +212,7 @@ describe('Derived annotation on repository variable', () => {
   test('existsBy / countBy', async () => {
     const repo = await seeded();
     expect(await repo.existsByEmail('c@example.com')).toBe(true);
-    expect(await repo.existsByEmail('nope@example.com')).toBe(false);
+    expect(await repo.existsByEmail('noop@example.com')).toBe(false);
     expect(await repo.countByActive(true)).toBe(3);
     expect(await repo.countByCity('Oslo')).toBe(2);
   });

@@ -25,7 +25,7 @@ describe('zodSchema', () => {
     const schema = zodSchema(z.object({ port: z.number() }));
     expect(() =>
       loadConfigSync({
-        sources: [objectSource({ port: 'nope' })],
+        sources: [objectSource({ port: 'noop' })],
         schema,
       }),
     ).toThrow();

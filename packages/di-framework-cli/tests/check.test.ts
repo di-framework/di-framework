@@ -237,7 +237,7 @@ describe('check command', () => {
           include: ['src/**/*.ts'],
         }) + '\n',
       );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = "nope";\n');
+      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = "noop";\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
         await expect(checkApp({ cwd: root, pretty: false })).rejects.toThrow('Typecheck failed');

@@ -127,7 +127,7 @@ body
     mkdirSync(withMissing);
     writeFileSync(
       join(withMissing, 'package.json'),
-      JSON.stringify({ name: 'm', skills: ['./nope', 1] }),
+      JSON.stringify({ name: 'm', skills: ['./noop', 1] }),
     );
     expect(resolveSkillPackageDirectories([withMissing])).toEqual([]);
 
@@ -349,7 +349,7 @@ describe('file and web tools remaining branches', () => {
       if (parsed.pathname.includes('throw')) throw new Error('net');
       if (parsed.hostname === 'api.search.brave.com') {
         if (parsed.searchParams.get('q') === 'failsearch') {
-          return new Response('nope', { status: 500 });
+          return new Response('noop', { status: 500 });
         }
         return new Response(
           JSON.stringify({
@@ -500,7 +500,7 @@ describe('file and web tools remaining branches', () => {
       'directory',
     );
     const writeFail = spyOn(fs, 'writeFileSync').mockImplementationOnce(() => {
-      throw 'nope';
+      throw 'noop';
     });
     expect(
       await write.call(JSON.stringify({ filePath: join(root, 'c.txt'), content: 'x' })),
@@ -560,7 +560,7 @@ describe('file and web tools remaining branches', () => {
     expect(await grep.call(JSON.stringify({ pattern: '(' }))).toContain(
       'Invalid regular expression',
     );
-    expect(await grep.call(JSON.stringify({ pattern: 'x', path: join(root, 'nope') }))).toContain(
+    expect(await grep.call(JSON.stringify({ pattern: 'x', path: join(root, 'noop') }))).toContain(
       'does not exist',
     );
     expect(await grep.call(JSON.stringify({ pattern: 'hello', path: file }))).toContain('hello');

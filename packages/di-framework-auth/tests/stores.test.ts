@@ -126,7 +126,7 @@ function runUserStoreSuite(name: string, build: () => UserStore) {
         webauthnUserHandle: 'handle-1',
       });
       expect((await store.findByWebAuthnHandle('handle-1'))?.id).toBe('u1');
-      expect(await store.findByWebAuthnHandle('nope')).toBeNull();
+      expect(await store.findByWebAuthnHandle('noop')).toBeNull();
     });
   });
 }
@@ -664,7 +664,7 @@ describe('memorySessionStore direct operations', () => {
 
   it('touch() is a no-op for a session that no longer exists', async () => {
     const sessions = memorySessionStore();
-    await expect(sessions.touch('nope', 100)).resolves.toBeUndefined();
+    await expect(sessions.touch('noop', 100)).resolves.toBeUndefined();
   });
 
   it('deleteBySubject() returns 0 for an unknown subject', async () => {

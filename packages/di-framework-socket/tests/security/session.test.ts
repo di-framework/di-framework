@@ -85,8 +85,8 @@ describe('SecureSession over memory duplex', () => {
       SecureSession.connect({ role: 'consumer', duplex: right }),
     ]);
     provider.close();
-    await expect(provider.send('nope')).rejects.toThrow(/not open/);
-    await expect(provider.sendSealedText('nope')).rejects.toThrow(/not open/);
+    await expect(provider.send('noop')).rejects.toThrow(/not open/);
+    await expect(provider.sendSealedText('noop')).rejects.toThrow(/not open/);
     expect(() => provider.exportSnapshot()).toThrow(/not open/);
     consumer.close();
   });

@@ -65,7 +65,7 @@ describe('init command', () => {
     });
 
     it('throws on unknown flags and missing --dir value', () => {
-      expect(() => parseInitArgs(['--nope'])).toThrow('Unknown flag');
+      expect(() => parseInitArgs(['--noop'])).toThrow('Unknown flag');
       expect(() => parseInitArgs(['--dir'])).toThrow('requires a path');
     });
   });
