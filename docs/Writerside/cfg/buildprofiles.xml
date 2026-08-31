@@ -8,15 +8,15 @@
       It should bake searchService/searchServiceUrl into config.json.
       CI also patches config.json after the build as a safety net.
 
-      Do not use <favicon> / <custom-favicons> with this builder: it emits the
-      filename as a literal text node (visible above the header) instead of
-      <link rel="icon">. Favicon links come from include-in-head; CI still
-      copies favicon.png / favicon.ico next to the HTML.
+      custom-favicons must be an absolute URL. A local filename (favicon.png)
+      is emitted as a literal text node above the header instead of <link
+      rel="icon">. CI still copies favicon.png / favicon.ico into the site
+      root so this URL stays valid after each docs deploy.
     -->
     <variables>
         <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
         <header-logo>favicon.png</header-logo>
-        <include-in-head>favicon-head.html</include-in-head>
+        <custom-favicons>https://docs.di-framework.dev/favicon.png</custom-favicons>
         <!-- Hosted at the GitHub Pages root; regenerated on each docs deploy. -->
         <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
     </variables>
@@ -25,7 +25,7 @@
             <noindex-content>true</noindex-content>
             <custom-css>footer.css</custom-css>
             <header-logo>favicon.png</header-logo>
-            <include-in-head>favicon-head.html</include-in-head>
+            <custom-favicons>https://docs.di-framework.dev/favicon.png</custom-favicons>
             <!-- Same endpoint at instance level in case the builder only merges profile vars -->
             <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
             <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
