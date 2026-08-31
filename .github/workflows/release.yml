@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: write # dispatch Deploy Documentation on this tag for /vX.Y/ snapshots
 
 jobs:
   release:
@@ -80,3 +81,12 @@ jobs:
             (cd "$pkg" && npm publish --access public --provenance --ignore-scripts)
             git checkout "./$pkg/package.json"
           done
+
+      - name: Snapshot documentation for this release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Frozen /vMAJOR.MINOR/ tree + docs-vX.Y.zip on the GitHub Release.
+          gh workflow run "Deploy Documentation" --ref "${GITHUB_REF_NAME}"

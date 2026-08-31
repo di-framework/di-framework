@@ -84,6 +84,34 @@ describe('HTTP API (Controller → Service → Repo)', () => {
     expect(body.hits.some((h) => h.objectID === 'docs_gamma')).toBe(true);
   });
 
+  test('GET /preview-search/:project/:instance/:version scopes hits to that snapshot', async () => {
+    const env = testEnv();
+    await worker.fetch(new Request('http://localhost/'), env, {} as ExecutionContext);
+    const repo = useContainer().resolve(DocumentRepository);
+    await repo.save(page('docs_gamma', 'Gamma', 'gamma on latest', 'd'));
+    await repo.save(
+      Object.assign(page('docs_gamma__v4.1', 'Gamma', 'gamma on historic 4.1', 'd'), {
+        version: 'v4.1',
+      }),
+    );
+
+    const latest = await worker.fetch(
+      new Request('http://localhost/preview-search/docs/d/latest?query=gamma&maxHits=5'),
+      env,
+      {} as ExecutionContext,
+    );
+    const latestBody = (await latest.json()) as { hits: { objectID: string }[] };
+    expect(latestBody.hits.map((h) => h.objectID)).toEqual(['docs_gamma']);
+
+    const old = await worker.fetch(
+      new Request('http://localhost/preview-search/docs/d/v4.1?query=gamma&maxHits=5'),
+      env,
+      {} as ExecutionContext,
+    );
+    const oldBody = (await old.json()) as { hits: { objectID: string }[] };
+    expect(oldBody.hits.map((h) => h.objectID)).toEqual(['docs_gamma__v4.1']);
+  });
+
   test('POST /auth/token rejects missing bearer', async () => {
     const env = testEnv();
     const res = await worker.fetch(

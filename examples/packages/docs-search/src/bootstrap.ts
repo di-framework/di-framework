@@ -4,6 +4,7 @@ import { AuthController } from './controllers/AuthController';
 import { HealthController } from './controllers/HealthController';
 import { ReindexController } from './controllers/ReindexController';
 import { SearchController } from './controllers/SearchController';
+import { hydrateCorpus } from './corpus-state';
 import type { Env } from './env';
 import {
   type CorpusDoc,
@@ -45,7 +46,7 @@ const DI_CLASSES = [
 
 /**
  * Register services/controllers and load bundled Writerside corpus if the repo is empty.
- * CI replaces the corpus on each reindex via {@link DocumentRepository.replaceCorpus}.
+ * CI upserts the versions present in the corpus body via {@link DocumentRepository.upsertVersions}.
  */
 export async function bootstrap(): Promise<void> {
   const container = useContainer();
@@ -62,6 +63,9 @@ export async function bootstrap(): Promise<void> {
 
   const repo = container.resolve(DocumentRepository);
   if ((await repo.count()) === 0) {
-    await repo.seed((corpus as { docs: CorpusDoc[] }).docs.map(corpusDocToPage));
+    const fromKv = await hydrateCorpus(getEnv(), repo);
+    if (!fromKv) {
+      await repo.seed((corpus as { docs: CorpusDoc[] }).docs.map(corpusDocToPage));
+    }
   }
 }

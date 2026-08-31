@@ -50,8 +50,8 @@ export class HealthController {
       },
       docsIndexed: docs,
       writerside: {
-        path: '/preview-search/{project}/{instance}?query=…',
-        example: '/preview-search/docs/d?query=repository&maxHits=10',
+        path: '/preview-search/{project}/{instance}/{version}?query=…',
+        example: '/preview-search/docs/d/latest?query=repository&maxHits=10',
       },
       model: env.EMBEDDING_MODEL || '@cf/google/embeddinggemma-300m',
       endpoints: {

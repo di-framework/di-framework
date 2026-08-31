@@ -91,7 +91,12 @@ bun run deploy
 2. Request GitHub OIDC (`audience=di-framework-docs-search`)
 3. `POST /auth/token` → reindex JWT  
 4. `POST /reindex` with corpus JSON + Bearer token  
-5. Build + deploy GitHub Pages  
+5. Build Writerside, assemble `/` + `/latest/` + frozen `/vX.Y/` snapshots, deploy GitHub Pages  
+6. On `v*` tags, POST a second corpus for that minor (`docs_{topic}__vX.Y`, URLs under `/vX.Y/`) so search stays scoped to the snapshot the reader has open  
+
+Each published tree’s `config.json` points search at `/preview-search/Writerside/d/{version}`. The worker filters Vectorize + metadata by that version. A latest-only reindex **upserts** `latest` and keeps other versions (stored in KV `corpus-docs` so they survive isolate restarts).
+
+On `v*` tags the workflow also archives `docs-vMAJOR.MINOR.zip` as a GitHub Release asset (and workflow artifact) so later deploys can restore those snapshots after a full Pages replace.
 
 **Domains**
 
@@ -106,7 +111,8 @@ bun run deploy
 | `/` (under base) | Health |
 | `/auth/token` | OIDC → reindex JWT |
 | `/reindex` | Push corpus + Vectorize sync |
-| `/preview-search/{project}/{instance}` | Writerside search API |
+| `/preview-search/{project}/{instance}` | Writerside search API (`latest`, or `Referer` `/vX.Y/`) |
+| `/preview-search/{project}/{instance}/{version}` | Version-scoped search (`latest` or `vMAJOR.MINOR`) |
 
 GitHub optional override: variable `DOCS_SEARCH_URL` (defaults to the URL above).  
 Permissions: `id-token: write` only. No `CLOUDFLARE_*` secrets.
@@ -127,6 +133,7 @@ Writerside (`buildprofiles.xml`):
 
 ```xml
 <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
+<versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
 ```
 
 Writerside calls `{search-endpoint}/preview-search/{project}/{instance}`.
