@@ -107,6 +107,21 @@ export function checkPackageTarballs(): boolean {
 
     const packedFiles = packData.files.map((f) => f.path);
     const packedFileSet = new Set(packedFiles);
+    console.log(
+      `  ${packData.size} bytes packed, ${packData.unpackedSize} bytes unpacked, ${packData.entryCount} files`,
+    );
+
+    // Published manifests must not leak monorepo-only workspace protocols.
+    for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies'] as const) {
+      for (const [dependency, version] of Object.entries(pkgJson[field] ?? {})) {
+        if (typeof version === 'string' && version.startsWith('workspace:')) {
+          console.error(
+            `  ❌ [${pkgName}] Published ${field}.${dependency} uses unresolved protocol "${version}"`,
+          );
+          totalErrors++;
+        }
+      }
+    }
 
     // a) Verify main, module, types, and exports exist inside packed files
     const pathsToCheck: Array<{ field: string; path: string }> = [];
@@ -114,6 +129,9 @@ export function checkPackageTarballs(): boolean {
     if (pkgJson.main) pathsToCheck.push({ field: 'main', path: pkgJson.main });
     if (pkgJson.module) pathsToCheck.push({ field: 'module', path: pkgJson.module });
     if (pkgJson.types) pathsToCheck.push({ field: 'types', path: pkgJson.types });
+    for (const binPath of Object.values(pkgJson.bin ?? {})) {
+      if (typeof binPath === 'string') pathsToCheck.push({ field: 'bin', path: binPath });
+    }
 
     if (pkgJson.exports) {
       const exportPaths = extractPathsFromExports(pkgJson.exports);

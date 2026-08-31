@@ -56,7 +56,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/core": "workspace:*",
+    "@di-framework/core": "^4",
     "graphql": "^16.8.0 || ^17.0.0",
     "typescript": "^5"
   },

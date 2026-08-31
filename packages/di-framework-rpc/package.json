@@ -66,8 +66,8 @@
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
-    "@di-framework/core": "workspace:*",
-    "@di-framework/socket": "workspace:*",
+    "@di-framework/core": "^4",
+    "@di-framework/socket": "^4",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
