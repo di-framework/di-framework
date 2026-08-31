@@ -202,7 +202,7 @@ describe('@Tool decorator', () => {
     expect(() => toolCallbacksFromBean(null as unknown as object)).toThrow(
       'toolCallbacksFromBean requires a bean instance',
     );
-    expect(() => toolCallbacksFromBean('nope' as unknown as object)).toThrow(
+    expect(() => toolCallbacksFromBean('noop' as unknown as object)).toThrow(
       'toolCallbacksFromBean requires a bean instance',
     );
   });

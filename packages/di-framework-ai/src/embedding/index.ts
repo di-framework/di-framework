@@ -7,3 +7,4 @@ export {
   type FakeEmbeddingModelOptions,
   l2Normalize,
 } from './fake-embedding-model.ts';
+export { PrecomputedEmbeddingModel } from './precomputed-embedding-model.ts';

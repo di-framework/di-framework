@@ -134,6 +134,9 @@ describe('search-request', () => {
       .build();
     expect(acceptAll.similarityThreshold).toBe(0);
     expect(acceptAll.filterExpression).toBeNull();
+
+    const withVector = searchRequestBuilder().query('q').queryEmbedding([1, 0]).build();
+    expect(withVector.queryEmbedding).toEqual([1, 0]);
   });
 });
 
@@ -214,6 +217,32 @@ describe('PgVectorStore', () => {
     expect(store.name).toBe('CustomStore');
     await store.add([textDocument('x', {}, 'x1')]);
   });
+
+  test('get returns a document by id and honors queryEmbedding', async () => {
+    const rows = [
+      { id: 'p1', content: 'hello', metadata: '{"k":1}' },
+      { id: 'p2', content: 'there', metadata: { k: 2 } },
+    ];
+    const client: PgClient = {
+      query: <T = any>(sql: string, params?: unknown[]) => {
+        if (sql.includes('WHERE id=')) {
+          const row = rows.find((item) => item.id === params?.[0]);
+          return { rows: (row ? [row] : []) as T[] };
+        }
+        if (sql.startsWith('SELECT')) {
+          return { rows: [{ id: 'p1', content: 'hello', metadata: '{"k":1}', score: 0.8 }] as T[] };
+        }
+        return { rows: [] };
+      },
+    };
+    const store = new PgVectorStore({ client, embeddingModel: new FakeEmbeddingModel() });
+    expect(await store.get('p1')).toMatchObject({ id: 'p1', text: 'hello', metadata: { k: 1 } });
+    expect(await store.get('p2')).toMatchObject({ metadata: { k: 2 } });
+    expect(await store.get('missing')).toBeNull();
+    const queryEmbedding = Array.from({ length: 64 }, (_, index) => (index === 0 ? 1 : 0));
+    const hits = await store.similaritySearch(searchRequest({ queryEmbedding, topK: 1 }));
+    expect(hits[0]?.id).toBe('p1');
+  });
 });
 
 describe('VectorizeVectorStore', () => {
@@ -253,7 +282,9 @@ describe('VectorizeVectorStore', () => {
     const viaQuery = await store.similaritySearchQuery('alpha');
     expect(viaQuery.length).toBeGreaterThan(0);
 
+    expect(await store.get('v1')).toMatchObject({ id: 'v1' });
     await store.delete(['v1']);
+    expect(await store.get('v1')).toBeNull();
     const afterDelete = await store.similaritySearch(searchRequest({ query: 'alpha', topK: 5 }));
     expect(afterDelete.map((h) => h.id)).not.toContain('v1');
   });

@@ -75,6 +75,16 @@ export {
   TransformersJsSkillEmbedder,
 } from './skill-embedder.ts';
 export type {
+  SkillSearchChunkRecord,
+  SkillSearchHit,
+  SkillSearchQuery,
+  SkillSearchStorageAdapter,
+  SkillSearchStorageRecord,
+} from './skill-search-connection.ts';
+export { chunkRecordId, SkillSearchConnection } from './skill-search-connection.ts';
+export { SkillSearchIndexer } from './skill-search-indexer.ts';
+export { SkillSearchRepository } from './skill-search-repository.ts';
+export type {
   SemanticSkillDiscoveryDecoratorOptions,
   SkillDecoratorOptions,
   SkillsAgentFromOverrides,
@@ -140,6 +150,7 @@ export {
   scoreSkillsIndexEntry,
   searchSkillsIndex,
   skillIndexText,
+  toSkillIndexWriteRequest,
 } from './skills-index.ts';
 export type {
   SkillsIndexCliCommand,

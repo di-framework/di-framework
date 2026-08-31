@@ -9,6 +9,7 @@
     "materialize:gitskills": "bun src/materialize-gitskills.ts",
     "index": "bun src/build-index.ts",
     "retrieve": "bun src/retrieve.ts",
+    "compare": "bun src/retrieve.ts --compare",
     "start": "bun src/main.ts",
     "live": "bun src/main.ts --live",
     "test": "bun test",

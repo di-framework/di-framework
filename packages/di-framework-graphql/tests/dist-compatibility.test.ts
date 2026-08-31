@@ -1,19 +1,12 @@
+import { describe, expect, it } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { describe, expect, it } from 'bun:test';
 
 // Import decorator APIs directly from built dist artifacts
 import { Container as Injectable } from '../../di-framework-core/dist/decorators/index.js';
-import {
-  Action,
-  Arg,
-  Field,
-  Lookup,
-  Portal,
-  SemanticType,
-} from '../dist/index.js';
-import { SemanticRegistry, buildTypeGraph, setRegistry } from '../dist/core.js';
+import { buildTypeGraph, SemanticRegistry, setRegistry } from '../dist/core.js';
+import { Action, Arg, Field, Lookup, Portal, SemanticType } from '../dist/index.js';
 
 function withDistRegistry<T>(fn: (registry: InstanceType<typeof SemanticRegistry>) => T): T {
   const fresh = new SemanticRegistry();
@@ -121,16 +114,59 @@ describe('Dist Artifacts & Packaging Compatibility', () => {
   it('verifies type declaration (.d.ts) files exist for all public subpath exports', () => {
     const rootDir = path.resolve(import.meta.dir, '../../..');
     const runtimePackages = [
-      { name: 'di-framework-core', exports: ['./dist/container.d.ts', './dist/decorators/index.d.ts', './dist/types.d.ts'] },
+      {
+        name: 'di-framework-core',
+        exports: ['./dist/container.d.ts', './dist/decorators/index.d.ts', './dist/types.d.ts'],
+      },
       { name: 'di-framework-repo', exports: ['./dist/index.d.ts'] },
       { name: 'di-framework-http', exports: ['./dist/index.d.ts'] },
       { name: 'di-framework-graphql', exports: ['./dist/index.d.ts', './dist/core.d.ts'] },
-      { name: 'di-framework-events', exports: ['./dist/index.d.ts', './dist/memory.d.ts', './dist/kafka.d.ts', './dist/nats.d.ts'] },
+      {
+        name: 'di-framework-events',
+        exports: [
+          './dist/index.d.ts',
+          './dist/memory.d.ts',
+          './dist/kafka.d.ts',
+          './dist/nats.d.ts',
+        ],
+      },
       { name: 'di-framework-config', exports: ['./dist/index.d.ts', './dist/zod.d.ts'] },
-      { name: 'di-framework-auth', exports: ['./dist/index.d.ts', './dist/webauthn.d.ts', './dist/oauth.d.ts', './dist/http.d.ts', './dist/graphql.d.ts', './dist/repo.d.ts', './dist/server.d.ts'] },
-      { name: 'di-framework-authz', exports: ['./dist/index.d.ts', './dist/http.d.ts', './dist/graphql.d.ts'] },
-      { name: 'di-framework-socket', exports: ['./dist/index.d.ts', './dist/node.d.ts', './dist/bun.d.ts', './dist/graphql.d.ts', './dist/workers.d.ts'] },
-      { name: 'di-framework-rpc', exports: ['./dist/index.d.ts', './dist/memory.d.ts', './dist/http.d.ts', './dist/socket.d.ts', './dist/grpc.d.ts'] },
+      {
+        name: 'di-framework-auth',
+        exports: [
+          './dist/index.d.ts',
+          './dist/webauthn.d.ts',
+          './dist/oauth.d.ts',
+          './dist/http.d.ts',
+          './dist/graphql.d.ts',
+          './dist/repo.d.ts',
+          './dist/server.d.ts',
+        ],
+      },
+      {
+        name: 'di-framework-authz',
+        exports: ['./dist/index.d.ts', './dist/http.d.ts', './dist/graphql.d.ts'],
+      },
+      {
+        name: 'di-framework-socket',
+        exports: [
+          './dist/index.d.ts',
+          './dist/node.d.ts',
+          './dist/bun.d.ts',
+          './dist/graphql.d.ts',
+          './dist/workers.d.ts',
+        ],
+      },
+      {
+        name: 'di-framework-rpc',
+        exports: [
+          './dist/index.d.ts',
+          './dist/memory.d.ts',
+          './dist/http.d.ts',
+          './dist/socket.d.ts',
+          './dist/grpc.d.ts',
+        ],
+      },
       { name: 'di-framework-codegen', exports: ['./dist/index.d.ts'] },
     ];
 

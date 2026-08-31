@@ -39,3 +39,4 @@ lcov
 /examples/packages/cf-worker/worker-configuration.d.ts
 references
 !examples/**/.claude/skills/**/references/
+/.claude/

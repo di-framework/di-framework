@@ -18,4 +18,7 @@ export interface VectorStore extends VectorStoreRetriever {
 
   /** Delete documents matching a filter expression. */
   deleteByFilter?(filterExpression: FilterExpression): Promise<void>;
+
+  /** Optional point lookup used by skill index metadata. */
+  get?(id: string): Promise<Document | null>;
 }

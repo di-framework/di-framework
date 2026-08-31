@@ -23,9 +23,7 @@ export const multiply = (value: number, by: number): number => {
   return value * by;
 };
 
-export const divide = function (value: number, by: number): number {
-  return value / by;
-};
+export const divide = (value: number, by: number): number => value / by;
 
 export function nestedFactory() {
   return (enabled: boolean) => {

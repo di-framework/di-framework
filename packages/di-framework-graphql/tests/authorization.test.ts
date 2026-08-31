@@ -277,7 +277,7 @@ describe('authorization wiring', () => {
         authorization: {
           principal: (ctx) => ctx.session,
           roles: (_ctx, principal: any) => principal?.grants ?? [],
-          onDenied: () => new SemanticAuthorizationError('Nope.', 'DENIED'),
+          onDenied: () => new SemanticAuthorizationError('Noop.', 'DENIED'),
         },
       });
     });
@@ -292,7 +292,7 @@ describe('authorization wiring', () => {
       query: '{ restricted }',
       context: { session: { grants: ['dev'] } },
     });
-    expect(denied.errors?.[0]?.message).toBe('Nope.');
+    expect(denied.errors?.[0]?.message).toBe('Noop.');
     expect(denied.errors?.[0]?.extensions?.code).toBe('DENIED');
   });
 

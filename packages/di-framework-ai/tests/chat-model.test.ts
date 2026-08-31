@@ -43,7 +43,7 @@ describe('FakeChatModel', () => {
   test('stream yields progressive text', async () => {
     const model = new FakeChatModel('a b');
     const chunks: string[] = [];
-    for await (const part of model.stream?.(new Prompt('q'))) {
+    for await (const part of model.stream(new Prompt('q'))) {
       chunks.push(part.content);
     }
     expect(chunks.at(-1)).toBe('a b');

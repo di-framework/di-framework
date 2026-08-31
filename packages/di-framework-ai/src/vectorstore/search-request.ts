@@ -11,6 +11,8 @@ export interface SearchRequest {
   readonly topK: number;
   readonly similarityThreshold: number;
   readonly filterExpression: FilterExpression | null;
+  /** When set, stores skip {@code EmbeddingModel.embed} and search this vector. */
+  readonly queryEmbedding?: ArrayLike<number>;
 }
 
 export interface SearchRequestOptions {
@@ -18,6 +20,7 @@ export interface SearchRequestOptions {
   readonly topK?: number;
   readonly similarityThreshold?: number;
   readonly filterExpression?: FilterExpression | string | null;
+  readonly queryEmbedding?: ArrayLike<number>;
 }
 
 /**
@@ -46,6 +49,7 @@ export function searchRequest(options: SearchRequestOptions = {}): SearchRequest
     topK,
     similarityThreshold,
     filterExpression,
+    ...(options.queryEmbedding != null ? { queryEmbedding: options.queryEmbedding } : {}),
   };
 }
 
@@ -81,6 +85,11 @@ export class SearchRequestBuilder {
       ...this.options,
       filterExpression: expression ?? null,
     };
+    return this;
+  }
+
+  queryEmbedding(embedding: ArrayLike<number>): this {
+    this.options = { ...this.options, queryEmbedding: embedding };
     return this;
   }
 

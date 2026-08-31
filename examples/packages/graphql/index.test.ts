@@ -218,8 +218,8 @@ describe('mutations', () => {
   });
 
   it('reports a missing entity from the @Lookup', async () => {
-    const result = await run('mutation { loanCheckIn(id: "nope") { state } }');
-    expect(result.errors?.[0]?.message).toContain("Loan 'nope' was not found");
+    const result = await run('mutation { loanCheckIn(id: "noop") { state } }');
+    expect(result.errors?.[0]?.message).toContain("Loan 'noop' was not found");
   });
 });
 
@@ -558,7 +558,7 @@ describe('the server', () => {
       const closed = new Promise<number>((resolve) =>
         socket.addEventListener('close', (ev) => resolve(ev.code)),
       );
-      socket.send(JSON.stringify({ type: 'nope' }));
+      socket.send(JSON.stringify({ type: 'noop' }));
       expect(await closed).toBe(4400);
     } finally {
       server.stop(true);

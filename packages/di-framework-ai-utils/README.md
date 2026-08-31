@@ -4,6 +4,8 @@
 installations do not fetch it for ordinary skills, small catalogs, or custom
 `SkillEmbedder` implementations. Install it explicitly only when using the
 default semantic embedder for a catalog above the indexing threshold.
+`@di-framework/repo` is an optional peer used only when you pass a storage adapter
+from that package into `SkillSearchConnection.fromStorageAdapter`.
 
 Agentic extras for [`@di-framework/ai`](../di-framework-ai). **Agent Skills** (`SKILL.md`, progressive disclosure) plus jailed file tools, HITL questions, todos, optional web / memory / task, and opt-in `Write` / `Edit` / `Bash`.
 
@@ -246,8 +248,11 @@ the same selected/abstained/error decisions for local and adapter backends.
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 
 Platform runtimes can independently supply `catalogStore`, `vectorSearch`, and a build-time
-`writer`. Remote catalogs use `buildAsync()` / `createSkillsAgentAsync()` so discovery lists only
-descriptors and the selected body is fetched after activation. See the
+`writer`. Wire a durable backend with `SkillSearchRepository(connection)` and
+`SkillSearchIndexer(data, connection)`, where `SkillSearchConnection.fromVectorStore` accepts any
+`VectorStore` (including `BunSqliteVectorStore`) and `fromStorageAdapter` accepts
+`@di-framework/repo` adapters. Remote catalogs use `buildAsync()` / `createSkillsAgentAsync()` so
+discovery lists only descriptors and the selected body is fetched after activation. See the
 [skill adapter authoring guide](../../docs/skill-adapter-authoring.md) for contracts, readiness,
 failure behavior, contract tests, and performance reporting.
 

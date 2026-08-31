@@ -452,7 +452,7 @@ export async function buildSkillsIndex(
   const index = { metadata, entries, lexical: buildLexicalIndex(skills) } satisfies SkillsIndex;
   let receipt: SkillIndexWriteReceipt | undefined;
   if (options.writer) {
-    receipt = await options.writer.replace(toIndexWriteRequest(index));
+    receipt = await options.writer.replace(toSkillIndexWriteRequest(index));
     if (!receipt.ready) throw new Error('Skill index writer did not return a ready receipt');
   } else {
     new LocalSkillIndexWriter(outputFile).writeIndex(index);
@@ -846,7 +846,7 @@ function adapterMetadata(index: SkillsIndex): SkillVectorIndexMetadata {
   };
 }
 
-function toIndexWriteRequest(index: SkillsIndex): SkillIndexWriteRequest {
+export function toSkillIndexWriteRequest(index: SkillsIndex): SkillIndexWriteRequest {
   const metadata = adapterMetadata(index);
   return {
     metadata: {

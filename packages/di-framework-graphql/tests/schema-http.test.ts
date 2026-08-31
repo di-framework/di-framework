@@ -265,7 +265,7 @@ describe('buildSemanticSchema errorFormatter', () => {
 
   it('rewrites validation errors returned from execute()', async () => {
     const api = buildFormattedApi();
-    const result = await api.execute({ query: '{ nope }' });
+    const result = await api.execute({ query: '{ noop }' });
     expect(result.errors?.[0]?.message).toMatch(/^formatted: /);
   });
 
@@ -277,7 +277,7 @@ describe('buildSemanticSchema errorFormatter', () => {
 
   it('rewrites validation errors returned from subscribe()', async () => {
     const api = buildFormattedApi();
-    const result = await api.subscribe({ query: '{ nope }' });
+    const result = await api.subscribe({ query: '{ noop }' });
     expect((result as any).errors?.[0]?.message).toMatch(/^formatted: /);
   });
 

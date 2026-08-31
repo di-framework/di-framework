@@ -1,4 +1,8 @@
-export type { BunSqliteVectorStoreOptions, BunVectorDatabase } from './adapters/bun-sqlite.ts';
+export type {
+  BunSqliteVectorStoreOptions,
+  BunVectorDatabase,
+  VectorSearchMode,
+} from './adapters/bun-sqlite.ts';
 export { BunSqliteVectorStore } from './adapters/bun-sqlite.ts';
 export type { PgClient, PgVectorStoreOptions } from './adapters/pgvector.ts';
 export { PgVectorStore } from './adapters/pgvector.ts';

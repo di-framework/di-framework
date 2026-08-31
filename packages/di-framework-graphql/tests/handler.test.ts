@@ -79,7 +79,7 @@ describe('createGraphQLHandler', () => {
   });
 
   it('reports validation errors without executing', async () => {
-    const response = await handler()(new Request('http://localhost/graphql?query={ nope }'));
+    const response = await handler()(new Request('http://localhost/graphql?query={ noop }'));
     expect(response.status).toBe(400);
     const body = (await response.json()) as any;
     expect(body.errors[0].message).toContain('Cannot query field');
@@ -102,9 +102,9 @@ describe('BatchLoader', () => {
 
   it('rejects every key when the batch function fails', async () => {
     const loader = new BatchLoader<string, string>(() => {
-      throw new Error('nope');
+      throw new Error('noop');
     });
-    await expect(loader.load('a')).rejects.toThrow('nope');
+    await expect(loader.load('a')).rejects.toThrow('noop');
   });
 
   it('loadMany loads multiple keys and clear resets cache', async () => {

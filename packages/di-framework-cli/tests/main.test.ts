@@ -69,7 +69,7 @@ describe('CLI main router', () => {
     };
     const err = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await expect(main(['nope'])).rejects.toThrow('EXIT_1');
+      await expect(main(['noop'])).rejects.toThrow('EXIT_1');
       expect(code).toBe(1);
     } finally {
       process.exit = originalExit;

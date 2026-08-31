@@ -126,3 +126,20 @@ The default count threshold is 50. At or below it, the artifact contains one met
 At runtime, a skill score is 75% cosine against its first raw document chunk (which contains routing frontmatter) plus 25% cosine against its best chunk. Only the top 10 names/descriptions enter the `Skill` tool; a full body still loads only after activation. Re-running the build with unchanged source, chunking, and model metadata reuses the artifact without loading the model.
 
 The recorded 408-skill build produced 4,558 chunks in 50.9 seconds and a 9,680,303-byte JSONL artifact. Across 30 hand-written cross-domain tasks, retrieval achieved 29/30 rank-1, 30/30 recall@10, and 0.9708 mean reciprocal rank. These are example-corpus measurements, not universal production guarantees.
+
+## ANN compare (SQLite / HNSW)
+
+Exact JSONL cosine remains the default. To index the same vectors into `BunSqliteVectorStore` via `SkillSearchIndexer` / `SkillSearchRepository` and compare ANN recall@10, latency, disk, and peak RSS:
+
+```bash
+bun run retrieve -- --compare --sqlite .cache/skills-ann.sqlite
+bun run retrieve -- --backend sqlite --sqlite .cache/skills-ann.sqlite
+```
+
+Opt-in 10,000-skill runs use the existing gitskills materialization. A Transformers-free synthetic 100,000-skill catalog is:
+
+```bash
+bun run retrieve -- --synthetic 100000 --compare --sqlite .cache/synthetic-100k.sqlite
+```
+
+ANN vs exact is fail-closed: missing/corrupt graphs and incompatible formats raise errors instead of falling back to the full catalog. Prompts still receive only selected skill names and descriptions.

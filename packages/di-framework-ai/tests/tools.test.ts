@@ -80,7 +80,7 @@ describe('ToolDefinition / FunctionToolCallback', () => {
     const cb = functionToolCallback({
       name: 'boom',
       call: () => {
-        throw new Error('nope');
+        throw new Error('noop');
       },
     });
 
@@ -105,7 +105,7 @@ describe('ToolDefinition / FunctionToolCallback', () => {
     const cb = functionToolCallback({
       name: 'boom',
       call: () => {
-        throw new Error('nope');
+        throw new Error('noop');
       },
     });
     let caught: unknown;

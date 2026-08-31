@@ -3,6 +3,7 @@ import { withDocumentScore } from '../document/document.ts';
 import type { EmbeddingModel } from '../embedding/embedding-model.ts';
 import { cosineSimilarity } from '../embedding/fake-embedding-model.ts';
 import { evaluateFilterExpression, type FilterExpression } from './filter/index.ts';
+import { resolveDocumentEmbedding, resolveQueryEmbedding } from './resolve-embedding.ts';
 import { type SearchRequest, searchRequest } from './search-request.ts';
 import type { VectorStore } from './vector-store.ts';
 
@@ -57,7 +58,7 @@ export class SimpleVectorStore implements VectorStore {
     }
     for (const doc of documents) {
       const text = doc.text ?? '';
-      const embedding = await this.embeddingModel.embedDocument(doc);
+      const embedding = await resolveDocumentEmbedding(this.embeddingModel, doc);
       this.store.set(doc.id, {
         id: doc.id,
         text,
@@ -65,6 +66,19 @@ export class SimpleVectorStore implements VectorStore {
         embedding: [...embedding],
       });
     }
+  }
+
+  async get(id: string): Promise<Document | null> {
+    const entry = this.store.get(id);
+    if (!entry) return null;
+    return {
+      id: entry.id,
+      text: entry.text,
+      media: null,
+      metadata: entry.metadata,
+      score: null,
+      embedding: entry.embedding,
+    };
   }
 
   async delete(ids: readonly string[]): Promise<void> {
@@ -84,7 +98,7 @@ export class SimpleVectorStore implements VectorStore {
   }
 
   async similaritySearch(request: SearchRequest): Promise<readonly Document[]> {
-    const queryEmbedding = await this.embeddingModel.embed(request.query);
+    const queryEmbedding = await resolveQueryEmbedding(this.embeddingModel, request);
     const results: Document[] = [];
 
     for (const entry of this.store.values()) {

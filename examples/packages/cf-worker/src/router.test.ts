@@ -96,9 +96,9 @@ describe('cf-worker router', () => {
   });
 
   test('badRequest returns a 400 JSON response', async () => {
-    const res = badRequest('Nope');
+    const res = badRequest('Noop');
     expect(res.status).toBe(400);
-    expect((await res.json()) as unknown).toEqual({ error: 'Nope' });
+    expect((await res.json()) as unknown).toEqual({ error: 'Noop' });
 
     const defaults = badRequest();
     expect(defaults.status).toBe(400);

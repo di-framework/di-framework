@@ -375,7 +375,7 @@ export function assertReadyMetadata(
   }
 }
 
-function validateWrite(request: SkillIndexWriteRequest): void {
+export function validateWrite(request: SkillIndexWriteRequest): void {
   if (!request.metadata.indexVersion || !request.metadata.catalogVersion) {
     throw new SkillAdapterError('INVALID_RESPONSE', 'Index and catalog versions are required');
   }

@@ -200,7 +200,7 @@ describe('McpToolCallback', () => {
       handlers: {
         boom: () => ({
           isError: true,
-          content: [{ type: 'text', text: 'nope' }],
+          content: [{ type: 'text', text: 'noop' }],
         }),
       },
     });

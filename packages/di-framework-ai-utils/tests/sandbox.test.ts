@@ -34,7 +34,7 @@ describe('assertPathAllowed', () => {
     const evil = join(parent, 'allowed-evil', 'secret');
     mkdirSync(allowed);
     mkdirSync(join(parent, 'allowed-evil'));
-    writeFileSync(evil, 'nope');
+    writeFileSync(evil, 'noop');
     const result = assertPathAllowed(evil, [allowed]);
     expect(result.ok).toBe(false);
   });

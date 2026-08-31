@@ -577,7 +577,7 @@ describe('oauthClient — token endpoint and userinfo mechanics', () => {
   });
 
   it('rejects a userinfo response that is not ok, or not a JSON object', async () => {
-    const notOk = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
+    const notOk = (async () => new Response('noop', { status: 500 })) as unknown as typeof fetch;
     await expect(client(notOk).userinfo('at')).rejects.toThrow(/HTTP 500/);
 
     const notObject = (async () =>

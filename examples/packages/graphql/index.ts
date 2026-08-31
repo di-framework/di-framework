@@ -99,7 +99,7 @@ export async function runLibraryExample(): Promise<void> {
     'addBook — same mutation, no librarian role',
     await run(`mutation {
     addBook(input: {
-      title: "Nope", author: "Nobody", genre: Fiction,
+      title: "Noop", author: "Nobody", genre: Fiction,
       publishedAt: "2024-01-01T00:00:00.000Z"
     }) { id }
   }`),

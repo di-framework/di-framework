@@ -357,7 +357,7 @@ describe('createAuthRoutes', () => {
     expect(callback.headers.getSetCookie().some((c) => c.startsWith('__Host-sid='))).toBe(true);
     expect(callback.headers.getSetCookie().some((c) => c.startsWith('__Host-csrf='))).toBe(true);
 
-    const unknownCb = await router.fetch(get('https://app.example.com/oauth/nope/callback'));
+    const unknownCb = await router.fetch(get('https://app.example.com/oauth/noop/callback'));
     expect(unknownCb.status).toBe(404);
   });
 

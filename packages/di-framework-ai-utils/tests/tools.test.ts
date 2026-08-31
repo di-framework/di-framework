@@ -32,7 +32,7 @@ describe('readTool', () => {
     const truncated = await tool.call(JSON.stringify({ filePath: long }));
     expect(truncated).toContain('... (line truncated)');
     expect(await tool.call(JSON.stringify({ filePath: empty }))).toContain('File is empty');
-    expect(await tool.call(JSON.stringify({ filePath: join(root, 'nope') }))).toContain(
+    expect(await tool.call(JSON.stringify({ filePath: join(root, 'noop') }))).toContain(
       'does not exist',
     );
     expect(await tool.call(JSON.stringify({ filePath: root }))).toContain('directory');
@@ -135,7 +135,7 @@ describe('writeTool and editTool', () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-write-'));
     const writer = writeTool({ allowedDirectories: [root] });
     const result = await writer.call(
-      JSON.stringify({ filePath: '/tmp/outside-ai-utils.txt', content: 'nope' }),
+      JSON.stringify({ filePath: '/tmp/outside-ai-utils.txt', content: 'noop' }),
     );
     expect(result).toContain('outside the allowed directories');
   });

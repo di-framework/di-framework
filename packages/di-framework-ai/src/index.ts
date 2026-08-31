@@ -408,6 +408,7 @@ export {
   embedDocument,
   FakeEmbeddingModel,
   l2Normalize,
+  PrecomputedEmbeddingModel,
 } from './embedding/index.ts';
 // MCP (Model Context Protocol → ToolCallback)
 export type {
@@ -615,6 +616,7 @@ export type {
   SimpleVectorStoreOptions,
   VectorizeIndex,
   VectorizeVectorStoreOptions,
+  VectorSearchMode,
   VectorStore,
   VectorStoreRetriever,
 } from './vectorstore/index.ts';
