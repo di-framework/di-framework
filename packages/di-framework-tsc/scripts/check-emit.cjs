@@ -24,6 +24,9 @@ const required = [
   'typeof b !== "number"',
   'class Greeter',
   'typeof prefix !== "string"',
+  'typeof value !== "number"',
+  'typeof by !== "number"',
+  'typeof enabled !== "boolean"',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
