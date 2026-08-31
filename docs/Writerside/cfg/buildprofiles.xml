@@ -11,6 +11,8 @@
     <variables>
         <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
         <favicon>favicon.png</favicon>
+        <!-- Hosted at the GitHub Pages root; regenerated on each docs deploy. -->
+        <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
     </variables>
     <build-profile instance="d">
         <variables>
@@ -19,6 +21,7 @@
             <favicon>favicon.png</favicon>
             <!-- Same endpoint at instance level in case the builder only merges profile vars -->
             <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
+            <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
         </variables>
     </build-profile>
 

@@ -158,17 +158,23 @@ export class VectorIndexService {
    * Embed the query with Workers AI, then ANN-query Vectorize (cosine metric).
    * Without Vectorize, returns [] so SearchService uses lexical fallback.
    */
-  async query(queryText: string, opts: { topK: number; product?: string }): Promise<VectorMatch[]> {
+  async query(
+    queryText: string,
+    opts: { topK: number; product?: string; version?: string },
+  ): Promise<VectorMatch[]> {
     if (!this.hasVectorize()) {
       return [];
     }
 
     const vector = await this.embeddings.embedOne(queryText);
     const topK = Math.min(Math.max(opts.topK, 1), 50);
+    const filter: Record<string, string> = {};
+    if (opts.product) filter.product = opts.product;
+    if (opts.version) filter.version = opts.version;
     const result = await this.env().VECTORIZE.query(vector, {
       topK,
       returnMetadata: 'all',
-      ...(opts.product ? { filter: { product: opts.product } } : {}),
+      ...(Object.keys(filter).length > 0 ? { filter } : {}),
     });
     return (result.matches ?? []).map((m) => ({
       id: m.id,

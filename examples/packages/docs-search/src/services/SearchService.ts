@@ -23,6 +23,7 @@ export class SearchService {
     maxHits?: number;
     isExactSearch?: boolean;
     product?: string;
+    version?: string;
   }): Promise<WritersideSearchResponse> {
     const query = opts.query.trim();
     const maxHits = Math.min(Math.max(opts.maxHits ?? 25, 1), 50);
@@ -33,16 +34,19 @@ export class SearchService {
     }
 
     const tokens = tokenize(query, opts.isExactSearch);
+    const version = opts.version || 'latest';
     // Over-fetch a bit so lexical re-rank has room
     const matches = await this.vectors.query(query, {
       topK: Math.min(maxHits * 2, 50),
       product: opts.product,
+      version,
     });
 
     const scored: ScoredDoc[] = [];
     for (const match of matches) {
       const page = await this.documents.findById(match.id);
       if (!page) continue;
+      if (page.version !== version) continue;
 
       if (opts.isExactSearch && tokens[0]) {
         const hay = `${page.pageTitle} ${page.content}`.toLowerCase();
@@ -70,6 +74,7 @@ export class SearchService {
       const pages = await this.documents.findAll();
       for (const page of pages) {
         if (opts.product && page.product !== opts.product) continue;
+        if (page.version !== version) continue;
         const lexical = lexicalScore(page, tokens, opts.isExactSearch);
         if (lexical <= 0) continue;
         scored.push({

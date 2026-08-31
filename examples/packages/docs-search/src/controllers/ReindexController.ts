@@ -9,6 +9,8 @@ import {
   type RequestSpec,
   type ResponseSpec,
 } from '@di-framework/http';
+import { getEnv } from '../bootstrap';
+import { persistCorpus } from '../corpus-state';
 import { type CorpusDoc, DocumentRepository } from '../repositories/DocumentRepository';
 import { router } from '../router';
 import { AuthService } from '../services/AuthService';
@@ -57,7 +59,8 @@ export class ReindexController {
       if (!Array.isArray(docs) || docs.length === 0) {
         return { ok: false, status: 400, error: 'body.docs must be a non-empty array' };
       }
-      corpusReplaced = await this.documents.replaceCorpus(docs);
+      corpusReplaced = await this.documents.upsertVersions(docs);
+      await persistCorpus(getEnv(), this.documents);
     }
 
     const result = await this.search.reindex({ full: opts.full });
@@ -77,7 +80,7 @@ export class ReindexController {
   @Endpoint({
     summary: 'Reindex corpus + Vectorize',
     description:
-      'Optional JSON body `{ docs }` replaces the in-memory corpus. Then syncs Vectorize (incremental unless `?full=1`).',
+      'Optional JSON body `{ docs }` upserts those versions into the corpus (other frozen versions are kept). Then syncs Vectorize (incremental unless `?full=1`).',
     responses: {
       '200': { description: 'Sync result' },
       '400': { description: 'Invalid corpus body' },

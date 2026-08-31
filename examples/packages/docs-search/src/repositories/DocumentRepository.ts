@@ -42,6 +42,38 @@ export class DocumentRepository extends InMemoryRepository<DocPage, string> {
     }
     return this.seed(docs.map(corpusDocToPage));
   }
+
+  /**
+   * Replace only the versions present in `docs`; keep other frozen snapshots.
+   * A latest-only CI push must not drop `/v4.1/` pages.
+   */
+  async upsertVersions(docs: CorpusDoc[]): Promise<number> {
+    const versions = new Set(docs.map((d) => d.version));
+    const existing = await this.findAll();
+    for (const page of existing) {
+      if (versions.has(page.version)) {
+        await this.delete(page.id);
+      }
+    }
+    return this.seed(docs.map(corpusDocToPage));
+  }
+
+  toCorpusDocs(): Promise<CorpusDoc[]> {
+    return this.findAll().then((pages) => pages.map(pageToCorpusDoc));
+  }
+}
+
+export function pageToCorpusDoc(page: DocPage): CorpusDoc {
+  return {
+    objectID: page.id,
+    url: page.url,
+    pageTitle: page.pageTitle,
+    mainTitle: page.mainTitle,
+    breadcrumbs: page.breadcrumbs,
+    content: page.content,
+    product: page.product,
+    version: page.version,
+  };
 }
 
 export function corpusDocToPage(d: CorpusDoc): DocPage {

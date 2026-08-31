@@ -76,22 +76,31 @@ function greet(user) {
 
 ## Supported boundaries and types
 
-The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, sound bounded unions, plain structural objects, arrays/readonly arrays, and fixed tuples with optional tails.
+The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, enums, accessible local class instances, sound bounded unions, plain structural objects, non-callable object-only intersections, erased primitive brands, template-literal strings, string index signatures, `Record<string, V>` and literal-key records, arrays/readonly arrays, and fixed tuples with optional tails.
 
 ## Limitations
 
 Unsupported paths are skipped as a whole rather than emitting a predicate that can reject valid input. Current intentional gaps are:
 
 - defaults and rest elements nested inside destructuring patterns
-- variadic tuples, classes, branded types, typia-style tags
+- variadic tuples, imported class bindings, callable/constructable intersections, typia-style tags, and custom nominal predicates
+- number-only and symbol index signatures, and advanced mapped/conditional types
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
 
 Arrays and `ReadonlyArray<T>` are checked with `Array.isArray` and a full element scan.
 Fixed tuples enforce their allowed length and validate each position; optional tails are presence-gated.
+Object-only intersections use the checker's flattened apparent properties, validating each required property once. Required properties are checked for presence before their value, including properties whose type admits `undefined`; optional object properties remain unchecked.
+String index signatures and `Record<string, V>` scan every own enumerable string-keyed value with `Object.keys`. Literal-key records instead check each required key, including names that require bracket access.
+Primitive intersections used as brands validate only their string, number, boolean, bigint, or literal runtime representation. Recognized marker objects contain only computed unique-symbol properties, or conventional marker keys such as `__brand`, `_brand`, or `_tag` whose values are literals, unique symbols, or `never`. Brand marker properties are compile-time-only and are never read at runtime; class, callable, constructable, indexed, and ordinary structural intersections are not erased as brands. Enforcing application-specific brand semantics requires a future custom predicate facility.
+Template-literal types always require a string. A template with one string-like placeholder also enforces its nonempty fixed prefix and suffix with `startsWith` and `endsWith`; multiple placeholders and non-string placeholders intentionally fall back to the string check.
+Structural traversal keeps a per-path visited set and a maximum depth of eight, so recursive types cannot hang compilation.
 Optional and defaulted parameters are validated only when their runtime value is not `undefined`; `null` is still checked against the declared type.
 Rest parameters use the same full array and element validation as ordinary arrays.
 Simple object, array, and nested destructured bindings are validated using the types of the bound identifiers.
+
+Numeric, string, and const enums are checked against their checker-known member values. Enums with a computed member are skipped as a whole because the computed runtime value cannot be reproduced soundly without depending on an emitted enum object.
+Class-typed parameters use `instanceof` when the checker can name an accessible local or local-namespace runtime constructor; interfaces remain structural. Subclasses pass the check, and generic type arguments are erased at runtime. As with any `instanceof` test, equivalent instances created in another JavaScript realm do not pass. ES-imported class bindings are conservatively skipped, including ordinary value imports, because TypeScript can elide an import used only as a type and the transformer does not synthesize or retain imports.
 
 ## Monorepo note
 
