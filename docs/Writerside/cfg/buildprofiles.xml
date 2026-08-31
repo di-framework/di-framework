@@ -7,10 +7,16 @@
       search-endpoint must be under top-level <variables> (Writerside docs).
       It should bake searchService/searchServiceUrl into config.json.
       CI also patches config.json after the build as a safety net.
+
+      Do not use <favicon> / <custom-favicons> with this builder: it emits the
+      filename as a literal text node (visible above the header) instead of
+      <link rel="icon">. Favicon links come from include-in-head; CI still
+      copies favicon.png / favicon.ico next to the HTML.
     -->
     <variables>
         <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
-        <custom-favicons>favicon.png</custom-favicons>
+        <header-logo>favicon.png</header-logo>
+        <include-in-head>favicon-head.html</include-in-head>
         <!-- Hosted at the GitHub Pages root; regenerated on each docs deploy. -->
         <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
     </variables>
@@ -18,7 +24,8 @@
         <variables>
             <noindex-content>true</noindex-content>
             <custom-css>footer.css</custom-css>
-            <custom-favicons>favicon.png</custom-favicons>
+            <header-logo>favicon.png</header-logo>
+            <include-in-head>favicon-head.html</include-in-head>
             <!-- Same endpoint at instance level in case the builder only merges profile vars -->
             <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
             <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
