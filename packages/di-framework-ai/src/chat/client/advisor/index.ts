@@ -13,6 +13,22 @@ export {
 } from './base-advisor.ts';
 export { ChatModelCallAdvisor } from './chat-model-call-advisor.ts';
 export { ChatModelStreamAdvisor } from './chat-model-stream-advisor.ts';
+export {
+  ContextCompressionAdvisor,
+  type ContextCompressionAdvisorOptions,
+  type ContextCompressionDiagnostic,
+  ContextCompressionError,
+  type ContextCompressionErrorCode,
+  type ContextCompressionPersistence,
+  type ContextCompressionRange,
+  type ContextCompressionRequest,
+  type ContextCompressionResult,
+  type ContextCompressor,
+  DEFAULT_CONTEXT_COMPRESSION_ORDER,
+  parseContextCompressionRequest,
+  parseContextCompressionResult,
+  type TokenCounter,
+} from './context-compression-advisor.ts';
 export { DefaultAdvisorChain } from './default-advisor-chain.ts';
 export {
   MessageChatMemoryAdvisor,
