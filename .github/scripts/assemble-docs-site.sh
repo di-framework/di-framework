@@ -106,15 +106,39 @@ if [[ "$REF_TYPE" == "tag" && "$REF_NAME" =~ ^v([0-9]+)\.([0-9]+) ]]; then
   fi
 fi
 
+# Writerside only renders the version dropdown when versions.json has 2+
+# entries. Until docs-v*.zip release assets exist, seed the current package
+# minor so the picker appears. Prefer a frozen zip when one was restored.
+PKG_JSON="${WORKSPACE}/package.json"
+if [[ -f "$PKG_JSON" ]]; then
+  CURRENT_MINOR="$(
+    python3 - "$PKG_JSON" <<'PY'
+import json, sys
+v = json.load(open(sys.argv[1])).get("version", "")
+parts = v.split(".")
+if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+    print(f"v{parts[0]}.{parts[1]}")
+PY
+  )"
+  if [[ -n "$CURRENT_MINOR" && ! -d "${SITE_DIR}/${CURRENT_MINOR}" ]]; then
+    echo "Seeding current minor snapshot ${CURRENT_MINOR} (no release asset yet)"
+    copy_build "${SITE_DIR}/${CURRENT_MINOR}"
+  fi
+fi
+
 SEARCH_ENDPOINT="${SEARCH_ENDPOINT:-https://di-framework-docs-search.seemueller.workers.dev/api/docs/search}"
 SEARCH_ENDPOINT="${SEARCH_ENDPOINT%/}"
 
-python3 - "$SITE_DIR" "$SEARCH_ENDPOINT" <<'PY'
+# Writerside frontend skips fetching versionsService unless productId is set.
+PRODUCT_ID="${PRODUCT_ID:-d}"
+
+python3 - "$SITE_DIR" "$SEARCH_ENDPOINT" "$PRODUCT_ID" <<'PY'
 import json, sys
 from pathlib import Path
 
 site = Path(sys.argv[1])
 endpoint = sys.argv[2].rstrip("/")
+product_id = sys.argv[3]
 entries = [{"version": "latest", "url": "/", "isCurrent": True}]
 
 def sort_key(v: str):
@@ -135,17 +159,18 @@ for ver in minors:
 (site / "versions.json").write_text(json.dumps(entries, indent=2) + "\n")
 print("versions.json:", json.dumps(entries, indent=2))
 
-def patch_search(config_path: Path, version: str) -> None:
+def patch_config(config_path: Path, version: str) -> None:
     if not config_path.is_file():
         return
     cfg = json.loads(config_path.read_text())
+    cfg["productId"] = product_id
     cfg["searchService"] = "custom"
     cfg["searchServiceUrl"] = f"{endpoint}/preview-search/Writerside/d/{version}"
     config_path.write_text(json.dumps(cfg, separators=(",", ":")))
-    print(f"search {config_path}: version={version}")
+    print(f"config {config_path}: productId={product_id} version={version}")
 
-patch_search(site / "config.json", "latest")
-patch_search(site / "latest" / "config.json", "latest")
+patch_config(site / "config.json", "latest")
+patch_config(site / "latest" / "config.json", "latest")
 for ver in minors:
-    patch_search(site / ver / "config.json", ver)
+    patch_config(site / ver / "config.json", ver)
 PY

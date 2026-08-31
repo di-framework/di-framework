@@ -176,6 +176,8 @@ jobs:
           from pathlib import Path
           p = Path("dir/config.json")
           cfg = json.loads(p.read_text())
+          # Writerside app.js only fetches versionsService when productId is set.
+          cfg["productId"] = "d"
           cfg["searchService"] = "custom"
           cfg["searchServiceUrl"] = "${SERVICE_URL}"
           p.write_text(json.dumps(cfg, separators=(",", ":")))
@@ -201,12 +203,18 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Release may be created by release.yml slightly later; retry a few times.
+          # Release may be created by release.yml slightly later; create or retry.
           for i in 1 2 3 4 5 6; do
             if gh release view "$TAG" >/dev/null 2>&1; then
               gh release upload "$TAG" "$ZIP" --clobber
               echo "Uploaded $(basename "$ZIP") to $TAG"
               exit 0
+            fi
+            if [[ "$i" -eq 1 ]]; then
+              gh release create "$TAG" "$ZIP" --title "$TAG" --generate-notes \
+                && echo "Created GitHub Release $TAG with $(basename "$ZIP")" \
+                && exit 0 \
+                || true
             fi
             echo "Release $TAG not visible yet (attempt $i); sleeping…"
             sleep 15
