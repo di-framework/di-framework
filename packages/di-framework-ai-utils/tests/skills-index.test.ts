@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -175,8 +175,11 @@ describe('buildSkillsIndex', () => {
       'weather-reporter',
     ]);
     expect(fixture.index.entries[0]?.chunks).toHaveLength(1);
-    expect(fixture.index.entries[0]?.chunks[0]?.embedding).toEqual(new Float32Array([1, 0, 0]));
-    expect(readFileSync(fixture.outputFile, 'utf8')).toContain('float32-le-base64');
+    expect(fixture.index.entries[0]?.chunks[0]?.embedding).toMatchObject({
+      values: new Int8Array([127, 0, 0]),
+    });
+    expect(readFileSync(fixture.outputFile, 'utf8')).toContain('int8-per-vector-v1');
+    expect(statSync(`${fixture.outputFile}.vectors.bin`).size).toBe(9);
 
     const secondEmbedder = new TestEmbedder();
     const unchanged = await buildSkillsIndex({
@@ -278,6 +281,61 @@ describe('skill index retrieval', () => {
     const file = join(directory, 'bad.jsonl');
     writeFileSync(file, '{}\n');
     expect(() => loadSkillsIndex(file)).toThrow(/Unsupported/);
+  });
+
+  test('continues to read version-2 JSONL indexes', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'skills-index-v2-'));
+    const file = join(directory, 'legacy.jsonl');
+    const vector = Buffer.alloc(8);
+    vector.writeFloatLE(1, 0);
+    vector.writeFloatLE(0, 4);
+    const metadata = {
+      kind: '@di-framework/ai-utils/skills-index',
+      version: 2,
+      indexed: true,
+      skillCount: 1,
+      chunkCount: 1,
+      threshold: 0,
+      retrievalLimit: 1,
+      chunkTokens: 256,
+      chunkOverlapTokens: 32,
+      scoring: 'frontmatter-guided-document-cosine-v1',
+      vectorEncoding: 'float32-le-base64',
+      catalogHash: 'legacy',
+      model: 'fixture',
+      revision: '1',
+      embedderId: 'fixture@1',
+      dimensions: 2,
+    };
+    const entry = {
+      kind: 'skill',
+      name: 'legacy',
+      description: 'legacy index',
+      documentHash: 'hash',
+      chunks: [{ source: 'document', vector: vector.toString('base64') }],
+    };
+    writeFileSync(file, `${JSON.stringify(metadata)}\n${JSON.stringify(entry)}\n`);
+    expect(loadSkillsIndex(file).metadata.version).toBe(2);
+    expect(rankSkillsIndex(loadSkillsIndex(file), [1, 0])[0]?.name).toBe('legacy');
+  });
+
+  test('validates sidecar truncation, hashes, and dimensions', async () => {
+    const fixture = await indexedFixture();
+    const sidecar = `${fixture.outputFile}.vectors.bin`;
+    const original = readFileSync(sidecar);
+    writeFileSync(sidecar, original.subarray(0, original.length - 1));
+    expect(() => loadSkillsIndex(fixture.outputFile)).toThrow(/truncated/);
+    writeFileSync(
+      sidecar,
+      Buffer.from(original.map((value, index) => (index === 0 ? value ^ 1 : value))),
+    );
+    expect(() => loadSkillsIndex(fixture.outputFile)).toThrow(/hash mismatch/);
+    writeFileSync(sidecar, original);
+
+    const manifest = JSON.parse(readFileSync(fixture.outputFile, 'utf8'));
+    manifest.metadata.dimensions += 1;
+    writeFileSync(fixture.outputFile, JSON.stringify(manifest));
+    expect(() => loadSkillsIndex(fixture.outputFile)).toThrow(/dimension mismatch/);
   });
 });
 

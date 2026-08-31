@@ -5,10 +5,11 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { expandUserPath } from '../sandbox/paths.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import {
@@ -28,11 +29,12 @@ import { collectSkills } from './skills-tool.ts';
 import { validateSkill } from './validate-skill.ts';
 
 export const SKILLS_INDEX_FORMAT = '@di-framework/ai-utils/skills-index';
-export const SKILLS_INDEX_VERSION = 2;
-export const SKILLS_INDEX_VECTOR_ENCODING = 'float32-le-base64';
+export const SKILLS_INDEX_VERSION = 3;
+export const SKILLS_INDEX_VECTOR_ENCODING = 'int8-per-vector-v1';
+export const SKILLS_INDEX_V2_VECTOR_ENCODING = 'float32-le-base64';
 export const SKILLS_INDEX_SCORING = 'frontmatter-guided-document-cosine-v1';
 export const SKILLS_INDEX_FIRST_CHUNK_WEIGHT = 0.75;
-export const DEFAULT_SKILLS_INDEX_FILE = '.di-framework/skills-index.jsonl';
+export const DEFAULT_SKILLS_INDEX_FILE = '.di-framework/skills-index.json';
 export const DEFAULT_SKILLS_INDEX_THRESHOLD = 50;
 export const DEFAULT_SKILLS_RETRIEVAL_LIMIT = 10;
 export const DEFAULT_SKILLS_INDEX_BATCH_SIZE = 32;
@@ -43,7 +45,7 @@ export type SkillsIndexChunkSource = 'document';
 
 export interface SkillsIndexMetadata {
   readonly kind: typeof SKILLS_INDEX_FORMAT;
-  readonly version: typeof SKILLS_INDEX_VERSION;
+  readonly version: 2 | typeof SKILLS_INDEX_VERSION;
   readonly indexed: boolean;
   readonly skillCount: number;
   readonly chunkCount: number;
@@ -52,17 +54,28 @@ export interface SkillsIndexMetadata {
   readonly chunkTokens: number;
   readonly chunkOverlapTokens: number;
   readonly scoring: typeof SKILLS_INDEX_SCORING;
-  readonly vectorEncoding: typeof SKILLS_INDEX_VECTOR_ENCODING;
+  readonly vectorEncoding:
+    | typeof SKILLS_INDEX_VECTOR_ENCODING
+    | typeof SKILLS_INDEX_V2_VECTOR_ENCODING;
   readonly catalogHash: string;
   readonly model?: string;
   readonly revision?: string;
   readonly embedderId?: string;
   readonly dimensions?: number;
+  readonly vectorFile?: string;
+  readonly vectorHash?: string;
+  readonly vectorBytes?: number;
+}
+
+export interface QuantizedSkillVector {
+  readonly values: Int8Array;
+  readonly scale: number;
+  readonly norm: number;
 }
 
 export interface SkillsIndexChunk {
   readonly source: SkillsIndexChunkSource;
-  readonly embedding: Float32Array;
+  readonly embedding: Float32Array | QuantizedSkillVector;
 }
 
 export interface SkillsIndexEntry {
@@ -471,7 +484,7 @@ export class LocalSkillVectorSearch implements SkillVectorSearch {
         entry.chunks.map((chunk, chunkIndex) => ({
           name: entry.name,
           description: entry.description,
-          score: cosineSimilarity(vector, chunk.embedding),
+          score: skillVectorSimilarity(vector, chunk.embedding),
           chunk: chunkIndex,
           source: chunk.source,
         })),
@@ -528,8 +541,7 @@ export class LocalSkillIndexWriter implements SkillIndexWriter {
   }
 
   writeIndex(index: SkillsIndex): void {
-    const records = [index.metadata, ...index.entries.map(serializeEntry)];
-    writeJsonLinesAtomically(resolve(expandUserPath(this.file)), records);
+    writeV3IndexAtomically(resolve(expandUserPath(this.file)), index);
   }
 }
 
@@ -542,12 +554,24 @@ export function loadSkillsIndex(file = DEFAULT_SKILLS_INDEX_FILE): SkillsIndex {
   } catch (error) {
     throw new Error(`Skills index does not exist or cannot be read: ${absolute}`, { cause: error });
   }
+  if (text.trimStart().startsWith('{')) {
+    let manifest: { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown } | undefined;
+    try {
+      manifest = JSON.parse(text);
+    } catch {
+      // Version-2 JSONL also begins with an object and is parsed below.
+    }
+    if (manifest?.metadata?.version === SKILLS_INDEX_VERSION) {
+      return parseV3Index(manifest, absolute);
+    }
+    if (manifest?.metadata?.kind === SKILLS_INDEX_FORMAT) throw unsupportedIndexError(absolute);
+  }
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length === 0) throw new Error(`Skills index is empty: ${absolute}`);
 
   const metadataLine = lines[0];
   if (metadataLine == null) throw new Error(`Skills index is empty: ${absolute}`);
-  const metadata = parseMetadata(metadataLine, absolute);
+  const metadata = parseMetadata(metadataLine, absolute, 2);
   const entries = lines
     .slice(1)
     .map((line, index) => parseEntry(line, index + 2, absolute, metadata.dimensions));
@@ -661,7 +685,7 @@ export function scoreSkillsIndexEntry(
   for (let chunkIndex = 0; chunkIndex < entry.chunks.length; chunkIndex++) {
     const chunk = entry.chunks[chunkIndex];
     if (!chunk) continue;
-    const score = cosineSimilarity(query, chunk.embedding);
+    const score = skillVectorSimilarity(query, chunk.embedding);
     firstChunkScore ??= score;
     if (!best || score > best.score) {
       best = { score, matchedChunk: chunkIndex, matchedSource: chunk.source };
@@ -693,6 +717,27 @@ export function cosineSimilarity(left: ArrayLike<number>, right: ArrayLike<numbe
   }
   if (leftNorm === 0 || rightNorm === 0) return 0;
   return dot / Math.sqrt(leftNorm * rightNorm);
+}
+
+function skillVectorSimilarity(
+  query: ArrayLike<number>,
+  vector: Float32Array | QuantizedSkillVector,
+): number {
+  if (vector instanceof Float32Array) return cosineSimilarity(query, vector);
+  if (query.length !== vector.values.length) {
+    throw new Error(
+      `Cannot compare vectors with dimensions ${query.length} and ${vector.values.length}`,
+    );
+  }
+  let dot = 0;
+  let queryNorm = 0;
+  for (let index = 0; index < query.length; index++) {
+    const value = Number(query[index]);
+    dot += value * (vector.values[index] ?? 0);
+    queryNorm += value * value;
+  }
+  if (queryNorm === 0 || vector.norm === 0) return 0;
+  return (dot * vector.scale) / (Math.sqrt(queryNorm) * vector.norm);
 }
 
 function adapterMetadata(index: SkillsIndex): SkillVectorIndexMetadata {
@@ -727,7 +772,7 @@ function toIndexWriteRequest(index: SkillsIndex): SkillIndexWriteRequest {
         documentHash: entry.documentHash,
         chunk: chunkIndex,
         source: chunk.source,
-        embedding: chunk.embedding,
+        embedding: materializeVector(chunk.embedding),
       })),
     ),
   };
@@ -789,25 +834,212 @@ function normalizeVector(input: ArrayLike<number>): Float32Array {
   return Float32Array.from(input, (value) => Number(value) * scale);
 }
 
-function serializeEntry(entry: SkillsIndexEntry): unknown {
-  return {
-    kind: entry.kind,
+interface V3ChunkRecord {
+  readonly source: SkillsIndexChunkSource;
+  readonly offset: number;
+  readonly scale: number;
+  readonly norm: number;
+}
+
+interface V3EntryRecord {
+  readonly kind: 'skill';
+  readonly name: string;
+  readonly description: string;
+  readonly documentHash: string;
+  readonly chunks: readonly V3ChunkRecord[];
+}
+
+function writeV3IndexAtomically(file: string, index: SkillsIndex): void {
+  mkdirSync(dirname(file), { recursive: true });
+  if (!index.metadata.indexed) {
+    writeJsonAtomically(file, {
+      metadata: { ...index.metadata, version: SKILLS_INDEX_VERSION },
+      entries: [],
+    });
+    return;
+  }
+  const dimensions = index.metadata.dimensions;
+  if (!dimensions) throw new Error('Indexed skills metadata is missing dimensions');
+  const vectorFile = `${file}.vectors.bin`;
+  const vectorTemporary = `${vectorFile}.${process.pid}.tmp`;
+  const chunks: Buffer[] = [];
+  let offset = 0;
+  const entries: V3EntryRecord[] = index.entries.map((entry) => ({
+    kind: 'skill',
     name: entry.name,
     description: entry.description,
     documentHash: entry.documentHash,
-    chunks: entry.chunks.map((chunk) => ({
-      source: chunk.source,
-      vector: encodeVector(chunk.embedding),
-    })),
+    chunks: entry.chunks.map((chunk) => {
+      const quantized = quantizeVector(chunk.embedding);
+      if (quantized.values.length !== dimensions) {
+        throw new Error(
+          `Skill '${entry.name}' vector has ${quantized.values.length} dimensions; expected ${dimensions}`,
+        );
+      }
+      const bytes = Buffer.from(
+        quantized.values.buffer,
+        quantized.values.byteOffset,
+        quantized.values.byteLength,
+      );
+      chunks.push(bytes);
+      const record = {
+        source: chunk.source,
+        offset,
+        scale: quantized.scale,
+        norm: quantized.norm,
+      };
+      offset += bytes.length;
+      return record;
+    }),
+  }));
+  const vectors = Buffer.concat(chunks);
+  const metadata: SkillsIndexMetadata = {
+    ...index.metadata,
+    version: SKILLS_INDEX_VERSION,
+    vectorEncoding: SKILLS_INDEX_VECTOR_ENCODING,
+    vectorFile: basename(vectorFile),
+    vectorHash: hashBytes(vectors),
+    vectorBytes: vectors.length,
   };
+  try {
+    writeFileSync(vectorTemporary, vectors);
+    renameSync(vectorTemporary, vectorFile);
+    writeJsonAtomically(file, { metadata, entries });
+  } catch (error) {
+    try {
+      unlinkSync(vectorTemporary);
+    } catch {
+      // The temporary sidecar may already have been published.
+    }
+    throw error;
+  }
 }
 
-function encodeVector(vector: Float32Array): string {
-  const bytes = Buffer.allocUnsafe(vector.length * Float32Array.BYTES_PER_ELEMENT);
-  for (let index = 0; index < vector.length; index++) {
-    bytes.writeFloatLE(vector[index] ?? 0, index * Float32Array.BYTES_PER_ELEMENT);
+function quantizeVector(vector: Float32Array | QuantizedSkillVector): QuantizedSkillVector {
+  if (!(vector instanceof Float32Array)) return vector;
+  let maximum = 0;
+  for (const value of vector) {
+    maximum = Math.max(maximum, Math.abs(value));
   }
-  return bytes.toString('base64');
+  if (maximum === 0) throw new Error('Cannot quantize a zero vector');
+  const scale = maximum / 127;
+  const values = Int8Array.from(vector, (value) =>
+    Math.max(-127, Math.min(127, Math.round(value / scale))),
+  );
+  let quantizedNormSquared = 0;
+  for (const value of values) quantizedNormSquared += (value * scale) ** 2;
+  return { values, scale, norm: Math.sqrt(quantizedNormSquared) };
+}
+
+function parseV3Index(
+  value: { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown },
+  file: string,
+): SkillsIndex {
+  const metadata = parseMetadata(JSON.stringify(value.metadata), file, SKILLS_INDEX_VERSION);
+  if (!Array.isArray(value.entries)) throw new Error(`Invalid skills index entries: ${file}`);
+  if (!metadata.indexed) {
+    if (value.entries.length !== 0)
+      throw new Error(`Non-indexed skills artifact contains entries: ${file}`);
+    return { file, metadata, entries: [] };
+  }
+  if (!metadata.vectorFile || !metadata.vectorHash || metadata.vectorBytes == null) {
+    throw new Error(`Indexed skills metadata is missing vector sidecar information: ${file}`);
+  }
+  const sidecar = resolve(dirname(file), metadata.vectorFile);
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(sidecar);
+  } catch (error) {
+    throw new Error(`Skills index vector sidecar is missing: ${sidecar}`, { cause: error });
+  }
+  if (statSync(sidecar).size !== metadata.vectorBytes || bytes.length !== metadata.vectorBytes) {
+    throw new Error(`Skills index vector sidecar is truncated: ${sidecar}`);
+  }
+  if (hashBytes(bytes) !== metadata.vectorHash) {
+    throw new Error(`Skills index vector sidecar hash mismatch: ${sidecar}`);
+  }
+  const dimensions = metadata.dimensions ?? 0;
+  if (bytes.length !== metadata.chunkCount * dimensions) {
+    throw new Error(`Skills index vector sidecar dimension mismatch: ${sidecar}`);
+  }
+  const names = new Set<string>();
+  let chunkCount = 0;
+  const entries = value.entries.map((raw, entryIndex): SkillsIndexEntry => {
+    const entry = raw as Partial<V3EntryRecord>;
+    if (
+      entry.kind !== 'skill' ||
+      typeof entry.name !== 'string' ||
+      typeof entry.description !== 'string' ||
+      typeof entry.documentHash !== 'string' ||
+      !Array.isArray(entry.chunks)
+    ) {
+      throw new Error(`Invalid skill index entry ${entryIndex} in ${file}`);
+    }
+    if (names.has(entry.name)) throw new Error(`Duplicate skill '${entry.name}' in ${file}`);
+    names.add(entry.name);
+    const chunks = entry.chunks.map((rawChunk): SkillsIndexChunk => {
+      const chunk = rawChunk as Partial<V3ChunkRecord>;
+      if (
+        chunk.source !== 'document' ||
+        !isNonNegativeInteger(chunk.offset) ||
+        typeof chunk.scale !== 'number' ||
+        !Number.isFinite(chunk.scale) ||
+        chunk.scale <= 0 ||
+        typeof chunk.norm !== 'number' ||
+        !Number.isFinite(chunk.norm) ||
+        chunk.norm <= 0 ||
+        chunk.offset + dimensions > bytes.length
+      ) {
+        throw new Error(`Invalid skill vector reference for '${entry.name}' in ${file}`);
+      }
+      chunkCount++;
+      return {
+        source: chunk.source,
+        embedding: {
+          values: new Int8Array(bytes.buffer, bytes.byteOffset + chunk.offset, dimensions),
+          scale: chunk.scale,
+          norm: chunk.norm,
+        },
+      };
+    });
+    if (chunks.length === 0) throw new Error(`Skill '${entry.name}' has no chunks`);
+    return {
+      kind: 'skill',
+      name: entry.name,
+      description: entry.description,
+      documentHash: entry.documentHash,
+      chunks,
+    };
+  });
+  if (entries.length !== metadata.skillCount || chunkCount !== metadata.chunkCount) {
+    throw new Error(`Skills index manifest counts do not match metadata: ${file}`);
+  }
+  return { file, metadata, entries };
+}
+
+function hashBytes(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function writeJsonAtomically(file: string, value: unknown): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(value)}\n`);
+    renameSync(temporary, file);
+  } catch (error) {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // The temporary file may not have been created.
+    }
+    throw error;
+  }
+}
+
+function materializeVector(vector: Float32Array | QuantizedSkillVector): Float32Array {
+  if (vector instanceof Float32Array) return vector;
+  return Float32Array.from(vector.values, (value) => value * vector.scale);
 }
 
 function decodeVector(
@@ -837,26 +1069,14 @@ function decodeVector(
   return vector;
 }
 
-function writeJsonLinesAtomically(file: string, records: readonly unknown[]): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
-  try {
-    writeFileSync(temporary, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
-    renameSync(temporary, file);
-  } catch (error) {
-    try {
-      unlinkSync(temporary);
-    } catch {
-      // The temporary file may not have been created.
-    }
-    throw error;
-  }
-}
-
-function parseMetadata(line: string, file: string): SkillsIndexMetadata {
+function parseMetadata(
+  line: string,
+  file: string,
+  expectedVersion: 2 | typeof SKILLS_INDEX_VERSION,
+): SkillsIndexMetadata {
   const value = parseLine(line, 1, file) as Partial<SkillsIndexMetadata>;
-  if (value.kind !== SKILLS_INDEX_FORMAT || value.version !== SKILLS_INDEX_VERSION) {
-    throw new Error(`Unsupported skills index format or version: ${file}`);
+  if (value.kind !== SKILLS_INDEX_FORMAT || value.version !== expectedVersion) {
+    throw unsupportedIndexError(file);
   }
   if (
     typeof value.indexed !== 'boolean' ||
@@ -868,7 +1088,8 @@ function parseMetadata(line: string, file: string): SkillsIndexMetadata {
     !isNonNegativeInteger(value.chunkOverlapTokens) ||
     value.chunkOverlapTokens >= value.chunkTokens ||
     value.scoring !== SKILLS_INDEX_SCORING ||
-    value.vectorEncoding !== SKILLS_INDEX_VECTOR_ENCODING ||
+    value.vectorEncoding !==
+      (expectedVersion === 2 ? SKILLS_INDEX_V2_VECTOR_ENCODING : SKILLS_INDEX_VECTOR_ENCODING) ||
     typeof value.catalogHash !== 'string'
   ) {
     throw new Error(`Invalid skills index metadata: ${file}`);
@@ -887,6 +1108,12 @@ function parseMetadata(line: string, file: string): SkillsIndexMetadata {
     throw new Error(`Non-indexed skills metadata declares chunks: ${file}`);
   }
   return value as SkillsIndexMetadata;
+}
+
+function unsupportedIndexError(file: string): Error {
+  return new Error(
+    `Unsupported skills index format or version: ${file}. Run: di-skills-index migrate --input "${file}" --output "${file}"`,
+  );
 }
 
 function parseEntry(
