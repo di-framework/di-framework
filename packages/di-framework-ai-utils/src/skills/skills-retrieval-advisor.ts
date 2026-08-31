@@ -12,6 +12,7 @@ import {
 } from '@di-framework/ai';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import {
+  runSkillAdapterOperation,
   SkillAdapterError,
   type SkillCatalogStore,
   type SkillChunkMatch,
@@ -45,6 +46,7 @@ export interface SkillsRetrievalAdvisorOptions {
   readonly catalogStore?: SkillCatalogStore;
   readonly vectorSearch?: SkillVectorSearch;
   readonly namespace?: string;
+  readonly timeoutMs?: number;
   readonly embedder?: SkillEmbedder;
   readonly limit?: number;
   readonly minScore?: number;
@@ -70,6 +72,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   private readonly catalogStore?: SkillCatalogStore;
   private readonly vectorSearch: SkillVectorSearch;
   private readonly namespace?: string;
+  private readonly timeoutMs?: number;
   private readonly embedder?: SkillEmbedder;
   private readonly limit?: number;
   private readonly minScore?: number;
@@ -99,6 +102,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     this.vectorSearch =
       options.vectorSearch ?? new LocalSkillVectorSearch(this.index as SkillsIndex);
     this.namespace = options.namespace;
+    this.timeoutMs = options.timeoutMs;
     this.embedder = options.embedder;
     this.limit = options.limit;
     this.minScore = options.minScore;
@@ -118,6 +122,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
             descriptors,
             catalogStore: this.catalogStore,
             namespace: this.namespace,
+            timeoutMs: this.timeoutMs,
             toolName: this.toolName,
           });
         }
@@ -219,9 +224,18 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   }
 
   private async searchAdapter(task: string): Promise<readonly SkillsIndexMatch[]> {
-    const metadata = await this.vectorSearch.metadata({ namespace: this.namespace });
-    const catalogVersion = this.catalogStore
-      ? await this.catalogStore.version({ namespace: this.namespace })
+    const metadata = await runSkillAdapterOperation(
+      'Loading skill vector metadata',
+      () => this.vectorSearch.metadata({ namespace: this.namespace }),
+      this.timeoutMs,
+    );
+    const catalogStore = this.catalogStore;
+    const catalogVersion = catalogStore
+      ? await runSkillAdapterOperation(
+          'Loading skill catalog version',
+          () => catalogStore.version({ namespace: this.namespace }),
+          this.timeoutMs,
+        )
       : this.index?.metadata.catalogHash;
     if (catalogVersion == null) {
       throw new SkillAdapterError('STALE_CATALOG', 'Catalog version is unavailable');
@@ -229,18 +243,27 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     const embedder =
       this.embedder ??
       new TransformersJsSkillEmbedder({ model: metadata.model, revision: metadata.revision });
-    const [query] = await embedder.embed([task], { purpose: 'query' });
+    const [query] = await runSkillAdapterOperation(
+      'Embedding skill query',
+      () => embedder.embed([task], { purpose: 'query' }),
+      this.timeoutMs,
+    );
     if (!query) throw new SkillAdapterError('INVALID_RESPONSE', 'Embedder omitted query vector');
     const limit = this.limit ?? this.index?.metadata.retrievalLimit ?? 10;
-    const chunks = await this.vectorSearch.query(query, {
-      namespace: this.namespace,
-      catalogVersion,
-      model: embedder.model,
-      revision: embedder.revision,
-      embedderId: embedder.id,
-      limit: Math.max(limit * 8, limit),
-      minScore: this.minScore,
-    });
+    const chunks = await runSkillAdapterOperation(
+      'Searching skill vectors',
+      () =>
+        this.vectorSearch.query(query, {
+          namespace: this.namespace,
+          catalogVersion,
+          model: embedder.model,
+          revision: embedder.revision,
+          embedderId: embedder.id,
+          limit: Math.max(limit * 8, limit),
+          minScore: this.minScore,
+        }),
+      this.timeoutMs,
+    );
     return aggregateSkillChunkMatches(
       chunks,
       limit,

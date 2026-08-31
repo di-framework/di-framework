@@ -20,6 +20,7 @@ import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import { resolveSkillPackageDirectories } from './resolve-packages.ts';
 import {
+  runSkillAdapterOperation,
   SkillAdapterError,
   type SkillCatalogStore,
   type SkillDescriptor,
@@ -37,7 +38,7 @@ import {
   DEFAULT_SKILL_TOOL_NAME,
   skillsTool,
 } from './skills-tool.ts';
-import { validateSkill } from './validate-skill.ts';
+import { validateSkill, validateSkillDescription, validateSkillName } from './validate-skill.ts';
 
 export interface SkillsToolboxWebOptions {
   readonly fetch?: boolean;
@@ -64,6 +65,7 @@ export interface SkillsSemanticDiscoveryOptions {
   readonly catalogStore?: SkillCatalogStore;
   readonly vectorSearch?: SkillVectorSearch;
   readonly namespace?: string;
+  readonly timeoutMs?: number;
 }
 
 export interface SkillsToolboxOptions extends SkillsToolOptions {
@@ -164,20 +166,43 @@ export async function createSkillsToolboxAsync(
 ): Promise<SkillsToolbox> {
   const discovery = semanticDiscoveryOptions(options);
   if (!discovery.catalogStore) return createSkillsToolbox(options);
-  const health = await discovery.catalogStore.health({ namespace: discovery.namespace });
+  const catalogStore = discovery.catalogStore;
+  const health = await runSkillAdapterOperation(
+    'Checking skill catalog health',
+    () => catalogStore.health({ namespace: discovery.namespace }),
+    discovery.timeoutMs,
+  );
   if (health.status !== 'ready') {
     throw new SkillAdapterError('NOT_READY', health.message ?? 'Skill catalog is not ready');
   }
   if (discovery.vectorSearch) {
-    const vectorHealth = await discovery.vectorSearch.health({ namespace: discovery.namespace });
+    const vectorSearch = discovery.vectorSearch;
+    const vectorHealth = await runSkillAdapterOperation(
+      'Checking skill vector index health',
+      () => vectorSearch.health({ namespace: discovery.namespace }),
+      discovery.timeoutMs,
+    );
     if (vectorHealth.status !== 'ready') {
       throw new SkillAdapterError('NOT_READY', vectorHealth.message ?? 'Skill index is not ready');
     }
   }
-  const descriptors = await discovery.catalogStore.list({ namespace: discovery.namespace });
+  const descriptors = await runSkillAdapterOperation(
+    'Listing skill catalog',
+    () => catalogStore.list({ namespace: discovery.namespace }),
+    discovery.timeoutMs,
+  );
   if (descriptors.length === 0) throw new Error('At least one skill must be configured');
+  for (const descriptor of descriptors) {
+    const error =
+      validateSkillName(descriptor.name) ?? validateSkillDescription(descriptor.description);
+    if (error)
+      throw new SkillAdapterError(
+        'INVALID_RESPONSE',
+        `Invalid descriptor '${descriptor.name}': ${error}`,
+      );
+  }
   return assembleSkillsToolbox(options, [], {
-    store: discovery.catalogStore,
+    store: catalogStore,
     descriptors,
     namespace: discovery.namespace,
   });
@@ -224,6 +249,7 @@ function assembleSkillsToolbox(
             descriptors: selected,
             catalogStore: remote.store,
             namespace: remote.namespace,
+            timeoutMs: semanticDiscoveryOptions(options).timeoutMs,
             onActivate: (skill) => {
               runtime.activate(skill);
               options.onActivate?.(skill);
@@ -347,6 +373,7 @@ function createRetrievalAdvisor(
     catalogStore: discovery.catalogStore,
     vectorSearch: discovery.vectorSearch,
     namespace: discovery.namespace,
+    timeoutMs: discovery.timeoutMs,
     embedder: discovery.embedder,
     limit: discovery.limit,
     minScore: discovery.minScore,

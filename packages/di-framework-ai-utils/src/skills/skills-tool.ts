@@ -2,6 +2,7 @@ import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import { loadSkillFile, loadSkillsDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import {
+  runSkillAdapterOperation,
   SkillAdapterError,
   type SkillCatalogStore,
   type SkillDescriptor,
@@ -50,6 +51,7 @@ export interface AsyncSkillsToolOptions
   readonly descriptors: readonly SkillDescriptor[];
   readonly catalogStore: SkillCatalogStore;
   readonly namespace?: string;
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -163,10 +165,15 @@ export function asyncSkillsTool(options: AsyncSkillsToolOptions): ToolCallback {
       const command = input?.command?.trim() ?? '';
       const descriptor = command ? descriptors.get(command) : undefined;
       if (!descriptor) return formatSkillNotFound(command);
-      const skill = await options.catalogStore.load(command, {
-        namespace: options.namespace,
-        expectedVersion: descriptor.version ?? descriptor.sourceHash,
-      });
+      const skill = await runSkillAdapterOperation(
+        `Loading skill '${command}'`,
+        () =>
+          options.catalogStore.load(command, {
+            namespace: options.namespace,
+            expectedVersion: descriptor.version ?? descriptor.sourceHash,
+          }),
+        options.timeoutMs,
+      );
       if (!skill) {
         throw new SkillAdapterError('MISSING_BODY', `Activated skill '${command}' has no body`);
       }

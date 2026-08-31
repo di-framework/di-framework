@@ -177,6 +177,12 @@ The default indexer uses the optional `@huggingface/transformers` peer locally. 
 
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 
+Platform runtimes can independently supply `catalogStore`, `vectorSearch`, and a build-time
+`writer`. Remote catalogs use `buildAsync()` / `createSkillsAgentAsync()` so discovery lists only
+descriptors and the selected body is fetched after activation. See the
+[skill adapter authoring guide](../../docs/skill-adapter-authoring.md) for contracts, readiness,
+failure behavior, contract tests, and performance reporting.
+
 ## Skill-only and MCP
 
 ```ts

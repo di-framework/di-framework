@@ -5,6 +5,7 @@ import {
   agentSkill,
   aggregateSkillChunkMatches,
   asyncSkillsTool,
+  benchmarkSkillVectorSearch,
   buildSkillsIndex,
   createSkillsAgentAsync,
   createSkillsAgentBundleAsync,
@@ -15,6 +16,7 @@ import {
   LocalSkillCatalogStore,
   LocalSkillIndexWriter,
   LocalSkillVectorSearch,
+  runSkillAdapterOperation,
   SkillAdapterError,
   SkillsAgent,
   SkillsIndex,
@@ -286,6 +288,19 @@ describe('asynchronous skill activation', () => {
     expect(skillTool?.toolDefinition.description).toContain('<name>alpha</name>');
     expect(skillTool?.toolDefinition.description).not.toContain('<name>beta</name>');
     expect(skillTool?.toolDefinition.description).not.toContain('PRIVATE BODY');
+    const availableCatalog = skillTool?.toolDefinition.description.match(
+      /<available_skills>\n<skill>[\s\S]*<\/available_skills>/,
+    )?.[0];
+    expect(availableCatalog).toMatchInlineSnapshot(`
+      "<available_skills>
+      <skill>
+        <name>alpha</name>
+        <description>Handle alpha tasks</description>
+      </skill>
+      </available_skills>"
+    `);
+    expect(JSON.stringify(selected?.prompt)).not.toContain('index-v1');
+    expect(JSON.stringify(selected?.prompt)).not.toContain('alpha-hash');
     expect(await skillTool?.call(JSON.stringify({ command: 'alpha' }))).toContain(
       'ALPHA PRIVATE BODY',
     );
@@ -361,6 +376,114 @@ describe('asynchronous skill activation', () => {
         .todos(false)
         .build(),
     ).toBeDefined();
+  });
+
+  test('missing bodies, timeouts, and unavailable adapters fail closed', async () => {
+    const descriptor = { name: 'missing', description: 'Missing body', sourceHash: 'hash' };
+    const tool = asyncSkillsTool({
+      descriptors: [descriptor],
+      catalogStore: new InMemorySkillCatalogStore([]),
+    });
+    await expect(tool.call(JSON.stringify({ command: 'missing' }))).rejects.toThrow(/no body/);
+    await expect(
+      runSkillAdapterOperation('Slow catalog', () => new Promise(() => {}), 1),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' });
+    await expect(new InMemorySkillVectorSearch().query([1])).rejects.toMatchObject({
+      code: 'NOT_READY',
+    });
+  });
+
+  test('async agent factories validate adapter readiness', async () => {
+    const skill = agentSkill({ name: 'remote', description: 'Remote tasks', content: 'body' });
+    const catalogStore = new InMemorySkillCatalogStore(
+      [
+        {
+          descriptor: {
+            name: skill.name,
+            description: skill.description,
+            sourceHash: 'remote-hash',
+          },
+          skill,
+        },
+      ],
+      { '': 'catalog' },
+    );
+    const vectorSearch = new InMemorySkillVectorSearch({
+      metadata: {
+        indexVersion: 'remote-index',
+        catalogVersion: 'catalog',
+        dimensions: 2,
+        model: embedder.model,
+        revision: embedder.revision,
+        embedderId: embedder.id,
+        scoring: 'cosine',
+      },
+      vectors: [
+        {
+          name: 'remote',
+          description: 'Remote tasks',
+          chunk: 0,
+          source: 'document',
+          embedding: [0, 1],
+        },
+      ],
+    });
+    const options = {
+      workspace: process.cwd(),
+      directories: [],
+      semanticDiscovery: { catalogStore, vectorSearch, embedder, timeoutMs: 50 },
+      todos: false,
+      list: false,
+      glob: false,
+      grep: false,
+    } as const;
+    const chatModel = new ScriptedChatModel([]);
+    await expect(createSkillsAgentAsync({ ...options, chatModel })).resolves.toBeDefined();
+    await expect(createSkillsAgentBundleAsync({ ...options, chatModel })).resolves.toMatchObject({
+      toolbox: { descriptors: [expect.anything()] },
+    });
+    await expect(SkillsAgent.ofAsync({ ...options, chatModel })).resolves.toBeDefined();
+    const builder = SkillsAgent.builder()
+      .chatModel(chatModel)
+      .workspace(process.cwd())
+      .noDefaultDirectories()
+      .semanticDiscovery(options.semanticDiscovery)
+      .todos(false)
+      .list(false)
+      .glob(false)
+      .grep(false);
+    await expect(builder.buildAsync()).resolves.toBeDefined();
+    await expect(builder.buildBundleAsync()).resolves.toMatchObject({
+      toolbox: { descriptors: [expect.anything()] },
+    });
+    await expect(
+      createSkillsToolboxAsync({
+        ...options,
+        semanticDiscovery: { ...options.semanticDiscovery, vectorSearch: new InMemorySkillVectorSearch() },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_READY' });
+
+    const invalidSkill = agentSkill({
+      name: 'Invalid Name',
+      description: 'Invalid descriptor',
+      content: 'body',
+    });
+    const invalidCatalog = new InMemorySkillCatalogStore([
+      {
+        descriptor: {
+          name: invalidSkill.name,
+          description: invalidSkill.description,
+          sourceHash: 'invalid',
+        },
+        skill: invalidSkill,
+      },
+    ]);
+    await expect(
+      createSkillsToolboxAsync({
+        ...options,
+        semanticDiscovery: { ...options.semanticDiscovery, catalogStore: invalidCatalog },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
 });
 
@@ -554,5 +677,97 @@ describe('local adapters', () => {
         new Set(skills.map((skill) => skill.name)),
       ),
     ).toThrow(/unknown skill/);
+  });
+
+  test('performance reporter accepts quality results from the evaluation corpus', async () => {
+    const search = new InMemorySkillVectorSearch({
+      metadata: {
+        indexVersion: 'benchmark',
+        catalogVersion: 'catalog',
+        dimensions: 2,
+        scoring: 'cosine',
+      },
+      vectors: [
+        {
+          name: 'alpha',
+          description: 'Alpha',
+          chunk: 0,
+          source: 'document',
+          embedding: [1, 0],
+        },
+      ],
+    });
+    let clock = 0;
+    const report = await benchmarkSkillVectorSearch({
+      createSearch: () => search,
+      cases: [{ vector: [1, 0], options: { limit: 1 } }],
+      warmupTrials: 0,
+      measuredTrials: 2,
+      now: () => clock++,
+      quality: {
+        positiveTrials: 30,
+        noSkillTrials: 2,
+        recallAt1: 1,
+        recallAt10: 1,
+        meanReciprocalRank: 1,
+        abstentionRate: 1,
+        noSkillFalsePositiveRate: 0,
+      },
+    });
+    expect(report).toMatchObject({
+      schemaVersion: 1,
+      measuredTrials: 2,
+      coldInitializationMs: 1,
+      vectorSearchMs: { p50: 1, p95: 1, mean: 1 },
+      quality: { recallAt1: 1, recallAt10: 1, meanReciprocalRank: 1 },
+    });
+    const evaluationQuality = await benchmarkSkillVectorSearch({
+      createSearch: () => search,
+      cases: [{ vector: [1, 0] }],
+      warmupTrials: 0,
+      measuredTrials: 1,
+      now: () => clock++,
+      quality: {
+        schemaVersion: 1,
+        suite: 'awesome-copilot semantic retrieval baseline',
+        corpus: { id: 'github/awesome-copilot', revision: 'pinned', skillCount: 408 },
+        trialsPerCase: 1,
+        caseCount: 30,
+        metrics: {
+          positiveTrials: 30,
+          noSkillTrials: 0,
+          recallAt1: 29 / 30,
+          recallAt10: 1,
+          meanReciprocalRank: 0.9708,
+          abstentionRate: 0,
+          noSkillFalsePositiveRate: 0,
+        },
+      },
+    });
+    expect(evaluationQuality.quality).toMatchObject({
+      suite: 'awesome-copilot semantic retrieval baseline',
+      corpus: { revision: 'pinned', skillCount: 408 },
+      metrics: { positiveTrials: 30, recallAt10: 1, noSkillFalsePositiveRate: 0 },
+    });
+    expect(
+      (
+        await benchmarkSkillVectorSearch({
+          createSearch: () => search,
+          cases: [{ vector: [1, 0] }],
+          measuredTrials: 1,
+          now: () => clock++,
+        })
+      ).measuredTrials,
+    ).toBe(1);
+    await expect(
+      benchmarkSkillVectorSearch({ createSearch: () => search, cases: [], warmupTrials: 0 }),
+    ).rejects.toThrow(/benchmark case/);
+    await expect(
+      benchmarkSkillVectorSearch({
+        createSearch: () => search,
+        cases: [{ vector: [1, 0] }],
+        warmupTrials: -1,
+      }),
+    ).rejects.toThrow(/non-negative/);
   });
 });
