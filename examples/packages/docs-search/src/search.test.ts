@@ -179,6 +179,12 @@ describe('DocumentRepository.replaceCorpus', () => {
     expect(all.map((p) => p.id).sort()).toEqual(['docs_overview', 'docs_overview__v4.1']);
     expect(all.find((p) => p.id === 'docs_overview')?.content).toBe('rewritten overview');
     expect(all.find((p) => p.id === 'docs_overview__v4.1')?.content).toBe('old overview');
+
+    const serialized = await repo.toCorpusDocs();
+    expect(serialized.find((d) => d.objectID === 'docs_overview')?.version).toBe('latest');
+    expect(serialized.find((d) => d.objectID === 'docs_overview__v4.1')?.content).toBe(
+      'old overview',
+    );
   });
 });
 

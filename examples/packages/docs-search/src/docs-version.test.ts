@@ -16,6 +16,7 @@ describe('docs version tokens', () => {
       'latest',
     );
     expect(parseVersionFromUrl('https://docs.di-framework.dev/overview.html')).toBeUndefined();
+    expect(parseVersionFromUrl('/v4.2/overview.html')).toBe('v4.2');
     expect(
       normalizeDocsVersion(undefined, 'https://docs.di-framework.dev/v4.2/repositories.html'),
     ).toBe('v4.2');
