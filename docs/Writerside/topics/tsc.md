@@ -4,7 +4,7 @@
 
 Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit, function bodies get `typeof` / shape guards synthesized from parameter types.
 
-Function declarations and block-bodied methods are supported with required identifier params and primitive/plain-object types.
+Function declarations, methods, and constructors are supported with required identifier params and primitive/plain-object types.
 
 `di-framework init` wires this by default (`@di-framework/tsc` and `plugins` in `tsconfig`; `ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Use the steps below for an existing app.
 
@@ -69,7 +69,7 @@ function greet(user) {
 ## How it works
 
 1. `ttsc` loads the program (parse + typecheck).
-2. The plugin walks function declarations and block-bodied methods.
+2. The plugin walks function declarations, methods, and constructors with bodies.
 3. For each required parameter, it reads the type (syntax keywords, else checker).
 4. It synthesizes `if` / `throw` AST nodes and prepends them to the body.
 5. Emit prints JavaScript from the mutated AST.
@@ -78,7 +78,7 @@ function greet(user) {
 
 Skipped today:
 
-- constructors, arrow functions, function expressions
+- arrow functions, function expressions
 - optional / default / rest / destructured parameters
 - unions, arrays, tuples, classes, branded types, typia-style tags
 

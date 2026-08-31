@@ -12,7 +12,9 @@ export function add(a: number, b: number): number {
 }
 
 export class Greeter {
+  constructor(private readonly prefix: string) {}
+
   greet(user: User): string {
-    return `hello ${user.name}`;
+    return `${this.prefix} ${user.name}`;
   }
 }
