@@ -38,6 +38,7 @@
     "**/dist",
     "**/*.test.ts",
     "packages/deno-http/**/*",
-    "packages/deno-sandboxes/**/*"
+    "packages/deno-sandboxes/**/*",
+    "packages/ai-skills/fixtures/**/*"
   ]
 }
