@@ -257,11 +257,20 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 		if p == nil || p.Name() == nil || p.Name().Kind != shimast.KindIdentifier {
 			continue
 		}
-		if p.DotDotDotToken != nil || p.QuestionToken != nil || p.Initializer != nil {
+		if p.DotDotDotToken != nil {
 			continue
 		}
 		name := p.Name().Text()
-		checks = append(checks, checksForParam(factory, checker, param, name)...)
+		paramChecks := checksForParam(factory, checker, param, name)
+		if len(paramChecks) == 0 {
+			continue
+		}
+		if p.QuestionToken != nil || p.Initializer != nil {
+			present := binary(factory, pathExpr(factory, name), shimast.KindExclamationEqualsEqualsToken, factory.NewIdentifier("undefined"))
+			checks = append(checks, factory.NewIfStatement(present, factory.NewBlock(factory.NewNodeList(paramChecks), true), nil))
+			continue
+		}
+		checks = append(checks, paramChecks...)
 	}
 	return checks
 }

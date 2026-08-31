@@ -60,3 +60,7 @@ export function arrayValues(numbers: number[], users: ReadonlyArray<User>) {
 export function tupleValues(pair: [number, string], nested: [string, User], optional: [number, string?]) {
   return { pair, nested, optional };
 }
+
+export function optionalValues(required: number, label?: string, count: number = 1) {
+  return { required, label, count };
+}

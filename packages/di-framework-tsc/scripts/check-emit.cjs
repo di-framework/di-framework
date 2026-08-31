@@ -47,6 +47,9 @@ const required = [
   'typeof nested[1].id !== "number"',
   'optional.length < 1',
   'optional.length > 2',
+  'if (label !== undefined)',
+  'typeof label !== "string"',
+  'if (count !== undefined)',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));

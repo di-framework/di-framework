@@ -78,13 +78,14 @@ function greet(user) {
 
 Skipped today:
 
-- optional / default / rest / destructured parameters
+- rest / destructured parameters
 - variadic tuples, classes, branded types, typia-style tags
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
 
 Arrays and `ReadonlyArray<T>` are checked with `Array.isArray` and a full element scan.
 Fixed tuples enforce their allowed length and validate each position; optional tails are presence-gated.
+Optional and defaulted parameters are validated only when their runtime value is not `undefined`; `null` is still checked against the declared type.
 
 ## Monorepo
 
