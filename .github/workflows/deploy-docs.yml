@@ -31,6 +31,7 @@ permissions:
   contents: write # attach docs-vX.Y.zip to the GitHub Release on v* tags
   pages: write
   id-token: write # GitHub OIDC → worker mints reindex token (no Cloudflare API secrets)
+  actions: read # download coverage-badges artifact from the Test workflow
 
 concurrency:
   group: 'pages'
@@ -194,6 +195,74 @@ jobs:
         run: |
           chmod +x .github/scripts/assemble-docs-site.sh
           .github/scripts/assemble-docs-site.sh dir site
+
+      # Shields endpoint badges: Test uploads coverage-badges/*.json; serve at
+      # https://docs.di-framework.dev/coverage/{slug}.json
+      - name: Resolve Test run with coverage badge JSON
+        id: badge-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          find_run() {
+            local sha="$1"
+            gh run list --workflow=ci.yml --commit "$sha" --status success --limit 5 \
+              --json databaseId,conclusion \
+              --jq '[.[] | select(.conclusion == "success")][0].databaseId // empty'
+          }
+          RUN_ID="$(find_run "$GITHUB_SHA" || true)"
+          # Writerside build usually outlasts Test; wait briefly if still in flight.
+          if [[ -z "$RUN_ID" ]]; then
+            for i in 1 2 3 4 5 6 7 8; do
+              IN_FLIGHT="$(
+                gh run list --workflow=ci.yml --commit "$GITHUB_SHA" --limit 5 \
+                  --json databaseId,status,conclusion \
+                  --jq '[.[] | select(.status != "completed")][0].databaseId // empty'
+              )"
+              if [[ -z "$IN_FLIGHT" ]]; then
+                RUN_ID="$(find_run "$GITHUB_SHA" || true)"
+                break
+              fi
+              echo "Test run $IN_FLIGHT still running (attempt $i); waiting…"
+              sleep 30
+              RUN_ID="$(find_run "$GITHUB_SHA" || true)"
+              [[ -n "$RUN_ID" ]] && break
+            done
+          fi
+          if [[ -z "$RUN_ID" ]]; then
+            RUN_ID="$(
+              gh run list --workflow=ci.yml --branch main --status success --limit 1 \
+                --json databaseId --jq '.[0].databaseId // empty'
+            )"
+            echo "::warning::No successful Test run for $GITHUB_SHA; using latest main run $RUN_ID"
+          fi
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::warning::No Test run found; coverage badges will be omitted from this deploy"
+            echo "run_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Using coverage-badges from Test run $RUN_ID"
+
+      - name: Download coverage badge JSON
+        if: steps.badge-run.outputs.run_id != ''
+        continue-on-error: true
+        id: download-badges
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-badges
+          path: coverage-badges
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.badge-run.outputs.run_id }}
+
+      - name: Publish coverage badges into Pages tree
+        if: steps.badge-run.outputs.run_id != '' && steps.download-badges.outcome == 'success'
+        run: |
+          set -euo pipefail
+          mkdir -p site/coverage
+          cp -v coverage-badges/*.json site/coverage/
+          ls -la site/coverage
 
       - name: Attach version snapshot to GitHub Release
         if: github.ref_type == 'tag' && steps.site.outputs.snapshot_zip != ''
