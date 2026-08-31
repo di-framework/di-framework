@@ -334,6 +334,29 @@ func stmtsFromCheckerTypeSeen(
 	}
 	flags := t.Flags()
 	switch {
+	case flags&shimchecker.TypeFlagsNull != 0:
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(shimast.KindNullKeyword), "null")}
+	case flags&shimchecker.TypeFlagsUndefined != 0:
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewIdentifier("undefined"), "undefined")}
+	case flags&shimchecker.TypeFlagsStringLiteral != 0:
+		value, ok := t.AsLiteralType().Value().(string)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewStringLiteral(value, shimast.TokenFlagsNone), fmt.Sprintf("%q", value))}
+	case flags&shimchecker.TypeFlagsNumberLiteral != 0:
+		value := fmt.Sprint(t.AsLiteralType().Value())
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewNumericLiteral(value, shimast.TokenFlagsNone), value)}
+	case flags&shimchecker.TypeFlagsBooleanLiteral != 0:
+		value, ok := t.AsLiteralType().Value().(bool)
+		if !ok {
+			return nil
+		}
+		kind, label := shimast.KindFalseKeyword, "false"
+		if value {
+			kind, label = shimast.KindTrueKeyword, "true"
+		}
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(kind), label)}
 	case flags&shimchecker.TypeFlagsString != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "string")}
 	case flags&shimchecker.TypeFlagsNumber != 0:
@@ -378,6 +401,11 @@ func stmtsFromCheckerTypeSeen(
 	default:
 		return nil
 	}
+}
+
+func equalityCheck(factory *shimast.NodeFactory, path string, expected *shimast.Expression, label string) *shimast.Node {
+	cond := binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, expected)
+	return throwIf(factory, cond, "Expected "+path+" to equal "+label)
 }
 
 // pathExpr builds a fresh expression tree for a dotted path (e.g. "user.id").
