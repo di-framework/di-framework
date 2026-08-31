@@ -2,18 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  loadEnvSecrets,
-  parseEnvFile,
-  requireEnv,
-  requireOpenAiApiKey,
-} from '../src/index.ts';
+import { loadEnvSecrets, parseEnvFile, requireEnv, requireOpenAiApiKey } from '../src/index.ts';
 
 describe('examples-shared env helpers', () => {
   test('parseEnvFile strips quotes and ignores comments', () => {
-    expect(
-      parseEnvFile('# comment\nFOO=bar\nQUOTED="from-file"\nSINGLE=\'x\'\nEMPTY=\n'),
-    ).toEqual({
+    expect(parseEnvFile('# comment\nFOO=bar\nQUOTED="from-file"\nSINGLE=\'x\'\nEMPTY=\n')).toEqual({
       FOO: 'bar',
       QUOTED: 'from-file',
       SINGLE: 'x',
