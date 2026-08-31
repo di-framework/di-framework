@@ -64,3 +64,7 @@ export function tupleValues(pair: [number, string], nested: [string, User], opti
 export function optionalValues(required: number, label?: string, count: number = 1) {
   return { required, label, count };
 }
+
+export function sum(...values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
