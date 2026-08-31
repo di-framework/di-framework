@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const fixtureRoot = path.resolve(__dirname, '..', 'fixture');
 const outFile = path.join(fixtureRoot, 'dist', 'greet.js');
+const serviceOutFile = path.join(fixtureRoot, 'dist', 'service.js');
 
 if (!fs.existsSync(outFile)) {
   console.error(`check-emit: missing emit output at ${outFile}`);
@@ -13,6 +14,11 @@ if (!fs.existsSync(outFile)) {
 }
 
 const js = fs.readFileSync(outFile, 'utf8');
+if (!fs.existsSync(serviceOutFile)) {
+  console.error(`check-emit: missing emit output at ${serviceOutFile}`);
+  process.exit(1);
+}
+const serviceJs = fs.readFileSync(serviceOutFile, 'utf8');
 const required = [
   'typeof user !== "object"',
   'Expected user to be an object',
@@ -59,6 +65,16 @@ const required = [
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
+const serviceRequired = [
+  'class ApiService',
+  'typeof config.endpoint !== "string"',
+  'typeof config.retries !== "number"',
+  'typeof id !== "number"',
+  '!Array.isArray(tags)',
+  'Expected mode to match its union type',
+  'const createService = (config) => {',
+];
+missing.push(...serviceRequired.filter((needle) => !serviceJs.includes(needle)));
 if (missing.length > 0) {
   console.error('check-emit: emitted JS is missing injected runtime checks:');
   for (const m of missing) console.error(`  - ${m}`);

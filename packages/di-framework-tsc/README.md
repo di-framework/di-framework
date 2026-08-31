@@ -74,9 +74,13 @@ function greet(user) {
 4. It synthesizes `if` / `throw` AST nodes with typescript-go `NodeFactory` and prepends them to the body.
 5. `EmitAllRaw` prints JavaScript from the mutated AST.
 
+## Supported boundaries and types
+
+The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, sound bounded unions, plain structural objects, arrays/readonly arrays, and fixed tuples with optional tails.
+
 ## Limitations
 
-Skipped today:
+Unsupported paths are skipped as a whole rather than emitting a predicate that can reject valid input. Current intentional gaps are:
 
 - defaults and rest elements nested inside destructuring patterns
 - variadic tuples, classes, branded types, typia-style tags
