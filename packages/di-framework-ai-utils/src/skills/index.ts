@@ -74,6 +74,31 @@ export {
   DEFAULT_SKILL_QUERY_PREFIX,
   TransformersJsSkillEmbedder,
 } from './skill-embedder.ts';
+export type {
+  SemanticSkillDiscoveryDecoratorOptions,
+  SkillDecoratorOptions,
+  SkillsAgentFromOverrides,
+  SkillsDecoratorOptions,
+  SkillsIndexConfigOptions,
+  SkillsIndexFromOverrides,
+  SkillsToolboxFromOverrides,
+} from './skills-decorators.ts';
+export {
+  getDeclaredSkills,
+  getSemanticSkillDiscoveryMetadata,
+  getSkillsIndexMetadata,
+  getSkillsMetadata,
+  SemanticSkillDiscovery,
+  Skill,
+  Skills,
+  SkillsIndexConfig,
+  skillsAgentBuilderFrom,
+  skillsAgentFrom,
+  skillsIndexBuilderFrom,
+  skillsToolboxBuilderFrom,
+  skillsToolboxFrom,
+  skillsToolboxOptionsFrom,
+} from './skills-decorators.ts';
 export { SkillsFluent } from './skills-fluent.ts';
 export type {
   BuildSkillsIndexOptions,

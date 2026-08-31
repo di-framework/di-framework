@@ -26,7 +26,7 @@ bun add @di-framework/ai-utils @di-framework/ai @di-framework/core
 npm install @di-framework/ai-utils @di-framework/ai @di-framework/core
 ```
 
-Peer: `@di-framework/ai`.
+Peer: `@di-framework/ai` and `@di-framework/core` (required for decorator DX; builders work with both installed as shown above).
 
 ## Quick start
 
@@ -175,6 +175,52 @@ await SkillsIndex.builder()
 This writes `.di-framework/skills-index.jsonl`. Enable fail-closed retrieval with `.semanticDiscovery()` on `SkillsAgent.builder()` or `SkillsToolbox.builder()`. The default index is also detected automatically when present.
 
 The default indexer uses the optional `@huggingface/transformers` peer. Install it only for large-catalog indexing (`bun add @huggingface/transformers@4.2.0`); small catalogs and custom embedders do not need it. Transformers.js tokenizes each exact `SKILL.md` into overlapping model-token chunks and embeds them locally with a pinned quantized BGE model. Runtime ranks skills using chunk cosine scores and sends only the top 10 names/descriptions to the chat model. Chunks and vectors do not enter the prompt; the full body remains lazy until activation. At or below the threshold, Transformers.js is not initialized and normal discovery remains active.
+
+## Decorator DX
+
+Thin decorators store catalog / retrieval / index metadata and apply helpers feed the **same builders**. Prefer builders for most apps; use decorators when you want DI-style declarations. Decorators never build indexes, load Transformers.js, or hide async work.
+
+```typescript
+import { ScriptedChatModel } from '@di-framework/ai';
+import {
+  SemanticSkillDiscovery,
+  Skill,
+  Skills,
+  SkillsIndexConfig,
+  skillsAgentFrom,
+  skillsIndexBuilderFrom,
+} from '@di-framework/ai-utils';
+
+@Skills({
+  directories: ['.claude/skills'],
+  packages: ['@company/skills'],
+})
+@SemanticSkillDiscovery({
+  indexFile: '.di-framework/skills-index.jsonl',
+  limit: 10,
+})
+@Skill({
+  name: 'code-reviewer',
+  description: 'Reviews TypeScript code.',
+  content: 'Check nulls and naming.',
+})
+class ApplicationSkills {}
+
+const agent = skillsAgentFrom(ApplicationSkills, {
+  chatModel: new ScriptedChatModel([]),
+});
+
+@SkillsIndexConfig({
+  directories: ['.claude/skills'],
+  threshold: 50,
+  retrievalLimit: 10,
+})
+class ApplicationSkillsIndex {}
+
+await skillsIndexBuilderFrom(ApplicationSkillsIndex).build();
+```
+
+Helpers: `skillsToolboxOptionsFrom`, `skillsToolboxBuilderFrom` / `skillsToolboxFrom`, `skillsAgentBuilderFrom` / `skillsAgentFrom`, `skillsIndexBuilderFrom`. Pass `chatModel`, custom `SkillEmbedder`, and stores as **overrides** — they are not stored on decorator metadata. Stack `@Skills`, `@SemanticSkillDiscovery`, and `@Skill` on one class; merge multiple catalog classes yourself. `di-skills-index` stays flag-driven.
 
 ## Skill-only and MCP
 

@@ -17,7 +17,7 @@ Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `Skills
 bun add @di-framework/ai-utils @di-framework/ai @di-framework/core
 ```
 
-Peer: `@di-framework/ai`.
+Peer: `@di-framework/ai` and `@di-framework/core` (decorator DX uses core metadata; builders share the same install).
 
 `@huggingface/transformers` is an optional peer used only by the default semantic indexer for large skill catalogs. Install it only when needed:
 
@@ -106,6 +106,42 @@ Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `name` and `descr
 | `SkillsIndex.builder()` | Build-time compact semantic index | Large skill catalogs |
 
 `.of(options)` on each factory matches the older options-object APIs. Aliases: `createSkillsAgent`, `createSkillsToolbox`, `skillsToolbox`, `skillsTool`.
+
+## Decorator DX
+
+Optional thin decorators map onto the builders above. They only store metadata; apply helpers call the existing builders. Prefer builders unless you want DI-style declarations.
+
+| Decorator | Apply helper |
+| --- | --- |
+| `@Skills({ directories, packages, files, workspace, noDefaultDirectories })` | `skillsToolboxBuilderFrom` / `skillsAgentBuilderFrom` |
+| `@SemanticSkillDiscovery({ indexFile, limit, ... })` | merged into `semanticDiscovery` (embedder/stores via overrides) |
+| `@SkillsIndexConfig({ directories, threshold, retrievalLimit, ... })` | `skillsIndexBuilderFrom` then `.build()` |
+| `@Skill({ name, description, content? })` | collected into catalog options |
+
+```ts
+import {
+  SemanticSkillDiscovery,
+  Skill,
+  Skills,
+  SkillsIndexConfig,
+  skillsAgentFrom,
+  skillsIndexBuilderFrom,
+} from '@di-framework/ai-utils';
+
+@Skills({ directories: ['.claude/skills'] })
+@SemanticSkillDiscovery({ limit: 10 })
+@Skill({ name: 'code-reviewer', description: 'Reviews TypeScript code.' })
+class ApplicationSkills {}
+
+const agent = skillsAgentFrom(ApplicationSkills, { chatModel: model });
+
+@SkillsIndexConfig({ directories: ['.claude/skills'], threshold: 50 })
+class ApplicationSkillsIndex {}
+
+await skillsIndexBuilderFrom(ApplicationSkillsIndex).build();
+```
+
+Builders remain the supported escape hatch. Decorators do not run indexing or load Transformers.js.
 
 ### Shared toolbox methods
 
