@@ -56,3 +56,7 @@ export function unionValues(value: string | number, nullable: string | null, res
 export function arrayValues(numbers: number[], users: ReadonlyArray<User>) {
   return { numbers, users };
 }
+
+export function tupleValues(pair: [number, string], nested: [string, User], optional: [number, string?]) {
+  return { pair, nested, optional };
+}
