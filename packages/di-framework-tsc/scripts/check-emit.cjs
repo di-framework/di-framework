@@ -41,6 +41,12 @@ const required = [
   'numbers.some(__di_item => typeof __di_item !== "number")',
   '!Array.isArray(users)',
   'typeof __di_item.id !== "number"',
+  'pair.length !== 2',
+  'typeof pair[0] !== "number"',
+  'typeof pair[1] !== "string"',
+  'typeof nested[1].id !== "number"',
+  'optional.length < 1',
+  'optional.length > 2',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));

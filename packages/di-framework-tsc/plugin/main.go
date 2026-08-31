@@ -389,6 +389,12 @@ func stmtsFromCheckerTypeSeen(
 			return nil
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an array with valid elements")}
+	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
+		invalid, ok := tupleInvalidPredicate(factory, checker, path, t, seen, depth)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid tuple")}
 	case flags&shimchecker.TypeFlagsObject != 0:
 		seen[t] = true
 		defer delete(seen, t)
@@ -493,6 +499,8 @@ func invalidPredicate(
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("bigint", shimast.TokenFlagsNone)), true
 	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
 		return arrayInvalidPredicate(factory, checker, path, t, seen, depth)
+	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
+		return tupleInvalidPredicate(factory, checker, path, t, seen, depth)
 	case flags&shimchecker.TypeFlagsObject != 0:
 		seen[t] = true
 		defer delete(seen, t)
@@ -517,6 +525,56 @@ func invalidPredicate(
 	default:
 		return nil, false
 	}
+}
+
+func tupleInvalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	seen map[*shimchecker.Type]bool,
+	depth int,
+) (*shimast.Expression, bool) {
+	elements := checker.GetTypeArguments(t)
+	flags := t.TargetTupleType().ElementFlags()
+	if len(elements) != len(flags) {
+		return nil, false
+	}
+	minLength := 0
+	for _, flag := range flags {
+		if flag&shimchecker.ElementFlagsRest != 0 {
+			return nil, false
+		}
+		if flag&shimchecker.ElementFlagsRequired != 0 {
+			minLength++
+		}
+	}
+	isArray := factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(factory.NewIdentifier("Array"), nil, factory.NewIdentifier("isArray"), 0),
+		nil, nil, factory.NewNodeList([]*shimast.Node{pathExpr(factory, path)}), 0,
+	)
+	out := factory.NewPrefixUnaryExpression(shimast.KindExclamationToken, isArray)
+	lengthPath := path + ".length"
+	if minLength == len(elements) {
+		badLength := binary(factory, pathExpr(factory, lengthPath), shimast.KindExclamationEqualsEqualsToken, factory.NewNumericLiteral(fmt.Sprint(len(elements)), shimast.TokenFlagsNone))
+		out = binary(factory, out, shimast.KindBarBarToken, badLength)
+	} else {
+		tooShort := binary(factory, pathExpr(factory, lengthPath), shimast.KindLessThanToken, factory.NewNumericLiteral(fmt.Sprint(minLength), shimast.TokenFlagsNone))
+		tooLong := binary(factory, pathExpr(factory, lengthPath), shimast.KindGreaterThanToken, factory.NewNumericLiteral(fmt.Sprint(len(elements)), shimast.TokenFlagsNone))
+		out = binary(factory, out, shimast.KindBarBarToken, binary(factory, tooShort, shimast.KindBarBarToken, tooLong))
+	}
+	for i, element := range elements {
+		pred, ok := invalidPredicate(factory, checker, fmt.Sprintf("%s[%d]", path, i), element, seen, depth+1)
+		if !ok {
+			return nil, false
+		}
+		if flags[i]&shimchecker.ElementFlagsOptional != 0 {
+			present := binary(factory, pathExpr(factory, lengthPath), shimast.KindGreaterThanToken, factory.NewNumericLiteral(fmt.Sprint(i), shimast.TokenFlagsNone))
+			pred = binary(factory, present, shimast.KindAmpersandAmpersandToken, pred)
+		}
+		out = binary(factory, out, shimast.KindBarBarToken, pred)
+	}
+	return out, true
 }
 
 func arrayInvalidPredicate(
@@ -558,15 +616,31 @@ func equalityCheck(factory *shimast.NodeFactory, path string, expected *shimast.
 // pathExpr builds a fresh expression tree for a dotted path (e.g. "user.id").
 // Each call allocates new nodes — AST nodes are not shareable across parents.
 func pathExpr(factory *shimast.NodeFactory, path string) *shimast.Expression {
-	parts := strings.Split(path, ".")
-	var expr *shimast.Expression = factory.NewIdentifier(parts[0])
-	for _, part := range parts[1:] {
-		expr = factory.NewPropertyAccessExpression(
-			expr,
-			nil,
-			factory.NewIdentifier(part),
-			0,
-		)
+	end := strings.IndexAny(path, ".[")
+	if end < 0 {
+		return factory.NewIdentifier(path)
+	}
+	var expr *shimast.Expression = factory.NewIdentifier(path[:end])
+	for end < len(path) {
+		if path[end] == '.' {
+			start := end + 1
+			end = start
+			for end < len(path) && path[end] != '.' && path[end] != '[' {
+				end++
+			}
+			expr = factory.NewPropertyAccessExpression(expr, nil, factory.NewIdentifier(path[start:end]), 0)
+			continue
+		}
+		close := strings.IndexByte(path[end:], ']')
+		if close < 0 {
+			return expr
+		}
+		close += end
+		index := path[end+1 : close]
+		// An identifier-shaped synthesized index prints as the numeric token while
+		// avoiding the emitter asking source-text questions of a detached literal.
+		expr = factory.NewElementAccessExpression(expr, nil, factory.NewIdentifier(index), 0)
+		end = close + 1
 	}
 	return expr
 }
