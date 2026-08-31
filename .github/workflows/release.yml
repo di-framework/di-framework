@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # create GitHub Release so docs-vX.Y.zip can attach
   id-token: write
   actions: write # dispatch Deploy Documentation on this tag for /vX.Y/ snapshots
 
@@ -88,5 +88,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Frozen /vMAJOR.MINOR/ tree + docs-vX.Y.zip on the GitHub Release.
-          gh workflow run "Deploy Documentation" --ref "${GITHUB_REF_NAME}"
+          TAG="${GITHUB_REF_NAME}"
+          # Deploy Documentation attaches docs-vX.Y.zip to this release; without
+          # it, later main deploys cannot restore /vX.Y/ snapshots and the
+          # Writerside version picker stays hidden (needs 2+ versions).
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+            echo "Created GitHub Release $TAG"
+          else
+            echo "GitHub Release $TAG already exists"
+          fi
+          gh workflow run "Deploy Documentation" --ref "$TAG"
