@@ -49,7 +49,11 @@ export function literalValues(
 type Success = { kind: 'success'; value: number };
 type Failure = { kind: 'failure'; message: string };
 
-export function unionValues(value: string | number, nullable: string | null, result: Success | Failure) {
+export function unionValues(
+  value: string | number,
+  nullable: string | null,
+  result: Success | Failure,
+) {
   return { value, nullable, result };
 }
 
@@ -57,7 +61,11 @@ export function arrayValues(numbers: number[], users: ReadonlyArray<User>) {
   return { numbers, users };
 }
 
-export function tupleValues(pair: [number, string], nested: [string, User], optional: [number, string?]) {
+export function tupleValues(
+  pair: [number, string],
+  nested: [string, User],
+  optional: [number, string?],
+) {
   return { pair, nested, optional };
 }
 

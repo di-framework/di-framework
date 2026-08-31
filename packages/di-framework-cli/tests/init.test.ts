@@ -146,7 +146,8 @@ describe('init command', () => {
         const src = readFileSync(join(dir, 'src', 'index.ts'), 'utf-8');
         expect(src).toContain('@Container()');
         expect(src).toContain('@di-framework/core');
-        expect(src).toContain('function greet(name: string)');
+        expect(src).toContain('hello(name: string)');
+        expect(src).not.toContain('function greet(name: string)');
       } finally {
         log.mockRestore();
       }
