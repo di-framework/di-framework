@@ -257,9 +257,6 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 		if p == nil || p.Name() == nil || p.Name().Kind != shimast.KindIdentifier {
 			continue
 		}
-		if p.DotDotDotToken != nil {
-			continue
-		}
 		name := p.Name().Text()
 		paramChecks := checksForParam(factory, checker, param, name)
 		if len(paramChecks) == 0 {

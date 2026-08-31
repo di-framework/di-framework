@@ -50,6 +50,8 @@ const required = [
   'if (label !== undefined)',
   'typeof label !== "string"',
   'if (count !== undefined)',
+  '!Array.isArray(values)',
+  'values.some(__di_item => typeof __di_item !== "number")',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
