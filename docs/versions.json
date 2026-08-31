@@ -5,6 +5,11 @@
     "isCurrent": true
   },
   {
+    "version": "v5.0",
+    "url": "/v5.0/",
+    "isCurrent": false
+  },
+  {
     "version": "v4.3",
     "url": "/v4.3/",
     "isCurrent": false
