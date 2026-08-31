@@ -4,7 +4,7 @@
 
 Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit, function bodies get `typeof` / shape guards synthesized from parameter types.
 
-Function declarations and expressions, arrows with block bodies, methods, and constructors are supported.
+Function declarations and expressions, arrows (including concise and async arrows), methods, and constructors are supported.
 
 `di-framework init` wires this by default. Use the steps below for an existing app.
 
@@ -69,7 +69,7 @@ function greet(user) {
 ## How it works
 
 1. `ttsc` loads the program (parse + typecheck).
-2. This plugin walks functions, block-bodied arrows, methods, and constructors.
+2. This plugin walks functions, arrows, methods, and constructors.
 3. For each required parameter, it reads the type (syntax keywords, else checker).
 4. It synthesizes `if` / `throw` AST nodes with typescript-go `NodeFactory` and prepends them to the body.
 5. `EmitAllRaw` prints JavaScript from the mutated AST.
@@ -78,7 +78,6 @@ function greet(user) {
 
 Skipped today:
 
-- concise expression-bodied arrows
 - optional / default / rest / destructured parameters
 - unions, arrays, tuples, classes, branded types, typia-style tags
 

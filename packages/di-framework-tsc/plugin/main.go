@@ -200,6 +200,13 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 			arrow := node.AsArrowFunction()
 			if arrow.Body != nil && arrow.Body.Kind == shimast.KindBlock {
 				injectCallable(factory, checker, arrow.Parameters, arrow.Body)
+			} else if arrow.Body != nil {
+				checks := checksForParams(factory, checker, arrow.Parameters)
+				if len(checks) > 0 {
+					stmts := append(checks, factory.NewReturnStatement(arrow.Body))
+					arrow.Body = factory.NewBlock(factory.NewNodeList(stmts), true)
+					shimast.SetParentInChildren(node)
+				}
 			}
 		}
 		node.ForEachChild(func(child *shimast.Node) bool {
@@ -223,6 +230,24 @@ func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, 
 		return
 	}
 
+	checks := checksForParams(factory, checker, params)
+	if len(checks) == 0 {
+		return
+	}
+
+	// Structural prepend — printer walks Statements.Nodes directly.
+	out := make([]*shimast.Node, 0, len(checks)+len(block.Statements.Nodes))
+	out = append(out, checks...)
+	out = append(out, block.Statements.Nodes...)
+	block.Statements.Nodes = out
+	// Emit walks parents; factory nodes start detached.
+	shimast.SetParentInChildren(body)
+}
+
+func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker, params *shimast.NodeList) []*shimast.Node {
+	if params == nil {
+		return nil
+	}
 	var checks []*shimast.Node
 	for _, param := range params.Nodes {
 		if param == nil || param.Kind != shimast.KindParameter {
@@ -238,17 +263,7 @@ func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, 
 		name := p.Name().Text()
 		checks = append(checks, checksForParam(factory, checker, param, name)...)
 	}
-	if len(checks) == 0 {
-		return
-	}
-
-	// Structural prepend — printer walks Statements.Nodes directly.
-	out := make([]*shimast.Node, 0, len(checks)+len(block.Statements.Nodes))
-	out = append(out, checks...)
-	out = append(out, block.Statements.Nodes...)
-	block.Statements.Nodes = out
-	// Emit walks parents; factory nodes start detached.
-	shimast.SetParentInChildren(body)
+	return checks
 }
 
 func checksForParam(

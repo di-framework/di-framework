@@ -32,3 +32,6 @@ export function nestedFactory() {
     return enabled;
   };
 }
+
+export const increment = (value: number) => value + 1;
+export const asyncIncrement = async (value: number) => value + 1;
