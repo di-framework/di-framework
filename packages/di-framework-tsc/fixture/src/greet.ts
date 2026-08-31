@@ -35,3 +35,13 @@ export function nestedFactory() {
 
 export const increment = (value: number) => value + 1;
 export const asyncIncrement = async (value: number) => value + 1;
+
+export function literalValues(
+  state: 'active',
+  count: 0,
+  enabled: true,
+  absent: null,
+  missing: undefined,
+) {
+  return { state, count, enabled, absent, missing };
+}

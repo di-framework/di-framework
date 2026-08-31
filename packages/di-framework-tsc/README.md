@@ -2,7 +2,7 @@
 
 [`ttsc`](https://ttsc.dev) transform plugin that injects **runtime parameter checks** from your TypeScript types.
 
-Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit, function bodies get `typeof` / shape guards synthesized from parameter types.
+Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit, function bodies get `typeof`, equality, and shape guards synthesized from parameter types.
 
 Function declarations and expressions, arrows (including concise and async arrows), methods, and constructors are supported.
 
@@ -80,6 +80,7 @@ Skipped today:
 
 - optional / default / rest / destructured parameters
 - unions, arrays, tuples, classes, branded types, typia-style tags
+- `void`, `never`, and `unique symbol`
 
 ## Monorepo
 

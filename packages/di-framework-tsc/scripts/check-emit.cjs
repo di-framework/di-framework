@@ -29,6 +29,11 @@ const required = [
   'typeof enabled !== "boolean"',
   'async (value) => {',
   'return value + 1',
+  'state !== "active"',
+  'count !== 0',
+  'enabled !== true',
+  'absent !== null',
+  'missing !== undefined',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
