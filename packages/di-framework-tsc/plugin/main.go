@@ -190,6 +190,9 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 		case shimast.KindMethodDeclaration:
 			method := node.AsMethodDeclaration()
 			injectCallable(factory, checker, method.Parameters, method.Body)
+		case shimast.KindConstructor:
+			ctor := node.AsConstructorDeclaration()
+			injectCallable(factory, checker, ctor.Parameters, ctor.Body)
 		}
 		node.ForEachChild(func(child *shimast.Node) bool {
 			walk(child)
