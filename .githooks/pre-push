@@ -2,10 +2,17 @@
 set -e
 
 echo "[pre-push] Running tests with the required 100% aggregate line coverage..."
-if ! bun test --coverage; then
+cov_log="$(mktemp -t di-framework-pre-push-cov.XXXXXX)"
+cleanup() {
+  rm -f "$cov_log"
+}
+trap cleanup EXIT
+
+if ! bun test --coverage >"$cov_log" 2>&1; then
   echo >&2
   echo "[pre-push] FAILED: the test/coverage command returned a non-zero exit status." >&2
   echo "[pre-push] If the summary above says '0 fail', the failure is the 100% line-coverage threshold." >&2
+  tail -n 80 "$cov_log" >&2 || true
   echo "[pre-push] Coverage details:" >&2
   bun scripts/check-line-coverage.ts || true
   echo "[pre-push] Reproduce with: bun test --coverage" >&2
