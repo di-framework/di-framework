@@ -30,7 +30,7 @@
     }
   },
   "peerDependencies": {
-    "@di-framework/core": "workspace:*",
+    "@di-framework/core": "^4",
     "typescript": "^5"
   },
   "files": [
