@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  statuses: write
+  actions: write # dispatch Deploy Documentation to publish coverage badge JSON
 
 jobs:
   build-and-test:
@@ -43,68 +43,64 @@ jobs:
       - name: Verify coverage mapping
         run: bun scripts/check-coverage-mapping.ts
 
-      - name: Export coverage to GitHub context & summary
+      - name: Export coverage summary & Shields badge JSON
         id: coverage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun -e '
             import { readFileSync, existsSync, appendFileSync } from "node:fs";
             import { resolve } from "node:path";
-            import { getWorkspacePackages, parseLcov, calculatePackageMetrics } from "./scripts/coverage-mapping";
+            import {
+              getWorkspacePackages,
+              parseLcov,
+              calculatePackageMetrics,
+              writeShieldBadgeFiles,
+            } from "./scripts/coverage-mapping";
 
             const packages = getWorkspacePackages(resolve(process.cwd(), "packages"));
             const lcovPath = resolve(process.cwd(), "coverage/lcov.info");
-            
-            if (existsSync(lcovPath)) {
-              const lcovContent = readFileSync(lcovPath, "utf8");
-              const records = parseLcov(lcovContent);
-              const metrics = calculatePackageMetrics(packages, records);
 
-              let md = "### 📊 Code Coverage Summary\n\n| Package | Line Coverage | Lines Hit / Total |\n| --- | --- | --- |\n";
-              
-              const token = process.env.GITHUB_TOKEN;
-              const repo = process.env.GITHUB_REPOSITORY;
-              const sha = process.env.GITHUB_SHA;
+            if (!existsSync(lcovPath)) {
+              console.log("No coverage/lcov.info; skipping badge export");
+              process.exit(0);
+            }
 
-              for (const m of metrics) {
-                const details = m.isMeasured ? `${m.lh}/${m.lf}` : "N/A (" + m.unmeasuredReason + ")";
-                md += `| \`${m.name}\` | **${m.status}** | ${details} |\n`;
+            const lcovContent = readFileSync(lcovPath, "utf8");
+            const records = parseLcov(lcovContent);
+            const metrics = calculatePackageMetrics(packages, records);
 
-                if (token && repo && sha && process.env.CI) {
-                  const payload = {
-                    state: "success",
-                    context: `coverage/badges/${m.slug}`,
-                    description: m.status,
-                    target_url: `https://github.com/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
-                  };
-                  fetch(`https://api.github.com/repos/${repo}/statuses/${sha}`, {
-                    method: "POST",
-                    headers: {
-                      "Authorization": `token ${token}`,
-                      "Accept": "application/vnd.github.v3+json",
-                      "User-Agent": "bun-script"
-                    },
-                    body: JSON.stringify(payload)
-                  }).catch(err => console.error("Failed to post commit status:", err));
-                }
-              }
+            const badgeDir = resolve(process.cwd(), "coverage/badges");
+            const written = writeShieldBadgeFiles(metrics, badgeDir);
+            console.log(`Wrote ${written.length} Shields endpoint JSON file(s) to ${badgeDir}`);
 
-              if (process.env.GITHUB_STEP_SUMMARY) {
-                appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
-              }
+            let md = "### 📊 Code Coverage Summary\n\n| Package | Line Coverage | Lines Hit / Total |\n| --- | --- | --- |\n";
+            for (const m of metrics) {
+              const details = m.isMeasured ? `${m.lh}/${m.lf}` : "N/A (" + m.unmeasuredReason + ")";
+              md += `| \`${m.name}\` | **${m.status}** | ${details} |\n`;
+            }
 
-              const totalLines = metrics.reduce((acc, s) => acc + (s.lf || 0), 0);
-              const totalHits = metrics.reduce((acc, s) => acc + (s.lh || 0), 0);
-              const pct = totalLines > 0 ? ((totalHits / totalLines) * 100).toFixed(1) : "0";
+            if (process.env.GITHUB_STEP_SUMMARY) {
+              appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+            }
 
-              if (process.env.GITHUB_OUTPUT) {
-                appendFileSync(process.env.GITHUB_OUTPUT, `total_lines=${totalLines}\n`);
-                appendFileSync(process.env.GITHUB_OUTPUT, `total_hits=${totalHits}\n`);
-                appendFileSync(process.env.GITHUB_OUTPUT, `coverage_percentage=${pct}%\n`);
-              }
+            const totalLines = metrics.reduce((acc, s) => acc + (s.lf || 0), 0);
+            const totalHits = metrics.reduce((acc, s) => acc + (s.lh || 0), 0);
+            const pct = totalLines > 0 ? ((totalHits / totalLines) * 100).toFixed(1) : "0";
+
+            if (process.env.GITHUB_OUTPUT) {
+              appendFileSync(process.env.GITHUB_OUTPUT, `total_lines=${totalLines}\n`);
+              appendFileSync(process.env.GITHUB_OUTPUT, `total_hits=${totalHits}\n`);
+              appendFileSync(process.env.GITHUB_OUTPUT, `coverage_percentage=${pct}%\n`);
             }
           '
+
+      - name: Upload Shields coverage badge JSON
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-badges
+          path: coverage/badges/*.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Link CLI
         run: cd packages/di-framework-cli && bun link
@@ -142,6 +138,23 @@ jobs:
           file: cobertura.xml
           language: TypeScript
           label: code-coverage-agent
+
+  # After Test succeeds on main, redeploy docs so /coverage/*.json is public for Shields.
+  publish-coverage-badges:
+    name: Publish coverage badges
+    needs: build-and-test
+    if: ${{ !cancelled() && needs.build-and-test.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch Deploy Documentation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Deploy Documentation" --repo "${{ github.repository }}" --ref main
 
   deno-examples:
     name: Deno examples

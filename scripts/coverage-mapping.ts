@@ -3,8 +3,17 @@
  * Core engine for package coverage mapping, LCOV parsing, metric calculation,
  * and Shields.io endpoint badge JSON generation.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
+/** Public host for Shields endpoint JSON published by Deploy Documentation. */
+export const COVERAGE_BADGE_PUBLIC_BASE = 'https://docs.di-framework.dev/coverage';
+
+/** Shields.io endpoint badge URL for a package slug (e.g. "core"). */
+export function shieldsEndpointBadgeUrl(slug: string): string {
+  const endpoint = `${COVERAGE_BADGE_PUBLIC_BASE}/${slug}.json`;
+  return `https://img.shields.io/endpoint?url=${encodeURIComponent(endpoint)}`;
+}
 
 export interface PackageInfo {
   name: string; // e.g. "@di-framework/core"
@@ -236,8 +245,22 @@ export function calculatePackageMetrics(
 export function generateShieldBadgeJson(metric: PackageMetric): ShieldBadgeJson {
   return {
     schemaVersion: 1,
-    label: 'coverage',
+    label: 'line coverage',
     message: metric.badgeMessage,
     color: metric.badgeColor,
   };
+}
+
+/**
+ * Writes one Shields endpoint JSON file per package under outDir/{slug}.json.
+ */
+export function writeShieldBadgeFiles(metrics: PackageMetric[], outDir: string): string[] {
+  mkdirSync(outDir, { recursive: true });
+  const written: string[] = [];
+  for (const metric of metrics) {
+    const filePath = join(outDir, `${metric.slug}.json`);
+    writeFileSync(filePath, `${JSON.stringify(generateShieldBadgeJson(metric))}\n`);
+    written.push(filePath);
+  }
+  return written;
 }

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   calculatePackageMetrics,
   generateShieldBadgeJson,
@@ -6,7 +9,9 @@ import {
   getWorkspacePackages,
   isSourceFile,
   parseLcov,
+  shieldsEndpointBadgeUrl,
   UNMEASURED_PACKAGES,
+  writeShieldBadgeFiles,
 } from '../scripts/coverage-mapping';
 
 describe('Coverage LCOV Parsing & Package Mapping', () => {
@@ -182,9 +187,62 @@ end_of_record
     const shieldJson = generateShieldBadgeJson(metric);
     expect(shieldJson).toEqual({
       schemaVersion: 1,
-      label: 'coverage',
+      label: 'line coverage',
       message: '100%',
       color: 'brightgreen',
     });
+  });
+
+  it('builds Shields endpoint URLs for the docs host', () => {
+    expect(shieldsEndpointBadgeUrl('core')).toBe(
+      'https://img.shields.io/endpoint?url=https%3A%2F%2Fdocs.di-framework.dev%2Fcoverage%2Fcore.json',
+    );
+    expect(shieldsEndpointBadgeUrl('ai-utils')).toBe(
+      'https://img.shields.io/endpoint?url=https%3A%2F%2Fdocs.di-framework.dev%2Fcoverage%2Fai-utils.json',
+    );
+  });
+
+  it('writes one Shields JSON file per package slug', () => {
+    const dir = join(tmpdir(), `di-cov-badges-${Date.now()}`);
+    const written = writeShieldBadgeFiles(
+      [
+        {
+          name: '@di-framework/core',
+          slug: 'core',
+          dirName: 'di-framework-core',
+          relPath: 'packages/di-framework-core',
+          isMeasured: true,
+          lf: 10,
+          lh: 10,
+          percentage: 100,
+          status: '100%',
+          badgeColor: 'brightgreen',
+          badgeMessage: '100%',
+        },
+        {
+          name: '@di-framework/tsc',
+          slug: 'tsc',
+          dirName: 'di-framework-tsc',
+          relPath: 'packages/di-framework-tsc',
+          isMeasured: false,
+          unmeasuredReason: 'Go plugin',
+          lf: 0,
+          lh: 0,
+          percentage: null,
+          status: 'N/A',
+          badgeColor: 'lightgrey',
+          badgeMessage: 'N/A',
+        },
+      ],
+      dir,
+    );
+    expect(written).toHaveLength(2);
+    expect(JSON.parse(readFileSync(join(dir, 'core.json'), 'utf8'))).toEqual({
+      schemaVersion: 1,
+      label: 'line coverage',
+      message: '100%',
+      color: 'brightgreen',
+    });
+    expect(JSON.parse(readFileSync(join(dir, 'tsc.json'), 'utf8')).message).toBe('N/A');
   });
 });

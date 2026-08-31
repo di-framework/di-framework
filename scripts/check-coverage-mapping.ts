@@ -15,6 +15,7 @@ import {
   calculatePackageMetrics,
   getWorkspacePackages,
   parseLcov,
+  shieldsEndpointBadgeUrl,
   UNMEASURED_PACKAGES,
 } from './coverage-mapping';
 
@@ -50,11 +51,11 @@ for (const pkg of packages) {
     errors.push(`Package '${pkg.name}' is missing from the packages table in README.md.`);
   }
 
-  // Verify README uses GitHub Commit Status dynamic badge URL for this package
-  const expectedBadge = `https://img.shields.io/github/commit-status/di-framework/di-framework/main/coverage%2Fbadges%2F${pkg.slug}?label=line%20coverage`;
+  // Verify README uses Shields endpoint badges hosted on the docs site
+  const expectedBadge = shieldsEndpointBadgeUrl(pkg.slug);
   if (!readmeContent.includes(expectedBadge)) {
     errors.push(
-      `Package '${pkg.name}' in README.md does not use the expected dynamic commit-status badge URL format.`,
+      `Package '${pkg.name}' in README.md does not use the expected Shields endpoint badge URL (${expectedBadge}).`,
     );
   }
 }
