@@ -24,6 +24,15 @@ export type {
 export { agentSkill, parseAllowedTools, parseSkillMarkdown } from './parse-skill-markdown.ts';
 export { resolveSkillPackageDirectories } from './resolve-packages.ts';
 export type {
+  SkillAdapterBenchmarkCase,
+  SkillAdapterBenchmarkOptions,
+  SkillAdapterEvaluationQuality,
+  SkillAdapterPerformanceReport,
+  SkillAdapterQualityInput,
+  SkillAdapterQualityMetrics,
+} from './skill-adapter-benchmark.ts';
+export { benchmarkSkillVectorSearch } from './skill-adapter-benchmark.ts';
+export type {
   InMemorySkillCatalogEntry,
   SkillAdapterCapabilities,
   SkillAdapterErrorCode,
@@ -45,8 +54,10 @@ export type {
 } from './skill-adapters.ts';
 export {
   assertReadyMetadata,
+  DEFAULT_SKILL_ADAPTER_TIMEOUT_MS,
   InMemorySkillCatalogStore,
   InMemorySkillVectorSearch,
+  runSkillAdapterOperation,
   SkillAdapterError,
 } from './skill-adapters.ts';
 export type {

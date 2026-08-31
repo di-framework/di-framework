@@ -36,6 +36,8 @@ export type SkillAdapterErrorCode =
   | 'NOT_READY'
   | 'INVALID_RESPONSE';
 
+export const DEFAULT_SKILL_ADAPTER_TIMEOUT_MS = 10_000;
+
 /** A stable, typed error boundary for platform adapter failures. */
 export class SkillAdapterError extends Error {
   override readonly name = 'SkillAdapterError';
@@ -46,6 +48,40 @@ export class SkillAdapterError extends Error {
     options?: ErrorOptions,
   ) {
     super(message, options);
+  }
+}
+
+/** Bound remote operations and normalize provider failures without fallback. */
+export async function runSkillAdapterOperation<T>(
+  operation: string,
+  call: () => PromiseLike<T>,
+  timeoutMs = DEFAULT_SKILL_ADAPTER_TIMEOUT_MS,
+): Promise<T> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+    throw new SkillAdapterError('INVALID_RESPONSE', 'Adapter timeout must be a positive integer');
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(call),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new SkillAdapterError(
+                'TIMEOUT',
+                `${operation} timed out after ${timeoutMs} milliseconds`,
+              ),
+            ),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } catch (error) {
+    if (error instanceof SkillAdapterError) throw error;
+    throw new SkillAdapterError('INVALID_RESPONSE', `${operation} failed`, { cause: error });
+  } finally {
+    if (timer != null) clearTimeout(timer);
   }
 }
 
