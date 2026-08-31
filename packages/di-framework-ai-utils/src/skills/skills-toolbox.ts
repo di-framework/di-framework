@@ -19,6 +19,7 @@ import { writeTool } from '../tools/write-tool.ts';
 import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import { resolveSkillPackageDirectories } from './resolve-packages.ts';
+import type { SkillCatalogStore, SkillVectorSearch } from './skill-adapters.ts';
 import type { SkillEmbedder } from './skill-embedder.ts';
 import { SkillsFluent } from './skills-fluent.ts';
 import { DEFAULT_SKILLS_INDEX_FILE, loadSkillsIndex } from './skills-index.ts';
@@ -50,6 +51,9 @@ export interface SkillsSemanticDiscoveryOptions {
   readonly minScore?: number;
   readonly recentUserMessages?: number;
   readonly embedder?: SkillEmbedder;
+  readonly catalogStore?: SkillCatalogStore;
+  readonly vectorSearch?: SkillVectorSearch;
+  readonly namespace?: string;
 }
 
 export interface SkillsToolboxOptions extends SkillsToolOptions {
@@ -232,7 +236,7 @@ function createRetrievalAdvisor(
     : resolve(workspace, configuredPath);
   const explicit =
     options.semanticDiscovery === true || typeof options.semanticDiscovery === 'object';
-  if (!existsSync(indexFile)) {
+  if (!discovery.vectorSearch && !existsSync(indexFile)) {
     if (explicit) {
       throw new Error(
         `Skills index does not exist: ${indexFile}. Build it with SkillsIndex.builder()`,
@@ -241,11 +245,14 @@ function createRetrievalAdvisor(
     return undefined;
   }
 
-  const index = loadSkillsIndex(indexFile);
-  if (!index.metadata.indexed) return undefined;
+  const index = discovery.vectorSearch ? undefined : loadSkillsIndex(indexFile);
+  if (index && !index.metadata.indexed) return undefined;
   return new SkillsRetrievalAdvisor({
     index,
     skills,
+    catalogStore: discovery.catalogStore,
+    vectorSearch: discovery.vectorSearch,
+    namespace: discovery.namespace,
     embedder: discovery.embedder,
     limit: discovery.limit,
     minScore: discovery.minScore,

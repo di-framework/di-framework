@@ -115,6 +115,8 @@ export interface SkillIndexVector {
   readonly description: string;
   readonly chunk: number;
   readonly source: SkillChunkSource;
+  /** Optional source identity retained by deterministic artifact writers. */
+  readonly documentHash?: string;
   readonly embedding: ArrayLike<number>;
 }
 

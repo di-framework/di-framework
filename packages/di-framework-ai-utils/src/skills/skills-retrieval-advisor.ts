@@ -11,9 +11,18 @@ import {
   type ToolCallback,
 } from '@di-framework/ai';
 import type { AgentSkill } from './parse-skill-markdown.ts';
+import {
+  SkillAdapterError,
+  type SkillCatalogStore,
+  type SkillChunkMatch,
+  type SkillDescriptor,
+  type SkillVectorSearch,
+} from './skill-adapters.ts';
 import type { SkillEmbedder } from './skill-embedder.ts';
+import { TransformersJsSkillEmbedder } from './skill-embedder.ts';
 import {
   assertSkillsIndexCurrent,
+  LocalSkillVectorSearch,
   loadSkillsIndex,
   type SkillsIndex,
   type SkillsIndexMatch,
@@ -25,8 +34,11 @@ export const SKILLS_RETRIEVAL_CONTEXT = 'skills_retrieval';
 export const DEFAULT_SKILLS_RETRIEVAL_ORDER = HIGHEST_PRECEDENCE + 250;
 
 export interface SkillsRetrievalAdvisorOptions {
-  readonly index: SkillsIndex | string;
+  readonly index?: SkillsIndex | string;
   readonly skills: readonly AgentSkill[];
+  readonly catalogStore?: SkillCatalogStore;
+  readonly vectorSearch?: SkillVectorSearch;
+  readonly namespace?: string;
   readonly embedder?: SkillEmbedder;
   readonly limit?: number;
   readonly minScore?: number;
@@ -46,8 +58,12 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   readonly name = 'Skills Retrieval Advisor';
   readonly order: number;
 
-  private readonly index: SkillsIndex;
+  private readonly index?: SkillsIndex;
   private readonly skillsByName: ReadonlyMap<string, AgentSkill>;
+  private readonly descriptors: readonly SkillDescriptor[];
+  private readonly catalogStore?: SkillCatalogStore;
+  private readonly vectorSearch: SkillVectorSearch;
+  private readonly namespace?: string;
   private readonly embedder?: SkillEmbedder;
   private readonly limit?: number;
   private readonly minScore?: number;
@@ -58,8 +74,21 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
 
   constructor(options: SkillsRetrievalAdvisorOptions) {
     this.index = typeof options.index === 'string' ? loadSkillsIndex(options.index) : options.index;
-    assertSkillsIndexCurrent(this.index, options.skills, { allowExtraSkills: true });
+    if (!this.index && !options.vectorSearch) {
+      throw new Error('Skills retrieval requires an index or vectorSearch adapter');
+    }
+    if (this.index)
+      assertSkillsIndexCurrent(this.index, options.skills, { allowExtraSkills: true });
     this.skillsByName = new Map(options.skills.map((skill) => [skill.name, skill]));
+    this.descriptors = options.skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      sourceHash: '',
+    }));
+    this.catalogStore = options.catalogStore;
+    this.vectorSearch =
+      options.vectorSearch ?? new LocalSkillVectorSearch(this.index as SkillsIndex);
+    this.namespace = options.namespace;
     this.embedder = options.embedder;
     this.limit = options.limit;
     this.minScore = options.minScore;
@@ -81,16 +110,19 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   }
 
   async before(request: ChatClientRequest): Promise<ChatClientRequest> {
-    if (!this.index.metadata.indexed) return request;
+    if (this.index && !this.index.metadata.indexed) return request;
     const callbacks = request.prompt.options?.toolCallbacks;
     if (!callbacks?.some((tool) => tool.toolDefinition.name === this.toolName)) return request;
 
     const task = this.taskText(request);
-    const semantic = await searchSkillsIndex(this.index, task, {
-      embedder: this.embedder,
-      limit: this.limit,
-      minScore: this.minScore,
-    });
+    const semantic =
+      this.index && !this.catalogStore && this.vectorSearch instanceof LocalSkillVectorSearch
+        ? await searchSkillsIndex(this.index, task, {
+            embedder: this.embedder,
+            limit: this.limit,
+            minScore: this.minScore,
+          })
+        : await this.searchAdapter(task);
     const matches = this.pinExplicitSkillNames(task, semantic);
     const selected = matches
       .map((match) => this.skillsByName.get(match.name))
@@ -141,13 +173,13 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     task: string,
     semantic: readonly SkillsIndexMatch[],
   ): readonly SkillsIndexMatch[] {
-    const limit = this.limit ?? this.index.metadata.retrievalLimit;
+    const limit = this.limit ?? this.index?.metadata.retrievalLimit ?? 10;
     const lowerTask = task.toLowerCase();
-    const explicit = this.index.entries
-      .filter((entry) => containsSkillName(lowerTask, entry.name))
-      .map((entry) => ({
-        name: entry.name,
-        description: entry.description,
+    const explicit = this.descriptors
+      .filter((descriptor) => containsSkillName(lowerTask, descriptor.name))
+      .map((descriptor) => ({
+        name: descriptor.name,
+        description: descriptor.description ?? '',
         score: 1,
         matchedChunk: 0,
         matchedSource: 'document' as const,
@@ -160,6 +192,76 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     }
     return [...merged.values()].slice(0, Math.max(limit, explicit.length));
   }
+
+  private async searchAdapter(task: string): Promise<readonly SkillsIndexMatch[]> {
+    const metadata = await this.vectorSearch.metadata({ namespace: this.namespace });
+    const catalogVersion = this.catalogStore
+      ? await this.catalogStore.version({ namespace: this.namespace })
+      : this.index?.metadata.catalogHash;
+    if (catalogVersion == null) {
+      throw new SkillAdapterError('STALE_CATALOG', 'Catalog version is unavailable');
+    }
+    const embedder =
+      this.embedder ??
+      new TransformersJsSkillEmbedder({ model: metadata.model, revision: metadata.revision });
+    const [query] = await embedder.embed([task], { purpose: 'query' });
+    if (!query) throw new SkillAdapterError('INVALID_RESPONSE', 'Embedder omitted query vector');
+    const limit = this.limit ?? this.index?.metadata.retrievalLimit ?? 10;
+    const chunks = await this.vectorSearch.query(query, {
+      namespace: this.namespace,
+      catalogVersion,
+      model: embedder.model,
+      revision: embedder.revision,
+      embedderId: embedder.id,
+      limit: Math.max(limit * 8, limit),
+      minScore: this.minScore,
+    });
+    return aggregateSkillChunkMatches(chunks, limit, this.skillsByName);
+  }
+}
+
+/** Shared skill-level MaxSim aggregation for local and hosted chunk search. */
+export function aggregateSkillChunkMatches(
+  chunks: readonly SkillChunkMatch[],
+  limit: number,
+  knownSkills?: ReadonlyMap<string, AgentSkill>,
+): readonly SkillsIndexMatch[] {
+  const grouped = new Map<string, { description: string; best: SkillChunkMatch; first?: number }>();
+  for (const chunk of chunks) {
+    if (!Number.isFinite(chunk.score) || chunk.chunk < 0 || !Number.isInteger(chunk.chunk)) {
+      throw new SkillAdapterError(
+        'PARTIAL_RESULT',
+        'Vector search returned an invalid chunk match',
+      );
+    }
+    if (knownSkills && !knownSkills.has(chunk.name)) {
+      throw new SkillAdapterError(
+        'PARTIAL_RESULT',
+        `Vector search returned unknown skill '${chunk.name}'`,
+      );
+    }
+    const current = grouped.get(chunk.name);
+    if (!current) {
+      grouped.set(chunk.name, {
+        description: chunk.description,
+        best: chunk,
+        first: chunk.chunk === 0 ? chunk.score : undefined,
+      });
+    } else {
+      if (chunk.score > current.best.score) current.best = chunk;
+      if (chunk.chunk === 0) current.first = chunk.score;
+    }
+  }
+  return [...grouped.entries()]
+    .map(([name, group]) => ({
+      name,
+      description: group.description,
+      score: group.first == null ? group.best.score : 0.75 * group.first + 0.25 * group.best.score,
+      matchedChunk: group.best.chunk,
+      matchedSource: group.best.source,
+    }))
+    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
+    .slice(0, limit);
 }
 
 function containsSkillName(lowerTask: string, name: string): boolean {

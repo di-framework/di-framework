@@ -12,6 +12,7 @@ export {
   loadSkillsDirectories,
   loadSkillsDirectory,
 } from './load-skills.ts';
+export { LocalSkillCatalogStore } from './local-skill-catalog.ts';
 export { skillsToolboxAsMcp } from './mcp.ts';
 export type {
   AgentSkill,
@@ -83,6 +84,8 @@ export {
   DEFAULT_SKILLS_INDEX_THRESHOLD,
   DEFAULT_SKILLS_RETRIEVAL_LIMIT,
   hashSkillCatalog,
+  LocalSkillIndexWriter,
+  LocalSkillVectorSearch,
   loadSkillsIndex,
   rankSkillsIndex,
   SKILLS_INDEX_FIRST_CHUNK_WEIGHT,
@@ -108,6 +111,7 @@ export {
 } from './skills-index-cli.ts';
 export type { SkillsRetrievalAdvisorOptions } from './skills-retrieval-advisor.ts';
 export {
+  aggregateSkillChunkMatches,
   DEFAULT_SKILLS_RETRIEVAL_ORDER,
   SKILLS_RETRIEVAL_CONTEXT,
   SkillsRetrievalAdvisor,

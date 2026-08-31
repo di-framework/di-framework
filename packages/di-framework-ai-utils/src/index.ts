@@ -71,6 +71,7 @@ export type {
 } from './skills/index.ts';
 export {
   agentSkill,
+  aggregateSkillChunkMatches,
   assertReadyMetadata,
   assertSkillsIndexCurrent,
   buildSkillsIndex,
@@ -99,6 +100,9 @@ export {
   formatSkillNotFound,
   InMemorySkillCatalogStore,
   InMemorySkillVectorSearch,
+  LocalSkillCatalogStore,
+  LocalSkillIndexWriter,
+  LocalSkillVectorSearch,
   loadSkillFile,
   loadSkillsDirectories,
   loadSkillsDirectory,
