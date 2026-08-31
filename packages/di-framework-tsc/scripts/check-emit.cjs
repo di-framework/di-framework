@@ -34,6 +34,9 @@ const required = [
   'enabled !== true',
   'absent !== null',
   'missing !== undefined',
+  'Expected value to match its union type',
+  'Expected nullable to match its union type',
+  'Expected result to match its union type',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
