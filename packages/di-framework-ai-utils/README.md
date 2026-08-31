@@ -182,6 +182,13 @@ The default index is also detected automatically when present. Explicit `.semant
 
 The default indexer uses the optional `@huggingface/transformers` peer locally. It is loaded only after the catalog exceeds the threshold; small catalogs and custom `SkillEmbedder` implementations do not require it. The indexer tokenizes each exact `SKILL.md` into 256-token chunks with 32-token overlap, embeds them with a pinned quantized BGE model, and writes format-v3 vectors with per-vector symmetric int8 quantization. The manifest records dimensions, scales, norms, byte length, and a SHA-256 sidecar hash. Version-2 float32/base64 JSONL remains readable. Runtime scores directly over int8 storage and sends only the top 10 names/descriptions to the chat model. Chunk text and vectors never enter the prompt; the chosen body still loads only after `Skill` activation.
 
+Format v3 also stores compact BM25 postings built from each skill name,
+description, and body. Retrieval deterministically fuses lexical and dense ranks,
+pins explicit skill names, and returns at most one match per skill. The manifest
+records all BM25, reciprocal-rank-fusion, and abstention parameters. A valid
+abstention removes the `Skill` tool for that request; missing, stale, or corrupt
+indexes remain hard errors and never fall back to the full catalog.
+
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 
 Platform runtimes can independently supply `catalogStore`, `vectorSearch`, and a build-time

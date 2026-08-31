@@ -337,6 +337,27 @@ describe('skill index retrieval', () => {
     writeFileSync(fixture.outputFile, JSON.stringify(manifest));
     expect(() => loadSkillsIndex(fixture.outputFile)).toThrow(/dimension mismatch/);
   });
+
+  test('fuses lexical and dense evidence, pins names, and abstains safely', async () => {
+    const fixture = await indexedFixture();
+    const rare = await searchSkillsIndex(fixture.index, 'check row-level security policy', {
+      embedder: fixture.embedder,
+    });
+    expect(rare[0]?.name).toBe('postgres-reviewer');
+    expect(rare[0]?.lexicalScore).toBeGreaterThan(0);
+
+    const explicit = await searchSkillsIndex(fixture.index, 'please run pdf-reader now', {
+      embedder: fixture.embedder,
+    });
+    expect(explicit[0]).toMatchObject({ name: 'pdf-reader', exactName: true });
+    expect(new Set(explicit.map((match) => match.name)).size).toBe(explicit.length);
+
+    expect(
+      await searchSkillsIndex(fixture.index, 'compose sonnets about moonlight', {
+        embedder: fixture.embedder,
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe('SkillsAgent semantic discovery', () => {
@@ -428,5 +449,22 @@ describe('SkillsAgent semantic discovery', () => {
 
     expect((await bundle.agent.chat('Extract the tables from this PDF.')).content).toBe('done');
     expect(bundle.toolbox.retrievalAdvisor).toBeDefined();
+  });
+
+  test('removes the Skill tool when calibrated retrieval abstains', async () => {
+    const fixture = await indexedFixture();
+    const advisor = new SkillsRetrievalAdvisor({
+      index: fixture.index,
+      skills: fixture.skills,
+      embedder: fixture.embedder,
+    });
+    const request = chatClientRequest(
+      new Prompt('compose sonnets about moonlight', {
+        toolCallbacks: [skillsTool({ skills: fixture.skills })],
+      }),
+    );
+    const next = await advisor.before(request);
+    expect(next.prompt.options?.toolCallbacks).toEqual([]);
+    expect(next.context.get('skills_retrieval')).toEqual({ decision: 'abstained', matches: [] });
   });
 });
