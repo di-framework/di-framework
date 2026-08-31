@@ -193,6 +193,14 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 		case shimast.KindConstructor:
 			ctor := node.AsConstructorDeclaration()
 			injectCallable(factory, checker, ctor.Parameters, ctor.Body)
+		case shimast.KindFunctionExpression:
+			fn := node.AsFunctionExpression()
+			injectCallable(factory, checker, fn.Parameters, fn.Body)
+		case shimast.KindArrowFunction:
+			arrow := node.AsArrowFunction()
+			if arrow.Body != nil && arrow.Body.Kind == shimast.KindBlock {
+				injectCallable(factory, checker, arrow.Parameters, arrow.Body)
+			}
 		}
 		node.ForEachChild(func(child *shimast.Node) bool {
 			walk(child)

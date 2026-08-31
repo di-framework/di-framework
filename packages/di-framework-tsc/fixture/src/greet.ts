@@ -18,3 +18,17 @@ export class Greeter {
     return `${this.prefix} ${user.name}`;
   }
 }
+
+export const multiply = (value: number, by: number): number => {
+  return value * by;
+};
+
+export const divide = function (value: number, by: number): number {
+  return value / by;
+};
+
+export function nestedFactory() {
+  return (enabled: boolean) => {
+    return enabled;
+  };
+}
