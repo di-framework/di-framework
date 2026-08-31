@@ -1,20 +1,41 @@
 import { describe, expect, test } from 'bun:test';
-import { chatClientRequest, Prompt } from '@di-framework/ai';
+import { chatClientRequest, Prompt, ScriptedChatModel } from '@di-framework/ai';
 import type { SkillEmbedder } from '../src/index.ts';
 import {
   agentSkill,
   aggregateSkillChunkMatches,
+  asyncSkillsTool,
   buildSkillsIndex,
+  createSkillsAgentAsync,
+  createSkillsAgentBundleAsync,
+  createSkillsToolbox,
+  createSkillsToolboxAsync,
   InMemorySkillCatalogStore,
   InMemorySkillVectorSearch,
   LocalSkillCatalogStore,
   LocalSkillIndexWriter,
   LocalSkillVectorSearch,
   SkillAdapterError,
+  SkillsAgent,
   SkillsIndex,
   SkillsRetrievalAdvisor,
+  SkillsToolbox,
   skillsTool,
 } from '../src/index.ts';
+
+const embedder: SkillEmbedder = {
+  id: 'local@test',
+  model: 'local',
+  revision: 'test',
+  async embed(texts) {
+    return texts.map((text) =>
+      text.includes('alpha') ? new Float32Array([1, 0]) : new Float32Array([0, 1]),
+    );
+  },
+  async split(text) {
+    return [text];
+  },
+};
 
 describe('platform-neutral skill adapters', () => {
   test('catalog isolates namespaces and validates activation versions', async () => {
@@ -150,21 +171,200 @@ describe('platform-neutral skill adapters', () => {
   });
 });
 
-describe('local adapters', () => {
-  const embedder: SkillEmbedder = {
-    id: 'local@test',
-    model: 'local',
-    revision: 'test',
-    async embed(texts) {
-      return texts.map((text) =>
-        text.includes('alpha') ? new Float32Array([1, 0]) : new Float32Array([0, 1]),
-      );
-    },
-    async split(text) {
-      return [text];
-    },
-  };
+describe('asynchronous skill activation', () => {
+  test('catalog bodies stay lazy until the selected tool executes', async () => {
+    const skill = agentSkill({
+      name: 'remote-review',
+      description: 'Review remote code',
+      content: 'SECRET REMOTE BODY',
+    });
+    let loads = 0;
+    const base = new InMemorySkillCatalogStore(
+      [
+        {
+          descriptor: {
+            name: skill.name,
+            description: skill.description,
+            sourceHash: 'hash',
+            version: 'v1',
+          },
+          skill,
+        },
+      ],
+      { '': 'catalog-v1' },
+    );
+    const store = {
+      capabilities: base.capabilities,
+      list: base.list.bind(base),
+      version: base.version.bind(base),
+      health: base.health.bind(base),
+      async load(name: string, options?: Parameters<typeof base.load>[1]) {
+        loads++;
+        return base.load(name, options);
+      },
+    };
+    const descriptors = await store.list();
+    const tool = asyncSkillsTool({ descriptors, catalogStore: store });
 
+    expect(tool.toolDefinition.description).toContain('Review remote code');
+    expect(tool.toolDefinition.description).not.toContain('SECRET REMOTE BODY');
+    expect(loads).toBe(0);
+    expect(await tool.call(JSON.stringify({ command: 'remote-review' }))).toContain(
+      'SECRET REMOTE BODY',
+    );
+    expect(loads).toBe(1);
+  });
+
+  test('async toolbox uses independent catalog and vector adapters', async () => {
+    const alpha = agentSkill({
+      name: 'alpha',
+      description: 'Handle alpha tasks',
+      content: 'ALPHA PRIVATE BODY',
+    });
+    const beta = agentSkill({
+      name: 'beta',
+      description: 'Handle beta tasks',
+      content: 'BETA PRIVATE BODY',
+    });
+    const catalogStore = new InMemorySkillCatalogStore(
+      [alpha, beta].map((skill) => ({
+        descriptor: {
+          name: skill.name,
+          description: skill.description,
+          sourceHash: `${skill.name}-hash`,
+          version: `${skill.name}-v1`,
+        },
+        skill,
+      })),
+      { '': 'catalog-v1' },
+    );
+    const vectorSearch = new InMemorySkillVectorSearch({
+      metadata: {
+        indexVersion: 'index-v1',
+        catalogVersion: 'catalog-v1',
+        dimensions: 2,
+        model: embedder.model,
+        revision: embedder.revision,
+        embedderId: embedder.id,
+        scoring: 'cosine',
+      },
+      vectors: [
+        {
+          name: 'alpha',
+          description: 'Handle alpha tasks',
+          chunk: 0,
+          source: 'document',
+          embedding: [1, 0],
+        },
+        {
+          name: 'beta',
+          description: 'Handle beta tasks',
+          chunk: 0,
+          source: 'document',
+          embedding: [0, 1],
+        },
+      ],
+    });
+    const options = {
+      workspace: process.cwd(),
+      semanticDiscovery: { catalogStore, vectorSearch, embedder, limit: 1 },
+      todos: false,
+      list: false,
+      glob: false,
+      grep: false,
+    } as const;
+    const toolbox = await createSkillsToolboxAsync(options);
+    expect(toolbox.skills).toEqual([]);
+    expect(toolbox.descriptors).toHaveLength(2);
+    const request = chatClientRequest(
+      new Prompt('please do an alpha task', { toolCallbacks: toolbox.tools }),
+    );
+    const selected = await toolbox.retrievalAdvisor?.before(request);
+    const skillTool = selected?.prompt.options?.toolCallbacks?.find(
+      (tool) => tool.toolDefinition.name === 'Skill',
+    );
+    expect(skillTool?.toolDefinition.description).toContain('<name>alpha</name>');
+    expect(skillTool?.toolDefinition.description).not.toContain('<name>beta</name>');
+    expect(skillTool?.toolDefinition.description).not.toContain('PRIVATE BODY');
+    expect(await skillTool?.call(JSON.stringify({ command: 'alpha' }))).toContain(
+      'ALPHA PRIVATE BODY',
+    );
+    expect((await SkillsToolbox.ofAsync(options)).descriptors).toHaveLength(2);
+    const builder = SkillsToolbox.builder()
+      .workspace(process.cwd())
+      .noDefaultDirectories()
+      .semanticDiscovery(options.semanticDiscovery)
+      .todos(false)
+      .list(false)
+      .glob(false)
+      .grep(false);
+    expect((await builder.buildAsync()).descriptors).toHaveLength(2);
+    expect(await builder.buildToolsAsync()).not.toHaveLength(0);
+    expect(() => createSkillsToolbox(options)).toThrow(/Asynchronous catalog stores/);
+    expect(
+      (
+        await createSkillsToolboxAsync({
+          skills: [alpha],
+          semanticDiscovery: false,
+          todos: false,
+        })
+      ).skills,
+    ).toEqual([alpha]);
+
+    const degradedCatalog = {
+      capabilities: catalogStore.capabilities,
+      list: catalogStore.list.bind(catalogStore),
+      load: catalogStore.load.bind(catalogStore),
+      version: catalogStore.version.bind(catalogStore),
+      async health() {
+        return { status: 'degraded' as const, message: 'catalog unavailable' };
+      },
+    };
+    await expect(
+      createSkillsToolboxAsync({
+        ...options,
+        semanticDiscovery: { ...options.semanticDiscovery, catalogStore: degradedCatalog },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_READY' });
+
+    await expect(
+      createSkillsToolboxAsync({
+        ...options,
+        semanticDiscovery: {
+          ...options.semanticDiscovery,
+          vectorSearch: new InMemorySkillVectorSearch(),
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_READY' });
+
+    const chatModel = new ScriptedChatModel([]);
+    await expect(createSkillsAgentAsync({ ...options, chatModel })).resolves.toBeDefined();
+    const bundle = await createSkillsAgentBundleAsync({ ...options, chatModel });
+    expect(bundle.toolbox.descriptors).toHaveLength(2);
+    await expect(SkillsAgent.ofAsync({ ...options, chatModel })).resolves.toBeDefined();
+    const agentBuilder = SkillsAgent.builder()
+      .chatModel(chatModel)
+      .workspace(process.cwd())
+      .noDefaultDirectories()
+      .semanticDiscovery(options.semanticDiscovery)
+      .todos(false)
+      .list(false)
+      .glob(false)
+      .grep(false);
+    await expect(agentBuilder.buildAsync()).resolves.toBeDefined();
+    expect((await agentBuilder.buildBundleAsync()).toolbox.descriptors).toHaveLength(2);
+    expect(
+      SkillsAgent.builder()
+        .chatModel(chatModel)
+        .noDefaultDirectories()
+        .addSkill(alpha)
+        .todos(false)
+        .build(),
+    ).toBeDefined();
+  });
+});
+
+describe('local adapters', () => {
   test('filesystem-compatible catalog and JSONL search implement the contracts', async () => {
     const skills = [
       agentSkill({ name: 'alpha', description: 'alpha routing', content: 'alpha body' }),
@@ -336,7 +536,7 @@ describe('local adapters', () => {
           },
         ],
         1,
-        new Map(skills.map((skill) => [skill.name, skill])),
+        new Set(skills.map((skill) => skill.name)),
       ),
     ).toThrow(/invalid chunk/);
     expect(() =>
@@ -351,7 +551,7 @@ describe('local adapters', () => {
           },
         ],
         1,
-        new Map(skills.map((skill) => [skill.name, skill])),
+        new Set(skills.map((skill) => skill.name)),
       ),
     ).toThrow(/unknown skill/);
   });

@@ -12,6 +12,7 @@ import { formatMemorySystemPrompt } from '../tools/memory-tools.ts';
 import { SkillsFluent } from './skills-fluent.ts';
 import {
   createSkillsToolbox,
+  createSkillsToolboxAsync,
   type SkillsToolbox,
   type SkillsToolboxOptions,
 } from './skills-toolbox.ts';
@@ -87,8 +88,16 @@ export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
     return this.buildBundle().agent;
   }
 
+  async buildAsync(): Promise<ChatAgent> {
+    return (await this.buildBundleAsync()).agent;
+  }
+
   buildBundle(): SkillsAgentBundle {
     return createSkillsAgentBundle(this.toAgentOptions());
+  }
+
+  buildBundleAsync(): Promise<SkillsAgentBundle> {
+    return createSkillsAgentBundleAsync(this.toAgentOptions());
   }
 
   toAgentOptions(): CreateSkillsAgentOptions {
@@ -116,6 +125,9 @@ export const SkillsAgent = {
   of(options: CreateSkillsAgentOptions): ChatAgent {
     return createSkillsAgent(options);
   },
+  ofAsync(options: CreateSkillsAgentOptions): Promise<ChatAgent> {
+    return createSkillsAgentAsync(options);
+  },
 };
 
 /**
@@ -127,8 +139,27 @@ export function createSkillsAgent(options: CreateSkillsAgentOptions): ChatAgent 
   return createSkillsAgentBundle(options).agent;
 }
 
+export async function createSkillsAgentAsync(
+  options: CreateSkillsAgentOptions,
+): Promise<ChatAgent> {
+  return (await createSkillsAgentBundleAsync(options)).agent;
+}
+
 export function createSkillsAgentBundle(options: CreateSkillsAgentOptions): SkillsAgentBundle {
   const toolbox = createSkillsToolbox(options);
+  return assembleSkillsAgent(options, toolbox);
+}
+
+export async function createSkillsAgentBundleAsync(
+  options: CreateSkillsAgentOptions,
+): Promise<SkillsAgentBundle> {
+  return assembleSkillsAgent(options, await createSkillsToolboxAsync(options));
+}
+
+function assembleSkillsAgent(
+  options: CreateSkillsAgentOptions,
+  toolbox: SkillsToolbox,
+): SkillsAgentBundle {
   const memoriesDir =
     options.memories === true
       ? `${(options.workspace ?? process.cwd()).replace(/[/\\]$/, '')}/.memory`

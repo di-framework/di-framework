@@ -28,14 +28,20 @@ import {
   type SkillsIndexMatch,
   searchSkillsIndex,
 } from './skills-index.ts';
-import { DEFAULT_SKILL_TOOL_NAME, type SkillsToolOptions, skillsTool } from './skills-tool.ts';
+import {
+  asyncSkillsTool,
+  DEFAULT_SKILL_TOOL_NAME,
+  type SkillsToolOptions,
+  skillsTool,
+} from './skills-tool.ts';
 
 export const SKILLS_RETRIEVAL_CONTEXT = 'skills_retrieval';
 export const DEFAULT_SKILLS_RETRIEVAL_ORDER = HIGHEST_PRECEDENCE + 250;
 
 export interface SkillsRetrievalAdvisorOptions {
   readonly index?: SkillsIndex | string;
-  readonly skills: readonly AgentSkill[];
+  readonly skills?: readonly AgentSkill[];
+  readonly descriptors?: readonly SkillDescriptor[];
   readonly catalogStore?: SkillCatalogStore;
   readonly vectorSearch?: SkillVectorSearch;
   readonly namespace?: string;
@@ -47,7 +53,7 @@ export interface SkillsRetrievalAdvisorOptions {
   readonly toolName?: string;
   readonly toolOptions?: Omit<SkillsToolOptions, 'skills' | 'directories' | 'files'>;
   /** Used by SkillsToolbox to preserve activation state and its runtime gate. */
-  readonly createTool?: (skills: readonly AgentSkill[]) => ToolCallback;
+  readonly createTool?: (descriptors: readonly SkillDescriptor[]) => ToolCallback;
 }
 
 /**
@@ -70,21 +76,25 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
   private readonly recentUserMessages: number;
   private readonly toolName: string;
   private readonly toolOptions: Omit<SkillsToolOptions, 'skills' | 'directories' | 'files'>;
-  private readonly createTool: (skills: readonly AgentSkill[]) => ToolCallback;
+  private readonly createTool: (descriptors: readonly SkillDescriptor[]) => ToolCallback;
 
   constructor(options: SkillsRetrievalAdvisorOptions) {
     this.index = typeof options.index === 'string' ? loadSkillsIndex(options.index) : options.index;
     if (!this.index && !options.vectorSearch) {
       throw new Error('Skills retrieval requires an index or vectorSearch adapter');
     }
-    if (this.index)
-      assertSkillsIndexCurrent(this.index, options.skills, { allowExtraSkills: true });
-    this.skillsByName = new Map(options.skills.map((skill) => [skill.name, skill]));
-    this.descriptors = options.skills.map((skill) => ({
-      name: skill.name,
-      description: skill.description,
-      sourceHash: '',
-    }));
+    const skills = options.skills ?? [];
+    if (this.index && skills.length > 0) {
+      assertSkillsIndexCurrent(this.index, skills, { allowExtraSkills: true });
+    }
+    this.skillsByName = new Map(skills.map((skill) => [skill.name, skill]));
+    this.descriptors =
+      options.descriptors ??
+      skills.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        sourceHash: '',
+      }));
     this.catalogStore = options.catalogStore;
     this.vectorSearch =
       options.vectorSearch ?? new LocalSkillVectorSearch(this.index as SkillsIndex);
@@ -101,12 +111,24 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
     this.toolOptions = options.toolOptions ?? {};
     this.createTool =
       options.createTool ??
-      ((skills) =>
-        skillsTool({
+      ((descriptors) => {
+        if (this.catalogStore) {
+          return asyncSkillsTool({
+            ...this.toolOptions,
+            descriptors,
+            catalogStore: this.catalogStore,
+            namespace: this.namespace,
+            toolName: this.toolName,
+          });
+        }
+        return skillsTool({
           ...this.toolOptions,
-          skills,
+          skills: descriptors
+            .map((descriptor) => this.skillsByName.get(descriptor.name))
+            .filter((skill): skill is AgentSkill => skill != null),
           toolName: this.toolName,
-        }));
+        });
+      });
   }
 
   async before(request: ChatClientRequest): Promise<ChatClientRequest> {
@@ -124,9 +146,12 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
           })
         : await this.searchAdapter(task);
     const matches = this.pinExplicitSkillNames(task, semantic);
+    const descriptorsByName = new Map(
+      this.descriptors.map((descriptor) => [descriptor.name, descriptor]),
+    );
     const selected = matches
-      .map((match) => this.skillsByName.get(match.name))
-      .filter((skill): skill is AgentSkill => skill != null);
+      .map((match) => descriptorsByName.get(match.name))
+      .filter((descriptor): descriptor is SkillDescriptor => descriptor != null);
 
     if (selected.length === 0) {
       throw new Error('Semantic skill discovery did not return any skills for this request');
@@ -216,7 +241,11 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
       limit: Math.max(limit * 8, limit),
       minScore: this.minScore,
     });
-    return aggregateSkillChunkMatches(chunks, limit, this.skillsByName);
+    return aggregateSkillChunkMatches(
+      chunks,
+      limit,
+      new Set(this.descriptors.map(({ name }) => name)),
+    );
   }
 }
 
@@ -224,7 +253,7 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
 export function aggregateSkillChunkMatches(
   chunks: readonly SkillChunkMatch[],
   limit: number,
-  knownSkills?: ReadonlyMap<string, AgentSkill>,
+  knownSkills?: ReadonlySet<string>,
 ): readonly SkillsIndexMatch[] {
   const grouped = new Map<string, { description: string; best: SkillChunkMatch; first?: number }>();
   for (const chunk of chunks) {
