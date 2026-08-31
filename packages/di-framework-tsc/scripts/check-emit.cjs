@@ -56,6 +56,25 @@ const required = [
   'if (label !== undefined)',
   'typeof label !== "string"',
   'if (count !== undefined)',
+  '!("left" in value)',
+  'typeof value.shared !== "number"',
+  '!("right" in value)',
+  '!("x-id" in nested.item)',
+  'nested.item["x-id"] !== undefined',
+  '!Array.isArray(entries)',
+  '!("left" in __di_item)',
+  'typeof __di_item.right !== "string"',
+  'Object.keys(indexed).some(__di_key => typeof indexed[__di_key] !== "number")',
+  'Object.keys(record).some(__di_key => typeof record[__di_key] !== "number")',
+  'Object.keys(values).some(__di_key => typeof values[__di_key] !== "object"',
+  'Object.keys(values[__di_key]).some(__di_key_1 => typeof values[__di_key][__di_key_1] !== "number")',
+  'Object.keys(__di_key).some(__di_key_1 => typeof __di_key[__di_key_1] !== "number")',
+  '!("x-id" in fixed)',
+  'typeof fixed["x-id"] !== "number"',
+  '!("" in special)',
+  'typeof special[""] !== "number"',
+  '!("__id" in special)',
+  'typeof special.__id !== "number"',
   '!Array.isArray(values)',
   'values.some(__di_item => typeof __di_item !== "number")',
   'typeof id !== "number"',
@@ -75,6 +94,23 @@ const serviceRequired = [
   'const createService = (config) => {',
 ];
 missing.push(...serviceRequired.filter((needle) => !serviceJs.includes(needle)));
+const sharedChecks = js.split('typeof value.shared !== "number"').length - 1;
+if (sharedChecks !== 1) {
+  missing.push(`intersection shared-property check exactly once (found ${sharedChecks})`);
+}
+const forbidden = [
+  'typeof value.label !== "string"',
+  'Object.keys(numericValues).some(__di_key',
+  'Object.keys(unsupportedValues).some(__di_key',
+  'Object.keys(symbolValues).some(__di_key',
+  'Expected callable to be an object',
+  'Expected constructable to be an object',
+  'Expected requiredRecursive to be an object',
+  'Object.keys(recursiveIndex).some(',
+];
+for (const needle of forbidden) {
+  if (js.includes(needle)) missing.push(`unexpected emitted check: ${needle}`);
+}
 if (missing.length > 0) {
   console.error('check-emit: emitted JS is missing injected runtime checks:');
   for (const m of missing) console.error(`  - ${m}`);
