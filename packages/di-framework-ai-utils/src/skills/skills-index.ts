@@ -11,6 +11,18 @@ import {
 import { dirname, resolve } from 'node:path';
 import { expandUserPath } from '../sandbox/paths.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
+import {
+  assertReadyMetadata,
+  type SkillAdapterCapabilities,
+  type SkillAdapterHealth,
+  type SkillChunkMatch,
+  type SkillIndexWriteReceipt,
+  type SkillIndexWriteRequest,
+  type SkillIndexWriter,
+  type SkillVectorIndexMetadata,
+  type SkillVectorQueryOptions,
+  type SkillVectorSearch,
+} from './skill-adapters.ts';
 import { type SkillEmbedder, TransformersJsSkillEmbedder } from './skill-embedder.ts';
 import { collectSkills } from './skills-tool.ts';
 import { validateSkill } from './validate-skill.ts';
@@ -79,6 +91,8 @@ export interface BuildSkillsIndexOptions {
   readonly chunkTokens?: number;
   readonly chunkOverlapTokens?: number;
   readonly embedder?: SkillEmbedder;
+  /** Optional hosted/object-storage writer. Local JSONL remains the default. */
+  readonly writer?: SkillIndexWriter;
   readonly force?: boolean;
   /** Reports embedded chunks, not skills. */
   readonly onProgress?: (completed: number, total: number) => void;
@@ -91,6 +105,7 @@ export interface BuildSkillsIndexResult {
   readonly chunkCount: number;
   readonly dimensions?: number;
   readonly unchanged?: boolean;
+  readonly receipt?: SkillIndexWriteReceipt;
 }
 
 /** Preferred build-time factory for a semantic Agent Skills index. */
@@ -168,6 +183,11 @@ export class SkillsIndexBuilder {
 
   embedder(embedder: SkillEmbedder): this {
     this.draft.embedder = embedder;
+    return this;
+  }
+
+  writer(writer: SkillIndexWriter): this {
+    this.draft.writer = writer;
     return this;
   }
 
@@ -275,7 +295,7 @@ export async function buildSkillsIndex(
       indexed: false,
       chunkCount: 0,
     };
-    writeJsonLinesAtomically(outputFile, [metadata]);
+    new LocalSkillIndexWriter(outputFile).writeIndex({ metadata, entries: [] });
     return { outputFile, indexed: false, skillCount: skills.length, chunkCount: 0 };
   }
 
@@ -384,14 +404,133 @@ export async function buildSkillsIndex(
       chunks,
     };
   });
-  writeJsonLinesAtomically(outputFile, [metadata, ...entries.map(serializeEntry)]);
+  const index = { metadata, entries } satisfies SkillsIndex;
+  let receipt: SkillIndexWriteReceipt | undefined;
+  if (options.writer) {
+    receipt = await options.writer.replace(toIndexWriteRequest(index));
+    if (!receipt.ready) throw new Error('Skill index writer did not return a ready receipt');
+  } else {
+    new LocalSkillIndexWriter(outputFile).writeIndex(index);
+  }
   return {
     outputFile,
     indexed: true,
     skillCount: skills.length,
     chunkCount: pendingChunks.length,
     dimensions,
+    receipt,
   };
+}
+
+const LOCAL_SEARCH_CAPABILITIES: SkillAdapterCapabilities = {
+  namespaces: false,
+  lazyBodies: false,
+  vectorSearch: true,
+  indexWriting: false,
+  eventuallyConsistent: false,
+};
+
+/** Filesystem JSONL plus exact cosine search behind the platform contract. */
+export class LocalSkillVectorSearch implements SkillVectorSearch {
+  readonly capabilities = LOCAL_SEARCH_CAPABILITIES;
+  readonly index: SkillsIndex;
+
+  constructor(index: SkillsIndex | string = DEFAULT_SKILLS_INDEX_FILE) {
+    this.index = typeof index === 'string' ? loadSkillsIndex(index) : index;
+  }
+
+  metadata(): Promise<SkillVectorIndexMetadata> {
+    return Promise.resolve(adapterMetadata(this.index));
+  }
+
+  async health(): Promise<SkillAdapterHealth> {
+    const metadata = adapterMetadata(this.index);
+    return metadata.ready
+      ? { status: 'ready', checkedVersion: metadata.indexVersion }
+      : { status: 'not-ready', message: 'The local index is below its indexing threshold' };
+  }
+
+  async query(
+    vector: ArrayLike<number>,
+    options: SkillVectorQueryOptions = {},
+  ): Promise<readonly SkillChunkMatch[]> {
+    const metadata = adapterMetadata(this.index);
+    assertReadyMetadata(metadata, options);
+    if (options.namespace != null)
+      throw new Error('Local JSONL search does not support namespaces');
+    if (vector.length !== metadata.dimensions) {
+      throw new Error(
+        `Query embedding has ${vector.length} dimensions; expected ${metadata.dimensions}`,
+      );
+    }
+    const limit = positiveInteger(options.limit ?? this.index.metadata.retrievalLimit, 'limit');
+    const minScore = options.minScore ?? Number.NEGATIVE_INFINITY;
+    if (Number.isNaN(minScore)) throw new Error('minScore must be a number');
+    return this.index.entries
+      .flatMap((entry) =>
+        entry.chunks.map((chunk, chunkIndex) => ({
+          name: entry.name,
+          description: entry.description,
+          score: cosineSimilarity(vector, chunk.embedding),
+          chunk: chunkIndex,
+          source: chunk.source,
+        })),
+      )
+      .filter((match) => match.score >= minScore)
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.name.localeCompare(right.name) ||
+          left.chunk - right.chunk,
+      )
+      .slice(0, limit);
+  }
+}
+
+const LOCAL_WRITER_CAPABILITIES: SkillAdapterCapabilities = {
+  ...LOCAL_SEARCH_CAPABILITIES,
+  vectorSearch: false,
+  indexWriting: true,
+};
+
+/** Atomic local JSONL writer used by the compatible synchronous builder path. */
+export class LocalSkillIndexWriter implements SkillIndexWriter {
+  readonly capabilities = LOCAL_WRITER_CAPABILITIES;
+
+  constructor(readonly file = DEFAULT_SKILLS_INDEX_FILE) {}
+
+  replace(request: SkillIndexWriteRequest): Promise<SkillIndexWriteReceipt> {
+    const entries = groupWriteVectors(request);
+    const metadata: SkillsIndexMetadata = {
+      kind: SKILLS_INDEX_FORMAT,
+      version: SKILLS_INDEX_VERSION,
+      indexed: true,
+      skillCount: entries.length,
+      chunkCount: request.vectors.length,
+      threshold: 0,
+      retrievalLimit: Math.max(1, entries.length),
+      chunkTokens: DEFAULT_SKILLS_INDEX_CHUNK_TOKENS,
+      chunkOverlapTokens: DEFAULT_SKILLS_INDEX_CHUNK_OVERLAP_TOKENS,
+      scoring: SKILLS_INDEX_SCORING,
+      vectorEncoding: SKILLS_INDEX_VECTOR_ENCODING,
+      catalogHash: request.metadata.catalogVersion,
+      model: request.metadata.model,
+      revision: request.metadata.revision,
+      embedderId: request.metadata.embedderId,
+      dimensions: request.metadata.dimensions,
+    };
+    this.writeIndex({ metadata, entries });
+    return Promise.resolve({
+      ...request.metadata,
+      ready: true,
+      writtenVectors: request.vectors.length,
+    });
+  }
+
+  writeIndex(index: SkillsIndex): void {
+    const records = [index.metadata, ...index.entries.map(serializeEntry)];
+    writeJsonLinesAtomically(resolve(expandUserPath(this.file)), records);
+  }
 }
 
 /** Parse and validate a generated skill index. */
@@ -554,6 +693,64 @@ export function cosineSimilarity(left: ArrayLike<number>, right: ArrayLike<numbe
   }
   if (leftNorm === 0 || rightNorm === 0) return 0;
   return dot / Math.sqrt(leftNorm * rightNorm);
+}
+
+function adapterMetadata(index: SkillsIndex): SkillVectorIndexMetadata {
+  return {
+    indexVersion: `${index.metadata.kind}@${index.metadata.version}:${index.metadata.catalogHash}`,
+    catalogVersion: index.metadata.catalogHash,
+    ready: index.metadata.indexed,
+    dimensions: index.metadata.dimensions ?? 0,
+    model: index.metadata.model,
+    revision: index.metadata.revision,
+    embedderId: index.metadata.embedderId,
+    scoring: index.metadata.scoring,
+  };
+}
+
+function toIndexWriteRequest(index: SkillsIndex): SkillIndexWriteRequest {
+  const metadata = adapterMetadata(index);
+  return {
+    metadata: {
+      indexVersion: metadata.indexVersion,
+      catalogVersion: metadata.catalogVersion,
+      dimensions: metadata.dimensions,
+      model: metadata.model,
+      revision: metadata.revision,
+      embedderId: metadata.embedderId,
+      scoring: metadata.scoring,
+    },
+    vectors: index.entries.flatMap((entry) =>
+      entry.chunks.map((chunk, chunkIndex) => ({
+        name: entry.name,
+        description: entry.description,
+        documentHash: entry.documentHash,
+        chunk: chunkIndex,
+        source: chunk.source,
+        embedding: chunk.embedding,
+      })),
+    ),
+  };
+}
+
+function groupWriteVectors(request: SkillIndexWriteRequest): SkillsIndexEntry[] {
+  const grouped = new Map<string, SkillsIndexEntry>();
+  for (const vector of request.vectors) {
+    const existing = grouped.get(vector.name);
+    const chunk = { source: vector.source, embedding: Float32Array.from(vector.embedding) };
+    if (existing) {
+      (existing.chunks as SkillsIndexChunk[]).push(chunk);
+    } else {
+      grouped.set(vector.name, {
+        kind: 'skill',
+        name: vector.name,
+        description: vector.description,
+        documentHash: vector.documentHash ?? '',
+        chunks: [chunk],
+      });
+    }
+  }
+  return [...grouped.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function hashSkillCatalog(skills: readonly Pick<AgentSkill, 'name' | 'source'>[]): string {
