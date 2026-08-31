@@ -76,14 +76,14 @@ function greet(user) {
 
 ## Supported boundaries and types
 
-The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, sound bounded unions, plain structural objects, non-callable object-only intersections, erased primitive brands, template-literal strings, string index signatures, `Record<string, V>` and literal-key records, arrays/readonly arrays, and fixed tuples with optional tails.
+The transformer handles function declarations/expressions, methods, constructors, and block- or expression-bodied arrows at any nesting level. Required, optional, default, rest, and simple destructured parameters are supported. Runtime predicates cover primitives, nullish and literal types, enums, accessible local class instances, sound bounded unions, plain structural objects, non-callable object-only intersections, erased primitive brands, template-literal strings, string index signatures, `Record<string, V>` and literal-key records, arrays/readonly arrays, and fixed tuples with optional tails.
 
 ## Limitations
 
 Unsupported paths are skipped as a whole rather than emitting a predicate that can reject valid input. Current intentional gaps are:
 
 - defaults and rest elements nested inside destructuring patterns
-- variadic tuples, classes, callable/constructable intersections, typia-style tags, and custom nominal predicates
+- variadic tuples, imported class bindings, callable/constructable intersections, typia-style tags, and custom nominal predicates
 - number-only and symbol index signatures, and advanced mapped/conditional types
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
@@ -98,6 +98,9 @@ Structural traversal keeps a per-path visited set and a maximum depth of eight, 
 Optional and defaulted parameters are validated only when their runtime value is not `undefined`; `null` is still checked against the declared type.
 Rest parameters use the same full array and element validation as ordinary arrays.
 Simple object, array, and nested destructured bindings are validated using the types of the bound identifiers.
+
+Numeric, string, and const enums are checked against their checker-known member values. Enums with a computed member are skipped as a whole because the computed runtime value cannot be reproduced soundly without depending on an emitted enum object.
+Class-typed parameters use `instanceof` when the checker can name an accessible local or local-namespace runtime constructor; interfaces remain structural. Subclasses pass the check, and generic type arguments are erased at runtime. As with any `instanceof` test, equivalent instances created in another JavaScript realm do not pass. ES-imported class bindings are conservatively skipped, including ordinary value imports, because TypeScript can elide an import used only as a type and the transformer does not synthesize or retain imports.
 
 ## Monorepo note
 

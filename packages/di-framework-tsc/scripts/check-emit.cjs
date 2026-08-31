@@ -7,6 +7,7 @@ const path = require('node:path');
 const fixtureRoot = path.resolve(__dirname, '..', 'fixture');
 const outFile = path.join(fixtureRoot, 'dist', 'greet.js');
 const serviceOutFile = path.join(fixtureRoot, 'dist', 'service.js');
+const nominalOutFile = path.join(fixtureRoot, 'dist', 'nominal.js');
 
 if (!fs.existsSync(outFile)) {
   console.error(`check-emit: missing emit output at ${outFile}`);
@@ -19,6 +20,11 @@ if (!fs.existsSync(serviceOutFile)) {
   process.exit(1);
 }
 const serviceJs = fs.readFileSync(serviceOutFile, 'utf8');
+if (!fs.existsSync(nominalOutFile)) {
+  console.error(`check-emit: missing emit output at ${nominalOutFile}`);
+  process.exit(1);
+}
+const nominalJs = fs.readFileSync(nominalOutFile, 'utf8');
 const required = [
   'typeof user !== "object"',
   'Expected user to be an object',
@@ -139,6 +145,53 @@ const forbidden = [
 ];
 for (const needle of forbidden) {
   if (js.includes(needle)) missing.push(`unexpected emitted check: ${needle}`);
+}
+
+const nominalRequired = [
+  'value !== 0 && value !== 2',
+  'value !== "ready" && value !== "done"',
+  'value !== 10 && value !== 20',
+  'Expected value to be a valid enum value',
+  '!(token instanceof Token)',
+  'Expected token to be an instance of Token',
+  'tokens.some(__di_item => !(__di_item instanceof Token))',
+  '!(value instanceof Token)',
+  '!(token instanceof Domain.NamespacedToken)',
+  'typeof token !== "object"',
+  'typeof token.value !== "string"',
+];
+missing.push(...nominalRequired.filter((needle) => !nominalJs.includes(needle)));
+
+const functionBody = (source, name) => {
+  const start = source.indexOf(`function ${name}(`);
+  if (start < 0) return '';
+  const next = source.indexOf('\nfunction ', start + 1);
+  return source.slice(start, next < 0 ? source.length : next);
+};
+const computedBody = functionBody(nominalJs, 'computedEnum');
+const classBody = functionBody(nominalJs, 'useToken');
+const interfaceBody = functionBody(nominalJs, 'useTokenShape');
+const typeOnlyBody = functionBody(nominalJs, 'typeOnlyToken');
+const importedBody = functionBody(nominalJs, 'importedToken');
+const nominalForbidden = [];
+if (computedBody.includes('TypeError')) nominalForbidden.push('guard for computedEnum');
+if (classBody.includes('typeof token.value'))
+  nominalForbidden.push('structural guard for class Token');
+if (interfaceBody.includes('instanceof'))
+  nominalForbidden.push('nominal guard for TokenShape interface');
+if (typeOnlyBody.includes('instanceof') || typeOnlyBody.includes('ExternalToken')) {
+  nominalForbidden.push('runtime reference for type-only ExternalToken import');
+}
+if (importedBody.includes('instanceof') || importedBody.includes('ImportedToken')) {
+  nominalForbidden.push('runtime reference for type-position ImportedToken value import');
+}
+if (nominalJs.includes('require("./external-token.js")')) {
+  nominalForbidden.push('retained external-token import used only in type positions');
+}
+if (nominalForbidden.length > 0) {
+  console.error('check-emit: emitted JS contains forbidden partial or structural checks:');
+  for (const item of nominalForbidden) console.error(`  - ${item}`);
+  process.exit(1);
 }
 if (missing.length > 0) {
   console.error('check-emit: emitted JS is missing injected runtime checks:');
