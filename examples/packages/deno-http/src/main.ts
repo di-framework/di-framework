@@ -1,4 +1,6 @@
-import { Bootstrap, Component, Container, Telemetry } from '@di-framework/core/decorators';
+import { ApplicationContext } from '@di-framework/core/application-context';
+import { useContainer } from '@di-framework/core/container';
+import { Component, Container, Telemetry } from '@di-framework/core/decorators';
 import {
   Controller,
   Endpoint,
@@ -33,7 +35,6 @@ type SentencesResponse = { nonsense: string; count: number };
 type SentenceResponse = { nonsense: string };
 
 // Denosaur Language Model
-@Bootstrap()
 @Controller()
 export class NaturalLanguageController {
   constructor(@Component(NaturalLanguageService) private service: NaturalLanguageService) {}
@@ -56,6 +57,11 @@ export class NaturalLanguageController {
   });
 }
 
+export const application = ApplicationContext.builder(useContainer()).bootstrap(
+  NaturalLanguageController,
+);
+
 if (import.meta.main) {
+  await application.start();
   Deno.serve({ port: 8000 }, (request: Request) => router.fetch(request, env, ctx));
 }
