@@ -16,6 +16,7 @@
     "build": "bun run packages/di-framework-cli/main.ts mx build",
     "check-packaging": "bun scripts/check-package-tarballs.ts",
     "check-package-tarballs": "bun scripts/check-package-tarballs.ts",
+    "check-ai-utils-optional-peer": "bun scripts/check-ai-utils-optional-peer.ts",
     "test:all": "bun --filter=* --sequential run test",
     "test": "bun test",
     "publish": "bun run packages/di-framework-cli/main.ts mx publish",
