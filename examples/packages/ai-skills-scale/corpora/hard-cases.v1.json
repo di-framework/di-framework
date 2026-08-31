@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "description": "Pre-tuning labels for difficult routing behavior. Relevant skills are labels, not measured predictions.",
+  "cases": [
+    {
+      "id": "alias-pdf-extraction",
+      "kind": "hard",
+      "prompt": "OCR the tables and footnotes in the attached portable document, then summarize them.",
+      "relevantSkills": ["convert-pdf-to-md"],
+      "notes": "Alias/paraphrase without the .pdf suffix."
+    },
+    {
+      "id": "rare-qdrant-hnsw",
+      "kind": "hard",
+      "prompt": "After scalar quantization our HNSW ef_search setting tanks recall; diagnose the Qdrant ranking path.",
+      "relevantSkills": ["qdrant-search-quality"],
+      "notes": "Rare product identifiers."
+    },
+    {
+      "id": "typo-postgres",
+      "kind": "typo",
+      "prompt": "Reveiw this Postgres scheema for JSONB antipaterns and unsafe RLS.",
+      "relevantSkills": ["postgresql-code-review"]
+    },
+    {
+      "id": "multilingual-pdf-es",
+      "kind": "multilingual",
+      "language": "es",
+      "prompt": "Extrae las tablas del informe PDF y resume sus conclusiones.",
+      "relevantSkills": ["convert-pdf-to-md"]
+    },
+    {
+      "id": "multilingual-ruff-fr",
+      "kind": "multilingual",
+      "language": "fr",
+      "prompt": "Corrige récursivement les erreurs Python avec Ruff, sans appliquer les corrections dangereuses.",
+      "relevantSkills": ["ruff-recursive-fix"]
+    },
+    {
+      "id": "multi-pdf-pipeline",
+      "kind": "multi-skill",
+      "prompt": "Merge these PDFs, rotate page three, watermark the result, then extract it as Markdown.",
+      "relevantSkills": ["pdftk-server", "convert-pdf-to-md"]
+    },
+    {
+      "id": "ambiguous-localization",
+      "kind": "ambiguous",
+      "prompt": "Add Japanese translations to the extension and its command metadata.",
+      "relevantSkills": ["vscode-ext-localization", "next-intl-add-language"],
+      "notes": "Intent omits which application framework is in use."
+    },
+    {
+      "id": "long-context-actions",
+      "kind": "long-context",
+      "prompt": "We are preparing a release. The service uses queues, a database, dashboards, and a long deployment checklist. The immediate request is narrow: inspect the pull_request_target workflow for expression injection and excessive GitHub token permissions before we merge.",
+      "relevantSkills": ["github-actions-hardening"]
+    },
+    {
+      "id": "adversarial-generic-review",
+      "kind": "adversarial",
+      "prompt": "Do a code review focused specifically on C# sync-over-async, cancellation propagation, and ConfigureAwait.",
+      "relevantSkills": ["csharp-async"],
+      "notes": "Specific routing should beat generic code-review descriptions."
+    },
+    {
+      "id": "no-skill-weather",
+      "kind": "no-skill",
+      "prompt": "Will I need an umbrella in Boston tomorrow afternoon?",
+      "relevantSkills": []
+    },
+    {
+      "id": "no-skill-personal",
+      "kind": "no-skill",
+      "prompt": "Remind me to call my sister after dinner.",
+      "relevantSkills": []
+    }
+  ]
+}

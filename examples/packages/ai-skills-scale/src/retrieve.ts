@@ -4,15 +4,18 @@ import {
   loadSkillsIndex,
   rankSkillsIndex,
   type SkillEmbedder,
+  type SkillsIndexMetadata,
   TransformersJsSkillEmbedder,
 } from '@di-framework/ai-utils';
 import { defaultIndexFile, exampleRoot } from './corpus.ts';
 import {
   formatEvaluationJson,
   formatEvaluationMarkdown,
+  type RetrievalEvaluationCase,
   type RetrievalEvaluationResult,
   runRetrievalEvaluation,
 } from './evaluation.ts';
+import { type IndexBuildMeasurements, indexMeasurementsFile } from './index-measurements.ts';
 import { retrievalCases } from './retrieval-cases.ts';
 
 export const AWESOME_COPILOT_BASELINE_REVISION = 'a80885b76044550770f60f360f8a0e5ae3524a31';
@@ -26,6 +29,10 @@ export interface RetrievalBenchmarkOptions {
   readonly trials?: number;
   readonly seed?: number;
   readonly embedder?: SkillEmbedder;
+  readonly labelsFile?: string;
+  readonly corpusId?: string;
+  readonly corpusRevision?: string;
+  readonly minScore?: number;
 }
 
 export async function runRetrievalBenchmark(
@@ -44,37 +51,39 @@ export async function runRetrievalBenchmark(
     return undefined;
   }
 
-  const embedder =
-    resolved.embedder ??
-    new TransformersJsSkillEmbedder({
-      model: index.metadata.model,
-      revision: index.metadata.revision,
-    });
+  const embedder = resolved.embedder ?? createBenchmarkEmbedder(index.metadata);
+  const evaluationCases = resolved.labelsFile
+    ? await loadEvaluationCases(resolved.labelsFile)
+    : retrievalCases.map((item) => ({
+        id: item.id,
+        prompt: item.prompt,
+        relevantSkills: [item.expectedSkill],
+        kind: 'unique' as const,
+      }));
+  const recordedMeasurements = await loadIndexMeasurements(indexFile);
   const result = await runRetrievalEvaluation({
-    suite: 'awesome-copilot semantic retrieval baseline',
+    suite: resolved.labelsFile
+      ? `${resolved.corpusId ?? 'extended'} semantic retrieval`
+      : 'awesome-copilot semantic retrieval baseline',
     corpus: {
-      id: 'github/awesome-copilot',
-      revision: AWESOME_COPILOT_BASELINE_REVISION,
+      id: resolved.corpusId ?? 'github/awesome-copilot',
+      revision: resolved.corpusRevision ?? AWESOME_COPILOT_BASELINE_REVISION,
       skillCount: index.metadata.skillCount,
     },
-    cases: retrievalCases.map((item) => ({
-      id: item.id,
-      prompt: item.prompt,
-      relevantSkills: [item.expectedSkill],
-      kind: 'unique' as const,
-    })),
+    cases: evaluationCases,
     trials: resolved.trials,
     seed: resolved.seed,
-    measurements: { artifactBytes: statSync(indexFile).size },
+    measurements: recordedMeasurements ?? { artifactBytes: statSync(indexFile).size },
     retrieve: async (evaluationCase) => {
       const embeddingStarted = performance.now();
       const [query] = await embedder.embed([evaluationCase.prompt], { purpose: 'query' });
       const embeddingFinished = performance.now();
       if (!query) throw new Error('Skill embedder did not return a query vector');
       const searchStarted = performance.now();
-      const candidates = rankSkillsIndex(index, query, { limit: index.entries.length }).map(
-        (match) => ({ name: match.name, score: match.score }),
-      );
+      const candidates = rankSkillsIndex(index, query, {
+        limit: index.entries.length,
+        minScore: resolved.minScore,
+      }).map((match) => ({ name: match.name, score: match.score }));
       const searchFinished = performance.now();
       return {
         candidates,
@@ -90,7 +99,41 @@ export async function runRetrievalBenchmark(
     formatEvaluationMarkdown(result),
   );
   console.log(formatEvaluationMarkdown(result));
+  if (!resolved.labelsFile) assertAwesomeCopilotBaseline(result);
   return result;
+}
+
+export function createBenchmarkEmbedder(
+  metadata: Pick<SkillsIndexMetadata, 'model' | 'revision'>,
+): SkillEmbedder {
+  return new TransformersJsSkillEmbedder({
+    model: metadata.model,
+    revision: metadata.revision,
+  });
+}
+
+export function assertAwesomeCopilotBaseline(result: RetrievalEvaluationResult): void {
+  if (result.metrics.positiveTrials !== 30 * result.trialsPerCase) {
+    throw new Error('The awesome-copilot baseline must retain all 30 labeled cases');
+  }
+  if (result.metrics.recallAt1 < 29 / 30 || result.metrics.recallAt10 < 1) {
+    throw new Error(
+      `awesome-copilot baseline regressed: recall@1 ${result.metrics.recallAt1}, recall@10 ${result.metrics.recallAt10}`,
+    );
+  }
+}
+
+async function loadEvaluationCases(file: string): Promise<readonly RetrievalEvaluationCase[]> {
+  const value = JSON.parse(await Bun.file(file).text()) as { cases?: unknown };
+  if (!Array.isArray(value.cases)) throw new Error('Evaluation labels file requires a cases array');
+  return value.cases as RetrievalEvaluationCase[];
+}
+
+async function loadIndexMeasurements(file: string): Promise<IndexBuildMeasurements | undefined> {
+  const measurements = Bun.file(indexMeasurementsFile(file));
+  if (!(await measurements.exists())) return undefined;
+  const value = JSON.parse(await measurements.text()) as IndexBuildMeasurements;
+  return value.schemaVersion === 1 ? value : undefined;
 }
 
 function writeReport(file: string, contents: string): void {
@@ -113,6 +156,10 @@ export function parseRetrievalOptions(args: readonly string[]): RetrievalBenchma
     markdownFile?: string;
     trials?: number;
     seed?: number;
+    labelsFile?: string;
+    corpusId?: string;
+    corpusRevision?: string;
+    minScore?: number;
   } = {};
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
@@ -137,6 +184,21 @@ export function parseRetrievalOptions(args: readonly string[]): RetrievalBenchma
       case '--seed':
         options.seed = positiveInteger(value(), flag);
         break;
+      case '--labels':
+        options.labelsFile = value();
+        break;
+      case '--corpus-id':
+        options.corpusId = value();
+        break;
+      case '--corpus-revision':
+        options.corpusRevision = value();
+        break;
+      case '--min-score': {
+        const parsed = Number(value());
+        if (!Number.isFinite(parsed)) throw new Error('--min-score requires a number');
+        options.minScore = parsed;
+        break;
+      }
       default:
         throw new Error(`Unknown option: ${flag}`);
     }

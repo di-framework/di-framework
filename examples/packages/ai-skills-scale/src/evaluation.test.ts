@@ -44,7 +44,8 @@ describe('retrieval evaluation harness', () => {
     });
 
     expect(result.trials).toHaveLength(6);
-    expect(seeds.slice(0, 2)).toEqual([seeds[0], seeds[1]]);
+    const firstSchedule = seeds.slice(0, 2);
+    expect(firstSchedule).toHaveLength(2);
     expect(new Set(seeds).size).toBe(6);
     expect(result.metrics).toMatchObject({
       positiveTrials: 4,
@@ -77,7 +78,7 @@ describe('retrieval evaluation harness', () => {
       memoryUsage: () => 0,
       retrieve: (_case, context) => ({ candidates: [{ name: String(context.seed), score: 1 }] }),
     });
-    expect(rerun.trials.map((trial) => trial.seed)).toEqual(seeds.slice(0, 2));
+    expect(rerun.trials.map((trial) => trial.seed)).toEqual(firstSchedule);
   });
 
   test('emits stable JSON and a measured-results Markdown report', async () => {
@@ -94,6 +95,22 @@ describe('retrieval evaluation harness', () => {
     expect(markdown).toContain('measured results');
     expect(markdown).toContain('Recall@1: 100.00%');
     expect(markdown).toContain('one \\| row');
+  });
+
+  test('samples peak memory while asynchronous retrieval is in flight', async () => {
+    let memory = 100;
+    const result = await runRetrievalEvaluation({
+      suite: 'memory',
+      corpus: { id: 'fixture', revision: 'abc123', skillCount: 1 },
+      cases: [{ id: 'one', prompt: 'alpha', relevantSkills: ['alpha'], kind: 'unique' }],
+      now: () => 0,
+      memoryUsage: () => (memory += 10),
+      retrieve: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return { candidates: [{ name: 'alpha', score: 1 }] };
+      },
+    });
+    expect(result.measurements.peakMemoryBytes).toBeGreaterThan(120);
   });
 
   test('uses safe zero-valued metrics when a class has no trials', () => {

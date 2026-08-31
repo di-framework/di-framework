@@ -6,6 +6,7 @@
   "description": "Large-catalog Agent Skills selection experiment for @di-framework/ai-utils",
   "scripts": {
     "fetch": "bun src/fetch.ts",
+    "materialize:gitskills": "bun src/materialize-gitskills.ts",
     "index": "bun src/build-index.ts",
     "retrieve": "bun src/retrieve.ts",
     "start": "bun src/main.ts",

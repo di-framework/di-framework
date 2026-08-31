@@ -2,7 +2,11 @@
 
 An empirical large-catalog test for [`@di-framework/ai-utils`](../../../packages/di-framework-ai-utils). It measures the exact `Skill` tool description, can run live skill-selection trials at increasing catalog sizes, and tests build-time semantic retrieval with Transformers.js.
 
-The corpus is [`github/awesome-copilot`](https://github.com/github/awesome-copilot), selected by searching GitHub repositories with `gh` ordered by stars and then counting actual `SKILL.md` files. It contains hundreds of real skills while remaining smaller and easier to inspect than mirrored multi-thousand-skill collections.
+The baseline corpus is [`github/awesome-copilot`](https://github.com/github/awesome-copilot) at
+commit `a80885b76044550770f60f360f8a0e5ae3524a31`. Fetching always checks out that commit rather
+than following its default branch. The source tree contains 423 `SKILL.md` files; 408 pass strict
+validation. [`corpora/awesome-copilot-408.json`](corpora/awesome-copilot-408.json) records the
+revision and an aggregate SHA-256 over the sorted skill paths and Git blob IDs.
 
 External skills are untrusted input. This example parses their metadata and instructions, sends only the generated discovery catalog to the model, and inspects the model's proposed `Skill` call without executing it. Skill bodies, bundled scripts, and referenced files never enter the live conversation.
 
@@ -68,6 +72,50 @@ The report records recall@1/10, mean reciprocal rank, no-skill abstention and fa
 rates, query-embedding/search/end-to-end latency, artifact size, and peak RSS. A zero value means
 the measurement was not supplied by that run (for example, indexing time when evaluating an
 already-built artifact).
+
+The baseline command fails if the 30 labeled tasks regress below 29/30 recall@1 or 30/30
+recall@10. Its historical 29/30 and 30/30 result remains a measured baseline, not a general claim.
+
+## Extended 1,000- and 10,000-skill benchmark
+
+The extended benchmark uses the CC-BY-4.0
+[`mvaccargiu/gitskills`](https://huggingface.co/datasets/mvaccargiu/gitskills) dataset associated
+with [GitSkills](https://arxiv.org/abs/2608.10906), pinned at revision
+`289a292b3c6b175df1331f5ad2715673ba42dead`. The committed manifests record the source revision,
+the aggregate hash/size/count of its 31 artifact Parquet shards, and the selection algorithm.
+Large source shards, materialized skills, indexes, and results stay in gitignored `.cache/`.
+
+Materialization is deliberately opt-in. It requires roughly 6.5 GB for source shards, additional
+space for indexes, network access, and the `duckdb` CLI. Downloads are cached and every shard is
+verified against its pinned LFS SHA-256. Valid, content-verified, deduplicated rows are ordered by
+content hash/repository/path after a small, versioned set of labeled skills is pinned to the front.
+This guarantees that every hard-query label exists in both subsets while the remaining distractors
+are a hash-ordered sample. The 1,000-skill set is an exact prefix of the 10,000-skill set.
+
+```bash
+bun run materialize:gitskills -- corpora/gitskills-1000.json
+bun run index -- --skills-dir .cache/gitskills-1000 --output .cache/gitskills-1000.jsonl
+bun run retrieve -- \
+  --index .cache/gitskills-1000.jsonl \
+  --labels corpora/hard-cases.v1.json \
+  --corpus-id gitskills-1000 \
+  --corpus-revision 289a292b3c6b175df1331f5ad2715673ba42dead \
+  --min-score 0.4 \
+  --trials 3 \
+  --json .cache/gitskills-1000-results.json \
+  --markdown .cache/gitskills-1000-results.md
+```
+
+Repeat with `gitskills-10000.json` and separate output paths for the 10,000-skill run. The hard
+labels include aliases/paraphrases, rare identifiers, misspellings, multilingual prompts,
+ambiguous and multi-skill intents, long context, generic-description interference, and no-skill
+requests. The score threshold is explicit because abstention cannot be measured if every query is
+forced to return a candidate.
+
+[`corpora/quality-targets.v1.json`](corpora/quality-targets.v1.json) versions the larger-suite
+targets as pre-tuning expectations. It is intentionally marked `measuredResults: false`; only
+generated JSON/Markdown reports describe measured runs. The tiny `ci-fixture.v1.json` exercises
+the deterministic harness without downloading either real-world corpus.
 
 `@di-framework/ai-utils` owns the generic `di-skills-index` build CLI and `SkillsIndex.builder()` API. This example keeps a thin custom wrapper only because its third-party benchmark corpus intentionally reports and skips incompatible entries; production indexing remains fail-closed.
 

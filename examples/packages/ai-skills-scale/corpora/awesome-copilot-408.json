@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "awesome-copilot-408",
+  "source": {
+    "kind": "git",
+    "repository": "https://github.com/github/awesome-copilot.git",
+    "revision": "a80885b76044550770f60f360f8a0e5ae3524a31",
+    "skillFileCount": 423,
+    "skillTreeSha256": "ab1cd5ce6596ecfaa3479d4cbad8f93524c4f6ddf3e1ef4d3619c532af64bcf7"
+  },
+  "selection": {
+    "acceptedSkillCount": 408,
+    "rule": "Load skills/ in lexical path order and retain entries accepted by strict @di-framework/ai-utils validation."
+  }
+}

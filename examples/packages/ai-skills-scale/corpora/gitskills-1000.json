@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "gitskills-1000",
+  "source": {
+    "kind": "huggingface-parquet",
+    "dataset": "mvaccargiu/gitskills",
+    "revision": "289a292b3c6b175df1331f5ad2715673ba42dead",
+    "config": "artifacts",
+    "shardCount": 31,
+    "shardBytes": 6449224347,
+    "shardManifestSha256": "ea717c790c6f0c6ca93f003cf17d667a8a1ca7a625109d34658d5490a8c8afe9"
+  },
+  "selection": {
+    "size": 1000,
+    "algorithm": "gitskills-anchored-lowest-content-hash-v1",
+    "filters": [
+      "dedup_primary = 1",
+      "content_fetched = 1",
+      "frontmatter_valid = 1",
+      "content_sha_ok = 1",
+      "valid portable skill name",
+      "non-empty description at most 1024 characters"
+    ],
+    "deduplicateBy": "name",
+    "requiredLabelAnchors": [
+      "convert-pdf-to-md",
+      "csharp-async",
+      "github-actions-hardening",
+      "next-intl-add-language",
+      "pdftk-server",
+      "postgresql-code-review",
+      "qdrant-search-quality",
+      "ruff-recursive-fix",
+      "vscode-ext-localization"
+    ],
+    "orderBy": ["file_sha", "repo_full_name", "path"]
+  }
+}

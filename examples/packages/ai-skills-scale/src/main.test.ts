@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScriptedChatModel, toolCall, toolCallResponse } from '@di-framework/ai';
 import { agentSkill, buildSkillsIndex, type SkillEmbedder } from '@di-framework/ai-utils';
+import { parseBuildIndexOptions, preserveIndexBuildMeasurements } from './build-index.ts';
 import { loadSkillCorpus, measureCatalog, selectCorpus } from './corpus.ts';
 import {
   parseCliOptions,
@@ -14,7 +15,13 @@ import {
   selectionCases,
 } from './main.ts';
 import { retrievalCases } from './retrieval-cases.ts';
-import { parseRetrievalOptions, runRetrievalBenchmark, runRetrieveMain } from './retrieve.ts';
+import {
+  assertAwesomeCopilotBaseline,
+  createBenchmarkEmbedder,
+  parseRetrievalOptions,
+  runRetrievalBenchmark,
+  runRetrieveMain,
+} from './retrieve.ts';
 
 function writeSkill(root: string, directory: string, name = directory): void {
   const skillDirectory = join(root, directory);
@@ -224,6 +231,14 @@ test('retrieval reporter CLI accepts deterministic trial and output controls', a
       '3',
       '--seed',
       '8',
+      '--labels',
+      'cases.json',
+      '--corpus-id',
+      'gitskills-1000',
+      '--corpus-revision',
+      'revision',
+      '--min-score',
+      '0.4',
     ]),
   ).toEqual({
     indexFile: '/tmp/index.jsonl',
@@ -231,9 +246,14 @@ test('retrieval reporter CLI accepts deterministic trial and output controls', a
     markdownFile: '/tmp/result.md',
     trials: 3,
     seed: 8,
+    labelsFile: 'cases.json',
+    corpusId: 'gitskills-1000',
+    corpusRevision: 'revision',
+    minScore: 0.4,
   });
   expect(() => parseRetrievalOptions(['--trials', '0'])).toThrow(/positive integer/);
   expect(() => parseRetrievalOptions(['--unknown'])).toThrow(/Unknown option/);
+  expect(() => parseRetrievalOptions(['--min-score', 'nope'])).toThrow(/requires a number/);
   await expect(runRetrieveMain(false)).resolves.toBeUndefined();
 });
 
@@ -261,10 +281,54 @@ test('retrieval benchmark ranks a deterministic index and writes both reports', 
     trials: 2,
     seed: 9,
   });
-  log.mockRestore();
   expect(result?.metrics).toMatchObject({ recallAt1: 1, recallAt10: 1 });
   expect(JSON.parse(readFileSync(jsonFile, 'utf8')).trials).toHaveLength(60);
   expect(readFileSync(markdownFile, 'utf8')).toContain('Recall@1: 100.00%');
+
+  const labelsFile = join(root, 'labels.json');
+  const measurementsFile = `${indexFile}.measurements.json`;
+  writeFileSync(
+    labelsFile,
+    JSON.stringify({
+      cases: [
+        {
+          id: 'extended',
+          prompt: retrievalCases[0]?.prompt,
+          relevantSkills: [retrievalCases[0]?.expectedSkill],
+          kind: 'hard',
+        },
+      ],
+    }),
+  );
+  writeFileSync(
+    measurementsFile,
+    JSON.stringify({
+      schemaVersion: 1,
+      indexingMilliseconds: 25,
+      artifactBytes: 50,
+      peakMemoryBytes: 75,
+    }),
+  );
+  const extended = await runRetrievalBenchmark({
+    indexFile,
+    jsonFile,
+    markdownFile,
+    labelsFile,
+    corpusId: 'extended-fixture',
+    corpusRevision: 'revision-1',
+    minScore: 0.5,
+    embedder,
+  });
+  expect(extended).toMatchObject({
+    suite: 'extended-fixture semantic retrieval',
+    corpus: { id: 'extended-fixture', revision: 'revision-1' },
+    measurements: { indexingMilliseconds: 25, artifactBytes: 50 },
+  });
+  writeFileSync(labelsFile, JSON.stringify({ nope: [] }));
+  await expect(runRetrievalBenchmark({ indexFile, labelsFile, embedder })).rejects.toThrow(
+    /cases array/,
+  );
+  log.mockRestore();
 });
 
 test('retrieval benchmark rejects a missing index and skips metadata-only indexes', async () => {
@@ -277,6 +341,7 @@ test('retrieval benchmark rejects a missing index and skips metadata-only indexe
   });
   const log = spyOn(console, 'log').mockImplementation(() => undefined);
   await expect(runRetrievalBenchmark(indexFile)).resolves.toBeUndefined();
+  await expect(runRetrieveMain(true, ['--index', indexFile])).resolves.toBeUndefined();
   expect(log).toHaveBeenCalled();
   log.mockRestore();
 });
@@ -303,7 +368,56 @@ function deterministicRetrievalEmbedder(names: readonly string[]): SkillEmbedder
       }),
   };
 }
-
+test('index CLI accepts extended corpus paths and baseline thresholds are mandatory', () => {
+  expect(
+    parseBuildIndexOptions([
+      '--skills-dir',
+      '.cache/gitskills-1000',
+      '--output',
+      '.cache/gitskills-1000.jsonl',
+    ]),
+  ).toEqual({
+    skillsDirectory: '.cache/gitskills-1000',
+    outputFile: '.cache/gitskills-1000.jsonl',
+  });
+  expect(() => parseBuildIndexOptions(['--wat'])).toThrow(/Unknown option/);
+  const prior = {
+    schemaVersion: 1 as const,
+    indexingMilliseconds: 500,
+    artifactBytes: 100,
+    peakMemoryBytes: 1_000,
+  };
+  const current = {
+    schemaVersion: 1 as const,
+    indexingMilliseconds: 5,
+    artifactBytes: 100,
+    peakMemoryBytes: 1_100,
+  };
+  expect(preserveIndexBuildMeasurements(current, prior, true)).toEqual({
+    ...current,
+    indexingMilliseconds: 500,
+  });
+  expect(preserveIndexBuildMeasurements(current, prior, false)).toEqual(current);
+  const result = {
+    trialsPerCase: 1,
+    metrics: { positiveTrials: 30, recallAt1: 29 / 30, recallAt10: 1 },
+  };
+  expect(() => assertAwesomeCopilotBaseline(result as never)).not.toThrow();
+  expect(() =>
+    assertAwesomeCopilotBaseline({
+      ...result,
+      metrics: { ...result.metrics, recallAt1: 28 / 30 },
+    } as never),
+  ).toThrow(/regressed/);
+  expect(() =>
+    assertAwesomeCopilotBaseline({
+      ...result,
+      metrics: { ...result.metrics, positiveTrials: 29 },
+    } as never),
+  ).toThrow(/retain all 30/);
+  const defaultEmbedder = createBenchmarkEmbedder({ model: 'fixture-model', revision: 'rev' });
+  expect(defaultEmbedder).toMatchObject({ model: 'fixture-model', revision: 'rev' });
+});
 test('live key resolves from the environment or a non-executed secrets file', () => {
   expect(requireOpenAiApiKey({ OPENAI_API_KEY: ' direct ' }, '/')).toBe('direct');
   const root = mkdtempSync(join(tmpdir(), 'ai-skills-scale-key-'));
