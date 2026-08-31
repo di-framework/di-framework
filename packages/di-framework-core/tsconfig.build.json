@@ -9,6 +9,6 @@
     "allowImportingTsExtensions": false,
     "lib": ["ESNext", "DOM"]
   },
-  "include": ["container.ts", "decorators/**/*.ts", "types.ts"],
+  "include": ["application-context.ts", "container.ts", "decorators/**/*.ts", "types.ts"],
   "exclude": ["tests/**"]
 }

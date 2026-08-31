@@ -6,6 +6,38 @@
 
 A lightweight, type-safe Dependency Injection framework for TypeScript using decorators. This framework automatically manages service instantiation, dependency resolution, and lifecycle management.
 
+## Explicit application startup
+
+Use `@Configuration()` and `@Bean()` for factory-based wiring. Dependencies are
+listed explicitly, so startup detects missing, duplicate, and cyclic beans
+before invoking a factory. Async factories are awaited while `Container.resolve()`
+remains synchronous.
+
+```typescript
+import { ApplicationContext } from '@di-framework/core/application-context';
+import { Bean, Configuration } from '@di-framework/core/decorators';
+
+@Configuration()
+class AppConfiguration {
+  @Bean()
+  port() { return 8080; } // token defaults to "port"
+
+  @Bean('serverUrl', { dependencies: ['port'] })
+  async serverUrl(port: number) { return `http://localhost:${port}`; }
+}
+
+const app = ApplicationContext.builder()
+  .configuration(AppConfiguration)
+  .bootstrap(HttpServer)
+await app.start();
+await app.stop();
+```
+
+Bootstrap components may define synchronous or asynchronous `start()` and
+`stop()` hooks. Successful components stop in reverse startup order. The legacy
+`@Bootstrap()` decorator still resolves at class-definition time, but is
+deprecated and will be removed in the next major release.
+
 ## Installation
 
 No external dependencies required! The framework works with SWC and TypeScript's native decorator support.

@@ -12,6 +12,7 @@ type ServiceDefinition<T = any> = {
   type: Constructor<T> | ServiceFactory<T>;
   singleton: boolean;
   instance?: T;
+  hasInstance?: boolean;
 };
 
 type ContainerEventName =
@@ -25,7 +26,7 @@ type ContainerEventPayloads = {
   registered: {
     key: string | Constructor;
     singleton: boolean;
-    kind: 'class' | 'factory';
+    kind: 'class' | 'factory' | 'value';
   };
   resolved: {
     key: string | Constructor;
@@ -230,6 +231,20 @@ export class Container {
     return this;
   }
 
+  /** Register an already-created value, including falsy and undefined values. */
+  public registerValue<T>(token: string | Constructor<T>, value: T): this {
+    const definition: ServiceDefinition<T> = {
+      type: () => value,
+      singleton: true,
+      instance: value,
+      hasInstance: true,
+    };
+    this.services.set(token, definition);
+    if (typeof token !== 'string') this.services.set(token.name, definition);
+    this.emit('registered', { key: token, singleton: true, kind: 'value' });
+    return this;
+  }
+
   /**
    * Get or create a service instance
    */
@@ -249,10 +264,10 @@ export class Container {
       throw new Error(`Service '${keyStr}' is not registered in the DI container`);
     }
 
-    const wasCached = definition.singleton && !!definition.instance;
+    const wasCached = definition.singleton && definition.hasInstance === true;
 
     // Return cached singleton
-    if (definition.singleton && definition.instance) {
+    if (definition.singleton && definition.hasInstance === true) {
       this.emit('resolved', {
         key,
         instance: definition.instance,
@@ -270,6 +285,7 @@ export class Container {
       // Cache singleton
       if (definition.singleton) {
         definition.instance = instance;
+        definition.hasInstance = true;
       }
 
       this.emit('resolved', {
@@ -360,6 +376,7 @@ export class Container {
       clone.services.set(key, {
         ...def,
         instance: options.carrySingletons ? def.instance : undefined,
+        hasInstance: options.carrySingletons ? def.hasInstance : false,
       });
     });
 

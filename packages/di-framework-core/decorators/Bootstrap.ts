@@ -6,6 +6,9 @@ import { INJECTABLE_METADATA_KEY } from './keys.js';
  *
  * Useful for startup-only classes (e.g. HTTP controllers) whose constructors
  * register routes or side effects and should run before handling requests.
+ *
+ * @deprecated Use `ApplicationContext.builder().bootstrap(MyClass).start()`.
+ * Definition-time eager behavior is preserved until the next major release.
  */
 export function Bootstrap(options: { singleton?: boolean; container?: DIContainer } = {}) {
   return <T extends { new (...args: any[]): {} }>(ctor: T) => {
