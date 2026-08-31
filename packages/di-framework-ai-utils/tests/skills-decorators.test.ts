@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { ScriptedChatModel } from '@di-framework/ai';
+import {
+  type Advisor,
+  ChatClient,
+  MessageWindowChatMemory,
+  ScriptedChatModel,
+} from '@di-framework/ai';
 import {
   agentSkill,
   getDeclaredSkills,
@@ -8,17 +13,19 @@ import {
   getSkillsMetadata,
   SemanticSkillDiscovery,
   Skill,
+  type SkillEmbedder,
   Skills,
   SkillsAgent,
-  skillsAgentBuilderFrom,
   SkillsIndex,
   SkillsIndexConfig,
-  skillsIndexBuilderFrom,
   SkillsToolbox,
-  skillsToolboxBuilderFrom,
-  skillsToolboxOptionsFrom,
-  type SkillEmbedder,
   type SkillTokenChunkOptions,
+  skillsAgentBuilderFrom,
+  skillsAgentFrom,
+  skillsIndexBuilderFrom,
+  skillsToolboxBuilderFrom,
+  skillsToolboxFrom,
+  skillsToolboxOptionsFrom,
 } from '../src/index.ts';
 
 class FakeEmbedder implements SkillEmbedder {
@@ -34,6 +41,11 @@ class FakeEmbedder implements SkillEmbedder {
     return [text];
   }
 }
+
+const passthroughAdvisor: Advisor = {
+  name: 'passthrough',
+  order: 0,
+};
 
 describe('skills decorators', () => {
   test('Skills and SemanticSkillDiscovery store metadata', () => {
@@ -61,6 +73,9 @@ describe('skills decorators', () => {
       limit: 10,
       minScore: 0.2,
     });
+    expect(getSkillsMetadata(new ApplicationSkills())).toEqual(
+      getSkillsMetadata(ApplicationSkills),
+    );
   });
 
   test('@Skill produces the same shape as agentSkill()', () => {
@@ -138,6 +153,10 @@ describe('skills decorators', () => {
     expect(options.chatModel).toBe(chatModel);
     expect(options.semanticDiscovery).toEqual({ limit: 3, embedder });
 
+    expect(
+      skillsToolboxOptionsFrom(ApplicationSkills, { semanticDiscovery: false }).semanticDiscovery,
+    ).toBe(false);
+
     const agentOptions = skillsAgentBuilderFrom(ApplicationSkills, {
       chatModel,
       system: 'Be concise.',
@@ -198,5 +217,84 @@ describe('skills decorators', () => {
 
     expect(skillsToolboxOptionsFrom(EmptyCatalog).directories).toEqual([]);
     expect(skillsToolboxBuilderFrom(EmptyCatalog).toOptions().directories).toEqual([]);
+  });
+
+  test('skillsToolboxFrom and skillsAgentFrom build through existing factories', () => {
+    @Skills({
+      skills: [
+        agentSkill({
+          name: 'inline',
+          description: 'Inline programmatic skill for decorator apply helpers.',
+          content: 'Do the thing.',
+        }),
+      ],
+      noDefaultDirectories: true,
+    })
+    class ApplicationSkills {}
+
+    const model = new ScriptedChatModel([]);
+    const toolbox = skillsToolboxFrom(ApplicationSkills, { chatModel: model });
+    expect(toolbox.skills.map((skill) => skill.name)).toEqual(['inline']);
+
+    const agent = skillsAgentFrom(ApplicationSkills, { chatModel: model });
+    expect(agent).toBeDefined();
+  });
+
+  test('skillsAgentBuilderFrom applies agent-only overrides', () => {
+    @Skills({
+      skills: [
+        agentSkill({
+          name: 'inline',
+          description: 'Inline programmatic skill for decorator apply helpers.',
+          content: 'Do the thing.',
+        }),
+      ],
+      noDefaultDirectories: true,
+    })
+    class ApplicationSkills {}
+
+    const model = new ScriptedChatModel([]);
+    const memory = MessageWindowChatMemory.of();
+    const client = ChatClient.builder(model).build();
+    const builderOptions = {};
+    const options = skillsAgentBuilderFrom(ApplicationSkills, {
+      chatModel: model,
+      chatClient: client,
+      system: 'Hello',
+      extraTools: [],
+      advisors: [passthroughAdvisor],
+      conversationMemory: memory,
+      defaultConversationId: 'c1',
+      builder: builderOptions,
+    }).toAgentOptions();
+
+    expect(options.system).toBe('Hello');
+    expect(options.chatClient).toBe(client);
+    expect(options.advisors).toEqual([passthroughAdvisor]);
+    expect(options.conversationMemory).toBe(memory);
+    expect(options.defaultConversationId).toBe('c1');
+    expect(options.builder).toBe(builderOptions);
+  });
+
+  test('builderFrom applies files and extraAllowedDirectories', () => {
+    @Skills({ noDefaultDirectories: true })
+    class ApplicationSkills {}
+
+    const options = skillsToolboxBuilderFrom(ApplicationSkills, {
+      files: ['/tmp/does-not-need-to-exist/SKILL.md'],
+      extraAllowedDirectories: ['/tmp/extra'],
+      toolDescriptionTemplate: 'Skills:\n%s',
+      skills: [
+        agentSkill({
+          name: 'inline',
+          description: 'Inline programmatic skill for decorator apply helpers.',
+          content: 'Do the thing.',
+        }),
+      ],
+    }).toOptions();
+
+    expect(options.files).toEqual(['/tmp/does-not-need-to-exist/SKILL.md']);
+    expect(options.extraAllowedDirectories).toEqual(['/tmp/extra']);
+    expect(options.toolDescriptionTemplate).toBe('Skills:\n%s');
   });
 });

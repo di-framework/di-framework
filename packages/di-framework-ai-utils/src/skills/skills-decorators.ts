@@ -6,24 +6,24 @@
 import type { ChatModel } from '@di-framework/ai';
 import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
 import {
-  SkillsAgent,
-  SkillsAgentBuilder,
   type CreateSkillsAgentOptions,
+  SkillsAgent,
+  type SkillsAgentBuilder,
 } from './create-skills-agent.ts';
 import {
-  agentSkill,
   type AgentSkill,
   type AgentSkillCreateOptions,
+  agentSkill,
 } from './parse-skill-markdown.ts';
-import { SkillsFluent } from './skills-fluent.ts';
+import type { SkillsFluent } from './skills-fluent.ts';
 import {
-  SkillsIndex,
-  SkillsIndexBuilder,
   type BuildSkillsIndexOptions,
+  SkillsIndex,
+  type SkillsIndexBuilder,
 } from './skills-index.ts';
 import {
   SkillsToolbox,
-  SkillsToolboxBuilder,
+  type SkillsToolboxBuilder,
   type SkillsToolboxOptions,
 } from './skills-toolbox.ts';
 
@@ -33,6 +33,7 @@ const SKILLS_INDEX_KEY = 'ai-utils:skills-index';
 const SKILLS_DECLARED_KEY = 'ai-utils:skills-declared';
 
 type AnyConstructor = new (...args: never[]) => object;
+type DecoratedTarget = object | AnyConstructor;
 
 /** Catalog sources declared with {@link Skills}. */
 export interface SkillsDecoratorOptions {
@@ -80,7 +81,7 @@ export type SkillsToolboxFromOverrides = SkillsToolboxOptions;
 export type SkillsAgentFromOverrides = CreateSkillsAgentOptions;
 export type SkillsIndexFromOverrides = BuildSkillsIndexOptions;
 
-function getCtor(target: object | Function): AnyConstructor {
+function getCtor(target: DecoratedTarget): AnyConstructor {
   if (typeof target === 'function') return target as AnyConstructor;
   return (target as { constructor: AnyConstructor }).constructor;
 }
@@ -137,14 +138,12 @@ export function Skill(options: SkillDecoratorOptions): ClassDecorator {
   };
 }
 
-export function getSkillsMetadata(
-  target: object | Function,
-): SkillsDecoratorOptions | undefined {
+export function getSkillsMetadata(target: DecoratedTarget): SkillsDecoratorOptions | undefined {
   return getOwnMetadata(SKILLS_CATALOG_KEY, getCtor(target)) as SkillsDecoratorOptions | undefined;
 }
 
 export function getSemanticSkillDiscoveryMetadata(
-  target: object | Function,
+  target: DecoratedTarget,
 ): SemanticSkillDiscoveryDecoratorOptions | undefined {
   return getOwnMetadata(SKILLS_SEMANTIC_KEY, getCtor(target)) as
     | SemanticSkillDiscoveryDecoratorOptions
@@ -152,12 +151,12 @@ export function getSemanticSkillDiscoveryMetadata(
 }
 
 export function getSkillsIndexMetadata(
-  target: object | Function,
+  target: DecoratedTarget,
 ): SkillsIndexConfigOptions | undefined {
   return getOwnMetadata(SKILLS_INDEX_KEY, getCtor(target)) as SkillsIndexConfigOptions | undefined;
 }
 
-export function getDeclaredSkills(target: object | Function): readonly AgentSkill[] {
+export function getDeclaredSkills(target: DecoratedTarget): readonly AgentSkill[] {
   return (getOwnMetadata(SKILLS_DECLARED_KEY, getCtor(target)) as AgentSkill[] | undefined) ?? [];
 }
 
@@ -166,7 +165,7 @@ export function getDeclaredSkills(target: object | Function): readonly AgentSkil
  * may supply non-serializable runtime deps (embedder, stores, chatModel).
  */
 export function skillsToolboxOptionsFrom(
-  target: object | Function,
+  target: DecoratedTarget,
   overrides: SkillsToolboxFromOverrides = {},
 ): SkillsToolboxOptions {
   const catalog = getSkillsMetadata(target) ?? {};
@@ -213,7 +212,7 @@ export function skillsToolboxOptionsFrom(
 
 /** Prefill {@link SkillsToolbox.builder} from decorator metadata. */
 export function skillsToolboxBuilderFrom(
-  target: object | Function,
+  target: DecoratedTarget,
   overrides: SkillsToolboxFromOverrides = {},
 ): SkillsToolboxBuilder {
   return applyToolboxOptions(SkillsToolbox.builder(), skillsToolboxOptionsFrom(target, overrides));
@@ -221,7 +220,7 @@ export function skillsToolboxBuilderFrom(
 
 /** Build a toolbox from decorator metadata (advisor included when configured). */
 export function skillsToolboxFrom(
-  target: object | Function,
+  target: DecoratedTarget,
   overrides: SkillsToolboxFromOverrides = {},
 ) {
   return skillsToolboxBuilderFrom(target, overrides).build();
@@ -229,7 +228,7 @@ export function skillsToolboxFrom(
 
 /** Prefill {@link SkillsAgent.builder} from decorator metadata. */
 export function skillsAgentBuilderFrom(
-  target: object | Function,
+  target: DecoratedTarget,
   overrides: SkillsAgentFromOverrides = {},
 ): SkillsAgentBuilder {
   const toolboxOptions = skillsToolboxOptionsFrom(target, overrides);
@@ -250,16 +249,13 @@ export function skillsAgentBuilderFrom(
 }
 
 /** Build a chat agent from decorator metadata. */
-export function skillsAgentFrom(
-  target: object | Function,
-  overrides: SkillsAgentFromOverrides = {},
-) {
+export function skillsAgentFrom(target: DecoratedTarget, overrides: SkillsAgentFromOverrides = {}) {
   return skillsAgentBuilderFrom(target, overrides).build();
 }
 
 /** Prefill {@link SkillsIndex.builder} from {@link SkillsIndexConfig} metadata. */
 export function skillsIndexBuilderFrom(
-  target: object | Function,
+  target: DecoratedTarget,
   overrides: SkillsIndexFromOverrides = {},
 ): SkillsIndexBuilder {
   const meta = getSkillsIndexMetadata(target) ?? {};
