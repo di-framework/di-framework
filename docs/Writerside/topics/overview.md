@@ -2,6 +2,8 @@
 
 A lightweight, type-safe dependency injection framework for TypeScript, plus companion packages for common application concerns. The core automatically manages service instantiation, dependency resolution, and lifecycle management.
 
+Published docs at [docs.di-framework.dev](https://docs.di-framework.dev) include a header **version switcher** (`versions.json`) so you can open `/latest/` or a frozen `/vX.Y/` snapshot from a release tag. In-page search is scoped to the snapshot you are reading.
+
 ## Features
 
 - **Zero Dependencies**: No external dependencies required. Works with SWC and TypeScript's native decorator support.

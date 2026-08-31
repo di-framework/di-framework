@@ -3,10 +3,16 @@ name: Deploy Documentation
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'docs/**'
       - 'examples/packages/docs-search/**'
       - '.github/workflows/deploy-docs.yml'
+      - '.github/scripts/assemble-docs-site.sh'
+  # Path filters apply to tag pushes too. release.yml also dispatches this
+  # workflow on v* so a version snapshot is archived even when the tag
+  # commit did not touch docs/.
   workflow_dispatch:
     inputs:
       full_reindex:
@@ -22,7 +28,7 @@ env:
   OIDC_AUDIENCE: di-framework-docs-search
 
 permissions:
-  contents: read
+  contents: write # attach docs-vX.Y.zip to the GitHub Release on v* tags
   pages: write
   id-token: write # GitHub OIDC → worker mints reindex token (no Cloudflare API secrets)
 
@@ -115,6 +121,24 @@ jobs:
           echo
           jq -e '.ok == true' /tmp/reindex.json >/dev/null
 
+          if [ "${{ github.ref_type }}" = "tag" ] && echo "${{ github.ref_name }}" | grep -Eq '^v[0-9]+\.[0-9]+'; then
+            TAG="${{ github.ref_name }}"
+            MINOR="$(echo "$TAG" | sed -E 's/^(v[0-9]+\.[0-9]+).*/\1/')"
+            SNAP="${{ env.DOCS_SEARCH_DIR }}/data/corpus-${MINOR}.json"
+            echo "Indexing snapshot $MINOR from $TAG"
+            (
+              cd "${{ env.DOCS_SEARCH_DIR }}"
+              DOCS_VERSION="$MINOR" CORPUS_OUT="$SNAP" bun run corpus
+            )
+            curl -fsS -X POST "$ENDPOINT" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-binary @"$SNAP" \
+              | tee /tmp/reindex-snapshot.json
+            echo
+            jq -e '.ok == true' /tmp/reindex-snapshot.json >/dev/null
+          fi
+
   build:
     name: Build Writerside site
     runs-on: ubuntu-latest
@@ -160,10 +184,49 @@ jobs:
           cp docs/Writerside/images/favicon.png dir/favicon.png
           cp docs/Writerside/images/favicon.png dir/favicon.ico
 
+      - name: Assemble versioned GitHub Pages tree
+        id: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SEARCH_ENDPOINT: ${{ vars.DOCS_SEARCH_URL }}
+        run: |
+          chmod +x .github/scripts/assemble-docs-site.sh
+          .github/scripts/assemble-docs-site.sh dir site
+
+      - name: Attach version snapshot to GitHub Release
+        if: github.ref_type == 'tag' && steps.site.outputs.snapshot_zip != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ steps.site.outputs.snapshot_zip }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Release may be created by release.yml slightly later; retry a few times.
+          for i in 1 2 3 4 5 6; do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" "$ZIP" --clobber
+              echo "Uploaded $(basename "$ZIP") to $TAG"
+              exit 0
+            fi
+            echo "Release $TAG not visible yet (attempt $i); sleeping…"
+            sleep 15
+          done
+          echo "::warning::No GitHub Release for $TAG; snapshot is still in Pages tree and as a workflow artifact."
+          mkdir -p artifacts
+          cp "$ZIP" "artifacts/$(basename "$ZIP")"
+
+      - name: Upload version snapshot artifact
+        if: github.ref_type == 'tag' && steps.site.outputs.snapshot_zip != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-${{ steps.site.outputs.snapshot_version }}
+          path: ${{ steps.site.outputs.snapshot_zip }}
+          if-no-files-found: ignore
+
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dir
+          path: site
 
   # Pages must ship even if reindex is flaky (DNS/OIDC/Worker). Search UI is
   # baked into the static build via <search-endpoint>; the Worker can reindex later.

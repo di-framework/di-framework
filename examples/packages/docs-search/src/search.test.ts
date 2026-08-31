@@ -6,7 +6,13 @@ import { EmbeddingService } from './services/EmbeddingService';
 import { lexicalScore, makeSnippet, SearchService, tokenize } from './services/SearchService';
 import { VectorIndexService } from './services/VectorIndexService';
 
-function page(id: string, title: string, content: string, product = 'd'): DocPage {
+function page(
+  id: string,
+  title: string,
+  content: string,
+  product = 'd',
+  version = 'latest',
+): DocPage {
   return Object.assign(new DocPage(), {
     id,
     url: `https://example.test/${id}.html`,
@@ -15,7 +21,7 @@ function page(id: string, title: string, content: string, product = 'd'): DocPag
     breadcrumbs: `Docs|${title}`,
     content,
     product,
-    version: 'latest',
+    version,
   });
 }
 
@@ -145,6 +151,35 @@ describe('DocumentRepository.replaceCorpus', () => {
     const all = await repo.findAll();
     expect(all.map((p) => p.id)).toEqual(['new-1']);
   });
+
+  test('upsertVersions replaces only the versions in the payload', async () => {
+    const root = useContainer();
+    root.register(DocumentRepository);
+    const repo = root.resolve(DocumentRepository);
+
+    await repo.seed([
+      page('docs_overview', 'Overview latest', 'current overview', 'd', 'latest'),
+      page('docs_overview__v4.1', 'Overview 4.1', 'old overview', 'd', 'v4.1'),
+    ]);
+
+    await repo.upsertVersions([
+      {
+        objectID: 'docs_overview',
+        url: 'https://example.test/overview.html',
+        pageTitle: 'Overview latest rewritten',
+        mainTitle: 'Overview latest rewritten',
+        breadcrumbs: 'Docs|Overview',
+        content: 'rewritten overview',
+        product: 'd',
+        version: 'latest',
+      },
+    ]);
+
+    const all = await repo.findAll();
+    expect(all.map((p) => p.id).sort()).toEqual(['docs_overview', 'docs_overview__v4.1']);
+    expect(all.find((p) => p.id === 'docs_overview')?.content).toBe('rewritten overview');
+    expect(all.find((p) => p.id === 'docs_overview__v4.1')?.content).toBe('old overview');
+  });
 });
 
 describe('EmbeddingService with a Workers AI binding', () => {
@@ -254,5 +289,40 @@ describe('SearchService.search with populated Vectorize matches', () => {
     const search = root.resolve(SearchService);
     const result = await search.search({ query: '   ' });
     expect(result).toMatchObject({ hits: [], nbHits: 0, nbPages: 0 });
+  });
+
+  test('search results stay inside the requested docs version', async () => {
+    const root = useContainer();
+    root.register(DocumentRepository);
+    root.register(EmbeddingService);
+    root.register(VectorIndexService);
+    root.register(SearchService);
+    root.registerFactory('Env', () => () => ({}) as never, { singleton: true });
+    const repo = root.resolve(DocumentRepository);
+    await repo.seed([
+      page('docs_overview', 'Overview', 'dependency injection container latest', 'd', 'latest'),
+      page(
+        'docs_overview__v4.1',
+        'Overview',
+        'dependency injection container historic',
+        'd',
+        'v4.1',
+      ),
+    ]);
+    const search = root.resolve(SearchService);
+
+    const latest = await search.search({
+      query: 'historic container',
+      maxHits: 10,
+      version: 'latest',
+    });
+    expect(latest.hits.every((h) => h.objectID === 'docs_overview')).toBe(true);
+
+    const old = await search.search({
+      query: 'historic container',
+      maxHits: 10,
+      version: 'v4.1',
+    });
+    expect(old.hits.map((h) => h.objectID)).toEqual(['docs_overview__v4.1']);
   });
 });

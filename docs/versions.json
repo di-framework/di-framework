@@ -1,0 +1,12 @@
+[
+  {
+    "version": "latest",
+    "url": "/",
+    "isCurrent": true
+  },
+  {
+    "version": "v4.2",
+    "url": "/v4.2/",
+    "isCurrent": false
+  }
+]
