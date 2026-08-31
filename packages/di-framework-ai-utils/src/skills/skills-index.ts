@@ -1116,6 +1116,8 @@ function writeV3IndexAtomically(file: string, index: SkillsIndex): void {
   const metadata: SkillsIndexMetadata = {
     ...index.metadata,
     version: SKILLS_INDEX_VERSION,
+    scoring: SKILLS_INDEX_SCORING,
+    scoringParameters: DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS,
     vectorEncoding: SKILLS_INDEX_VECTOR_ENCODING,
     vectorFile: basename(vectorFile),
     vectorHash: hashBytes(vectors),
