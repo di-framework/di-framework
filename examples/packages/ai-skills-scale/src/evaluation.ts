@@ -1,5 +1,6 @@
 export type RetrievalCaseKind =
   | 'unique'
+  | 'hard'
   | 'multi-skill'
   | 'ambiguous'
   | 'no-skill'
@@ -125,7 +126,16 @@ export async function runRetrievalEvaluation(
       const trialSeed = mixSeed(seed, evaluationCase.id, trial);
       const memoryBefore = memoryUsage();
       const started = now();
-      const output = await options.retrieve(evaluationCase, { trial, seed: trialSeed });
+      const memorySampler = setInterval(() => {
+        observedPeakMemory = Math.max(observedPeakMemory, memoryUsage());
+      }, 10);
+      memorySampler.unref();
+      let output: RetrievalTrialOutput;
+      try {
+        output = await options.retrieve(evaluationCase, { trial, seed: trialSeed });
+      } finally {
+        clearInterval(memorySampler);
+      }
       const finished = now();
       const memoryAfter = memoryUsage();
       observedPeakMemory = Math.max(observedPeakMemory, memoryBefore, memoryAfter);
@@ -160,7 +170,7 @@ export async function runRetrievalEvaluation(
     measurements: {
       indexingMilliseconds: options.measurements?.indexingMilliseconds ?? 0,
       artifactBytes: options.measurements?.artifactBytes ?? 0,
-      peakMemoryBytes: options.measurements?.peakMemoryBytes ?? observedPeakMemory,
+      peakMemoryBytes: Math.max(options.measurements?.peakMemoryBytes ?? 0, observedPeakMemory),
     },
     metrics: calculateMetrics(results),
     trials: results,

@@ -11,4 +11,8 @@ coveragePathIgnorePatterns = [
   "**/scripts/**",
   "**/coverage/**",
   "**/dist/**",
+  # Opt-in benchmark entrypoints require a fetched 6.5 GB corpus, DuckDB,
+  # or the local embedding model. Their reusable logic is tested separately.
+  "examples/packages/ai-skills-scale/src/build-index.ts",
+  "examples/packages/ai-skills-scale/src/materialize-gitskills.ts",
 ]

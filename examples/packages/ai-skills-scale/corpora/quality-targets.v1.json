@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "status": "pre-tuning targets recorded 2026-08-31",
+  "measuredResults": false,
+  "suites": {
+    "awesome-copilot-408-baseline": {
+      "positiveCases": 30,
+      "minimumRecallAt1": 0.9666666666666667,
+      "minimumRecallAt10": 1,
+      "minimumMeanReciprocalRank": 0.95
+    },
+    "gitskills-1000-hard": {
+      "minimumRecallAt1": 0.7,
+      "minimumRecallAt10": 0.9,
+      "minimumMeanReciprocalRank": 0.75,
+      "minimumNoSkillAbstentionRate": 0.9,
+      "maximumNoSkillFalsePositiveRate": 0.1
+    },
+    "gitskills-10000-hard": {
+      "minimumRecallAt1": 0.6,
+      "minimumRecallAt10": 0.85,
+      "minimumMeanReciprocalRank": 0.7,
+      "minimumNoSkillAbstentionRate": 0.9,
+      "maximumNoSkillFalsePositiveRate": 0.1
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "description": "Tiny deterministic CI fixture; it is not a measured real-world result.",
+  "skills": [
+    { "name": "pdf", "description": "Extract and summarize PDF documents." },
+    { "name": "postgres", "description": "Review PostgreSQL schemas and row-level security." },
+    { "name": "ruff", "description": "Apply safe Ruff fixes to Python projects." }
+  ],
+  "cases": [
+    { "id": "pdf", "kind": "unique", "prompt": "summarize report.pdf", "relevantSkills": ["pdf"] },
+    {
+      "id": "typo",
+      "kind": "typo",
+      "prompt": "reveiw my Postgres scheema",
+      "relevantSkills": ["postgres"]
+    },
+    { "id": "none", "kind": "no-skill", "prompt": "weather tomorrow", "relevantSkills": [] }
+  ]
+}
