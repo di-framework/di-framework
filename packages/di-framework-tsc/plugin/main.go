@@ -254,7 +254,14 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 			continue
 		}
 		p := param.AsParameterDeclaration()
-		if p == nil || p.Name() == nil || p.Name().Kind != shimast.KindIdentifier {
+		if p == nil || p.Name() == nil {
+			continue
+		}
+		if p.Name().Kind == shimast.KindObjectBindingPattern || p.Name().Kind == shimast.KindArrayBindingPattern {
+			checks = append(checks, checksForBindingName(factory, checker, p.Name())...)
+			continue
+		}
+		if p.Name().Kind != shimast.KindIdentifier {
 			continue
 		}
 		name := p.Name().Text()
@@ -270,6 +277,38 @@ func checksForParams(factory *shimast.NodeFactory, checker *shimchecker.Checker,
 		checks = append(checks, paramChecks...)
 	}
 	return checks
+}
+
+func checksForBindingName(factory *shimast.NodeFactory, checker *shimchecker.Checker, name *shimast.Node) []*shimast.Node {
+	if name == nil || checker == nil {
+		return nil
+	}
+	if name.Kind == shimast.KindIdentifier {
+		t := checker.GetTypeAtLocation(name)
+		if t == nil {
+			return nil
+		}
+		return stmtsFromCheckerType(factory, checker, name.Text(), t)
+	}
+	if name.Kind != shimast.KindObjectBindingPattern && name.Kind != shimast.KindArrayBindingPattern {
+		return nil
+	}
+	pattern := name.AsBindingPattern()
+	if pattern == nil || pattern.Elements == nil {
+		return nil
+	}
+	var out []*shimast.Node
+	for _, raw := range pattern.Elements.Nodes {
+		if raw == nil || raw.Kind != shimast.KindBindingElement {
+			continue
+		}
+		element := raw.AsBindingElement()
+		if element == nil || element.Name() == nil || element.DotDotDotToken != nil || element.Initializer != nil {
+			continue
+		}
+		out = append(out, checksForBindingName(factory, checker, element.Name())...)
+	}
+	return out
 }
 
 func checksForParam(

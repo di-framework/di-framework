@@ -78,7 +78,7 @@ function greet(user) {
 
 Skipped today:
 
-- destructured parameters
+- defaults and rest elements nested inside destructuring patterns
 - variadic tuples, classes, branded types, typia-style tags
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
@@ -87,6 +87,7 @@ Arrays and `ReadonlyArray<T>` are checked with `Array.isArray` and a full elemen
 Fixed tuples enforce their allowed length and validate each position; optional tails are presence-gated.
 Optional and defaulted parameters are validated only when their runtime value is not `undefined`; `null` is still checked against the declared type.
 Rest parameters use the same full array and element validation as ordinary arrays.
+Simple object, array, and nested destructured bindings are validated using the types of the bound identifiers.
 
 ## Monorepo note
 
