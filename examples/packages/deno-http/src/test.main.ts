@@ -1,5 +1,7 @@
 import { assertEquals } from '@std/assert';
-import { router } from './main.ts';
+import { application, router } from './main.ts';
+
+await application.start();
 
 const env = {};
 const ctx = {};

@@ -3,7 +3,9 @@
 // Deploy to Deno Deploy: push as-is (Sandbox works natively)
 
 import { Sandbox } from '@deno/sandbox';
-import { Bootstrap, Component, Container, Telemetry } from '@di-framework/core/decorators';
+import { ApplicationContext } from '@di-framework/core/application-context';
+import { useContainer } from '@di-framework/core/container';
+import { Component, Container, Telemetry } from '@di-framework/core/decorators';
 import {
   Controller,
   Endpoint,
@@ -115,7 +117,6 @@ class SandboxService {
   }
 }
 
-@Bootstrap()
 @Controller()
 export class SandboxController {
   constructor(@Component(SandboxService) private service: SandboxService) {}
@@ -173,6 +174,8 @@ export class SandboxController {
 }
 
 if (import.meta.main) {
+  const application = ApplicationContext.builder(useContainer()).bootstrap(SandboxController);
+  await application.start();
   console.log('Server running on http://localhost:8000');
   Deno.serve({ port: 8000 }, async (request: Request) => {
     try {
