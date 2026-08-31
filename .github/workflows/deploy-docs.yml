@@ -186,6 +186,9 @@ jobs:
           PY
           cp docs/Writerside/images/favicon.png dir/favicon.png
           cp docs/Writerside/images/favicon.png dir/favicon.ico
+          # <custom-favicons> dumps its value as page text; without it the
+          # builder injects JetBrains.com icons. Rewrite HTML link tags here.
+          python3 .github/scripts/patch-docs-favicons.py dir
 
       - name: Assemble versioned GitHub Pages tree
         id: site
