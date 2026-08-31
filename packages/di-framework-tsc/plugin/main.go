@@ -443,6 +443,9 @@ func stmtsFromCheckerTypeSeen(
 		}
 		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its union type")}
 	case flags&shimchecker.TypeFlagsIntersection != 0:
+		if base, ok := brandedBaseType(checker, t); ok {
+			return stmtsFromCheckerTypeSeen(factory, checker, path, base, state, depth+1)
+		}
 		if !isStructuralIntersection(checker, t) {
 			return nil
 		}
@@ -470,6 +473,15 @@ func stmtsFromCheckerTypeSeen(
 			kind, label = shimast.KindTrueKeyword, "true"
 		}
 		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(kind), label)}
+	case flags&shimchecker.TypeFlagsBigIntLiteral != 0:
+		value := fmt.Sprint(t.AsLiteralType().Value()) + "n"
+		return []*shimast.Node{equalityCheck(factory, path, factory.NewBigIntLiteral(value, shimast.TokenFlagsNone), value)}
+	case flags&shimchecker.TypeFlagsTemplateLiteral != 0:
+		invalid, ok := templateLiteralInvalidPredicate(factory, path, t)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its template literal type")}
 	case flags&shimchecker.TypeFlagsString != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "string")}
 	case flags&shimchecker.TypeFlagsNumber != 0:
@@ -532,6 +544,9 @@ func invalidPredicate(
 		}
 		return out, true
 	case flags&shimchecker.TypeFlagsIntersection != 0:
+		if base, ok := brandedBaseType(checker, t); ok {
+			return invalidPredicate(factory, checker, path, base, state, depth+1)
+		}
 		if !isStructuralIntersection(checker, t) {
 			return nil, false
 		}
@@ -558,6 +573,11 @@ func invalidPredicate(
 			kind = shimast.KindTrueKeyword
 		}
 		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewToken(kind)), true
+	case flags&shimchecker.TypeFlagsBigIntLiteral != 0:
+		value := fmt.Sprint(t.AsLiteralType().Value()) + "n"
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewBigIntLiteral(value, shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsTemplateLiteral != 0:
+		return templateLiteralInvalidPredicate(factory, path, t)
 	case flags&shimchecker.TypeFlagsString != 0:
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("string", shimast.TokenFlagsNone)), true
 	case flags&shimchecker.TypeFlagsNumber != 0:
@@ -575,6 +595,177 @@ func invalidPredicate(
 	default:
 		return nil, false
 	}
+}
+
+// brandedBaseType recognizes erased nominal types such as
+// string & { readonly __brand: unique symbol }. Exactly one runtime-checkable
+// primitive base is required; every other constituent must be a non-empty
+// plain object marker. Marker properties are intentionally never inspected at
+// runtime because TypeScript brands do not exist in emitted JavaScript.
+func brandedBaseType(checker *shimchecker.Checker, t *shimchecker.Type) (*shimchecker.Type, bool) {
+	var base *shimchecker.Type
+	markerCount := 0
+	for _, member := range t.Types() {
+		if member == nil {
+			return nil, false
+		}
+		if isBrandBaseType(member) {
+			if base != nil {
+				return nil, false
+			}
+			base = member
+			continue
+		}
+		if !isBrandMarkerType(checker, member) {
+			return nil, false
+		}
+		markerCount++
+	}
+	return base, base != nil && markerCount > 0
+}
+
+func isBrandBaseType(t *shimchecker.Type) bool {
+	flags := t.Flags()
+	return flags&(shimchecker.TypeFlagsString|shimchecker.TypeFlagsNumber|shimchecker.TypeFlagsBoolean|shimchecker.TypeFlagsBigInt|shimchecker.TypeFlagsStringLiteral|shimchecker.TypeFlagsNumberLiteral|shimchecker.TypeFlagsBooleanLiteral|shimchecker.TypeFlagsBigIntLiteral|shimchecker.TypeFlagsTemplateLiteral) != 0
+}
+
+func isBrandMarkerType(checker *shimchecker.Checker, t *shimchecker.Type) bool {
+	if t.Flags()&shimchecker.TypeFlagsObject == 0 ||
+		isClassObjectType(t) ||
+		checker.IsArrayLikeType(t) ||
+		shimchecker.IsTupleType(t) ||
+		len(shimchecker.Checker_getSignaturesOfType(checker, t, shimchecker.SignatureKindCall)) > 0 ||
+		len(shimchecker.Checker_getSignaturesOfType(checker, t, shimchecker.SignatureKindConstruct)) > 0 ||
+		len(shimchecker.Checker_getIndexInfosOfType(checker, t)) > 0 {
+		return false
+	}
+
+	properties := shimchecker.Checker_getApparentProperties(checker, t)
+	if len(properties) == 0 {
+		return false
+	}
+	for _, property := range properties {
+		if property == nil {
+			return false
+		}
+		if isUniqueSymbolMarkerProperty(property.Name) {
+			continue
+		}
+		if !conventionalBrandMarkerNames[property.Name] {
+			return false
+		}
+		propertyType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, property.Name)
+		if !isBrandMarkerValueType(propertyType) {
+			return false
+		}
+	}
+	return true
+}
+
+var conventionalBrandMarkerNames = map[string]bool{
+	"__brand": true,
+	"_brand":  true,
+	"_tag":    true,
+	"__tag":   true,
+	"__type":  true,
+	"_type":   true,
+	"brand":   true,
+}
+
+func isClassObjectType(t *shimchecker.Type) bool {
+	if t.ObjectFlags()&shimchecker.ObjectFlagsClass != 0 ||
+		t.Symbol() != nil && t.Symbol().Flags&shimast.SymbolFlagsClass != 0 {
+		return true
+	}
+	if t.ObjectFlags()&shimchecker.ObjectFlagsReference == 0 {
+		return false
+	}
+	target := t.Target()
+	return target != nil && (target.ObjectFlags()&shimchecker.ObjectFlagsClass != 0 ||
+		target.Symbol() != nil && target.Symbol().Flags&shimast.SymbolFlagsClass != 0)
+}
+
+// Unique symbol property names are encoded by typescript-go as
+// <internal-prefix>@<symbol-name>@<numeric-id>. Well-known symbols omit the
+// numeric identity suffix and are therefore not treated as nominal markers.
+func isUniqueSymbolMarkerProperty(name string) bool {
+	if len(name) < 4 || name[0] != 0xfe || name[1] != '@' {
+		return false
+	}
+	lastAt := strings.LastIndexByte(name, '@')
+	if lastAt <= 1 || lastAt == len(name)-1 {
+		return false
+	}
+	_, err := strconv.ParseUint(name[lastAt+1:], 10, 64)
+	return err == nil
+}
+
+func isBrandMarkerValueType(t *shimchecker.Type) bool {
+	if t == nil {
+		return false
+	}
+	flags := t.Flags()
+	if flags&(shimchecker.TypeFlagsStringLiteral|shimchecker.TypeFlagsNumberLiteral|shimchecker.TypeFlagsBooleanLiteral|shimchecker.TypeFlagsBigIntLiteral|shimchecker.TypeFlagsUniqueESSymbol|shimchecker.TypeFlagsNever) != 0 {
+		return true
+	}
+	if flags&shimchecker.TypeFlagsUnion == 0 || len(t.Types()) == 0 {
+		return false
+	}
+	for _, member := range t.Types() {
+		if !isBrandMarkerValueType(member) {
+			return false
+		}
+	}
+	return true
+}
+
+// templateLiteralInvalidPredicate always checks the string representation. A
+// template with exactly one string-like placeholder can also enforce its
+// fixed prefix and suffix cheaply. Complex templates deliberately fall back
+// to typeof rather than approximating their language with an unsound regex.
+func templateLiteralInvalidPredicate(
+	factory *shimast.NodeFactory,
+	path string,
+	t *shimchecker.Type,
+) (*shimast.Expression, bool) {
+	template := t.AsTemplateLiteralType()
+	if template == nil {
+		return nil, false
+	}
+	notString := binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("string", shimast.TokenFlagsNone))
+	texts, placeholders := template.Texts(), template.Types()
+	if len(texts) != len(placeholders)+1 {
+		return nil, false
+	}
+	if len(placeholders) != 1 || !isStringLikeType(placeholders[0]) {
+		return notString, true
+	}
+	out := notString
+	if texts[0] != "" {
+		out = binary(factory, out, shimast.KindBarBarToken, stringMethodInvalidPredicate(factory, path, "startsWith", texts[0]))
+	}
+	if texts[1] != "" {
+		out = binary(factory, out, shimast.KindBarBarToken, stringMethodInvalidPredicate(factory, path, "endsWith", texts[1]))
+	}
+	return out, true
+}
+
+func isStringLikeType(t *shimchecker.Type) bool {
+	if t == nil {
+		return false
+	}
+	return t.Flags()&(shimchecker.TypeFlagsString|shimchecker.TypeFlagsStringLiteral|shimchecker.TypeFlagsTemplateLiteral|shimchecker.TypeFlagsStringMapping) != 0
+}
+
+func stringMethodInvalidPredicate(factory *shimast.NodeFactory, path, method, value string) *shimast.Expression {
+	call := factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(pathExpr(factory, path), nil, factory.NewIdentifier(method), 0),
+		nil,
+		nil,
+		factory.NewNodeList([]*shimast.Node{factory.NewStringLiteral(value, shimast.TokenFlagsNone)}),
+		0,
+	)
+	return factory.NewPrefixUnaryExpression(shimast.KindExclamationToken, call)
 }
 
 // isStructuralIntersection keeps primitive/object intersections (including
