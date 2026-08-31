@@ -183,8 +183,13 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 		if node == nil {
 			return
 		}
-		if node.Kind == shimast.KindFunctionDeclaration {
-			injectFunction(factory, checker, node)
+		switch node.Kind {
+		case shimast.KindFunctionDeclaration:
+			fn := node.AsFunctionDeclaration()
+			injectCallable(factory, checker, fn.Parameters, fn.Body)
+		case shimast.KindMethodDeclaration:
+			method := node.AsMethodDeclaration()
+			injectCallable(factory, checker, method.Parameters, method.Body)
 		}
 		node.ForEachChild(func(child *shimast.Node) bool {
 			walk(child)
@@ -198,18 +203,17 @@ func injectFile(factory *shimast.NodeFactory, file *shimast.SourceFile, checker 
 	}
 }
 
-func injectFunction(factory *shimast.NodeFactory, checker *shimchecker.Checker, node *shimast.Node) {
-	fn := node.AsFunctionDeclaration()
-	if fn == nil || fn.Body == nil || fn.Parameters == nil {
+func injectCallable(factory *shimast.NodeFactory, checker *shimchecker.Checker, params *shimast.NodeList, body *shimast.Node) {
+	if body == nil || params == nil {
 		return
 	}
-	block := fn.Body.AsBlock()
+	block := body.AsBlock()
 	if block == nil || block.Statements == nil {
 		return
 	}
 
 	var checks []*shimast.Node
-	for _, param := range fn.Parameters.Nodes {
+	for _, param := range params.Nodes {
 		if param == nil || param.Kind != shimast.KindParameter {
 			continue
 		}
@@ -233,7 +237,7 @@ func injectFunction(factory *shimast.NodeFactory, checker *shimchecker.Checker, 
 	out = append(out, block.Statements.Nodes...)
 	block.Statements.Nodes = out
 	// Emit walks parents; factory nodes start detached.
-	shimast.SetParentInChildren(fn.Body)
+	shimast.SetParentInChildren(body)
 }
 
 func checksForParam(
