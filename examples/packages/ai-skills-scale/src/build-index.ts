@@ -1,13 +1,12 @@
 import { existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   DEFAULT_SKILLS_INDEX_THRESHOLD,
   DEFAULT_SKILLS_RETRIEVAL_LIMIT,
   SkillsIndex,
 } from '@di-framework/ai-utils';
-import { defaultSkillsDirectory, exampleRoot, loadSkillCorpus } from './corpus.ts';
+import { defaultIndexFile, defaultSkillsDirectory, loadSkillCorpus } from './corpus.ts';
 
-export const defaultIndexFile = join(exampleRoot, '.cache', 'skills-index.jsonl');
+export { defaultIndexFile } from './corpus.ts';
 
 export async function buildScaleSkillsIndex(
   options: {

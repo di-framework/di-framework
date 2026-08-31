@@ -56,6 +56,19 @@ bun run index
 bun run retrieve
 ```
 
+`retrieve` now writes machine-readable `.cache/retrieval-results.json` and a human-readable
+`.cache/retrieval-results.md`. Use repeated trials for any nondeterministic retrieval layer and
+choose alternate destinations when comparing runs:
+
+```bash
+bun run retrieve -- --trials 3 --seed 42 --json .cache/run.json --markdown .cache/run.md
+```
+
+The report records recall@1/10, mean reciprocal rank, no-skill abstention and false-positive
+rates, query-embedding/search/end-to-end latency, artifact size, and peak RSS. A zero value means
+the measurement was not supplied by that run (for example, indexing time when evaluating an
+already-built artifact).
+
 `@di-framework/ai-utils` owns the generic `di-skills-index` build CLI and `SkillsIndex.builder()` API. This example keeps a thin custom wrapper only because its third-party benchmark corpus intentionally reports and skips incompatible entries; production indexing remains fail-closed.
 
 The indexer uses `@huggingface/transformers` with a pinned [`onnx-community/bge-small-en-v1.5-ONNX`](https://huggingface.co/onnx-community/bge-small-en-v1.5-ONNX) revision, CLS pooling, the model's recommended query prefix, normalized 384-dimensional embeddings, and cosine similarity. The generated file stays under `.cache/` and is not committed. The package's normal `bun run build` invokes the same index step automatically when the fetched corpus is present; on a clean checkout it skips it.
