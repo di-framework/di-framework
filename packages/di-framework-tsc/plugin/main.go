@@ -383,6 +383,12 @@ func stmtsFromCheckerTypeSeen(
 		return []*shimast.Node{typeofCheck(factory, path, "boolean")}
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "bigint")}
+	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
+		invalid, ok := arrayInvalidPredicate(factory, checker, path, t, seen, depth)
+		if !ok {
+			return nil
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an array with valid elements")}
 	case flags&shimchecker.TypeFlagsObject != 0:
 		seen[t] = true
 		defer delete(seen, t)
@@ -485,10 +491,9 @@ func invalidPredicate(
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("boolean", shimast.TokenFlagsNone)), true
 	case flags&shimchecker.TypeFlagsBigInt != 0:
 		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("bigint", shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsObject != 0 && checker.IsArrayLikeType(t) && !shimchecker.IsTupleType(t):
+		return arrayInvalidPredicate(factory, checker, path, t, seen, depth)
 	case flags&shimchecker.TypeFlagsObject != 0:
-		if checker.IsArrayLikeType(t) {
-			return nil, false
-		}
 		seen[t] = true
 		defer delete(seen, t)
 		notObject := binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("object", shimast.TokenFlagsNone))
@@ -512,6 +517,37 @@ func invalidPredicate(
 	default:
 		return nil, false
 	}
+}
+
+func arrayInvalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	seen map[*shimchecker.Type]bool,
+	depth int,
+) (*shimast.Expression, bool) {
+	typeArgs := checker.GetTypeArguments(t)
+	if len(typeArgs) != 1 {
+		return nil, false
+	}
+	itemName := "__di_item"
+	itemInvalid, ok := invalidPredicate(factory, checker, itemName, typeArgs[0], seen, depth+1)
+	if !ok {
+		return nil, false
+	}
+	isArray := factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(factory.NewIdentifier("Array"), nil, factory.NewIdentifier("isArray"), 0),
+		nil, nil, factory.NewNodeList([]*shimast.Node{pathExpr(factory, path)}), 0,
+	)
+	notArray := factory.NewPrefixUnaryExpression(shimast.KindExclamationToken, isArray)
+	param := factory.NewParameterDeclaration(nil, nil, factory.NewIdentifier(itemName), nil, nil, nil)
+	arrow := factory.NewArrowFunction(nil, nil, factory.NewNodeList([]*shimast.Node{param}), nil, nil, factory.NewToken(shimast.KindEqualsGreaterThanToken), itemInvalid)
+	hasInvalidItem := factory.NewCallExpression(
+		factory.NewPropertyAccessExpression(pathExpr(factory, path), nil, factory.NewIdentifier("some"), 0),
+		nil, nil, factory.NewNodeList([]*shimast.Node{arrow}), 0,
+	)
+	return binary(factory, notArray, shimast.KindBarBarToken, hasInvalidItem), true
 }
 
 func equalityCheck(factory *shimast.NodeFactory, path string, expected *shimast.Expression, label string) *shimast.Node {

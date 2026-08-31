@@ -79,9 +79,11 @@ function greet(user) {
 Skipped today:
 
 - optional / default / rest / destructured parameters
-- arrays, tuples, classes, branded types, typia-style tags
+- tuples, classes, branded types, typia-style tags
 - unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
+
+Arrays and `ReadonlyArray<T>` are checked with `Array.isArray` and a full element scan.
 
 ## Monorepo note
 

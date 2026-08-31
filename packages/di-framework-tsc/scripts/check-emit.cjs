@@ -37,6 +37,10 @@ const required = [
   'Expected value to match its union type',
   'Expected nullable to match its union type',
   'Expected result to match its union type',
+  '!Array.isArray(numbers)',
+  'numbers.some(__di_item => typeof __di_item !== "number")',
+  '!Array.isArray(users)',
+  'typeof __di_item.id !== "number"',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
