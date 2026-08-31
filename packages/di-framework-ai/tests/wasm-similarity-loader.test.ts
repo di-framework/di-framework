@@ -3,7 +3,11 @@ import { loadWasmSimilarity } from '../src/vectorstore/adapters/wasm-similarity-
 
 describe('loadWasmSimilarity', () => {
   test('returns null when the module has no cosine ranker', async () => {
-    expect(await loadWasmSimilarity()).toBeNull();
+    expect(
+      await loadWasmSimilarity(
+        new URL('./fixtures/empty-wasm-similarity.ts', import.meta.url).href,
+      ),
+    ).toBeNull();
   });
 
   test('returns null when the specifier cannot be imported', async () => {
