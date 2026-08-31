@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { useContainer } from '@di-framework/core/container';
 import { Container } from '@di-framework/core/decorators';
 import { z } from 'zod';
 import { zodSchema } from '../src/adapters/zod.ts';
-import { Configuration, Value } from '../src/decorators.ts';
+import { Configuration, Value, WithProfile } from '../src/decorators.ts';
 import { envSource } from '../src/sources/env.ts';
+import { jsonFileSource } from '../src/sources/json-file.ts';
 import { objectSource } from '../src/sources/object.ts';
 
 describe('Configuration / Value', () => {
@@ -105,5 +108,31 @@ describe('Configuration / Value', () => {
     expect(ThrowsOnConstruct).toBeDefined();
     expect(useContainer().has(ThrowsOnConstruct)).toBe(false);
     expect(useContainer().resolve<{ ok: boolean }>('cfg2')).toEqual({ ok: true });
+  });
+
+  it('WithProfile overlays {profile}.config.{ext} for file sources', () => {
+    const dir = join(import.meta.dir, '.tmp-with-profile');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify({ host: 'base', port: 1 }));
+    writeFileSync(join(dir, 'dev.config.json'), JSON.stringify({ port: 8080 }));
+    try {
+      @WithProfile('dev')
+      @Configuration({
+        sources: [jsonFileSource(file)],
+        token: 'profiled',
+      })
+      class AppConfig {
+        host = 'localhost';
+        port = 3000;
+      }
+
+      const cfg = useContainer().resolve(AppConfig);
+      expect(cfg.host).toBe('base');
+      expect(cfg.port).toBe(8080);
+      expect(useContainer().resolve<number>('profiled.port')).toBe(8080);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

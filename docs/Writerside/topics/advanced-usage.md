@@ -358,7 +358,7 @@ const emailer = container.construct(EmailService, {
 
 ## Configuration Services
 
-For typed, validated configuration from env and files, use [`@di-framework/config`](config.md). A minimal imperative example:
+For typed, validated configuration from env, JSON, YAML, and TOML files, use [`@di-framework/config`](config.md). A minimal imperative example:
 
 ```typescript
 import { loadAndRegisterConfig, envSource } from '@di-framework/config';

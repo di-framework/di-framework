@@ -198,7 +198,7 @@ await app.initialize();
 
 ## 9. Use `@di-framework/config` for Configuration
 
-Prefer typed config over ad-hoc `process.env` parsing. `@Configuration` / `@Value` load, validate, and inject settings the same way other DI services work:
+Prefer typed config over ad-hoc `process.env` parsing. `@Configuration` / `@Value` / `@WithProfile` load, validate, and inject settings the same way other DI services work. JSON is built in; YAML and TOML are optional peers.
 
 ```typescript
 import { Configuration, Value, envSource } from '@di-framework/config';
@@ -220,7 +220,7 @@ export class DatabaseService {
 }
 ```
 
-For scripts and tests, use `loadAndRegisterConfig` / `registerConfig`. See [Configuration](config.md).
+For scripts and tests, use `loadAndRegisterConfig` / `registerConfig`. Overlay environment-specific files with `@WithProfile('dev')` (`dev.config.yaml` next to `config.yaml`). See [Configuration](config.md).
 
 **Why:** Centralizes configuration, fails fast on invalid settings, and makes environment-specific values easy to inject.
 

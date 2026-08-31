@@ -17,13 +17,18 @@ export interface ConfigSchema<T = unknown> {
 
 export type ConfigKeyCase = 'camel' | 'lower' | 'preserve';
 
-export interface LoadConfigOptions<T = Record<string, unknown>> {
+export interface LoadConfigOptions<T extends Record<string, unknown> = Record<string, unknown>> {
   /** Sources are deep-merged left → right (later wins). */
   sources?: ConfigSource[];
   /** Base values applied before sources. */
   defaults?: Record<string, unknown>;
   /** Optional schema; when set, return type is `T`. */
   schema?: ConfigSchema<T>;
+  /**
+   * Selected config profiles. File sources overlay `{profile}.config.{ext}`.
+   * `@WithProfile` on a `@Configuration` class sets this automatically.
+   */
+  profiles?: readonly string[];
 }
 
 export interface ConfigContainer {
@@ -43,8 +48,9 @@ export interface RegisterConfigOptions {
   container?: unknown;
 }
 
-export interface ConfigurationDecoratorOptions<T = Record<string, unknown>>
-  extends LoadConfigOptions<T>,
+export interface ConfigurationDecoratorOptions<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> extends LoadConfigOptions<T>,
     RegisterConfigOptions {
   /**
    * When true (default), also register the decorated class as a singleton

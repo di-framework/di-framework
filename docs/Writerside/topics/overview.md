@@ -17,7 +17,7 @@ A lightweight, type-safe dependency injection framework for TypeScript, plus com
 - **HTTP Routing & OpenAPI**: Type-safe HTTP routing and build-time OpenAPI 3.1 generation with `@di-framework/http`.
 - **GraphQL**: Object-oriented, decorator-driven GraphQL with `@di-framework/graphql` — domain classes become the schema.
 - **Events**: Bridge `@Publisher` / `@Subscriber` to Kafka, NATS, or in-memory transports with `@di-framework/events`.
-- **Configuration**: Typed, validated config from env/files injected via DI with `@di-framework/config`.
+- **Configuration**: Typed, validated config from env, JSON, YAML, and TOML files injected via DI with `@di-framework/config`, including `{profile}.config.{ext}` overlays via `@WithProfile`.
 - **Authentication**: Sessions, JWT, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with `@di-framework/auth` — zero runtime dependencies.
 - **Resource Authorization**: Decorator-authored policies, EBNF interchange, DI resource providers, and fail-closed HTTP controller bindings with `@di-framework/authz`.
 - **Sockets**: Security-first WebSocket, TCP, and UDP with a WebCrypto secure channel via `@di-framework/socket` (network I/O — distinct from the in-process event bus).
@@ -121,7 +121,7 @@ userService.getUser('123');
 - [Events](events.md) - Bridge container events to Kafka / NATS / memory
 - [Sockets](socket.md) - WebSocket, TCP, UDP with a secure channel (`@di-framework/socket`)
 - [RPC](rpc.md) - JSON-RPC and per-method gRPC with a typed client (`@di-framework/rpc`)
-- [Configuration](config.md) - Typed config from env/files via DI
+- [Configuration](config.md) - Typed config from env, JSON, YAML, and TOML via DI
 - [Authentication](auth.md) - Sessions, JWT, OAuth2/OIDC, and passkeys
 - [Resource Authorization](authorization.md) - Declarative policies and HTTP resource enforcement
 - [AI](ai.md) - Chat, tools, RAG, MCP, and agents with `@di-framework/ai`
