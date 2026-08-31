@@ -1,5 +1,10 @@
 # @di-framework/ai-utils
 
+`@huggingface/transformers@4.2.0` is an optional peer. Bun, npm, pnpm, and Yarn
+installations do not fetch it for ordinary skills, small catalogs, or custom
+`SkillEmbedder` implementations. Install it explicitly only when using the
+default semantic embedder for a catalog above the indexing threshold.
+
 Agentic extras for [`@di-framework/ai`](../di-framework-ai). **Agent Skills** (`SKILL.md`, progressive disclosure) plus jailed file tools, HITL questions, todos, optional web / memory / task, and opt-in `Write` / `Edit` / `Bash`.
 
 This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.

@@ -53,8 +53,8 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@di-framework/auth": "workspace:*",
-    "@di-framework/core": "workspace:*",
+    "@di-framework/auth": "^4",
+    "@di-framework/core": "^4",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {

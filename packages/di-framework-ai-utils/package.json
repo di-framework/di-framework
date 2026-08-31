@@ -53,7 +53,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/ai": "workspace:*",
+    "@di-framework/ai": "^4",
     "@huggingface/transformers": "4.2.0",
     "typescript": "^5"
   },
