@@ -3,7 +3,6 @@ import { LoggerService } from '@di-framework/services-example/LoggerService';
 
 type Env = unknown | any;
 
-
 @Container()
 export class CounterService {
   constructor(@Component(LoggerService) private readonly logger: LoggerService) {}

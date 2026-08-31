@@ -130,7 +130,10 @@ describe('Dist Artifacts & Packaging Compatibility', () => {
           './dist/nats.d.ts',
         ],
       },
-      { name: 'di-framework-config', exports: ['./dist/index.d.ts', './dist/zod.d.ts'] },
+      {
+        name: 'di-framework-config',
+        exports: ['./dist/index.d.ts', './dist/zod.d.ts', './dist/yaml.d.ts', './dist/toml.d.ts'],
+      },
       {
         name: 'di-framework-auth',
         exports: [

@@ -22,6 +22,6 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src/**/*", "index.ts", "zod.ts"],
+  "include": ["src/**/*", "index.ts", "zod.ts", "yaml.ts", "toml.ts"],
   "exclude": ["**/*.test.ts", "tests/**/*", "node_modules", "dist"]
 }

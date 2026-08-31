@@ -1,7 +1,7 @@
 {
   "name": "@di-framework/config",
   "version": "4.2.3",
-  "description": "Typed, validated configuration for di-framework — load from env/files, validate, and inject via DI.",
+  "description": "Typed, validated configuration for di-framework — load from env, JSON, YAML, and TOML, validate, and inject via DI.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,6 +18,18 @@
       "bun": "./dist/zod.js",
       "import": "./dist/zod.js",
       "default": "./dist/zod.js"
+    },
+    "./yaml": {
+      "types": "./dist/yaml.d.ts",
+      "bun": "./dist/yaml.js",
+      "import": "./dist/yaml.js",
+      "default": "./dist/yaml.js"
+    },
+    "./toml": {
+      "types": "./dist/toml.d.ts",
+      "bun": "./dist/toml.js",
+      "import": "./dist/toml.js",
+      "default": "./dist/toml.js"
     }
   },
   "author": "@di-framework Contributors",
@@ -35,6 +47,8 @@
     "config",
     "configuration",
     "environment",
+    "yaml",
+    "toml",
     "dependency-injection",
     "decorators",
     "typescript",
@@ -46,21 +60,31 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts ./zod.ts --outdir ./dist --target node --external @di-framework/core --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./zod.ts ./yaml.ts ./toml.ts --outdir ./dist --target node --external @di-framework/core --external zod --external yaml --external smol-toml && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "bun run build",
     "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "smol-toml": "^1.4.2",
     "typescript": "^5",
+    "yaml": "^2.8.0",
     "zod": "^3.24.0"
   },
   "peerDependencies": {
     "@di-framework/core": "^4",
+    "smol-toml": "^1.3.0",
     "typescript": "^5",
+    "yaml": "^2.6.0",
     "zod": "^3.22.0"
   },
   "peerDependenciesMeta": {
+    "smol-toml": {
+      "optional": true
+    },
+    "yaml": {
+      "optional": true
+    },
     "zod": {
       "optional": true
     }
