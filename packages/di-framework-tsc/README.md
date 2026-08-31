@@ -79,7 +79,8 @@ function greet(user) {
 Skipped today:
 
 - optional / default / rest / destructured parameters
-- unions, arrays, tuples, classes, branded types, typia-style tags
+- arrays, tuples, classes, branded types, typia-style tags
+- unions with unsupported members or more than 12 members
 - `void`, `never`, and `unique symbol`
 
 ## Monorepo

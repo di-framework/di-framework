@@ -334,6 +334,24 @@ func stmtsFromCheckerTypeSeen(
 	}
 	flags := t.Flags()
 	switch {
+	case flags&shimchecker.TypeFlagsUnion != 0:
+		members := t.Types()
+		if len(members) == 0 || len(members) > 12 {
+			return nil
+		}
+		var invalid *shimast.Expression
+		for _, member := range members {
+			memberInvalid, ok := invalidPredicate(factory, checker, path, member, seen, depth+1)
+			if !ok {
+				return nil
+			}
+			if invalid == nil {
+				invalid = memberInvalid
+			} else {
+				invalid = binary(factory, invalid, shimast.KindAmpersandAmpersandToken, memberInvalid)
+			}
+		}
+		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its union type")}
 	case flags&shimchecker.TypeFlagsNull != 0:
 		return []*shimast.Node{equalityCheck(factory, path, factory.NewToken(shimast.KindNullKeyword), "null")}
 	case flags&shimchecker.TypeFlagsUndefined != 0:
@@ -400,6 +418,99 @@ func stmtsFromCheckerTypeSeen(
 		return out
 	default:
 		return nil
+	}
+}
+
+// invalidPredicate returns a composable expression that is true when path does
+// not satisfy t. The bool is false when a sound runtime predicate is not
+// available; callers then skip the entire union rather than partially checking it.
+func invalidPredicate(
+	factory *shimast.NodeFactory,
+	checker *shimchecker.Checker,
+	path string,
+	t *shimchecker.Type,
+	seen map[*shimchecker.Type]bool,
+	depth int,
+) (*shimast.Expression, bool) {
+	if t == nil || depth > 8 || seen[t] {
+		return nil, false
+	}
+	flags := t.Flags()
+	switch {
+	case flags&shimchecker.TypeFlagsUnion != 0:
+		members := t.Types()
+		if len(members) == 0 || len(members) > 12 {
+			return nil, false
+		}
+		var out *shimast.Expression
+		for _, member := range members {
+			pred, ok := invalidPredicate(factory, checker, path, member, seen, depth+1)
+			if !ok {
+				return nil, false
+			}
+			if out == nil {
+				out = pred
+			} else {
+				out = binary(factory, out, shimast.KindAmpersandAmpersandToken, pred)
+			}
+		}
+		return out, true
+	case flags&shimchecker.TypeFlagsNull != 0:
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)), true
+	case flags&shimchecker.TypeFlagsUndefined != 0:
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewIdentifier("undefined")), true
+	case flags&shimchecker.TypeFlagsStringLiteral != 0:
+		value, ok := t.AsLiteralType().Value().(string)
+		if !ok {
+			return nil, false
+		}
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral(value, shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsNumberLiteral != 0:
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewNumericLiteral(fmt.Sprint(t.AsLiteralType().Value()), shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsBooleanLiteral != 0:
+		value, ok := t.AsLiteralType().Value().(bool)
+		if !ok {
+			return nil, false
+		}
+		kind := shimast.KindFalseKeyword
+		if value {
+			kind = shimast.KindTrueKeyword
+		}
+		return binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, factory.NewToken(kind)), true
+	case flags&shimchecker.TypeFlagsString != 0:
+		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("string", shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsNumber != 0:
+		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("number", shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsBoolean != 0:
+		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("boolean", shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsBigInt != 0:
+		return binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("bigint", shimast.TokenFlagsNone)), true
+	case flags&shimchecker.TypeFlagsObject != 0:
+		if checker.IsArrayLikeType(t) {
+			return nil, false
+		}
+		seen[t] = true
+		defer delete(seen, t)
+		notObject := binary(factory, factory.NewTypeOfExpression(pathExpr(factory, path)), shimast.KindExclamationEqualsEqualsToken, factory.NewStringLiteral("object", shimast.TokenFlagsNone))
+		out := binary(factory, notObject, shimast.KindBarBarToken, binary(factory, pathExpr(factory, path), shimast.KindEqualsEqualsEqualsToken, factory.NewToken(shimast.KindNullKeyword)))
+		props := shimchecker.Checker_getApparentProperties(checker, t)
+		if len(props) == 0 {
+			return nil, false
+		}
+		for _, sym := range props {
+			if sym == nil || sym.Name == "" || strings.HasPrefix(sym.Name, "__") || sym.Flags&shimast.SymbolFlagsOptional != 0 {
+				continue
+			}
+			propType := shimchecker.Checker_getTypeOfPropertyOfType(checker, t, sym.Name)
+			pred, ok := invalidPredicate(factory, checker, path+"."+sym.Name, propType, seen, depth+1)
+			if !ok {
+				return nil, false
+			}
+			out = binary(factory, out, shimast.KindBarBarToken, pred)
+		}
+		return out, true
+	default:
+		return nil, false
 	}
 }
 
