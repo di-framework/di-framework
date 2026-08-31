@@ -165,6 +165,31 @@ export {
   SkillsToolboxBuilder,
   skillsToolbox,
 } from './skills-toolbox.ts';
+export type {
+  SemanticSkillDiscoveryDecoratorOptions,
+  SkillDecoratorOptions,
+  SkillsAgentFromOverrides,
+  SkillsDecoratorOptions,
+  SkillsIndexConfigOptions,
+  SkillsIndexFromOverrides,
+  SkillsToolboxFromOverrides,
+} from './skills-decorators.ts';
+export {
+  getDeclaredSkills,
+  getSemanticSkillDiscoveryMetadata,
+  getSkillsIndexMetadata,
+  getSkillsMetadata,
+  SemanticSkillDiscovery,
+  Skill,
+  Skills,
+  skillsAgentBuilderFrom,
+  skillsAgentFrom,
+  SkillsIndexConfig,
+  skillsIndexBuilderFrom,
+  skillsToolboxBuilderFrom,
+  skillsToolboxFrom,
+  skillsToolboxOptionsFrom,
+} from './skills-decorators.ts';
 export type { ValidateSkillOptions } from './validate-skill.ts';
 export {
   validateSkill,

@@ -230,8 +230,8 @@
         "wasm-similarity": "^1.0.10",
       },
       "peerDependencies": {
-        "@di-framework/auth": "workspace:*",
-        "@di-framework/core": "workspace:*",
+        "@di-framework/auth": "^4",
+        "@di-framework/core": "^4",
         "typescript": "^5",
       },
       "optionalPeers": [
@@ -246,12 +246,14 @@
       },
       "devDependencies": {
         "@di-framework/ai": "workspace:*",
+        "@di-framework/core": "workspace:*",
         "@huggingface/transformers": "4.2.0",
         "@types/bun": "latest",
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/ai": "workspace:*",
+        "@di-framework/ai": "^4",
+        "@di-framework/core": "^4",
         "@huggingface/transformers": "4.2.0",
         "typescript": "^5",
       },
@@ -271,10 +273,10 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "workspace:*",
-        "@di-framework/graphql": "workspace:*",
-        "@di-framework/http": "workspace:*",
-        "@di-framework/repo": "workspace:*",
+        "@di-framework/core": "^4",
+        "@di-framework/graphql": "^4",
+        "@di-framework/http": "^4",
+        "@di-framework/repo": "^4",
         "graphql": "^16.8.0 || ^17.0.0",
         "typescript": "^5",
       },
@@ -296,9 +298,9 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/auth": "workspace:*",
-        "@di-framework/core": "workspace:*",
-        "@di-framework/http": "workspace:*",
+        "@di-framework/auth": "^4",
+        "@di-framework/core": "^4",
+        "@di-framework/http": "^4",
         "typescript": "^5",
       },
       "optionalPeers": [
@@ -390,7 +392,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "workspace:*",
+        "@di-framework/core": "^4",
         "graphql": "^16.8.0 || ^17.0.0",
         "typescript": "^5",
       },
@@ -412,7 +414,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "workspace:*",
+        "@di-framework/core": "^4",
         "typescript": "^5",
       },
     },
@@ -420,7 +422,7 @@
       "name": "@di-framework/repo",
       "version": "4.2.3",
       "peerDependencies": {
-        "@di-framework/core": "workspace:*",
+        "@di-framework/core": "^4",
         "typescript": "^5",
       },
     },

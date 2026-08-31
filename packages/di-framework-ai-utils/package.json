@@ -42,18 +42,20 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./src/index.ts ./src/skills-index-cli.ts --outdir ./dist --target node --external @di-framework/ai && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./src/index.ts ./src/skills-index-cli.ts --outdir ./dist --target node --external @di-framework/ai --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "bun run build",
     "test": "bun test"
   },
   "devDependencies": {
     "@di-framework/ai": "workspace:*",
+    "@di-framework/core": "workspace:*",
     "@huggingface/transformers": "4.2.0",
     "@types/bun": "latest",
     "typescript": "^5"
   },
   "peerDependencies": {
     "@di-framework/ai": "^4",
+    "@di-framework/core": "^4",
     "@huggingface/transformers": "4.2.0",
     "typescript": "^5"
   },
