@@ -6,7 +6,7 @@ import {
   type Message,
 } from '../messages/message.ts';
 import { MessageType } from '../messages/message-type.ts';
-import { addMessage, type ChatMemory } from './chat-memory.ts';
+import { addMessage, type ReplaceableChatMemory } from './chat-memory.ts';
 import type { ChatMemoryRepository } from './chat-memory-repository.ts';
 import { InMemoryChatMemoryRepository } from './in-memory-chat-memory-repository.ts';
 
@@ -23,7 +23,7 @@ export interface MessageWindowChatMemoryOptions {
  * snapping when trimming.
  * Spring AI: {@code MessageWindowChatMemory}.
  */
-export class MessageWindowChatMemory implements ChatMemory {
+export class MessageWindowChatMemory implements ReplaceableChatMemory {
   private readonly chatMemoryRepository: ChatMemoryRepository;
   private readonly maxMessages: number;
 
@@ -72,6 +72,15 @@ export class MessageWindowChatMemory implements ChatMemory {
   clear(conversationId: string): void {
     assertConversationId(conversationId);
     this.chatMemoryRepository.deleteByConversationId(conversationId);
+  }
+
+  replace(conversationId: string, messages: readonly Message[]): void {
+    assertConversationId(conversationId);
+    if (messages.some((message) => message == null)) {
+      throw new Error('messages cannot contain null elements');
+    }
+    const processed = processWindow([], messages, this.maxMessages);
+    this.chatMemoryRepository.saveAll(conversationId, processed);
   }
 }
 

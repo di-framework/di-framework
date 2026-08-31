@@ -167,6 +167,28 @@ configureAi({
 
 Imperative APIs are unchanged: `functionToolCallback`, `MessageChatMemoryAdvisor`, `RetrievalAugmentationAdvisor`, MCP adapters, and `ChainWorkflow` / `RoutingWorkflow` / … See source tests under `tests/` for examples.
 
+### Explicit context compression
+
+`ContextCompressionAdvisor` runs after chat-memory loading and before skill
+retrieval on both call and stream paths. It requires an application-supplied
+`TokenCounter` and `ContextCompressor`; the package does not estimate tokens or
+invoke a hidden model.
+
+```typescript
+const compression = new ContextCompressionAdvisor({
+  tokenBudget: 8_000,
+  tokenCounter: myTokenizer,
+  compressor: mySummarizer,
+  persistence: 'request', // default; use "memory" only with ReplaceableChatMemory
+});
+```
+
+Compressor output is rejected before model invocation if it remains over budget,
+is malformed, or changes system messages, the current user turn, media, or an
+assistant/tool-response group. `MessageWindowChatMemory` supports atomic
+replacement for opt-in persistent compression. `onCompression` reports token
+counts, compressed ranges, persistence, and duration without message bodies.
+
 **Agent Skills** (`SKILL.md`, progressive disclosure) are not in this package. Use [`@di-framework/ai-utils`](../di-framework-ai-utils) `SkillsAgent.builder()` / `SkillsToolbox.builder()`. Docs: [Agent Skills](../../docs/Writerside/topics/ai-utils.md).
 
 ### Tool Execution Authorization & Interception

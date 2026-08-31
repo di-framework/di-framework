@@ -18,6 +18,15 @@ export interface ChatMemory {
   clear(conversationId: string): void;
 }
 
+/** Nonbreaking extension for memories that support atomic conversation replacement. */
+export interface ReplaceableChatMemory extends ChatMemory {
+  replace(conversationId: string, messages: readonly Message[]): void;
+}
+
+export function isReplaceableChatMemory(memory: ChatMemory): memory is ReplaceableChatMemory {
+  return typeof (memory as Partial<ReplaceableChatMemory>).replace === 'function';
+}
+
 /**
  * Context key for the chat memory conversation id.
  * Spring AI: {@code ChatMemory.CONVERSATION_ID}.
