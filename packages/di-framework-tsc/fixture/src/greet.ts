@@ -52,3 +52,7 @@ type Failure = { kind: 'failure'; message: string };
 export function unionValues(value: string | number, nullable: string | null, result: Success | Failure) {
   return { value, nullable, result };
 }
+
+export function arrayValues(numbers: number[], users: ReadonlyArray<User>) {
+  return { numbers, users };
+}
