@@ -165,6 +165,70 @@ export function unsupportedRecordValues(unsupportedValues: Record<string, Date>)
   return unsupportedValues;
 }
 
+declare const userIdBrand: unique symbol;
+type UserId = string & { readonly [userIdBrand]: 'UserId' };
+type AccountId = number & { readonly __brand: 'AccountId' };
+type EnabledFlag = boolean & { readonly __brand: 'EnabledFlag' };
+type Sequence = bigint & { readonly __brand: 'Sequence' };
+type AdminRole = 'admin' & { readonly __brand: 'AdminRole' };
+type ApiVersion = 1 & { readonly __brand: 'ApiVersion' };
+type FirstSequence = 1n & { readonly __brand: 'FirstSequence' };
+
+type UserRoute = `user_${string}`;
+type BrandedUserRoute = UserRoute & { readonly __brand: 'UserRoute' };
+
+export function brandedValues(
+  userId: UserId,
+  accountId: AccountId,
+  enabled: EnabledFlag,
+  sequence: Sequence,
+  role: AdminRole,
+) {
+  return { userId, accountId, enabled, sequence, role };
+}
+
+export function literalBrandValues(apiVersion: ApiVersion, firstSequence: FirstSequence) {
+  return { apiVersion, firstSequence };
+}
+
+export function brandedCollections(
+  ids: UserId[],
+  value: UserId | number,
+  routes: BrandedUserRoute[],
+) {
+  return { ids, value, routes };
+}
+
+export function templateValues(
+  route: UserRoute,
+  artifact: `${string}_done`,
+  wrapped: `v_${string}_end`,
+  complex: `pair_${string}_${string}_end`,
+  numeric: `item_${number}`,
+) {
+  return { route, artifact, wrapped, complex, numeric };
+}
+
+export function templateCollections(routes: UserRoute[], value: UserRoute | number) {
+  return { routes, value };
+}
+
+type LengthConstrainedString = string & { length: 3 };
+type DateIntersection = string & Date;
+type CallableBrandLike = string & { readonly __brand: 'Callable'; (): string };
+
+export function unsupportedLengthIntersection(lengthValue: LengthConstrainedString) {
+  return lengthValue;
+}
+
+export function unsupportedDateIntersection(dateValue: DateIntersection) {
+  return dateValue;
+}
+
+export function unsupportedCallableIntersection(callableValue: CallableBrandLike) {
+  return callableValue;
+}
+
 export function sum(...values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }

@@ -60,6 +60,32 @@ throwsTypeError(() => fixture.specialKeyRecord({ '': 1 }));
 throwsTypeError(() => fixture.specialKeyRecord({ '': 'bad', __id: 1 }));
 throwsTypeError(() => fixture.specialKeyRecord({ '': 1, __id: 'bad' }));
 throwsTypeError(() => fixture.recursiveValue({ value: 'bad' }));
+throwsTypeError(() => fixture.brandedValues(123, 42, true, 1n, 'admin'));
+throwsTypeError(() => fixture.brandedValues('user-1', 'bad', true, 1n, 'admin'));
+throwsTypeError(() => fixture.brandedValues('user-1', 42, 'yes', 1n, 'admin'));
+throwsTypeError(() => fixture.brandedValues('user-1', 42, true, 1, 'admin'));
+throwsTypeError(() => fixture.brandedValues('user-1', 42, true, 1n, 'member'));
+throwsTypeError(() => fixture.literalBrandValues(2, 1n));
+throwsTypeError(() => fixture.literalBrandValues(1, 2n));
+throwsTypeError(() => fixture.brandedCollections(['first', 2], 1, ['user_first']));
+throwsTypeError(() => fixture.brandedCollections(['first'], false, ['user_first']));
+throwsTypeError(() => fixture.brandedCollections(['first'], 1, ['wrong']));
+throwsTypeError(() =>
+  fixture.templateValues('wrong', 'build_done', 'v_one_end', 'anything', 'anything'),
+);
+throwsTypeError(() =>
+  fixture.templateValues('user_1', 'wrong', 'v_one_end', 'anything', 'anything'),
+);
+throwsTypeError(() =>
+  fixture.templateValues('user_1', 'build_done', 'wrong', 'anything', 'anything'),
+);
+throwsTypeError(() =>
+  fixture.templateValues('user_1', 'build_done', 'v_one_wrong', 'anything', 'anything'),
+);
+throwsTypeError(() => fixture.templateValues('user_1', 'build_done', 'v_one_end', 1, 'anything'));
+throwsTypeError(() => fixture.templateValues('user_1', 'build_done', 'v_one_end', 'anything', 1));
+throwsTypeError(() => fixture.templateCollections(['user_first', 'wrong'], 1));
+throwsTypeError(() => fixture.templateCollections(['user_first'], false));
 throwsTypeError(() => fixture.sum(1, 'bad'));
 throwsTypeError(() => fixture.destructuredValues({ id: 'bad', name: 'Ada' }, [1, 'ok']));
 throwsTypeError(() => createService({ endpoint: '/api', retries: 'bad' }));
@@ -113,6 +139,36 @@ assert.deepEqual(fixture.unsupportedSymbolIndex({ [Symbol.iterator]: 'unchecked'
   [Symbol.iterator]: 'unchecked',
 });
 assert.deepEqual(fixture.unsupportedRecordValues({ bad: {} }), { bad: {} });
+assert.deepEqual(fixture.brandedValues('user-1', 42, true, 1n, 'admin'), {
+  userId: 'user-1',
+  accountId: 42,
+  enabled: true,
+  sequence: 1n,
+  role: 'admin',
+});
+assert.deepEqual(fixture.literalBrandValues(1, 1n), { apiVersion: 1, firstSequence: 1n });
+assert.deepEqual(fixture.brandedCollections(['first'], 'second', ['user_first']), {
+  ids: ['first'],
+  value: 'second',
+  routes: ['user_first'],
+});
+assert.deepEqual(
+  fixture.templateValues('user_1', 'build_done', 'v_one_end', 'not-a-pair', 'not-a-number'),
+  {
+    route: 'user_1',
+    artifact: 'build_done',
+    wrapped: 'v_one_end',
+    complex: 'not-a-pair',
+    numeric: 'not-a-number',
+  },
+);
+assert.deepEqual(fixture.templateCollections(['user_first'], 2), {
+  routes: ['user_first'],
+  value: 2,
+});
+assert.equal(fixture.unsupportedLengthIntersection(123), 123);
+assert.equal(fixture.unsupportedDateIntersection(123), 123);
+assert.equal(fixture.unsupportedCallableIntersection(123), 123);
 assert.deepEqual(service.execute({ id: 1, tags: ['a'] }), [1, '/api:sync:a']);
 
 console.log('check-runtime: ok — injected guards accept valid calls and reject invalid calls');
