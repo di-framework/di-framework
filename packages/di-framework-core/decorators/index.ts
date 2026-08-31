@@ -11,6 +11,13 @@
 export { Bootstrap } from './Bootstrap.js';
 export { Builder } from './Builder.js';
 export {
+  Bean,
+  type BeanDefinition,
+  type BeanOptions,
+  type BeanToken,
+  Configuration,
+} from './Configuration.js';
+export {
   Component,
   Container,
   getInjectionContainer,

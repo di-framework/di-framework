@@ -37,6 +37,12 @@
       "import": "./dist/container.js",
       "default": "./dist/container.js"
     },
+    "./application-context": {
+      "types": "./dist/application-context.d.ts",
+      "bun": "./dist/application-context.js",
+      "import": "./dist/application-context.js",
+      "default": "./dist/application-context.js"
+    },
     "./decorators": {
       "types": "./dist/decorators/index.d.ts",
       "bun": "./dist/decorators/index.js",
