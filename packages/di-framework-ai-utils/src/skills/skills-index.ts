@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -1081,7 +1081,7 @@ function writeV3IndexAtomically(file: string, index: SkillsIndex): void {
   const dimensions = index.metadata.dimensions;
   if (!dimensions) throw new Error('Indexed skills metadata is missing dimensions');
   const vectorFile = `${file}.vectors.bin`;
-  const vectorTemporary = `${vectorFile}.${process.pid}.tmp`;
+  const vectorTemporary = uniqueTemporaryPath(vectorFile);
   const chunks: Buffer[] = [];
   let offset = 0;
   const entries: V3EntryRecord[] = index.entries.map((entry) => ({
@@ -1124,7 +1124,7 @@ function writeV3IndexAtomically(file: string, index: SkillsIndex): void {
     vectorBytes: vectors.length,
   };
   try {
-    writeFileSync(vectorTemporary, vectors);
+    writePrivateFile(vectorTemporary, vectors);
     renameSync(vectorTemporary, vectorFile);
     writeJsonAtomically(file, { metadata, entries, lexical: index.lexical });
   } catch (error) {
@@ -1245,11 +1245,19 @@ function hashBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function uniqueTemporaryPath(file: string): string {
+  return `${file}.${process.pid}.${randomUUID()}.tmp`;
+}
+
+function writePrivateFile(file: string, data: string | NodeJS.ArrayBufferView): void {
+  writeFileSync(file, data, { mode: 0o600, flag: 'wx' });
+}
+
 function writeJsonAtomically(file: string, value: unknown): void {
   mkdirSync(dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
+  const temporary = uniqueTemporaryPath(file);
   try {
-    writeFileSync(temporary, `${JSON.stringify(value)}\n`);
+    writePrivateFile(temporary, `${JSON.stringify(value)}\n`);
     renameSync(temporary, file);
   } catch (error) {
     try {
