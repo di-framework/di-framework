@@ -1,7 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { ChatAgent, type ChatModel, OpenAiChatModel, type ToolCallback } from '@di-framework/ai';
 import { SkillsAgent, SkillsToolbox } from '@di-framework/ai-utils';
+import {
+  loadEnvSecrets as loadSharedEnvSecrets,
+  requireOpenAiApiKey as requireSharedOpenAiApiKey,
+} from '@di-framework/examples-shared';
 
 export const exampleRoot = join(import.meta.dir, '..');
 export const skillsDirectory = join(exampleRoot, '.claude', 'skills');
@@ -30,56 +33,14 @@ export function createReviewAgent(chatModel: ChatModel, options: { shell?: boole
     .build();
 }
 
-/**
- * Fill missing {@code process.env} keys from a gitignored {@code .env.secrets}
- * file (repo root or any ancestor of {@link exampleRoot}). Existing env wins.
- */
+/** Fill missing {@code process.env} keys from ancestor {@code .env.secrets}. */
 export function loadEnvSecrets(startDir = exampleRoot): string | undefined {
-  let dir = startDir;
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, '.env.secrets');
-    if (existsSync(candidate)) {
-      applyEnvFile(candidate);
-      return candidate;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return undefined;
-}
-
-function applyEnvFile(path: string): void {
-  const text = readFileSync(path, 'utf8');
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq <= 0) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined || process.env[key] === '') {
-      process.env[key] = value;
-    }
-  }
+  return loadSharedEnvSecrets(startDir);
 }
 
 /** Fail fast when the live OpenAI path is used without a key. */
 export function requireOpenAiApiKey(env: NodeJS.ProcessEnv = process.env): string {
-  if (env === process.env && !env.OPENAI_API_KEY?.trim()) {
-    loadEnvSecrets();
-  }
-  const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not set (export it or add it to .env.secrets)');
-  }
-  return apiKey;
+  return requireSharedOpenAiApiKey(env, env === process.env ? exampleRoot : undefined);
 }
 
 export function createOpenAiChatModel(): OpenAiChatModel {

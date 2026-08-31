@@ -7,8 +7,12 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",
+    "test": "bun test",
     "build": "di-framework build",
     "check": "di-framework check"
+  },
+  "dependencies": {
+    "@di-framework/services-example": "workspace:*"
   },
   "devDependencies": {
     "@di-framework/cli": "workspace:*",

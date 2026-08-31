@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "test": "bun test",
     "build": "di-framework build",
     "check": "di-framework check"
+  },
+  "dependencies": {
+    "@di-framework/services-example": "workspace:*"
   },
   "devDependencies": {
     "@di-framework/cli": "workspace:*",

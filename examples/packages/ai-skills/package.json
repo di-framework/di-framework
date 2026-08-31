@@ -14,7 +14,8 @@
   "dependencies": {
     "@di-framework/ai": "workspace:*",
     "@di-framework/ai-utils": "workspace:*",
-    "@di-framework/core": "workspace:*"
+    "@di-framework/core": "workspace:*",
+    "@di-framework/examples-shared": "workspace:*"
   },
   "devDependencies": {
     "@di-framework/cli": "workspace:*",

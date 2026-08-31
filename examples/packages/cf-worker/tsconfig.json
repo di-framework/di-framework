@@ -1,23 +1,15 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["bun"],
     "jsx": "react-jsx",
-    "rootDir": "..",
+    "rootDir": "src",
     "outDir": "dist",
-    "strict": true,
-    "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": false,
     "plugins": [{ "transform": "@di-framework/tsc" }]
   },
-  "include": ["src/**/*.ts", "../services/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "../services/**/*.test.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

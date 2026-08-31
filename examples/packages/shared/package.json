@@ -1,0 +1,23 @@
+{
+  "name": "@di-framework/examples-shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared helpers for di-framework example packages",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

@@ -1,14 +1,46 @@
 {
-  "name": "di-services-example",
+  "name": "@di-framework/services-example",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "description": "Shared constructor-injected demo services for di-framework examples",
+  "exports": {
+    ".": {
+      "bun": "./index.ts",
+      "import": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./ApplicationContext": {
+      "bun": "./ApplicationContext.ts",
+      "import": "./ApplicationContext.ts",
+      "default": "./ApplicationContext.ts"
+    },
+    "./DatabaseService": {
+      "bun": "./DatabaseService.ts",
+      "import": "./DatabaseService.ts",
+      "default": "./DatabaseService.ts"
+    },
+    "./LoggerService": {
+      "bun": "./LoggerService.ts",
+      "import": "./LoggerService.ts",
+      "default": "./LoggerService.ts"
+    },
+    "./UserService": {
+      "bun": "./UserService.ts",
+      "import": "./UserService.ts",
+      "default": "./UserService.ts"
+    }
+  },
   "scripts": {
+    "test": "bun test",
     "build": "di-framework build",
     "check": "di-framework check"
   },
+  "dependencies": {
+    "@di-framework/core": "workspace:*"
+  },
   "devDependencies": {
     "@di-framework/cli": "workspace:*",
-    "@di-framework/core": "workspace:*",
     "@di-framework/tsc": "workspace:*"
   }
 }

@@ -20,9 +20,12 @@
     "packages/graphql/**/*.ts",
     "packages/http-router/**/*.ts",
     "packages/services/**/*.ts",
+    "packages/shared/**/*.ts",
     "packages/test-example/**/*.ts",
     "packages/cf-worker/**/*.ts",
     "packages/ai-chat/**/*.ts",
+    "packages/ai-skills/**/*.ts",
+    "packages/ai-skills-scale/**/*.ts",
     "packages/auth/**/*.ts",
     "packages/authz/**/*.ts",
     "packages/config/**/*.ts",
@@ -35,6 +38,7 @@
     "**/dist",
     "**/*.test.ts",
     "packages/deno-http/**/*",
-    "packages/deno-sandboxes/**/*"
+    "packages/deno-sandboxes/**/*",
+    "packages/ai-skills/fixtures/**/*"
   ]
 }
