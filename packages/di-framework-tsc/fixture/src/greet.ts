@@ -68,3 +68,11 @@ export function optionalValues(required: number, label?: string, count: number =
 export function sum(...values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
+
+export function destructuredValues({ id, name }: User, [count, label]: [number, string]) {
+  return { id, name, count, label };
+}
+
+export function nestedDestructured({ user: { id } }: { user: User }) {
+  return id;
+}
