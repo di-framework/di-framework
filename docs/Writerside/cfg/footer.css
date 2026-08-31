@@ -7,3 +7,15 @@ footer[data-test="footer"] {
 footer[data-test="footer"] .footer__copyright {
   display: none;
 }
+
+/* Header brand mark: smaller than the default 48px, lightly rounded */
+.wh-header__product-logo,
+.wh-header__product-logo--custom {
+  width: 28px !important;
+  height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  margin-right: 10px !important;
+  border-radius: 6px;
+  object-fit: cover;
+}
