@@ -103,7 +103,7 @@ Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `name` and `descr
 | `SkillsAgent.builder()` | `ChatAgent` + toolbox | Usual entry |
 | `SkillsToolbox.builder()` | Toolbox (`build()` / `buildTools()`) | Attach to an existing `ChatClient` / `ChatAgent` |
 | `SkillsTool.builder()` | `Skill` only | Tests or when you already have Read/Glob |
-| `SkillsIndex.builder()` | Build-time semantic JSONL index | Large skill catalogs |
+| `SkillsIndex.builder()` | Build-time compact semantic index | Large skill catalogs |
 
 `.of(options)` on each factory matches the older options-object APIs. Aliases: `createSkillsAgent`, `createSkillsToolbox`, `skillsToolbox`, `skillsTool`.
 
@@ -166,7 +166,9 @@ await SkillsIndex.builder()
   .build();
 ```
 
-This writes `.di-framework/skills-index.jsonl`. Put the command in `prebuild` (or call the API from a build script), then enable fail-closed runtime retrieval:
+This writes `.di-framework/skills-index.json` and a content-verified
+`.vectors.bin` sidecar. Put the command in `prebuild` (or call the API from a
+build script), then enable fail-closed runtime retrieval:
 
 ```ts
 const agent = SkillsAgent.builder()
@@ -178,7 +180,7 @@ const agent = SkillsAgent.builder()
 
 The default index is also detected automatically when present. Explicit `.semanticDiscovery()` throws if it is missing. At or below 50 skills, the build writes metadata only and keeps normal full-catalog discovery.
 
-The default indexer uses the optional `@huggingface/transformers` peer locally. It is loaded only after the catalog exceeds the threshold; small catalogs and custom `SkillEmbedder` implementations do not require it. The indexer tokenizes each exact `SKILL.md` into 256-token chunks with 32-token overlap, embeds them with a pinned quantized BGE model, and stores compact float32/base64 vectors. Runtime scores skills from those chunks and sends only the top 10 names/descriptions to the chat model. Chunk text and vectors never enter the prompt; the chosen body still loads only after `Skill` activation.
+The default indexer uses the optional `@huggingface/transformers` peer locally. It is loaded only after the catalog exceeds the threshold; small catalogs and custom `SkillEmbedder` implementations do not require it. The indexer tokenizes each exact `SKILL.md` into 256-token chunks with 32-token overlap, embeds them with a pinned quantized BGE model, and writes format-v3 vectors with per-vector symmetric int8 quantization. The manifest records dimensions, scales, norms, byte length, and a SHA-256 sidecar hash. Version-2 float32/base64 JSONL remains readable. Runtime scores directly over int8 storage and sends only the top 10 names/descriptions to the chat model. Chunk text and vectors never enter the prompt; the chosen body still loads only after `Skill` activation.
 
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 
