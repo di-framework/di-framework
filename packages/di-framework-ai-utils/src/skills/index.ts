@@ -21,6 +21,32 @@ export type {
 export { agentSkill, parseAllowedTools, parseSkillMarkdown } from './parse-skill-markdown.ts';
 export { resolveSkillPackageDirectories } from './resolve-packages.ts';
 export type {
+  InMemorySkillCatalogEntry,
+  SkillAdapterCapabilities,
+  SkillAdapterErrorCode,
+  SkillAdapterHealth,
+  SkillAdapterHealthStatus,
+  SkillCatalogListOptions,
+  SkillCatalogLoadOptions,
+  SkillCatalogStore,
+  SkillChunkMatch,
+  SkillChunkSource,
+  SkillDescriptor,
+  SkillIndexVector,
+  SkillIndexWriteReceipt,
+  SkillIndexWriteRequest,
+  SkillIndexWriter,
+  SkillVectorIndexMetadata,
+  SkillVectorQueryOptions,
+  SkillVectorSearch,
+} from './skill-adapters.ts';
+export {
+  assertReadyMetadata,
+  InMemorySkillCatalogStore,
+  InMemorySkillVectorSearch,
+  SkillAdapterError,
+} from './skill-adapters.ts';
+export type {
   SkillEmbedder,
   SkillEmbeddingOptions,
   SkillTokenChunkOptions,
