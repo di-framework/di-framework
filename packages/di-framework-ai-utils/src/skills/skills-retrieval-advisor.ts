@@ -159,7 +159,14 @@ export class SkillsRetrievalAdvisor implements CallAdvisor, StreamAdvisor {
       .filter((descriptor): descriptor is SkillDescriptor => descriptor != null);
 
     if (selected.length === 0) {
-      throw new Error('Semantic skill discovery did not return any skills for this request');
+      request.context.set(SKILLS_RETRIEVAL_CONTEXT, { decision: 'abstained', matches: [] });
+      return copyChatClientRequest(request, {
+        prompt: new Prompt(request.prompt.messages, {
+          ...request.prompt.options,
+          toolCallbacks: callbacks.filter((tool) => tool.toolDefinition.name !== this.toolName),
+        }),
+        context: request.context,
+      });
     }
 
     const replacement = this.createTool(selected);

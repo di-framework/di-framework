@@ -32,7 +32,8 @@ export const SKILLS_INDEX_FORMAT = '@di-framework/ai-utils/skills-index';
 export const SKILLS_INDEX_VERSION = 3;
 export const SKILLS_INDEX_VECTOR_ENCODING = 'int8-per-vector-v1';
 export const SKILLS_INDEX_V2_VECTOR_ENCODING = 'float32-le-base64';
-export const SKILLS_INDEX_SCORING = 'frontmatter-guided-document-cosine-v1';
+export const SKILLS_INDEX_SCORING = 'hybrid-rrf-bm25-v1';
+export const SKILLS_INDEX_V2_SCORING = 'frontmatter-guided-document-cosine-v1';
 export const SKILLS_INDEX_FIRST_CHUNK_WEIGHT = 0.75;
 export const DEFAULT_SKILLS_INDEX_FILE = '.di-framework/skills-index.json';
 export const DEFAULT_SKILLS_INDEX_THRESHOLD = 50;
@@ -40,6 +41,14 @@ export const DEFAULT_SKILLS_RETRIEVAL_LIMIT = 10;
 export const DEFAULT_SKILLS_INDEX_BATCH_SIZE = 32;
 export const DEFAULT_SKILLS_INDEX_CHUNK_TOKENS = 256;
 export const DEFAULT_SKILLS_INDEX_CHUNK_OVERLAP_TOKENS = 32;
+export const DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS: SkillsIndexScoringParameters = {
+  denseWeight: 1,
+  lexicalWeight: 1,
+  rrfK: 60,
+  bm25K1: 1.2,
+  bm25B: 0.75,
+  abstentionThreshold: 0.018,
+};
 
 export type SkillsIndexChunkSource = 'document';
 
@@ -53,7 +62,7 @@ export interface SkillsIndexMetadata {
   readonly retrievalLimit: number;
   readonly chunkTokens: number;
   readonly chunkOverlapTokens: number;
-  readonly scoring: typeof SKILLS_INDEX_SCORING;
+  readonly scoring: typeof SKILLS_INDEX_SCORING | typeof SKILLS_INDEX_V2_SCORING;
   readonly vectorEncoding:
     | typeof SKILLS_INDEX_VECTOR_ENCODING
     | typeof SKILLS_INDEX_V2_VECTOR_ENCODING;
@@ -65,6 +74,23 @@ export interface SkillsIndexMetadata {
   readonly vectorFile?: string;
   readonly vectorHash?: string;
   readonly vectorBytes?: number;
+  readonly scoringParameters?: SkillsIndexScoringParameters;
+}
+
+export interface SkillsIndexScoringParameters {
+  readonly denseWeight: number;
+  readonly lexicalWeight: number;
+  readonly rrfK: number;
+  readonly bm25K1: number;
+  readonly bm25B: number;
+  readonly abstentionThreshold: number;
+}
+
+export interface SkillsLexicalIndex {
+  readonly documentLengths: readonly number[];
+  readonly averageDocumentLength: number;
+  /** token -> compact [document index, weighted term frequency] pairs */
+  readonly postings: Readonly<Record<string, readonly number[]>>;
 }
 
 export interface QuantizedSkillVector {
@@ -90,6 +116,7 @@ export interface SkillsIndex {
   readonly file?: string;
   readonly metadata: SkillsIndexMetadata;
   readonly entries: readonly SkillsIndexEntry[];
+  readonly lexical?: SkillsLexicalIndex;
 }
 
 export interface BuildSkillsIndexOptions {
@@ -227,6 +254,7 @@ export interface SearchSkillsIndexOptions {
   readonly embedder?: SkillEmbedder;
   readonly limit?: number;
   readonly minScore?: number;
+  readonly abstentionThreshold?: number;
 }
 
 export interface SkillsIndexMatch {
@@ -235,6 +263,9 @@ export interface SkillsIndexMatch {
   readonly score: number;
   readonly matchedChunk: number;
   readonly matchedSource: SkillsIndexChunkSource;
+  readonly denseScore?: number;
+  readonly lexicalScore?: number;
+  readonly exactName?: boolean;
 }
 
 export interface SkillsIndexEntryScore {
@@ -298,6 +329,7 @@ export async function buildSkillsIndex(
     chunkTokens,
     chunkOverlapTokens,
     scoring: SKILLS_INDEX_SCORING,
+    scoringParameters: DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS,
     vectorEncoding: SKILLS_INDEX_VECTOR_ENCODING,
     catalogHash,
   } as const;
@@ -417,7 +449,7 @@ export async function buildSkillsIndex(
       chunks,
     };
   });
-  const index = { metadata, entries } satisfies SkillsIndex;
+  const index = { metadata, entries, lexical: buildLexicalIndex(skills) } satisfies SkillsIndex;
   let receipt: SkillIndexWriteReceipt | undefined;
   if (options.writer) {
     receipt = await options.writer.replace(toIndexWriteRequest(index));
@@ -525,6 +557,7 @@ export class LocalSkillIndexWriter implements SkillIndexWriter {
       chunkTokens: DEFAULT_SKILLS_INDEX_CHUNK_TOKENS,
       chunkOverlapTokens: DEFAULT_SKILLS_INDEX_CHUNK_OVERLAP_TOKENS,
       scoring: SKILLS_INDEX_SCORING,
+      scoringParameters: DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS,
       vectorEncoding: SKILLS_INDEX_VECTOR_ENCODING,
       catalogHash: request.metadata.catalogVersion,
       model: request.metadata.model,
@@ -555,7 +588,9 @@ export function loadSkillsIndex(file = DEFAULT_SKILLS_INDEX_FILE): SkillsIndex {
     throw new Error(`Skills index does not exist or cannot be read: ${absolute}`, { cause: error });
   }
   if (text.trimStart().startsWith('{')) {
-    let manifest: { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown } | undefined;
+    let manifest:
+      | { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown; lexical?: unknown }
+      | undefined;
     try {
       manifest = JSON.parse(text);
     } catch {
@@ -640,7 +675,65 @@ export async function searchSkillsIndex(
   assertCompatibleEmbedder(index, embedder);
   const [query] = await embedder.embed([task], { purpose: 'query' });
   if (!query) throw new Error('Skill embedder did not return a query vector');
-  return rankSkillsIndex(index, query, options);
+  return rankHybridSkillsIndex(index, query, task, options);
+}
+
+/** Deterministic dense + BM25 reciprocal-rank fusion with exact-name pinning. */
+export function rankHybridSkillsIndex(
+  index: SkillsIndex,
+  query: ArrayLike<number>,
+  task: string,
+  options: Pick<SearchSkillsIndexOptions, 'limit' | 'minScore' | 'abstentionThreshold'> = {},
+): readonly SkillsIndexMatch[] {
+  const limit = positiveInteger(options.limit ?? index.metadata.retrievalLimit, 'limit');
+  const dense = rankSkillsIndex(index, query, {
+    limit: index.entries.length,
+    minScore: options.minScore,
+  });
+  if (!index.lexical || index.metadata.version === 2) return dense.slice(0, limit);
+  const parameters = index.metadata.scoringParameters ?? DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS;
+  const lexicalByIndex = scoreLexicalIndex(index.lexical, task, parameters);
+  const lexicalScores = new Map(
+    [...lexicalByIndex].map(([entryIndex, score]) => [
+      index.entries[entryIndex]?.name ?? '',
+      score,
+    ]),
+  );
+  const lexical = [...lexicalScores.entries()].sort(
+    ([leftName, left], [rightName, right]) => right - left || leftName.localeCompare(rightName),
+  );
+  const denseRanks = new Map(dense.map((match, rank) => [match.name, rank + 1]));
+  const lexicalRanks = new Map(lexical.map(([name], rank) => [name, rank + 1]));
+  const denseByName = new Map(dense.map((match) => [match.name, match]));
+  const normalizedTask = task.normalize('NFKC').toLocaleLowerCase();
+  const fused = index.entries.map((entry): SkillsIndexMatch => {
+    const denseMatch = denseByName.get(entry.name);
+    const denseRank = denseRanks.get(entry.name);
+    const lexicalRank = lexicalRanks.get(entry.name);
+    const exactName = containsExplicitName(normalizedTask, entry.name);
+    const score =
+      (denseRank ? parameters.denseWeight / (parameters.rrfK + denseRank) : 0) +
+      (lexicalRank ? parameters.lexicalWeight / (parameters.rrfK + lexicalRank) : 0);
+    return {
+      name: entry.name,
+      description: entry.description,
+      score: exactName ? Number.POSITIVE_INFINITY : score,
+      denseScore: denseMatch?.score,
+      lexicalScore: lexicalScores.get(entry.name) ?? 0,
+      exactName,
+      matchedChunk: denseMatch?.matchedChunk ?? 0,
+      matchedSource: denseMatch?.matchedSource ?? 'document',
+    };
+  });
+  fused.sort(
+    (left, right) =>
+      Number(right.exactName) - Number(left.exactName) ||
+      right.score - left.score ||
+      left.name.localeCompare(right.name),
+  );
+  const threshold = options.abstentionThreshold ?? parameters.abstentionThreshold;
+  if (!fused[0]?.exactName && (fused[0]?.score ?? 0) < threshold) return [];
+  return fused.slice(0, limit);
 }
 
 /** Rank with an already-computed query vector using frontmatter-guided MaxSim. */
@@ -798,6 +891,133 @@ function groupWriteVectors(request: SkillIndexWriteRequest): SkillsIndexEntry[] 
   return [...grouped.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function buildLexicalIndex(skills: readonly AgentSkill[]): SkillsLexicalIndex {
+  const postingMaps = new Map<string, Map<number, number>>();
+  const documentLengths: number[] = [];
+  for (let document = 0; document < skills.length; document++) {
+    const skill = skills[document];
+    if (!skill) continue;
+    const weighted = [
+      ...tokenizeLexical(skill.name).flatMap((token) => [token, token, token, token]),
+      ...tokenizeLexical(skill.description ?? '').flatMap((token) => [token, token]),
+      ...tokenizeLexical(skill.source),
+    ];
+    documentLengths.push(weighted.length);
+    for (const token of weighted) {
+      let posting = postingMaps.get(token);
+      if (!posting) {
+        posting = new Map();
+        postingMaps.set(token, posting);
+      }
+      posting.set(document, (posting.get(document) ?? 0) + 1);
+    }
+  }
+  const postings: Record<string, readonly number[]> = {};
+  for (const [token, posting] of [...postingMaps].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    postings[token] = [...posting].flatMap(([document, frequency]) => [document, frequency]);
+  }
+  return {
+    documentLengths,
+    averageDocumentLength:
+      documentLengths.reduce((total, length) => total + length, 0) /
+      Math.max(1, documentLengths.length),
+    postings,
+  };
+}
+
+function scoreLexicalIndex(
+  index: SkillsLexicalIndex,
+  task: string,
+  parameters: SkillsIndexScoringParameters,
+): ReadonlyMap<number, number> {
+  const scores = new Map<number, number>();
+  const queryTokens = new Set(tokenizeLexical(task));
+  const documentCount = index.documentLengths.length;
+  for (const token of queryTokens) {
+    const posting = index.postings[token];
+    if (!posting) continue;
+    const documentFrequency = posting.length / 2;
+    const inverseDocumentFrequency = Math.log(
+      1 + (documentCount - documentFrequency + 0.5) / (documentFrequency + 0.5),
+    );
+    for (let offset = 0; offset < posting.length; offset += 2) {
+      const document = posting[offset];
+      const frequency = posting[offset + 1];
+      if (document == null || frequency == null) continue;
+      const length = index.documentLengths[document] ?? 0;
+      const denominator =
+        frequency +
+        parameters.bm25K1 *
+          (1 - parameters.bm25B + parameters.bm25B * (length / index.averageDocumentLength));
+      const contribution =
+        inverseDocumentFrequency * ((frequency * (parameters.bm25K1 + 1)) / denominator);
+      scores.set(document, (scores.get(document) ?? 0) + contribution);
+    }
+  }
+  return scores;
+}
+
+function tokenizeLexical(text: string): string[] {
+  return (
+    text
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}_-]+/gu)
+      ?.filter((token) => token.length > 2) ?? []
+  );
+}
+
+function containsExplicitName(normalizedTask: string, name: string): boolean {
+  const normalizedName = name.normalize('NFKC').toLocaleLowerCase();
+  let start = normalizedTask.indexOf(normalizedName);
+  while (start >= 0) {
+    const before = start === 0 ? '' : (normalizedTask[start - 1] ?? '');
+    const after = normalizedTask[start + normalizedName.length] ?? '';
+    if (!/[\p{L}\p{N}_-]/u.test(before) && !/[\p{L}\p{N}_-]/u.test(after)) return true;
+    start = normalizedTask.indexOf(normalizedName, start + 1);
+  }
+  return false;
+}
+
+function parseLexicalIndex(value: unknown, skillCount: number, file: string): SkillsLexicalIndex {
+  const lexical = value as Partial<SkillsLexicalIndex> | undefined;
+  if (
+    !lexical ||
+    !Array.isArray(lexical.documentLengths) ||
+    lexical.documentLengths.length !== skillCount ||
+    lexical.documentLengths.some((length) => !isNonNegativeInteger(length)) ||
+    typeof lexical.averageDocumentLength !== 'number' ||
+    !Number.isFinite(lexical.averageDocumentLength) ||
+    lexical.averageDocumentLength <= 0 ||
+    !lexical.postings ||
+    typeof lexical.postings !== 'object'
+  ) {
+    throw new Error(`Invalid skills lexical index: ${file}`);
+  }
+  for (const [token, posting] of Object.entries(lexical.postings)) {
+    if (
+      !token ||
+      !Array.isArray(posting) ||
+      posting.length % 2 !== 0 ||
+      posting.some((number) => !Number.isFinite(number))
+    ) {
+      throw new Error(`Invalid lexical posting '${token}' in ${file}`);
+    }
+    for (let offset = 0; offset < posting.length; offset += 2) {
+      if (
+        !isNonNegativeInteger(posting[offset]) ||
+        (posting[offset] ?? skillCount) >= skillCount ||
+        !isPositiveInteger(posting[offset + 1])
+      ) {
+        throw new Error(`Invalid lexical posting '${token}' in ${file}`);
+      }
+    }
+  }
+  return lexical as SkillsLexicalIndex;
+}
+
 export function hashSkillCatalog(skills: readonly Pick<AgentSkill, 'name' | 'source'>[]): string {
   const sorted = skills
     .map((skill) => ({
@@ -904,7 +1124,7 @@ function writeV3IndexAtomically(file: string, index: SkillsIndex): void {
   try {
     writeFileSync(vectorTemporary, vectors);
     renameSync(vectorTemporary, vectorFile);
-    writeJsonAtomically(file, { metadata, entries });
+    writeJsonAtomically(file, { metadata, entries, lexical: index.lexical });
   } catch (error) {
     try {
       unlinkSync(vectorTemporary);
@@ -932,7 +1152,7 @@ function quantizeVector(vector: Float32Array | QuantizedSkillVector): QuantizedS
 }
 
 function parseV3Index(
-  value: { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown },
+  value: { metadata?: Partial<SkillsIndexMetadata>; entries?: unknown; lexical?: unknown },
   file: string,
 ): SkillsIndex {
   const metadata = parseMetadata(JSON.stringify(value.metadata), file, SKILLS_INDEX_VERSION);
@@ -1014,7 +1234,9 @@ function parseV3Index(
   if (entries.length !== metadata.skillCount || chunkCount !== metadata.chunkCount) {
     throw new Error(`Skills index manifest counts do not match metadata: ${file}`);
   }
-  return { file, metadata, entries };
+  const lexical =
+    value.lexical == null ? undefined : parseLexicalIndex(value.lexical, entries.length, file);
+  return { file, metadata, entries, lexical };
 }
 
 function hashBytes(bytes: Uint8Array): string {
@@ -1087,12 +1309,29 @@ function parseMetadata(
     !isPositiveInteger(value.chunkTokens) ||
     !isNonNegativeInteger(value.chunkOverlapTokens) ||
     value.chunkOverlapTokens >= value.chunkTokens ||
-    value.scoring !== SKILLS_INDEX_SCORING ||
+    value.scoring !== (expectedVersion === 2 ? SKILLS_INDEX_V2_SCORING : SKILLS_INDEX_SCORING) ||
     value.vectorEncoding !==
       (expectedVersion === 2 ? SKILLS_INDEX_V2_VECTOR_ENCODING : SKILLS_INDEX_VECTOR_ENCODING) ||
     typeof value.catalogHash !== 'string'
   ) {
     throw new Error(`Invalid skills index metadata: ${file}`);
+  }
+  if (
+    expectedVersion === SKILLS_INDEX_VERSION &&
+    (!value.scoringParameters ||
+      !Number.isFinite(value.scoringParameters.denseWeight) ||
+      !Number.isFinite(value.scoringParameters.lexicalWeight) ||
+      !Number.isFinite(value.scoringParameters.rrfK) ||
+      value.scoringParameters.rrfK <= 0 ||
+      !Number.isFinite(value.scoringParameters.bm25K1) ||
+      value.scoringParameters.bm25K1 <= 0 ||
+      !Number.isFinite(value.scoringParameters.bm25B) ||
+      value.scoringParameters.bm25B < 0 ||
+      value.scoringParameters.bm25B > 1 ||
+      !Number.isFinite(value.scoringParameters.abstentionThreshold) ||
+      value.scoringParameters.abstentionThreshold < 0)
+  ) {
+    throw new Error(`Invalid skills index scoring parameters: ${file}`);
   }
   if (
     value.indexed &&

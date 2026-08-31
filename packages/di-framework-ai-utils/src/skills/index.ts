@@ -85,6 +85,8 @@ export type {
   SkillsIndexEntryScore,
   SkillsIndexMatch,
   SkillsIndexMetadata,
+  SkillsIndexScoringParameters,
+  SkillsLexicalIndex,
 } from './skills-index.ts';
 export {
   assertSkillsIndexCurrent,
@@ -94,12 +96,14 @@ export {
   DEFAULT_SKILLS_INDEX_CHUNK_OVERLAP_TOKENS,
   DEFAULT_SKILLS_INDEX_CHUNK_TOKENS,
   DEFAULT_SKILLS_INDEX_FILE,
+  DEFAULT_SKILLS_INDEX_SCORING_PARAMETERS,
   DEFAULT_SKILLS_INDEX_THRESHOLD,
   DEFAULT_SKILLS_RETRIEVAL_LIMIT,
   hashSkillCatalog,
   LocalSkillIndexWriter,
   LocalSkillVectorSearch,
   loadSkillsIndex,
+  rankHybridSkillsIndex,
   rankSkillsIndex,
   SKILLS_INDEX_FIRST_CHUNK_WEIGHT,
   SKILLS_INDEX_FORMAT,
