@@ -10,3 +10,9 @@ export function greet(user: User): string {
 export function add(a: number, b: number): number {
   return a + b;
 }
+
+export class Greeter {
+  greet(user: User): string {
+    return `hello ${user.name}`;
+  }
+}

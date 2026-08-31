@@ -4,7 +4,7 @@
 
 Source stays plain TypeScript — no `assert()`, schemas, or decorators. On emit, function bodies get `typeof` / shape guards synthesized from parameter types.
 
-> MVP: function declarations with required identifier params; primitives + plain object/interface props. See [Limitations](#limitations).
+Function declarations and block-bodied methods are supported with required identifier params and primitive/plain-object types.
 
 `di-framework init` wires this by default. Use the steps below for an existing app.
 
@@ -69,7 +69,7 @@ function greet(user) {
 ## How it works
 
 1. `ttsc` loads the program (parse + typecheck).
-2. This plugin walks `FunctionDeclaration` nodes.
+2. This plugin walks function declarations and block-bodied methods.
 3. For each required parameter, it reads the type (syntax keywords, else checker).
 4. It synthesizes `if` / `throw` AST nodes with typescript-go `NodeFactory` and prepends them to the body.
 5. `EmitAllRaw` prints JavaScript from the mutated AST.
@@ -78,7 +78,7 @@ function greet(user) {
 
 Skipped today:
 
-- methods, arrow functions, function expressions
+- constructors, arrow functions, function expressions
 - optional / default / rest / destructured parameters
 - unions, arrays, tuples, classes, branded types, typia-style tags
 

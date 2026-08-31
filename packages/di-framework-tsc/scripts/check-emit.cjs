@@ -22,6 +22,7 @@ const required = [
   'Expected user.name to be a string',
   'typeof a !== "number"',
   'typeof b !== "number"',
+  'class Greeter',
 ];
 
 const missing = required.filter((needle) => !js.includes(needle));
