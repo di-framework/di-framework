@@ -1,5 +1,5 @@
 import { Component, Container } from '@di-framework/core/decorators';
-import { LoggerService } from '../../../services/LoggerService';
+import { LoggerService } from '@di-framework/services-example/LoggerService';
 
 @Container()
 export class CounterService {

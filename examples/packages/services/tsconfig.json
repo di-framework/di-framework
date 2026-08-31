@@ -1,16 +1,8 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["bun"],
     "rootDir": ".",
     "outDir": "dist",
-    "strict": true,
-    "skipLibCheck": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": false,
     "plugins": [{ "transform": "@di-framework/tsc" }]
   },
   "include": ["**/*.ts"],

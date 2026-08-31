@@ -1,9 +1,9 @@
 import { beforeEach, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core';
-import { ApplicationContext } from '../services/ApplicationContext';
-import { DatabaseService } from '../services/DatabaseService';
-import { LoggerService } from '../services/LoggerService';
-import { UserService } from '../services/UserService';
+import { ApplicationContext } from '@di-framework/services-example';
+import { DatabaseService } from '@di-framework/services-example/DatabaseService';
+import { LoggerService } from '@di-framework/services-example/LoggerService';
+import { UserService } from '@di-framework/services-example/UserService';
 
 beforeEach(() => {
   const container = useContainer();

@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { useContainer } from '@di-framework/core/container';
-import { DatabaseService } from '../../services/DatabaseService';
-import { LoggerService } from '../../services/LoggerService';
-import { UserService } from '../../services/UserService';
+import { DatabaseService } from '@di-framework/services-example/DatabaseService';
+import { LoggerService } from '@di-framework/services-example/LoggerService';
+import { UserService } from '@di-framework/services-example/UserService';
 import { badRequest, handleRequest } from './router';
 import { ConfigService } from './services/ConfigService';
 import { CounterService } from './services/CounterService';

@@ -1,9 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import type { ChatModel } from '@di-framework/ai';
 import { OpenAiChatModel, Prompt, systemMessage, userMessage } from '@di-framework/ai';
 import type { AgentSkill } from '@di-framework/ai-utils';
 import { SkillsTool } from '@di-framework/ai-utils';
+import { requireOpenAiApiKey as requireSharedOpenAiApiKey } from '@di-framework/examples-shared';
 import {
   defaultSkillsDirectory,
   exampleRoot,
@@ -268,39 +267,7 @@ export function requireOpenAiApiKey(
   env: NodeJS.ProcessEnv = process.env,
   startDirectory = exampleRoot,
 ): string {
-  const configured = env.OPENAI_API_KEY?.trim();
-  if (configured) return configured;
-
-  let directory = startDirectory;
-  for (let depth = 0; depth < 8; depth++) {
-    const candidate = join(directory, '.env.secrets');
-    if (existsSync(candidate)) {
-      const parsed = readEnvValue(readFileSync(candidate, 'utf8'), 'OPENAI_API_KEY');
-      if (parsed) return parsed;
-    }
-    const parent = dirname(directory);
-    if (parent === directory) break;
-    directory = parent;
-  }
-  throw new Error('OPENAI_API_KEY is required for --live');
-}
-
-function readEnvValue(text: string, wantedKey: string): string | undefined {
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const equals = trimmed.indexOf('=');
-    if (equals <= 0 || trimmed.slice(0, equals).trim() !== wantedKey) continue;
-    let value = trimmed.slice(equals + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    return value.trim() || undefined;
-  }
-  return undefined;
+  return requireSharedOpenAiApiKey(env, startDirectory);
 }
 
 export async function runAiSkillsScaleMain(

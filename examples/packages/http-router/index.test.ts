@@ -29,7 +29,7 @@ describe('http-router example', () => {
   });
 
   test('POST /echo echoes message with timestamp', async () => {
-    const { LoggerService } = await import('../services/LoggerService');
+    const { LoggerService } = await import('@di-framework/services-example/LoggerService');
     const container = useContainer();
     if (!container.has(LoggerService)) container.register(LoggerService, { singleton: true });
     if (!container.has(EchoController)) container.register(EchoController, { singleton: true });

@@ -9,7 +9,7 @@ import {
   type ResponseSpec,
   TypedRouter,
 } from '@di-framework/http';
-import { LoggerService } from '../services/LoggerService';
+import { LoggerService } from '@di-framework/services-example/LoggerService';
 
 const router = TypedRouter();
 
