@@ -19,14 +19,24 @@ import { writeTool } from '../tools/write-tool.ts';
 import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import { resolveSkillPackageDirectories } from './resolve-packages.ts';
-import type { SkillCatalogStore, SkillVectorSearch } from './skill-adapters.ts';
+import {
+  SkillAdapterError,
+  type SkillCatalogStore,
+  type SkillDescriptor,
+  type SkillVectorSearch,
+} from './skill-adapters.ts';
 import type { SkillEmbedder } from './skill-embedder.ts';
 import { SkillsFluent } from './skills-fluent.ts';
 import { DEFAULT_SKILLS_INDEX_FILE, loadSkillsIndex } from './skills-index.ts';
 import { SkillsRetrievalAdvisor } from './skills-retrieval-advisor.ts';
 import { createSkillsRuntime, type SkillsRuntime } from './skills-runtime.ts';
 import type { SkillsToolOptions } from './skills-tool.ts';
-import { collectSkills, DEFAULT_SKILL_TOOL_NAME, skillsTool } from './skills-tool.ts';
+import {
+  asyncSkillsTool,
+  collectSkills,
+  DEFAULT_SKILL_TOOL_NAME,
+  skillsTool,
+} from './skills-tool.ts';
 import { validateSkill } from './validate-skill.ts';
 
 export interface SkillsToolboxWebOptions {
@@ -84,6 +94,7 @@ export interface SkillsToolboxOptions extends SkillsToolOptions {
 
 export interface SkillsToolbox {
   readonly skills: readonly AgentSkill[];
+  readonly descriptors: readonly SkillDescriptor[];
   readonly allowedDirectories: readonly string[];
   readonly tools: readonly ToolCallback[];
   readonly runtime: SkillsRuntime;
@@ -98,6 +109,9 @@ export const SkillsToolbox = {
   of(options: SkillsToolboxOptions = {}): SkillsToolbox {
     return createSkillsToolbox(options);
   },
+  ofAsync(options: SkillsToolboxOptions = {}): Promise<SkillsToolbox> {
+    return createSkillsToolboxAsync(options);
+  },
 };
 
 export class SkillsToolboxBuilder extends SkillsFluent<SkillsToolboxBuilder> {
@@ -107,6 +121,14 @@ export class SkillsToolboxBuilder extends SkillsFluent<SkillsToolboxBuilder> {
 
   buildTools(): ToolCallback[] {
     return this.build().tools as ToolCallback[];
+  }
+
+  buildAsync(): Promise<SkillsToolbox> {
+    return SkillsToolbox.ofAsync(this.toOptions());
+  }
+
+  async buildToolsAsync(): Promise<ToolCallback[]> {
+    return (await this.buildAsync()).tools as ToolCallback[];
   }
 }
 
@@ -119,6 +141,12 @@ export function skillsToolbox(options: SkillsToolboxOptions = {}): ToolCallback[
 }
 
 export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsToolbox {
+  const discovery = semanticDiscoveryOptions(options);
+  if (discovery.catalogStore) {
+    throw new Error(
+      'Asynchronous catalog stores require createSkillsToolboxAsync() or buildAsync()',
+    );
+  }
   const directories = resolveToolboxDirectories(options);
   const files = options.files == null ? undefined : options.files.map(expandUserPath);
   const collected = collectSkills({
@@ -127,6 +155,43 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
     files,
   });
 
+  return assembleSkillsToolbox(options, collected);
+}
+
+/** Build a toolbox without reading complete remote skill bodies during discovery. */
+export async function createSkillsToolboxAsync(
+  options: SkillsToolboxOptions = {},
+): Promise<SkillsToolbox> {
+  const discovery = semanticDiscoveryOptions(options);
+  if (!discovery.catalogStore) return createSkillsToolbox(options);
+  const health = await discovery.catalogStore.health({ namespace: discovery.namespace });
+  if (health.status !== 'ready') {
+    throw new SkillAdapterError('NOT_READY', health.message ?? 'Skill catalog is not ready');
+  }
+  if (discovery.vectorSearch) {
+    const vectorHealth = await discovery.vectorSearch.health({ namespace: discovery.namespace });
+    if (vectorHealth.status !== 'ready') {
+      throw new SkillAdapterError('NOT_READY', vectorHealth.message ?? 'Skill index is not ready');
+    }
+  }
+  const descriptors = await discovery.catalogStore.list({ namespace: discovery.namespace });
+  if (descriptors.length === 0) throw new Error('At least one skill must be configured');
+  return assembleSkillsToolbox(options, [], {
+    store: discovery.catalogStore,
+    descriptors,
+    namespace: discovery.namespace,
+  });
+}
+
+function assembleSkillsToolbox(
+  options: SkillsToolboxOptions,
+  collected: readonly AgentSkill[],
+  remote?: {
+    readonly store: SkillCatalogStore;
+    readonly descriptors: readonly SkillDescriptor[];
+    readonly namespace?: string;
+  },
+): SkillsToolbox {
   for (const skill of collected) {
     validateSkill(skill, { matchDirectoryName: skill.basePath !== '.' });
   }
@@ -142,23 +207,44 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
     perSkillSandbox: options.perSkillSandbox,
   });
   const dirs = () => runtime.fileDirectories();
+  const descriptors =
+    remote?.descriptors ??
+    collected.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      sourceHash: '',
+    }));
+  const skillsByName = new Map(collected.map((skill) => [skill.name, skill]));
 
-  const buildSkillTool = (skills: readonly AgentSkill[]): ToolCallback =>
+  const buildSkillTool = (selected: readonly SkillDescriptor[]): ToolCallback =>
     gateToolCallback(
-      skillsTool({
-        ...options,
-        skills,
-        directories: undefined,
-        files: undefined,
-        onActivate: (skill) => {
-          runtime.activate(skill);
-          options.onActivate?.(skill);
-        },
-      }),
+      remote
+        ? asyncSkillsTool({
+            ...options,
+            descriptors: selected,
+            catalogStore: remote.store,
+            namespace: remote.namespace,
+            onActivate: (skill) => {
+              runtime.activate(skill);
+              options.onActivate?.(skill);
+            },
+          })
+        : skillsTool({
+            ...options,
+            skills: selected
+              .map((descriptor) => skillsByName.get(descriptor.name))
+              .filter((skill): skill is AgentSkill => skill != null),
+            directories: undefined,
+            files: undefined,
+            onActivate: (skill) => {
+              runtime.activate(skill);
+              options.onActivate?.(skill);
+            },
+          }),
       runtime,
     );
 
-  const raw: ToolCallback[] = [buildSkillTool(collected), readTool({ allowedDirectories: dirs })];
+  const raw: ToolCallback[] = [buildSkillTool(descriptors), readTool({ allowedDirectories: dirs })];
 
   if (options.list !== false) {
     raw.push(listDirectoryTool({ allowedDirectories: dirs, workingDirectory: workspace }));
@@ -215,15 +301,22 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
       ? tool
       : gateToolCallback(tool, runtime),
   );
-  const retrievalAdvisor = createRetrievalAdvisor(options, workspace, collected, buildSkillTool);
-  return { skills: collected, allowedDirectories, tools, runtime, retrievalAdvisor };
+  const retrievalAdvisor = createRetrievalAdvisor(
+    options,
+    workspace,
+    collected,
+    descriptors,
+    buildSkillTool,
+  );
+  return { skills: collected, descriptors, allowedDirectories, tools, runtime, retrievalAdvisor };
 }
 
 function createRetrievalAdvisor(
   options: SkillsToolboxOptions,
   workspace: string,
   skills: readonly AgentSkill[],
-  buildSkillTool: (skills: readonly AgentSkill[]) => ToolCallback,
+  descriptors: readonly SkillDescriptor[],
+  buildSkillTool: (descriptors: readonly SkillDescriptor[]) => ToolCallback,
 ): SkillsRetrievalAdvisor | undefined {
   if (options.semanticDiscovery === false) return undefined;
   const discovery =
@@ -250,6 +343,7 @@ function createRetrievalAdvisor(
   return new SkillsRetrievalAdvisor({
     index,
     skills,
+    descriptors,
     catalogStore: discovery.catalogStore,
     vectorSearch: discovery.vectorSearch,
     namespace: discovery.namespace,
@@ -266,6 +360,12 @@ function createRetrievalAdvisor(
     // buildSkillTool already includes activation and the runtime gate.
     createTool: buildSkillTool,
   });
+}
+
+function semanticDiscoveryOptions(options: SkillsToolboxOptions): SkillsSemanticDiscoveryOptions {
+  return options.semanticDiscovery && typeof options.semanticDiscovery === 'object'
+    ? options.semanticDiscovery
+    : {};
 }
 
 function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {

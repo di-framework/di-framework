@@ -1,7 +1,9 @@
 export type { CreateSkillsAgentOptions, SkillsAgentBundle } from './create-skills-agent.ts';
 export {
   createSkillsAgent,
+  createSkillsAgentAsync,
   createSkillsAgentBundle,
+  createSkillsAgentBundleAsync,
   SkillsAgent,
   SkillsAgentBuilder,
 } from './create-skills-agent.ts';
@@ -118,8 +120,9 @@ export {
 } from './skills-retrieval-advisor.ts';
 export type { SkillsRuntime, SkillsRuntimeOptions } from './skills-runtime.ts';
 export { createSkillsRuntime } from './skills-runtime.ts';
-export type { SkillsInput, SkillsToolOptions } from './skills-tool.ts';
+export type { AsyncSkillsToolOptions, SkillsInput, SkillsToolOptions } from './skills-tool.ts';
 export {
+  asyncSkillsTool,
   collectSkills,
   DEFAULT_SKILL_TOOL_NAME,
   formatSkillLoadResult,
@@ -138,6 +141,7 @@ export type {
 } from './skills-toolbox.ts';
 export {
   createSkillsToolbox,
+  createSkillsToolboxAsync,
   SkillsToolbox,
   SkillsToolboxBuilder,
   skillsToolbox,
