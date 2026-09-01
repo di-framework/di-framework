@@ -33,6 +33,7 @@ di-framework <command> [args...]
 | **`agent audit`** | Audit resolved agent configuration and actionable findings without writing files |
 | **`agent init`** | Plan or create neutral agent configuration assets |
 | **`agent inspect`** | Read resolved skill roots, repository instructions, precedence, and `.aiignore` policy |
+| **`agent migrate`** | Plan or explicitly apply neutral agent-configuration migrations |
 | **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
 | **`skills index build`** | Build a semantic Agent Skills index |
 | **`skills index inspect`** | Inspect safe index metadata and sizes |
@@ -104,6 +105,29 @@ instruction contents or changing files. Use `--skills-dir` and
 `--skills-package` for explicit roots, and `--source-mode replace` to inspect
 only those explicit roots instead of merging the neutral `.agents/skills`
 defaults.
+
+### Agent configuration migration
+
+```bash
+# Planning is the default and never writes.
+di-framework agent migrate
+di-framework agent migrate --plan --json
+
+# Apply the exact plan generated and returned by this invocation.
+di-framework agent migrate --apply
+```
+
+`agent migrate` delegates repository auditing, deterministic planning, and
+execution to `@di-framework/ai-utils`. Both text and stable JSON return the
+generated plan; apply results additionally classify every action as applied,
+skipped, or failed, so collisions and partial failures stay explicit. Use
+`--source` to select exact audited opportunities. Existing files are collisions
+unless `--replace-existing` generates an explicit recoverable `replace-file`
+action.
+
+The command only targets neutral `AGENTS.md`, `.agents/AGENTS.md`,
+`.agents/skills/**`, and `.aiignore` assets. It creates no vendor adapter or
+legacy directory. `--plan` and the default mode perform no writes.
 
 ### HTTP OpenAPI generation
 
