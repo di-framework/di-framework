@@ -102,6 +102,8 @@ export interface QuantizedSkillVector {
 export interface SkillsIndexChunk {
   readonly source: SkillsIndexChunkSource;
   readonly embedding: Float32Array | QuantizedSkillVector;
+  /** Build-time source chunk; intentionally omitted from generated artifacts. */
+  readonly text?: string;
 }
 
 export interface SkillsIndexEntry {
@@ -415,6 +417,7 @@ export async function buildSkillsIndex(
       chunksBySkill[chunk.skillIndex]?.push({
         source: chunk.source,
         embedding: vector,
+        text: chunk.text,
       });
     }
     options.onProgress?.(
@@ -862,6 +865,7 @@ export function toSkillIndexWriteRequest(index: SkillsIndex): SkillIndexWriteReq
       entry.chunks.map((chunk, chunkIndex) => ({
         name: entry.name,
         description: entry.description,
+        text: chunk.text,
         documentHash: entry.documentHash,
         chunk: chunkIndex,
         source: chunk.source,

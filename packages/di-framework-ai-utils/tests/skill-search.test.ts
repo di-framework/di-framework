@@ -181,6 +181,45 @@ describe('SkillSearchRepository and SkillSearchIndexer', () => {
     expect(SkillsToolbox).toBeDefined();
   });
 
+  test('vector-backed indexing stores full source chunks without exposing them to selection', async () => {
+    const store = new TrackingStore();
+    const connection = SkillSearchConnection.fromVectorStore(store);
+    const secretBody = 'INTERNAL FULL SKILL INSTRUCTIONS';
+    const skill = agentSkill({
+      name: 'full-source',
+      description: 'Choose this skill for source-aware work',
+      content: secretBody,
+    });
+
+    await buildSkillsIndex({
+      skills: [skill],
+      threshold: 0,
+      embedder: {
+        id: 'local@test',
+        model: 'local',
+        revision: 'test',
+        embed: async (texts) => texts.map(() => new Float32Array([1, 0])),
+        split: async (text) => [text],
+      },
+      writer: new SkillSearchIndexer(connection),
+    });
+
+    const chunk = store.documents().find((doc) => doc.metadata.kind === 'skill-chunk');
+    expect(chunk?.text).toContain(secretBody);
+
+    const hits = await new SkillSearchRepository(connection).query([1, 0], { limit: 1 });
+    expect(hits).toEqual([
+      {
+        name: 'full-source',
+        description: 'Choose this skill for source-aware work',
+        score: 1,
+        chunk: 0,
+        source: 'document',
+      },
+    ]);
+    expect(JSON.stringify(hits)).not.toContain(secretBody);
+  });
+
   test('fails closed for not-ready indexes, bad queries, and corrupt metadata', async () => {
     const store = SimpleVectorStore.of(new PrecomputedEmbeddingModel(2));
     const connection = SkillSearchConnection.fromVectorStore(store);
@@ -388,6 +427,10 @@ class TrackingStore implements VectorStore {
 
   ids(): string[] {
     return [...this.docs.keys()];
+  }
+
+  documents(): ReturnType<typeof document>[] {
+    return [...this.docs.values()];
   }
 }
 
