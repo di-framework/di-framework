@@ -37,6 +37,53 @@ Only `AGENTS.md` is automatic. Extra names are explicit fallbacks tried after
 meaning. `.agents/AGENTS.md` participates naturally when the working directory
 is inside `.agents/**`.
 
+## Repository audit and migration
+
+`auditAgentConfiguration` reports neutral instructions, skills, `.aiignore`
+policy, suppressed sources, conflicts, and explicit vendor migration
+opportunities without loading vendor configuration or changing files.
+
+Turn that report into a deterministic, JSON-safe plan before opting into any
+writes:
+
+```ts
+import {
+  auditAgentConfiguration,
+  executeAgentConfigurationMigration,
+  planAgentConfigurationMigration,
+} from '@di-framework/ai-utils';
+
+const audit = auditAgentConfiguration({ workspace: process.cwd() });
+const plan = planAgentConfigurationMigration(audit, {
+  // Omit this list to plan every opportunity, or select exact audited sources.
+  opportunityPaths: audit.migrationOpportunities.map(({ path }) => path),
+  requests: [
+    { target: '.agents/AGENTS.md', content: '# Agent defaults\n' },
+    { target: '.agents/skills' },
+    { target: '.aiignore', content: 'private/\n' },
+  ],
+});
+
+// Dry-run is the default and never writes.
+const preview = executeAgentConfigurationMigration(plan);
+
+// Applying is an explicit opt-in and executes exactly the fingerprinted plan.
+const result = executeAgentConfigurationMigration(plan, { dryRun: false });
+```
+
+Plans only target `AGENTS.md`, `.agents/AGENTS.md`, `.agents/skills/**`, and
+`.aiignore`. Existing files become typed collisions unless replacement was
+explicitly requested during planning. A replacement is a distinct
+`replace-file` action and retains the old file beside the target with the
+`.di-framework-backup` suffix. Creation uses same-directory staging and an
+atomic no-replace link; source and target fingerprints are checked again at
+execution time. Symbolic-link targets and sources are rejected.
+
+Execution results classify every plan action as `applied`, `skipped`, or
+`failed`, so partial failures are visible to automation. No vendor directory,
+compatibility adapter, CLI, executable, or semantic index is created by these
+APIs.
+
 This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.
 
 Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `SkillsTool.builder()`, `SkillsIndex.builder()`. Free-function aliases remain. Skills stay in this package — `configureAi` / `@Agent` in `@di-framework/ai` are unchanged.
