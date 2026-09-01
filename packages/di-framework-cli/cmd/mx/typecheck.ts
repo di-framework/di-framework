@@ -3,6 +3,7 @@
 import path from 'node:path';
 import process from 'node:process';
 import ts from 'typescript';
+import { CommandFailure } from '../../command';
 
 type Args = {
   tsconfigPath?: string;
@@ -67,8 +68,8 @@ function stripAnsi(s: string) {
   return s.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
-export async function typecheck() {
-  const args = parseArgs(process.argv);
+export async function typecheck(argv: string[] = process.argv) {
+  const args = parseArgs(argv);
 
   // Start search either from where you run it, or from where the script lives.
   const startDir =
@@ -84,7 +85,7 @@ export async function typecheck() {
     console.error(
       '❌ Could not find tsconfig.json. Pass a path as the first argument, or run with --from=script.',
     );
-    process.exit(2);
+    throw new CommandFailure('INVALID_CONFIG', 'Could not find tsconfig.json', 2);
   }
 
   const cwd = process.cwd();
@@ -92,7 +93,7 @@ export async function typecheck() {
   const configFileText = ts.sys.readFile(tsconfigPath);
   if (!configFileText) {
     console.error(`❌ Failed to read tsconfig: ${tsconfigPath}`);
-    process.exit(2);
+    throw new CommandFailure('INVALID_CONFIG', `Failed to read tsconfig: ${tsconfigPath}`, 2);
   }
 
   const configJson = ts.parseConfigFileTextToJson(tsconfigPath, configFileText);
@@ -104,7 +105,7 @@ export async function typecheck() {
       getNewLine: () => ts.sys.newLine,
     });
     console.error(args.pretty ? msg : stripAnsi(msg));
-    process.exit(2);
+    throw new CommandFailure('INVALID_CONFIG', 'Failed to parse tsconfig.json', 2);
   }
 
   const parsed = ts.parseJsonConfigFileContent(
@@ -126,7 +127,7 @@ export async function typecheck() {
       const msg = formatDiagnostic(d, host);
       console.error(args.pretty ? msg : stripAnsi(msg));
     }
-    process.exit(2);
+    throw new CommandFailure('INVALID_CONFIG', 'tsconfig parsing produced diagnostics', 2);
   }
 
   const formatHost: ts.FormatDiagnosticsHost = {
@@ -203,17 +204,22 @@ export async function typecheck() {
 
   if (errors.length) {
     console.error(`❌ Typecheck failed: ${errors.length} error(s).`);
-    process.exit(1);
+    throw new CommandFailure('TYPECHECK_FAILED', `${errors.length} typecheck error(s)`, 1, {
+      errors: errors.length,
+    });
   }
 
   console.log(
     `✅ Typecheck passed (${warnings.length ? `${warnings.length} warning(s)` : 'no warnings'}).`,
   );
-  process.exit(0);
 }
 
 /** Shared entrypoint error handler (kept separate so tests can cover it). */
 export function handleTypecheckFailure(err: unknown): never {
+  if (err instanceof CommandFailure) {
+    console.error(err.message);
+    process.exit(err.exitCode);
+  }
   console.error('❌ Fatal error while running typecheck:', err);
   process.exit(2);
 }

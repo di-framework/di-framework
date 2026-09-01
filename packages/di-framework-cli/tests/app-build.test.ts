@@ -226,13 +226,10 @@ describe('app build command', () => {
     );
     await Bun.write(join(root, 'src', 'index.ts'), 'export const n = 1;\n');
     const log = spyOn(console, 'log').mockImplementation(() => {});
-    const cwd = process.cwd();
     try {
-      process.chdir(root);
-      await build([]);
+      await build([], root);
       expect(await Bun.file(join(root, 'dist', 'index.js')).exists()).toBe(true);
     } finally {
-      process.chdir(cwd);
       log.mockRestore();
     }
   }, 60_000);

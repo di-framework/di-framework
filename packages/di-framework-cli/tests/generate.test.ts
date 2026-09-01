@@ -3,24 +3,17 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateCommand } from '../cmd/generate';
+import { CommandFailure } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
 async function withExitCapture(fn: () => Promise<void>): Promise<number> {
-  const originalExit = process.exit;
-  let exitCode = 0;
-  (process as any).exit = (code: number) => {
-    exitCode = code;
-    throw new Error(`EXIT_${code}`);
-  };
   try {
     await fn();
     return 0;
-  } catch (err: any) {
-    if (!String(err?.message ?? err).startsWith('EXIT_')) throw err;
-    return exitCode;
-  } finally {
-    process.exit = originalExit;
+  } catch (err) {
+    if (!(err instanceof CommandFailure)) throw err;
+    return err.exitCode;
   }
 }
 

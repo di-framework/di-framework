@@ -58,8 +58,14 @@ export async function generateCommand(rawArgs: string[] = process.argv.slice(3))
 
   if (result.drifted) {
     console.error('\n❌ Codegen check failed: Schema manifests or generated files have drifted.');
-    process.exit(1);
+    throw new CommandFailure(
+      'GENERATED_OUTPUT_DRIFT',
+      'Schema manifests or generated files have drifted',
+      1,
+    );
   }
 
   console.log('\n✅ Application surfaces generated successfully!');
 }
+
+import { CommandFailure } from '../command';
