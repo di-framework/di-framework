@@ -1,6 +1,12 @@
 import * as fs from 'node:fs';
 import { constants } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+  type AiIgnorePolicy,
+  type AiIgnoreSuppressionDiagnostic,
+  aiIgnoreSuppressionDiagnostic,
+  evaluateAiIgnorePath,
+} from '../policy/index.ts';
 import { nodeErrnoCode } from '../sandbox/fs-error.ts';
 import type {
   AgentSourceDiagnosticCode,
@@ -65,6 +71,13 @@ export interface ValidateSkillDefinitionOptions {
   readonly source?: SkillDiagnosticSource;
   /** Defaults to true for filesystem-backed skills. */
   readonly matchDirectoryName?: boolean;
+}
+
+export interface ValidateResolvedSkillCatalogOptions {
+  /** Optional discovery policy applied before traversing or reading SKILL.md files. */
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
+  /** Receives content-free records for policy-suppressed skill sources. */
+  readonly onSuppressed?: (diagnostic: AiIgnoreSuppressionDiagnostic) => void;
 }
 
 /** Validate one parsed skill without creating an agent or semantic index. */
@@ -195,6 +208,7 @@ export function validateSkillsDirectory(directory: string): SkillValidationResul
 /** Validate an already-resolved catalog in the exact source precedence supplied. */
 export function validateResolvedSkillCatalog(
   resolvedSources: ResolvedSkillSources,
+  options: ValidateResolvedSkillCatalogOptions = {},
 ): SkillValidationResult {
   const diagnostics = resolvedSources.diagnostics.map((item) =>
     diagnostic(
@@ -218,7 +232,7 @@ export function validateResolvedSkillCatalog(
     const sourceContext: SkillDiagnosticSource = source;
     let files: string[];
     try {
-      files = walkSkillFiles(source.path);
+      files = walkSkillFiles(source.path, options);
     } catch {
       diagnostics.push(
         diagnostic(
@@ -508,21 +522,42 @@ function parseFrontMatter(markdown: string): { yaml: YamlMap; error?: string } {
   }
 }
 
-function walkSkillFiles(root: string): string[] {
+function walkSkillFiles(root: string, options: ValidateResolvedSkillCatalogOptions): string[] {
   const out: string[] = [];
   const stack = [root];
   while (stack.length > 0) {
     const directory = stack.pop();
     if (directory == null) break;
-    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    if (isPolicySuppressed(directory, 'directory', options)) continue;
+    const entries = fs
+      .readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       if (SKIP_DIR_NAMES.has(entry.name)) continue;
       const path = join(directory, entry.name);
       if (entry.isDirectory()) stack.push(path);
-      else if (entry.isFile() && entry.name === 'SKILL.md') out.push(path);
+      else if (
+        entry.isFile() &&
+        entry.name === 'SKILL.md' &&
+        !isPolicySuppressed(path, 'file', options)
+      ) {
+        out.push(path);
+      }
     }
   }
   return out;
+}
+
+function isPolicySuppressed(
+  path: string,
+  kind: 'file' | 'directory',
+  options: ValidateResolvedSkillCatalogOptions,
+): boolean {
+  if (options.aiIgnorePolicy == null) return false;
+  const evaluation = evaluateAiIgnorePath(options.aiIgnorePolicy, path, { kind });
+  if (!evaluation.ignored) return false;
+  options.onSuppressed?.(aiIgnoreSuppressionDiagnostic(evaluation, 'skill-discovery', kind));
+  return true;
 }
 
 function validationResult(

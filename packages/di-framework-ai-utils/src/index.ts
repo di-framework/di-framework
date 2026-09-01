@@ -7,6 +7,20 @@
  */
 
 export type {
+  AgentConfigurationAuditFinding,
+  AgentConfigurationAuditFindingCode,
+  AgentConfigurationAuditProvenance,
+  AgentConfigurationAuditReport,
+  AgentConfigurationAuditSeverity,
+  AgentConfigurationMigrationOpportunity,
+  AuditAgentConfigurationOptions,
+  AuditedAgentInstructionSource,
+  VendorAgentAsset,
+  VendorAgentAssetKind,
+} from './audit-agent-configuration.ts';
+export { auditAgentConfiguration } from './audit-agent-configuration.ts';
+
+export type {
   AgentInstructionSource,
   AgentInstructionsDiagnostic,
   AgentInstructionsDiagnosticCode,
@@ -144,6 +158,7 @@ export type {
   SkillVectorQueryOptions,
   SkillVectorSearch,
   TransformersJsSkillEmbedderOptions,
+  ValidateResolvedSkillCatalogOptions,
   ValidateSkillDefinitionOptions,
   ValidateSkillOptions,
   ValidateSkillsIndexOptions,
