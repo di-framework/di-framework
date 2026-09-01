@@ -7,11 +7,6 @@
       search-endpoint must be under top-level <variables> (Writerside docs).
       It should bake searchService/searchServiceUrl into config.json.
       CI also patches config.json after the build as a safety net.
-
-      Never set <favicon> / <custom-favicons>: this builder emits the value
-      as a literal text node above the header (filename or URL). Favicon
-      <link> tags are injected by .github/scripts/patch-docs-favicons.py
-      after the Writerside build; CI also copies favicon.png / favicon.ico.
     -->
     <variables>
         <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
@@ -24,6 +19,7 @@
             <noindex-content>true</noindex-content>
             <custom-css>footer.css</custom-css>
             <header-logo>favicon.png</header-logo>
+            <custom-favicons>favicon.png</custom-favicons>
             <!-- Same endpoint at instance level in case the builder only merges profile vars -->
             <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
             <versions-switcher>https://docs.di-framework.dev/versions.json</versions-switcher>
