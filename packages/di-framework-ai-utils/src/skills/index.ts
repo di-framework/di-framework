@@ -233,3 +233,17 @@ export {
   validateSkillDescription,
   validateSkillName,
 } from './validate-skill.ts';
+export type {
+  SkillCatalogDiagnostic,
+  SkillCatalogDiagnosticCode,
+  SkillDiagnosticSource,
+  SkillValidationResult,
+  ValidateSkillDefinitionOptions,
+} from './validate-skill-catalog.ts';
+export {
+  validateResolvedSkillCatalog,
+  validateSkillCatalog,
+  validateSkillDefinition,
+  validateSkillDirectory,
+  validateSkillsDirectory,
+} from './validate-skill-catalog.ts';
