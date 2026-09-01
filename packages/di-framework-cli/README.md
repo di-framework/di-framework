@@ -30,6 +30,7 @@ di-framework <command> [args...]
 | **`init [name]`** | Scaffold a new app (`package.json`, `tsconfig` with `@di-framework/tsc`, sample `src/index.ts`) |
 | **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
 | **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
+| **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
 
 ```bash
 di-framework init my-api
@@ -38,6 +39,22 @@ cd my-api && bun install && bun run dev
 di-framework check
 di-framework build
 ```
+
+### HTTP OpenAPI generation
+
+```bash
+di-framework http openapi generate \
+  --controllers ./src/controllers.ts \
+  --controllers ./src/admin/controllers.ts \
+  --output ./openapi.json
+```
+
+`--controllers` is required and repeatable. `--output` defaults to
+`openapi.json`. The command delegates controller loading, document generation,
+and file writing to the typed `@di-framework/http` APIs. Add global `--json`
+anywhere in the invocation to receive the shared single-value envelope with
+`controllerModules`, `outputPath`, and `bytes`; failures use stable command
+codes and exit status `2` for usage or `3` for loading/writing failures.
 
 `init` wires `@di-framework/tsc` and `@di-framework/cli` by default (`plugins` in `tsconfig`; `"build"` / `"check"` scripts call `di-framework`; `ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Runtime parameter checks are injected on `ttsc --emit` (`bun run build` / `bun start`). `bun run dev` executes source with Bun and skips emit-time checks. The first `ttsc` build needs a Go toolchain.
 ### `init` options
