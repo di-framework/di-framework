@@ -55,6 +55,7 @@ describe('CLI main router', () => {
       'index',
       'validate',
     ]);
+    expect(Object.keys(COMMAND_TREE.children?.agent?.children ?? {})).toEqual(['audit', 'inspect']);
   });
 
   it('prints root help to an injected stream', () => {
@@ -94,6 +95,10 @@ describe('CLI main router', () => {
       generate: async (args) => void calls.push(['generate', args]),
       build: async (args) => void calls.push(['build', args]),
       check: async (args) => void calls.push(['check', args]),
+      agentAudit: async (args) => {
+        calls.push(['agent audit', args]);
+        return {};
+      },
       agentInspect: async (args) => {
         calls.push(['agent inspect', args]);
         return {};
@@ -137,6 +142,7 @@ describe('CLI main router', () => {
       ['generate', '--check'],
       ['build', '--watch'],
       ['check', 'tsconfig.app.json'],
+      ['agent', 'audit', '--source-mode', 'merge'],
       ['agent', 'inspect', '--source-mode', 'replace'],
       ['http', 'openapi', 'generate', '--controllers', './controllers.ts'],
       ['skills', 'index', 'build', '--skills-dir', '.agents/skills'],
@@ -157,6 +163,7 @@ describe('CLI main router', () => {
       ['generate', ['--check']],
       ['build', ['--watch']],
       ['check', ['tsconfig.app.json']],
+      ['agent audit', ['--source-mode', 'merge']],
       ['agent inspect', ['--source-mode', 'replace']],
       ['http openapi generate', ['--controllers', './controllers.ts']],
       ['skills index build', ['--skills-dir', '.agents/skills']],

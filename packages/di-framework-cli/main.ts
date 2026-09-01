@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { runAgentAudit } from './cmd/agent/audit';
 import { runAgentInspect } from './cmd/agent/inspect';
 /** di-framework CLI — app tooling by default; monorepo maintainers use `mx`. */
 import { build } from './cmd/build';
@@ -33,6 +34,7 @@ export type CliHandlers = {
   generate(args: string[]): Promise<void>;
   build(args: string[]): Promise<void>;
   check(args: string[]): Promise<void>;
+  agentAudit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   skillsIndexBuild(args: string[]): Promise<CommandResult>;
@@ -52,6 +54,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   generate: generateCommand,
   build,
   check,
+  agentAudit: runAgentAudit,
   agentInspect: runAgentInspect,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   skillsIndexBuild: runSkillsIndexBuild,
@@ -106,6 +109,22 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
       agent: {
         description: 'Inspect and manage agent configuration',
         children: {
+          audit: {
+            description: 'Audit agent configuration without changing files',
+            usage: 'di-framework agent audit [options]',
+            options: [
+              '--workspace <path>  Workspace boundary (default: current directory)',
+              '--working-directory <path>  Instruction discovery location',
+              '--user-directory <path>  User-level neutral source root',
+              '--skills-dir <path>  Explicit skill root (repeatable)',
+              '--skills-package <name>  Package-provided skill root (repeatable)',
+              '--source-mode merge|replace  Merge with or replace neutral skill roots',
+              '--instructions-fallback <name>  Instruction fallback filename (repeatable)',
+              '--max-instruction-bytes <count>  Combined instruction byte limit',
+              '--allowed-directory <path>  Allowed-directory intersection (repeatable)',
+            ],
+            run: ({ args }) => handlers.agentAudit(args),
+          },
           inspect: {
             description: 'Inspect resolved agent configuration without changing files',
             usage: 'di-framework agent inspect [options]',
