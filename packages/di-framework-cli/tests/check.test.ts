@@ -10,8 +10,22 @@ import {
   parseCheckArgs,
   runCheckMain,
 } from '../cmd/check';
+import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+
+function captureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    stdout,
+    stderr,
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+  };
+}
 
 describe('check command', () => {
   const temps: string[] = [];
@@ -59,6 +73,11 @@ describe('check command', () => {
     it('parses --pretty and --no-pretty', () => {
       expect(parseCheckArgs(['--pretty'], '/tmp').pretty).toBe(true);
       expect(parseCheckArgs(['--no-pretty'], '/tmp').pretty).toBe(false);
+    });
+
+    it('rejects unknown flags and extra positional arguments', () => {
+      expect(() => parseCheckArgs(['--unknown'], '/tmp')).toThrow('Unknown flag');
+      expect(() => parseCheckArgs(['one.json', 'two.json'], '/tmp')).toThrow('Unexpected argument');
     });
   });
 
@@ -182,13 +201,9 @@ describe('check command', () => {
       await Bun.$`chmod +x ${join(root, 'node_modules', '.bin', 'ttsc')} ${join(root, 'node_modules', 'ttsc', 'cli.js')}`;
       await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
       await Bun.write(join(root, 'tsconfig.json'), '{}\n');
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        await checkApp({ cwd: root, pretty: false });
-        expect(log.mock.calls.some((c) => String(c[0]).includes('ttsc'))).toBe(true);
-      } finally {
-        log.mockRestore();
-      }
+      const captured = captureIo();
+      await checkApp({ cwd: root, pretty: false }, captured.io);
+      expect(captured.stdout.join('')).toContain('ttsc');
     }, 30_000);
 
     it('honors an explicit tsconfig path', async () => {
@@ -259,21 +274,18 @@ describe('check command', () => {
   });
 
   describe('CLI entrypoint', () => {
-    it('handleCheckFailure exits 1', () => {
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
+    it('handleCheckFailure assigns exit code 1 without exiting', () => {
+      const captured = captureIo();
       let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handleCheckFailure(new Error('boom'))).toThrow('EXIT_1');
-        expect(code).toBe(1);
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+      handleCheckFailure(new Error('boom'), captured.io, (value) => {
+        code = value;
+      });
+      expect(code).toBe(1);
+      expect(captured.stderr.join('')).toContain('check failed: boom');
+      const previousExitCode = process.exitCode;
+      handleCheckFailure('default setter', captured.io);
+      expect(process.exitCode).toBe(1);
+      process.exitCode = previousExitCode;
     });
 
     it('runCheckMain respects isMain', () => {

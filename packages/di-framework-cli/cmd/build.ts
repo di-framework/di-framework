@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { $ as defaultShell } from 'bun';
+import { type CliIo, type CommandResult, PROCESS_IO } from '../command';
 
 export type AppBuildOptions = {
   cwd: string;
@@ -72,9 +73,10 @@ export function readPkgJson(cwd: string): {
 export async function buildApp(
   opts: AppBuildOptions,
   shell: BuildShell = defaultShell,
-): Promise<void> {
+  io: CliIo = PROCESS_IO,
+): Promise<{ cwd: string; tool: 'ttsc' | 'tsc'; tsconfigPath: string } | undefined> {
   if (opts.passthrough.includes('--help') || opts.passthrough.includes('-h')) {
-    printBuildHelp();
+    printBuildHelp(io.stderr as NodeJS.WritableStream);
     return;
   }
 
@@ -90,35 +92,45 @@ export async function buildApp(
     throw new Error('Nothing to build: add a tsconfig.json, or scaffold with `di-framework init`.');
   }
 
-  if (hasTtsc(opts.cwd, pkg)) {
-    console.log('Building with ttsc --emit -p tsconfig.json…');
+  const useTtsc = hasTtsc(opts.cwd, pkg);
+  if (useTtsc) {
+    io.stdout.write('Building with ttsc --emit -p tsconfig.json…\n');
     await shell`bun x ttsc --emit -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
   } else {
-    console.log('Building with tsc -p tsconfig.json…');
+    io.stdout.write('Building with tsc -p tsconfig.json…\n');
     await shell`bun x tsc -p ${tsconfig} ${opts.passthrough}`.cwd(opts.cwd);
   }
-  console.log('✅ Build finished');
+  io.stdout.write('✅ Build finished\n');
+  return { cwd: opts.cwd, tool: useTtsc ? 'ttsc' : 'tsc', tsconfigPath: tsconfig };
 }
 
 export async function build(
   args: string[] = process.argv.slice(3),
   cwd: string = process.cwd(),
-): Promise<void> {
+  io: CliIo = PROCESS_IO,
+): Promise<CommandResult> {
   if (args[0] === '--help' || args[0] === '-h') {
-    printBuildHelp();
-    return;
+    printBuildHelp(io.stderr as NodeJS.WritableStream);
+    return { data: { help: true } };
   }
-  await buildApp(parseBuildArgs(args, cwd));
+  const result = await buildApp(parseBuildArgs(args, cwd), defaultShell, io);
+  return { data: result ?? null };
 }
 
-export function handleBuildFailure(err: unknown): never {
-  console.error('build failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
+export function handleBuildFailure(
+  err: unknown,
+  io: CliIo = PROCESS_IO,
+  setExitCode: (code: number) => void = (code) => {
+    process.exitCode = code;
+  },
+): void {
+  io.stderr.write(`build failed: ${err instanceof Error ? err.message : String(err)}\n`);
+  setExitCode(1);
 }
 
 export function runBuildMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => build().catch(handleBuildFailure),
+  start: () => Promise<unknown> = () => build().catch(handleBuildFailure),
 ): void {
   if (isMain) void start();
 }

@@ -64,6 +64,7 @@ const REMOVED_ENTRYPOINTS = [
   'packages/di-framework-ai-utils/src/skills/skills-index-cli.ts',
   'packages/di-framework-http/src/cli.ts',
   'packages/di-framework-tsc/bin/dtsc.cjs',
+  'packages/di-framework-cli/cmd/mx.ts',
 ];
 
 function captureIo(): { stdout: string[]; stderr: string[]; io: CliIo } {
@@ -168,6 +169,57 @@ describe('unified CLI end-to-end contract', () => {
         ok: false,
         error: { code: 'UNKNOWN_COMMAND', details: { token: alias } },
       });
+    }
+  });
+
+  it('rejects invalid legacy-handler arguments with one JSON envelope and no stream leakage', async () => {
+    for (const argv of [
+      ['generate', '--definitely-unknown'],
+      ['generate', '--config'],
+      ['init', 'one', 'two'],
+      ['check', '--definitely-unknown'],
+      ['mx', 'build', '--definitely-unknown'],
+      ['mx', 'test', 'unexpected'],
+      ['mx', 'typecheck', '--definitely-unknown'],
+      ['mx', 'publish', 'unexpected'],
+    ]) {
+      const captured = captureIo();
+      expect(await executeCommand(COMMAND_TREE, [...argv, '--json'], captured.io)).toBe(2);
+      expect(captured.stderr).toEqual([]);
+      expect(captured.stdout).toHaveLength(1);
+      expect(JSON.parse(captured.stdout[0]!)).toMatchObject({
+        schemaVersion: 1,
+        command: argv.slice(0, argv[0] === 'mx' ? 2 : 1).join(' '),
+        ok: false,
+        error: { code: 'INVALID_USAGE' },
+      });
+    }
+  });
+
+  it('returns non-null stable JSON data from every legacy handler adapter', async () => {
+    const operations = [
+      ['init', 'demo'],
+      ['generate'],
+      ['build'],
+      ['check'],
+      ['mx', 'build'],
+      ['mx', 'test'],
+      ['mx', 'typecheck'],
+      ['mx', 'publish'],
+    ];
+    const handlers = new Proxy({} as CliHandlers, {
+      get: (_target, name) => async (_args: unknown, io: CliIo) => {
+        io.stdout.write(`handled ${String(name)}\n`);
+        return { data: { handler: String(name) } };
+      },
+    });
+    const tree = createCommandTree(handlers);
+    for (const argv of operations) {
+      const captured = captureIo();
+      expect(await executeCommand(tree, [...argv, '--json'], captured.io)).toBe(0);
+      expect(captured.stderr).toEqual([]);
+      expect(captured.stdout).toHaveLength(1);
+      expect(JSON.parse(captured.stdout[0]!).data).not.toBeNull();
     }
   });
 

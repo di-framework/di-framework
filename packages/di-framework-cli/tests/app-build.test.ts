@@ -3,8 +3,22 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build, buildApp, handleBuildFailure, parseBuildArgs, runBuildMain } from '../cmd/build';
+import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+
+function captureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    stdout,
+    stderr,
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+  };
+}
 
 describe('app build command', () => {
   const temps: string[] = [];
@@ -144,21 +158,18 @@ describe('app build command', () => {
     expect(hasTtsc(root, {})).toBe(true);
   });
 
-  it('handleBuildFailure exits 1', () => {
-    const err = spyOn(console, 'error').mockImplementation(() => {});
-    const originalExit = process.exit;
+  it('handleBuildFailure assigns exit code 1 without exiting', () => {
+    const captured = captureIo();
     let code: number | undefined;
-    (process as any).exit = (c: number) => {
-      code = c;
-      throw new Error(`EXIT_${c}`);
-    };
-    try {
-      expect(() => handleBuildFailure(new Error('boom'))).toThrow('EXIT_1');
-      expect(code).toBe(1);
-    } finally {
-      process.exit = originalExit;
-      err.mockRestore();
-    }
+    handleBuildFailure(new Error('boom'), captured.io, (value) => {
+      code = value;
+    });
+    expect(code).toBe(1);
+    expect(captured.stderr.join('')).toContain('build failed: boom');
+    const previousExitCode = process.exitCode;
+    handleBuildFailure('default setter', captured.io);
+    expect(process.exitCode).toBe(1);
+    process.exitCode = previousExitCode;
   });
 
   it('runBuildMain respects isMain', () => {

@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { handleTestFailure, runTestMain, test } from '../cmd/mx/test';
+import { runMxTest, runTestMain, test } from '../cmd/mx/test';
+import type { CliIo } from '../command';
 
 const SCRIPT_PATH = join(import.meta.dir, '..', 'scripts', 'e2e-test.sh');
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+const SILENT_IO: CliIo = { stdout: { write: () => {} }, stderr: { write: () => {} } };
 
 describe('test command', () => {
   const temps: string[] = [];
@@ -59,46 +61,56 @@ describe('test command', () => {
   });
 
   describe('CLI entrypoint', () => {
-    it('handleTestFailure logs and exits 1', () => {
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
-      let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handleTestFailure(new Error('boom'))).toThrow('EXIT_1');
-        expect(code).toBe(1);
-        expect(err.mock.calls[0]?.[0]).toContain('Tests failed');
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+    it('rejects every argument without running the suite', async () => {
+      await expect(runMxTest(['--watch'], SILENT_IO)).rejects.toMatchObject({
+        code: 'INVALID_USAGE',
+        exitCode: 2,
+      });
+      expect(
+        await runMxTest([], SILENT_IO, '#!/bin/bash\necho canonical-ok\nexit 0\n'),
+      ).toMatchObject({ data: { passed: true, suite: 'e2e' } });
     });
 
-    it('runTestMain invokes start only when isMain is true', () => {
+    it('runTestMain uses an injected exit-code setter', async () => {
+      let code: number | undefined;
+      await runTestMain(
+        true,
+        async () => {
+          throw new Error('boom');
+        },
+        (value) => {
+          code = value;
+        },
+      );
+      expect(code).toBe(1);
+      const previousExitCode = process.exitCode;
+      await runTestMain(true, async () => {
+        throw new Error('default setter');
+      });
+      expect(process.exitCode).toBe(1);
+      process.exitCode = previousExitCode;
+    });
+
+    it('runTestMain invokes start only when isMain is true', async () => {
       let calls = 0;
       const start = async () => {
         calls++;
+        return {};
       };
-      runTestMain(false, start);
+      await runTestMain(false, start);
       expect(calls).toBe(0);
-      runTestMain(true, start);
+      await runTestMain(true, start);
       expect(calls).toBe(1);
     });
 
     it('exits with code 1 when the e2e script fails under import.meta.main', async () => {
       const root = mkdtempSync(join(tmpdir(), 'test-main-fail-'));
       temps.push(root);
-      // Force the default embedded script to fail by making `bun` unavailable via a broken PATH
-      // is unreliable; instead invoke handleTestFailure coverage above and spawn with a
-      // stub that exits non-zero by overriding through a tiny wrapper entrypoint.
       const wrapper = join(root, 'run.ts');
       await Bun.write(
         wrapper,
-        `import { test, handleTestFailure } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'mx', 'test.ts'))};
-test('#!/bin/bash\\nexit 1\\n').catch(handleTestFailure);
+        `import { runTestMain, test } from ${JSON.stringify(join(import.meta.dir, '..', 'cmd', 'mx', 'test.ts'))};
+await runTestMain(true, async () => { await test('#!/bin/bash\\nexit 1\\n'); return {}; });
 `,
       );
       const proc = Bun.spawn([process.execPath, wrapper], {

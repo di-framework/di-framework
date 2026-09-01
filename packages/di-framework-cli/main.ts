@@ -9,11 +9,10 @@ import { check } from './cmd/check';
 import { generateCommand } from './cmd/generate';
 import { runHttpOpenAPIGenerate } from './cmd/http/openapi-generate';
 import { init } from './cmd/init';
-import type { MxBuildOptions } from './cmd/mx/build';
-import { build as mxBuild, parseMxBuildArgs } from './cmd/mx/build';
-import { publish } from './cmd/mx/publish';
-import { test } from './cmd/mx/test';
-import { typecheck } from './cmd/mx/typecheck';
+import { runMxBuild } from './cmd/mx/build';
+import { runMxPublish } from './cmd/mx/publish';
+import { runMxTest } from './cmd/mx/test';
+import { runMxTypecheck } from './cmd/mx/typecheck';
 import {
   runSkillsIndexBuild,
   runSkillsIndexInspect,
@@ -32,10 +31,10 @@ import {
 } from './command';
 
 export type CliHandlers = {
-  init(args: string[]): Promise<void>;
-  generate(args: string[]): Promise<void>;
-  build(args: string[]): Promise<void>;
-  check(args: string[]): Promise<void>;
+  init(args: string[], io: CliIo): Promise<CommandResult>;
+  generate(args: string[], io: CliIo): Promise<CommandResult>;
+  build(args: string[], io: CliIo): Promise<CommandResult>;
+  check(args: string[], io: CliIo): Promise<CommandResult>;
   agentAudit(args: string[]): Promise<CommandResult>;
   agentInit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
@@ -47,16 +46,16 @@ export type CliHandlers = {
   skillsIndexQuery(args: string[]): Promise<CommandResult>;
   skillsIndexMigrate(args: string[]): Promise<CommandResult>;
   skillsValidate(args: string[]): Promise<CommandResult>;
-  mxBuild(options: MxBuildOptions): Promise<void>;
-  mxTest(): Promise<void>;
-  mxTypecheck(argv: string[]): Promise<void>;
-  mxPublish(): Promise<void>;
+  mxBuild(args: string[], io: CliIo): Promise<CommandResult>;
+  mxTest(args: string[], io: CliIo): Promise<CommandResult>;
+  mxTypecheck(argv: string[], io: CliIo): Promise<CommandResult>;
+  mxPublish(args: string[], io: CliIo): Promise<CommandResult>;
 };
 
 const DEFAULT_HANDLERS: CliHandlers = {
   init,
   generate: generateCommand,
-  build,
+  build: (args, io) => build(args, process.cwd(), io),
   check,
   agentAudit: runAgentAudit,
   agentInit: runAgentInit,
@@ -69,10 +68,10 @@ const DEFAULT_HANDLERS: CliHandlers = {
   skillsIndexQuery: runSkillsIndexQuery,
   skillsIndexMigrate: runSkillsIndexMigrate,
   skillsValidate: runSkillsValidate,
-  mxBuild,
-  mxTest: test,
-  mxTypecheck: typecheck,
-  mxPublish: publish,
+  mxBuild: runMxBuild,
+  mxTest: runMxTest,
+  mxTypecheck: runMxTypecheck,
+  mxPublish: runMxPublish,
 };
 
 export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): CommandNode {
@@ -83,34 +82,22 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
       init: {
         description: 'Scaffold a new di-framework application',
         usage: 'di-framework init [name] [options]',
-        run: async ({ args }) => {
-          await handlers.init(args);
-          return undefined;
-        },
+        run: ({ args, io }) => handlers.init(args, io),
       },
       generate: {
         description: 'Generate application surfaces from schema manifests',
         usage: 'di-framework generate [options]',
-        run: async ({ args }) => {
-          await handlers.generate(args);
-          return undefined;
-        },
+        run: ({ args, io }) => handlers.generate(args, io),
       },
       build: {
         description: 'Build the current application (ttsc or tsc)',
         usage: 'di-framework build [args...]',
-        run: async ({ args }) => {
-          await handlers.build(args);
-          return undefined;
-        },
+        run: ({ args, io }) => handlers.build(args, io),
       },
       check: {
         description: 'Typecheck the current application',
         usage: 'di-framework check [tsconfig.json] [options]',
-        run: async ({ args }) => {
-          await handlers.check(args);
-          return undefined;
-        },
+        run: ({ args, io }) => handlers.check(args, io),
       },
       agent: {
         description: 'Inspect and manage agent configuration',
@@ -279,31 +266,19 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
         children: {
           build: {
             description: 'Build all monorepo packages',
-            run: async ({ args }) => {
-              await handlers.mxBuild(parseMxBuildArgs(args));
-              return undefined;
-            },
+            run: ({ args, io }) => handlers.mxBuild(args, io),
           },
           test: {
             description: 'Run the monorepo E2E test suite',
-            run: async () => {
-              await handlers.mxTest();
-              return undefined;
-            },
+            run: ({ args, io }) => handlers.mxTest(args, io),
           },
           typecheck: {
             description: 'Typecheck the monorepo with the language service',
-            run: async ({ args }) => {
-              await handlers.mxTypecheck(['bun', 'typecheck', ...args]);
-              return undefined;
-            },
+            run: ({ args, io }) => handlers.mxTypecheck(args, io),
           },
           publish: {
             description: 'Test, build, and publish all packages to npm',
-            run: async () => {
-              await handlers.mxPublish();
-              return undefined;
-            },
+            run: ({ args, io }) => handlers.mxPublish(args, io),
           },
         },
       },

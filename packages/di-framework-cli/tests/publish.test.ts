@@ -1,11 +1,25 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PACKAGES } from '../cmd/mx/publish';
+import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 const REAL_BUN = process.execPath;
+
+function captureIo(): { io: CliIo; stderr: string[]; stdout: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+    stderr,
+    stdout,
+  };
+}
 
 async function makePublishWorkspace(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), 'publish-cmd-'));
@@ -159,8 +173,7 @@ describe('publish command', () => {
   describe('package metadata', () => {
     it('every package has a name, version, and repository.url', async () => {
       for (const pkg of PACKAGES) {
-        // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
-        const pkgJson = await Bun.file(join(REPO_ROOT, pkg, 'package.json')).json();
+        const pkgJson = JSON.parse(await Bun.file(join(REPO_ROOT, pkg, 'package.json')).text());
         expect(pkgJson.name).toBeTruthy();
         expect(pkgJson.version).toBeTruthy();
         expect(pkgJson.private).not.toBe(true);
@@ -174,8 +187,7 @@ describe('publish command', () => {
     it('publishes only the canonical di-framework binary', async () => {
       const publishedBins: Record<string, string> = {};
       for (const pkg of PACKAGES) {
-        // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
-        const pkgJson = await Bun.file(join(REPO_ROOT, pkg, 'package.json')).json();
+        const pkgJson = JSON.parse(await Bun.file(join(REPO_ROOT, pkg, 'package.json')).text());
         Object.assign(publishedBins, pkgJson.bin ?? {});
       }
       expect(publishedBins).toEqual({ 'di-framework': './main.ts' });
@@ -228,7 +240,7 @@ describe('publish command', () => {
       let publishCalls = 0;
       const fakeShell = ((strings: TemplateStringsArray, ...exprs: unknown[]) => {
         const cmd = strings.reduce((acc, s, i) => acc + s + (exprs[i] ?? ''), '');
-        return {
+        const result = {
           // biome-ignore lint/suspicious/noThenProperty: the injected shell deliberately returns a thenable.
           then(resolve: (v: unknown) => void, reject?: (e: unknown) => void) {
             if (cmd.includes('bun publish')) {
@@ -240,22 +252,26 @@ describe('publish command', () => {
             }
             resolve({ exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() });
           },
+          quiet() {
+            return result;
+          },
         };
+        return result;
       }) as import('../cmd/mx/publish').PublishShell;
 
       try {
         process.chdir(root);
-        const log = spyOn(console, 'log').mockImplementation(() => {});
-        const err = spyOn(console, 'error').mockImplementation(() => {});
-        const { publish } = await import('../cmd/mx/publish');
-        await publish(fakeShell);
-        expect(err.mock.calls.some((c) => String(c[0]).includes('Failed to publish'))).toBe(true);
-        expect(log.mock.calls.some((c) => String(c[0]).includes('Published'))).toBe(true);
-        expect(log.mock.calls.some((c) => String(c[0]).includes('Publish process finished'))).toBe(
-          true,
-        );
-        log.mockRestore();
-        err.mockRestore();
+        const output = captureIo();
+        const { publish, runMxPublish } = await import('../cmd/mx/publish');
+        const result = await publish(fakeShell, output.io);
+        expect(result.failed).toHaveLength(1);
+        expect(result.published).toHaveLength(PACKAGES.length - 1);
+        expect(output.stderr.join('')).toContain('Failed to publish');
+        expect(output.stdout.join('')).toContain('Published');
+        expect(output.stdout.join('')).toContain('Publish process finished');
+        const commandResult = await runMxPublish([], output.io, fakeShell);
+        expect(commandResult.exitCode).toBe(0);
+        expect(commandResult.data).toMatchObject({ failed: [], published: expect.any(Array) });
       } finally {
         process.chdir(prevCwd);
       }
@@ -263,23 +279,33 @@ describe('publish command', () => {
   });
 
   describe('CLI entrypoint', () => {
-    it('handlePublishFailure logs and exits 1', () => {
-      const { handlePublishFailure } = require('../cmd/mx/publish');
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
+    it('runMxPublish rejects arguments before starting the pipeline', async () => {
+      const { runMxPublish } = await import('../cmd/mx/publish');
+      await expect(runMxPublish(['--tag=next'], captureIo().io)).rejects.toMatchObject({
+        code: 'INVALID_USAGE',
+        exitCode: 2,
+      });
+    });
+
+    it('runPublishMain uses an injected exit-code setter', async () => {
+      const { runPublishMain } = await import('../cmd/mx/publish');
       let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handlePublishFailure(new Error('boom'))).toThrow('EXIT_1');
-        expect(code).toBe(1);
-        expect(err.mock.calls[0]?.[0]).toContain('Publish script failed');
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+      await runPublishMain(
+        true,
+        async () => {
+          throw new Error('boom');
+        },
+        (value) => {
+          code = value;
+        },
+      );
+      expect(code).toBe(1);
+      const previousExitCode = process.exitCode;
+      await runPublishMain(true, async () => {
+        throw new Error('default setter');
+      });
+      expect(process.exitCode).toBe(1);
+      process.exitCode = previousExitCode;
     });
 
     it('runPublishMain invokes start only when isMain is true', async () => {
@@ -287,10 +313,11 @@ describe('publish command', () => {
       let calls = 0;
       const start = async () => {
         calls++;
+        return {};
       };
-      runPublishMain(false, start);
+      await runPublishMain(false, start);
       expect(calls).toBe(0);
-      runPublishMain(true, start);
+      await runPublishMain(true, start);
       expect(calls).toBe(1);
     });
 

@@ -1,6 +1,8 @@
 import { $ } from 'bun';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import type { CliIo, CommandResult } from '../../command';
+import { CommandFailure } from '../../command';
 
 function isErrno(err: unknown, code: string): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
@@ -13,7 +15,19 @@ export type MxBuildOptions = {
   workspaceRoot?: string;
 };
 
-export function parseMxBuildArgs(args: string[] = process.argv.slice(2)): MxBuildOptions {
+export function parseMxBuildArgs(args: readonly string[] = process.argv.slice(2)): MxBuildOptions {
+  for (const arg of args) {
+    if (arg !== '--sync-versions') {
+      throw new CommandFailure('INVALID_USAGE', `Unknown mx build argument: ${arg}`, 2, {
+        argument: arg,
+      });
+    }
+  }
+  if (args.filter((arg) => arg === '--sync-versions').length > 1) {
+    throw new CommandFailure('INVALID_USAGE', 'Duplicate mx build argument: --sync-versions', 2, {
+      argument: '--sync-versions',
+    });
+  }
   return { syncVersions: args.includes('--sync-versions') };
 }
 
@@ -36,8 +50,11 @@ export const PACKAGES = [
   'packages/di-framework-tsc',
 ];
 
-export async function build(options: MxBuildOptions = {}) {
-  console.log('🚀 Starting build process...');
+export async function build(
+  options: MxBuildOptions = {},
+  io: CliIo = { stdout: process.stdout, stderr: process.stderr },
+): Promise<void> {
+  io.stdout.write('🚀 Starting build process...\n');
 
   const syncVersions = options.syncVersions === true;
   const workspaceRoot = options.workspaceRoot ?? process.cwd();
@@ -46,11 +63,11 @@ export async function build(options: MxBuildOptions = {}) {
     const rootPkgPath = join(workspaceRoot, 'package.json');
     const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
     version = rootPkg.version;
-    console.log(`📌 Using version ${version} from workspace root`);
+    io.stdout.write(`📌 Using version ${version} from workspace root\n`);
   }
 
   for (const pkgDir of PACKAGES) {
-    console.log(`\n📦 Building ${pkgDir}...`);
+    io.stdout.write(`\n📦 Building ${pkgDir}...\n`);
     const fullPath = join(workspaceRoot, pkgDir);
 
     // Sync version only when requested (publish / release). Read-or-skip; no existsSync TOCTOU.
@@ -65,36 +82,48 @@ export async function build(options: MxBuildOptions = {}) {
     }
 
     // 1. Clean dist
-    await $`rm -rf ${join(fullPath, 'dist')}`;
+    await $`rm -rf ${join(fullPath, 'dist')}`.quiet();
 
     // 2. Run build
-    console.log('  Running build...');
+    io.stdout.write('  Running build...\n');
     if (existsSync(join(fullPath, 'tsconfig.build.json'))) {
-      await $`cd ${fullPath} && bun x tsc -p tsconfig.build.json`;
+      await $`cd ${fullPath} && bun x tsc -p tsconfig.build.json`.quiet();
     } else {
-      await $`cd ${fullPath} && bun run build`;
+      await $`cd ${fullPath} && bun run build`.quiet();
     }
 
-    console.log(`  ✅ Finished building ${pkgDir}`);
+    io.stdout.write(`  ✅ Finished building ${pkgDir}\n`);
   }
 
-  console.log('\n✨ All builds completed successfully!');
+  io.stdout.write('\n✨ All builds completed successfully!\n');
 }
 
-/** Shared entrypoint error handler (kept separate so tests can cover it). */
-export function handleBuildFailure(err: unknown): never {
-  console.error('❌ Build failed:', err);
-  process.exit(1);
+export async function runMxBuild(args: readonly string[], io: CliIo): Promise<CommandResult> {
+  const options = parseMxBuildArgs(args);
+  await build(options, io);
+  return {
+    data: { packages: [...PACKAGES], syncVersions: options.syncVersions === true },
+    text: `Built ${PACKAGES.length} packages${options.syncVersions ? ' with synchronized versions' : ''}.`,
+  };
 }
 
-/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
-export function runBuildMain(
+/** Standalone boundary; reports failures without terminating an embedding process. */
+export async function runBuildMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => build(parseMxBuildArgs()).catch(handleBuildFailure),
-): void {
-  if (isMain) {
-    void start();
+  start: (args: readonly string[], io: CliIo) => Promise<CommandResult> = runMxBuild,
+  setExitCode: (code: number) => void = (code) => {
+    process.exitCode = code;
+  },
+): Promise<void> {
+  if (!isMain) return;
+  try {
+    await start(process.argv.slice(2), { stdout: process.stdout, stderr: process.stderr });
+  } catch (error) {
+    process.stderr.write(
+      `❌ Build failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    setExitCode(error instanceof CommandFailure ? error.exitCode : 1);
   }
 }
 
-runBuildMain();
+void runBuildMain();

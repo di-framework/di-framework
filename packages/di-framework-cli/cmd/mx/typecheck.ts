@@ -3,6 +3,7 @@
 import path from 'node:path';
 import process from 'node:process';
 import ts from 'typescript';
+import type { CliIo, CommandResult } from '../../command';
 import { CommandFailure } from '../../command';
 
 type Args = {
@@ -18,17 +19,37 @@ export function parseArgs(argv: string[]): Args {
 
   for (const arg of argv.slice(2)) {
     if (arg.startsWith('--pretty=')) {
-      pretty = arg.split('=')[1] !== '0';
+      const value = arg.slice('--pretty='.length);
+      if (value !== '0' && value !== '1') {
+        throw new CommandFailure('INVALID_USAGE', `Invalid --pretty value: ${value}`, 2, {
+          argument: arg,
+        });
+      }
+      pretty = value === '1';
       continue;
     }
     if (arg.startsWith('--from=')) {
-      const v = arg.split('=')[1];
-      if (v === 'cwd' || v === 'script') from = v;
+      const v = arg.slice('--from='.length);
+      if (v !== 'cwd' && v !== 'script') {
+        throw new CommandFailure('INVALID_USAGE', `Invalid --from value: ${v}`, 2, {
+          argument: arg,
+        });
+      }
+      from = v;
       continue;
     }
-    if (!arg.startsWith('-') && !tsconfigPath) {
-      tsconfigPath = arg;
+    if (arg.startsWith('-')) {
+      throw new CommandFailure('INVALID_USAGE', `Unknown mx typecheck argument: ${arg}`, 2, {
+        argument: arg,
+      });
     }
+    if (!tsconfigPath) {
+      tsconfigPath = arg;
+      continue;
+    }
+    throw new CommandFailure('INVALID_USAGE', `Unexpected mx typecheck argument: ${arg}`, 2, {
+      argument: arg,
+    });
   }
 
   return { tsconfigPath, pretty, from };
@@ -68,7 +89,10 @@ function stripAnsi(s: string) {
   return s.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
-export async function typecheck(argv: string[] = process.argv) {
+export async function typecheck(
+  argv: string[] = process.argv,
+  io: CliIo = { stdout: process.stdout, stderr: process.stderr },
+): Promise<CommandResult> {
   const args = parseArgs(argv);
 
   // Start search either from where you run it, or from where the script lives.
@@ -82,9 +106,6 @@ export async function typecheck(argv: string[] = process.argv) {
     : findTopmostTsconfig(startDir);
 
   if (!tsconfigPath) {
-    console.error(
-      '❌ Could not find tsconfig.json. Pass a path as the first argument, or run with --from=script.',
-    );
     throw new CommandFailure('INVALID_CONFIG', 'Could not find tsconfig.json', 2);
   }
 
@@ -92,20 +113,19 @@ export async function typecheck(argv: string[] = process.argv) {
 
   const configFileText = ts.sys.readFile(tsconfigPath);
   if (!configFileText) {
-    console.error(`❌ Failed to read tsconfig: ${tsconfigPath}`);
     throw new CommandFailure('INVALID_CONFIG', `Failed to read tsconfig: ${tsconfigPath}`, 2);
   }
 
   const configJson = ts.parseConfigFileTextToJson(tsconfigPath, configFileText);
   if (configJson.error) {
-    console.error('❌ Failed to parse tsconfig.json:');
     const msg = ts.formatDiagnosticsWithColorAndContext([configJson.error], {
       getCanonicalFileName: (f) => f,
       getCurrentDirectory: () => cwd,
       getNewLine: () => ts.sys.newLine,
     });
-    console.error(args.pretty ? msg : stripAnsi(msg));
-    throw new CommandFailure('INVALID_CONFIG', 'Failed to parse tsconfig.json', 2);
+    throw new CommandFailure('INVALID_CONFIG', 'Failed to parse tsconfig.json', 2, {
+      diagnostic: args.pretty ? msg : stripAnsi(msg),
+    });
   }
 
   const parsed = ts.parseJsonConfigFileContent(
@@ -117,17 +137,18 @@ export async function typecheck(argv: string[] = process.argv) {
   );
 
   if (parsed.errors.length) {
-    console.error('❌ tsconfig parsing produced diagnostics:');
     const host: ts.FormatDiagnosticsHost = {
       getCanonicalFileName: (f) => f,
       getCurrentDirectory: () => cwd,
       getNewLine: () => ts.sys.newLine,
     };
-    for (const d of parsed.errors) {
+    const diagnostics = parsed.errors.map((d) => {
       const msg = formatDiagnostic(d, host);
-      console.error(args.pretty ? msg : stripAnsi(msg));
-    }
-    throw new CommandFailure('INVALID_CONFIG', 'tsconfig parsing produced diagnostics', 2);
+      return args.pretty ? msg : stripAnsi(msg);
+    });
+    throw new CommandFailure('INVALID_CONFIG', 'tsconfig parsing produced diagnostics', 2, {
+      diagnostics,
+    });
   }
 
   const formatHost: ts.FormatDiagnosticsHost = {
@@ -183,8 +204,8 @@ export async function typecheck(argv: string[] = process.argv) {
   const warnings = all.filter((d) => d.category === ts.DiagnosticCategory.Warning);
 
   // Small banner so you can tell which config actually drove the check.
-  console.log(`ℹ️ Using tsconfig: ${tsconfigPath}`);
-  console.log(`ℹ️ Checking ${servicesHost.getScriptFileNames().length} file(s)`);
+  io.stdout.write(`ℹ️ Using tsconfig: ${tsconfigPath}\n`);
+  io.stdout.write(`ℹ️ Checking ${servicesHost.getScriptFileNames().length} file(s)\n`);
 
   if (all.length) {
     const sorted = [
@@ -198,40 +219,51 @@ export async function typecheck(argv: string[] = process.argv) {
     ];
     for (const d of sorted) {
       const msg = formatDiagnostic(d, formatHost);
-      console.error(args.pretty ? msg : stripAnsi(msg));
+      io.stderr.write(args.pretty ? msg : stripAnsi(msg));
     }
   }
 
   if (errors.length) {
-    console.error(`❌ Typecheck failed: ${errors.length} error(s).`);
     throw new CommandFailure('TYPECHECK_FAILED', `${errors.length} typecheck error(s)`, 1, {
       errors: errors.length,
+      warnings: warnings.length,
+      tsconfigPath,
     });
   }
 
-  console.log(
-    `✅ Typecheck passed (${warnings.length ? `${warnings.length} warning(s)` : 'no warnings'}).`,
-  );
+  const text = `Typecheck passed (${warnings.length ? `${warnings.length} warning(s)` : 'no warnings'}).`;
+  return {
+    data: {
+      errors: 0,
+      files: servicesHost.getScriptFileNames().length,
+      tsconfigPath,
+      warnings: warnings.length,
+    },
+    text,
+  };
 }
 
-/** Shared entrypoint error handler (kept separate so tests can cover it). */
-export function handleTypecheckFailure(err: unknown): never {
-  if (err instanceof CommandFailure) {
-    console.error(err.message);
-    process.exit(err.exitCode);
-  }
-  console.error('❌ Fatal error while running typecheck:', err);
-  process.exit(2);
+export function runMxTypecheck(args: readonly string[], io: CliIo): Promise<CommandResult> {
+  return typecheck(['bun', 'typecheck', ...args], io);
 }
 
-/** CLI main gate — `isMain` is injectable so tests can cover the entry path. */
-export function runTypecheckMain(
+/** Standalone boundary; reports failures without terminating an embedding process. */
+export async function runTypecheckMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => typecheck().catch(handleTypecheckFailure),
-): void {
-  if (isMain) {
-    void start();
+  start: (args: string[], io: CliIo) => Promise<CommandResult> = typecheck,
+  setExitCode: (code: number) => void = (code) => {
+    process.exitCode = code;
+  },
+): Promise<void> {
+  if (!isMain) return;
+  try {
+    await start(process.argv, { stdout: process.stdout, stderr: process.stderr });
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof CommandFailure ? error.message : `❌ Fatal error while running typecheck: ${error instanceof Error ? error.message : String(error)}`}\n`,
+    );
+    setExitCode(error instanceof CommandFailure ? error.exitCode : 2);
   }
 }
 
-runTypecheckMain();
+void runTypecheckMain();

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { $ } from 'bun';
+import { type CliIo, CommandFailure, type CommandResult, PROCESS_IO } from '../command';
 import { hasTtsc, readPkgJson } from './build';
 
 export type CheckOptions = {
@@ -49,7 +50,10 @@ export function parseCheckArgs(args: string[], cwd = process.cwd()): CheckOption
     }
     if (!arg.startsWith('-') && !tsconfigPath) {
       tsconfigPath = arg;
+      continue;
     }
+    if (arg.startsWith('-')) throw new Error(`Unknown flag: ${arg}`);
+    throw new Error(`Unexpected argument: ${arg}`);
   }
 
   return { cwd: resolve(cwd), tsconfigPath, pretty };
@@ -75,7 +79,10 @@ Maintainer monorepo typecheck: di-framework mx typecheck
 `);
 }
 
-export async function checkApp(opts: CheckOptions): Promise<void> {
+export async function checkApp(
+  opts: CheckOptions,
+  io: CliIo = PROCESS_IO,
+): Promise<{ cwd: string; tool: 'ttsc' | 'tsc'; tsconfigPath: string }> {
   const tsconfigPath = opts.tsconfigPath
     ? resolve(opts.cwd, opts.tsconfigPath)
     : findNearestTsconfig(opts.cwd);
@@ -89,7 +96,7 @@ export async function checkApp(opts: CheckOptions): Promise<void> {
   const pkg = readPkgJson(opts.cwd);
   const useTtsc = hasTtsc(opts.cwd, pkg ?? undefined);
   const tool = useTtsc ? 'ttsc' : 'tsc';
-  console.log(`ℹ️  Checking with ${tool} --noEmit -p ${tsconfigPath}`);
+  io.stdout.write(`ℹ️  Checking with ${tool} --noEmit -p ${tsconfigPath}\n`);
 
   const prettyFlag = opts.pretty ? [] : ['--pretty', 'false'];
   const proc = useTtsc
@@ -100,25 +107,46 @@ export async function checkApp(opts: CheckOptions): Promise<void> {
     throw new Error(`Typecheck failed (exit ${proc.exitCode})`);
   }
 
-  console.log('✅ Check passed');
+  io.stdout.write('✅ Check passed\n');
+  return { cwd: opts.cwd, tool, tsconfigPath };
 }
 
-export async function check(args: string[] = process.argv.slice(3)): Promise<void> {
+export async function check(
+  args: string[] = process.argv.slice(3),
+  io: CliIo = PROCESS_IO,
+): Promise<CommandResult> {
   if (args[0] === '--help' || args[0] === '-h') {
-    printCheckHelp();
-    return;
+    printCheckHelp(io.stderr as NodeJS.WritableStream);
+    return { data: { help: true } };
   }
-  await checkApp(parseCheckArgs(args));
+  let options: CheckOptions;
+  try {
+    options = parseCheckArgs(args);
+  } catch (error) {
+    throw new CommandFailure(
+      'INVALID_USAGE',
+      error instanceof Error ? error.message : String(error),
+      2,
+    );
+  }
+  const result = await checkApp(options, io);
+  return { data: result };
 }
 
-export function handleCheckFailure(err: unknown): never {
-  console.error('check failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
+export function handleCheckFailure(
+  err: unknown,
+  io: CliIo = PROCESS_IO,
+  setExitCode: (code: number) => void = (code) => {
+    process.exitCode = code;
+  },
+): void {
+  io.stderr.write(`check failed: ${err instanceof Error ? err.message : String(err)}\n`);
+  setExitCode(1);
 }
 
 export function runCheckMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => check().catch(handleCheckFailure),
+  start: () => Promise<unknown> = () => check().catch(handleCheckFailure),
 ): void {
   if (isMain) void start();
 }

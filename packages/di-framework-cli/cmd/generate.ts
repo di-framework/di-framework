@@ -1,6 +1,17 @@
-export async function generateCommand(rawArgs: string[] = process.argv.slice(3)) {
+import {
+  type CliIo,
+  CommandFailure,
+  type CommandResult,
+  type JsonValue,
+  PROCESS_IO,
+} from '../command';
+
+export async function generateCommand(
+  rawArgs: string[] = process.argv.slice(3),
+  io: CliIo = PROCESS_IO,
+): Promise<CommandResult> {
   const { generate } = await import('@di-framework/codegen');
-  const args = rawArgs.length > 0 ? rawArgs : process.argv.slice(3);
+  const args = rawArgs;
 
   let configPath: string | undefined;
   let init = false;
@@ -10,24 +21,32 @@ export async function generateCommand(rawArgs: string[] = process.argv.slice(3))
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? '';
-    if (arg === '--config' && i + 1 < args.length) {
-      configPath = args[++i];
+    if (arg === '--config') {
+      const value = args[++i];
+      if (!value) throw new CommandFailure('INVALID_USAGE', '--config requires a path', 2);
+      configPath = value;
     } else if (arg.startsWith('--config=')) {
       configPath = arg.slice(9);
-    } else if (arg === '--outDir' && i + 1 < args.length) {
-      outDir = args[++i];
+      if (!configPath) throw new CommandFailure('INVALID_USAGE', '--config requires a path', 2);
+    } else if (arg === '--outDir') {
+      const value = args[++i];
+      if (!value) throw new CommandFailure('INVALID_USAGE', '--outDir requires a path', 2);
+      outDir = value;
     } else if (arg.startsWith('--outDir=')) {
       outDir = arg.slice(9);
+      if (!outDir) throw new CommandFailure('INVALID_USAGE', '--outDir requires a path', 2);
     } else if (arg === '--init') {
       init = true;
     } else if (arg === '--check') {
       check = true;
     } else if (arg === '--clean') {
       clean = true;
+    } else {
+      throw new CommandFailure('INVALID_USAGE', `Unknown argument: ${arg}`, 2, { token: arg });
     }
   }
 
-  console.log('⚡ Running @di-framework/codegen...');
+  io.stdout.write('⚡ Running @di-framework/codegen...\n');
 
   const result = await generate({
     config: configPath,
@@ -39,7 +58,7 @@ export async function generateCommand(rawArgs: string[] = process.argv.slice(3))
 
   for (const diag of result.diagnostics) {
     const icon = result.drifted ? '❌' : 'ℹ️ ';
-    console.log(`  ${icon} ${diag}`);
+    io.stdout.write(`  ${icon} ${diag}\n`);
   }
 
   for (const file of result.files) {
@@ -53,19 +72,16 @@ export async function generateCommand(rawArgs: string[] = process.argv.slice(3))
             : file.status === 'drifted'
               ? '❌ drifted'
               : '🔹 unchanged';
-    console.log(`  ${icon.padEnd(12)} ${file.relativePath}`);
+    io.stdout.write(`  ${icon.padEnd(12)} ${file.relativePath}\n`);
   }
 
   if (result.drifted) {
-    console.error('\n❌ Codegen check failed: Schema manifests or generated files have drifted.');
-    throw new CommandFailure(
-      'GENERATED_OUTPUT_DRIFT',
-      'Schema manifests or generated files have drifted',
-      1,
+    io.stderr.write(
+      '\n❌ Codegen check failed: Schema manifests or generated files have drifted.\n',
     );
+    return { data: result as unknown as JsonValue, exitCode: 1 };
   }
 
-  console.log('\n✅ Application surfaces generated successfully!');
+  io.stdout.write('\n✅ Application surfaces generated successfully!\n');
+  return { data: result as unknown as JsonValue };
 }
-
-import { CommandFailure } from '../command';

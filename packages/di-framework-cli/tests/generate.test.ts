@@ -3,18 +3,25 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateCommand } from '../cmd/generate';
-import { CommandFailure } from '../command';
+import type { CliIo, CommandResult } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
-async function withExitCapture(fn: () => Promise<void>): Promise<number> {
-  try {
-    await fn();
-    return 0;
-  } catch (err) {
-    if (!(err instanceof CommandFailure)) throw err;
-    return err.exitCode;
-  }
+async function withExitCapture(fn: () => Promise<CommandResult>): Promise<number> {
+  return (await fn()).exitCode ?? 0;
+}
+
+function captureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    stdout,
+    stderr,
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+  };
 }
 
 describe('CLI generate command', () => {
@@ -145,9 +152,12 @@ export const Order = { parse: (i: any) => i, jsonSchema: {} };
       writeFileSync(ledgerPath, JSON.stringify(ledger), 'utf-8');
 
       // Generate again
-      const exitCode = await withExitCapture(() => generateCommand());
+      const captured = captureIo();
+      const exitCode = await withExitCapture(() =>
+        generateCommand(process.argv.slice(3), captured.io),
+      );
       expect(exitCode).toBe(0);
-      expect(log.mock.calls.some((c) => String(c[0]).includes('ℹ️'))).toBe(true);
+      expect(captured.stdout.join('')).toContain('ℹ️');
     } finally {
       log.mockRestore();
       err.mockRestore();
