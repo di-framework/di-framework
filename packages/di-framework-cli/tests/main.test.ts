@@ -77,16 +77,17 @@ describe('CLI main router', () => {
     }
   });
 
-  it('redirects legacy maintainer commands to mx with a note', async () => {
+  it('rejects legacy top-level maintainer commands', async () => {
     const err = spyOn(console, 'error').mockImplementation(() => {});
     const originalExit = process.exit;
     (process as any).exit = (c: number) => {
       throw new Error(`EXIT_${c}`);
     };
     try {
-      // mx test will run e2e — too heavy. Use typecheck with missing config to exit quickly after redirect.
-      await expect(main(['typecheck', '--pretty=0'])).rejects.toThrow();
-      expect(err.mock.calls.some((c) => String(c[0]).includes('mx typecheck'))).toBe(true);
+      await expect(main(['typecheck'])).rejects.toThrow('EXIT_1');
+      expect(err.mock.calls.some((c) => String(c[0]).includes('Unknown command: typecheck'))).toBe(
+        true,
+      );
     } finally {
       process.exit = originalExit;
       err.mockRestore();

@@ -9,6 +9,8 @@ function isErrno(err: unknown, code: string): boolean {
 export type MxBuildOptions = {
   /** Copy the workspace root version into each package.json. Off by default so install/CI compile does not dirty trees. */
   syncVersions?: boolean;
+  /** Workspace to build. Defaults to the current working directory. */
+  workspaceRoot?: string;
 };
 
 export function parseMxBuildArgs(args: string[] = process.argv.slice(2)): MxBuildOptions {
@@ -38,9 +40,10 @@ export async function build(options: MxBuildOptions = {}) {
   console.log('🚀 Starting build process...');
 
   const syncVersions = options.syncVersions === true;
+  const workspaceRoot = options.workspaceRoot ?? process.cwd();
   let version: string | undefined;
   if (syncVersions) {
-    const rootPkgPath = join(process.cwd(), 'package.json');
+    const rootPkgPath = join(workspaceRoot, 'package.json');
     const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
     version = rootPkg.version;
     console.log(`📌 Using version ${version} from workspace root`);
@@ -48,7 +51,7 @@ export async function build(options: MxBuildOptions = {}) {
 
   for (const pkgDir of PACKAGES) {
     console.log(`\n📦 Building ${pkgDir}...`);
-    const fullPath = join(process.cwd(), pkgDir);
+    const fullPath = join(workspaceRoot, pkgDir);
 
     // Sync version only when requested (publish / release). Read-or-skip; no existsSync TOCTOU.
     if (syncVersions && version !== undefined) {
