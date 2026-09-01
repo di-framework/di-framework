@@ -314,6 +314,7 @@ function applyToolboxOptions<T extends SkillsFluent<T>>(
   if (options.grep != null) b = b.grep(options.grep);
   if (options.list != null) b = b.list(options.list);
   if (options.write != null) b = b.write(options.write);
+  if (options.aiIgnore != null) b = b.aiIgnore(options.aiIgnore);
   if (options.shell != null) b = b.shell(options.shell);
   if (options.shellTimeoutMs != null) b = b.shellTimeoutMs(options.shellTimeoutMs);
   if (options.confirmShell != null) b = b.confirmShell(options.confirmShell);

@@ -267,6 +267,8 @@ export type {
 } from './sources/index.ts';
 export { resolveAgentSources } from './sources/index.ts';
 export type {
+  AiIgnoreEnforcement,
+  AiIgnoreToolPolicy,
   AskUserOption,
   AskUserQuestion,
   AskUserQuestionInput,

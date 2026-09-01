@@ -1,4 +1,5 @@
 import type { ChatModel } from '@di-framework/ai';
+import type { AiIgnoreEnforcement } from '../tools/aiignore-enforcement.ts';
 import type { QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import type { BashConfirmInput } from '../tools/bash-tool.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
@@ -116,6 +117,11 @@ export class SkillsFluent<T extends SkillsFluent<T>> {
 
   write(enabled = true): T {
     this.draft.write = enabled;
+    return this.self();
+  }
+
+  aiIgnore(enforcement: AiIgnoreEnforcement): T {
+    this.draft.aiIgnore = enforcement;
     return this.self();
   }
 
