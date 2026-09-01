@@ -30,6 +30,7 @@ di-framework <command> [args...]
 | **`init [name]`** | Scaffold a new app (`package.json`, `tsconfig` with `@di-framework/tsc`, sample `src/index.ts`) |
 | **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
 | **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
+| **`agent inspect`** | Read resolved skill roots, repository instructions, precedence, and `.aiignore` policy |
 | **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
 | **`skills index build`** | Build a semantic Agent Skills index |
 | **`skills index inspect`** | Inspect safe index metadata and sizes |
@@ -45,6 +46,22 @@ cd my-api && bun install && bun run dev
 di-framework check
 di-framework build
 ```
+
+### Agent configuration inspection
+
+```bash
+di-framework agent inspect
+di-framework agent inspect --working-directory packages/api --json
+```
+
+`agent inspect` is read-only. It delegates skill-root resolution, hierarchical
+instruction discovery, catalog conflict detection, and root `.aiignore` loading
+to `@di-framework/ai-utils`. Text and JSON identify source precedence,
+suppressed candidates, shadowed skills, and active policy rules without exposing
+instruction contents or changing files. Use `--skills-dir` and
+`--skills-package` for explicit roots, and `--source-mode replace` to inspect
+only those explicit roots instead of merging the neutral `.agents/skills`
+defaults.
 
 ### HTTP OpenAPI generation
 
