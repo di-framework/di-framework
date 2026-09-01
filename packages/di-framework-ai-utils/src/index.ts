@@ -19,6 +19,24 @@ export {
   DEFAULT_AGENT_INSTRUCTIONS_MAX_BYTES,
   discoverAgentInstructions,
 } from './instructions/index.ts';
+export type {
+  AiIgnoreDecision,
+  AiIgnoreEvaluation,
+  AiIgnorePolicy,
+  AiIgnorePolicyErrorCode,
+  AiIgnorePolicySource,
+  AiIgnoreRule,
+  CompileAiIgnorePolicyOptions,
+  EvaluateAiIgnorePathOptions,
+  LoadAiIgnorePolicyOptions,
+} from './policy/index.ts';
+export {
+  AIIGNORE_FILE,
+  AiIgnorePolicyError,
+  compileAiIgnorePolicy,
+  evaluateAiIgnorePath,
+  loadAiIgnorePolicy,
+} from './policy/index.ts';
 
 export type {
   AllowedDirectories,
@@ -234,8 +252,8 @@ export {
   validateSkillDescription,
   validateSkillDirectory,
   validateSkillName,
-  validateSkillsIndex,
   validateSkillsDirectory,
+  validateSkillsIndex,
 } from './skills/index.ts';
 export type {
   AgentSourceCandidate,
