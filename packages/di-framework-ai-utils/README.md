@@ -98,6 +98,34 @@ Discovery puts only `name` + `description` in the `Skill` tool description. Acti
 
 Front matter is YAML (maps, lists, scalars, `|` / `>` blocks). `name` and `description` must satisfy [agentskills.io](https://agentskills.io/specification) rules; on disk the folder name must match `name`.
 
+Validate definitions without constructing an agent, toolbox, or semantic index:
+
+```ts
+import {
+  validateSkillCatalog,
+  validateSkillDefinition,
+  validateSkillDirectory,
+  validateSkillsDirectory,
+} from '@di-framework/ai-utils';
+
+const directory = validateSkillDirectory('.agents/skills/code-reviewer');
+const directoryCatalog = validateSkillsDirectory('.agents/skills');
+const catalog = validateSkillCatalog({
+  workspace: process.cwd(),
+  directories: ['./team-skills'],
+  sourceMode: 'merge',
+});
+
+if (!catalog.valid) {
+  for (const diagnostic of catalog.diagnostics) {
+    // Typed data only; choose presentation appropriate for your application.
+    report(diagnostic.code, diagnostic.path, diagnostic.source, diagnostic.message);
+  }
+}
+```
+
+`validateSkillCatalog` calls the same source resolver as runtime discovery, so explicit, package, workspace, and user definitions have identical precedence. The first definition wins; same-source collisions are `skill-duplicate` warnings and lower-precedence definitions are `skill-shadowed` warnings. `validateResolvedSkillCatalog` accepts a previously resolved catalog, while `validateSkillDefinition` validates an in-memory `AgentSkill`. `validateSkillDirectory` checks one skill and its `SKILL.md`, referenced and bundled resources, readability, and symlinks; `validateSkillsDirectory` validates a complete directory catalog.
+
 ## Builders
 
 | Factory | Builds | When to use |
@@ -379,6 +407,6 @@ const mcp = skillsToolboxAsMcp({
 | File / shell | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |
 | Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
-| Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill` |
+| Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill`, `validateSkillDefinition`, `validateSkillDirectory`, `validateSkillsDirectory`, `validateSkillCatalog`, `validateResolvedSkillCatalog` |
 
 **Style:** `static of` / `static builder` and free functions for pure helpers. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).
