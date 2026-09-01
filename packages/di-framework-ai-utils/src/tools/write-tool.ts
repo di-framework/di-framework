@@ -7,9 +7,11 @@ import {
 } from '../sandbox/allowed-directories.ts';
 import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
+import { type AiIgnoreToolPolicy, aiIgnoreRejection } from './aiignore-enforcement.ts';
 
 export interface WriteToolOptions {
   readonly allowedDirectories: AllowedDirectories;
+  readonly aiIgnore?: AiIgnoreToolPolicy;
 }
 
 export interface WriteInput {
@@ -48,6 +50,8 @@ Usage:
         resolveAllowedDirectories(options.allowedDirectories),
       );
       if (!access.ok) return access.error;
+      const ignored = aiIgnoreRejection(options.aiIgnore, access.path, 'write', 'file');
+      if (ignored != null) return ignored;
 
       const content = input?.content ?? '';
       try {

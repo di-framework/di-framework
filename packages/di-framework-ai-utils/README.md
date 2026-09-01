@@ -214,6 +214,7 @@ Builders remain the supported escape hatch. Decorators do not run indexing or lo
 | `workspace` | Default cwd / search root (also an allowed file root) |
 | `extraAllowedDirectory(s)` | Extra sandbox roots |
 | `write()` / `shell()` | Opt-in `Write`+`Edit` / `Bash` |
+| `aiIgnore('discovery' \| 'read' \| 'read-write')` | Enforce root `.aiignore` for direct file tools |
 | `confirmShell(fn)` | HITL gate for `Bash` |
 | `askUser(handler)` | `AskUserQuestion` |
 | `web(true \| { fetch, search, braveApiKey })` | `WebFetch` / `WebSearch` |
@@ -338,6 +339,32 @@ const isolated = SkillsToolbox.builder()
   .workspace(process.cwd())
   .build();
 ```
+
+Direct file tools accept a compiled policy and an explicit enforcement mode:
+
+```ts
+import { loadAiIgnorePolicy, readTool } from '@di-framework/ai-utils';
+
+const policy = loadAiIgnorePolicy({ workspace: process.cwd() });
+const read = readTool({
+  allowedDirectories: [process.cwd()],
+  aiIgnore: { policy, enforcement: 'read' },
+});
+```
+
+Toolboxes and agents can load the root policy automatically with
+`.aiIgnore(mode)`. Enforcement is opt-in and cumulative:
+
+| Mode | Directory listing | Read | Edit | Write |
+| --- | --- | --- | --- | --- |
+| `discovery` | Filter/reject | Allow | Allow | Allow |
+| `read` | Filter/reject | Reject | Reject | Allow |
+| `read-write` | Filter/reject | Reject | Reject | Reject |
+
+Only paths matched as ignored are rejected. Negated rules can include a path,
+but cannot override the filesystem sandbox or allowed-directory boundaries,
+which are checked first. Policy rejections report the target path, policy path,
+and matching rule line without including policy or file contents.
 
 `addPackage('@scope/pack')` resolves `pack/package.json` from the workspace,
 then uses its `skills` field (string or string[]). Without that field, it tries

@@ -6,10 +6,12 @@ import {
 } from '../sandbox/allowed-directories.ts';
 import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
+import { type AiIgnoreToolPolicy, aiIgnoreRejection } from './aiignore-enforcement.ts';
 import { DEFAULT_MAX_LINE_CHARS } from './read-tool.ts';
 
 export interface EditToolOptions {
   readonly allowedDirectories: AllowedDirectories;
+  readonly aiIgnore?: AiIgnoreToolPolicy;
 }
 
 export interface EditInput {
@@ -55,15 +57,16 @@ Usage:
       const filePath = input?.filePath?.trim() ?? '';
       const oldString = input?.oldString ?? '';
       const newString = input?.newString ?? '';
-      if (oldString === newString) {
-        return 'Error: oldString and newString must be different';
-      }
-
       const access = assertPathAllowed(
         filePath,
         resolveAllowedDirectories(options.allowedDirectories),
       );
       if (!access.ok) return access.error;
+      const ignored = aiIgnoreRejection(options.aiIgnore, access.path, 'read', 'file');
+      if (ignored != null) return ignored;
+      if (oldString === newString) {
+        return 'Error: oldString and newString must be different';
+      }
 
       let content: string;
       try {

@@ -6,10 +6,12 @@ import {
   resolveAllowedDirectories,
 } from '../sandbox/allowed-directories.ts';
 import { assertPathAllowed, uniqueResolvedRoots } from '../sandbox/paths.ts';
+import { type AiIgnoreToolPolicy, aiIgnoreRejection } from './aiignore-enforcement.ts';
 
 export interface ListDirectoryToolOptions {
   readonly allowedDirectories: AllowedDirectories;
   readonly workingDirectory?: string;
+  readonly aiIgnore?: AiIgnoreToolPolicy;
 }
 
 export interface ListDirectoryInput {
@@ -43,6 +45,8 @@ Usage:
       if (!target) return 'Error: No directory configured';
       const access = assertPathAllowed(target, roots);
       if (!access.ok) return access.error;
+      const ignored = aiIgnoreRejection(options.aiIgnore, access.path, 'discovery', 'directory');
+      if (ignored != null) return ignored;
       try {
         if (!statSync(access.path).isDirectory()) {
           return `Error: Path is not a directory: ${target}`;
@@ -52,9 +56,15 @@ Usage:
       }
       try {
         const names = readdirSync(access.path, { withFileTypes: true })
-          .map((entry) => {
+          .flatMap((entry) => {
             const full = join(access.path, entry.name);
-            return entry.isDirectory() ? `${full}/` : full;
+            const entryAccess = assertPathAllowed(full, roots);
+            if (!entryAccess.ok) return [];
+            const kind = entry.isDirectory() ? 'directory' : 'file';
+            if (aiIgnoreRejection(options.aiIgnore, entryAccess.path, 'discovery', kind) != null) {
+              return [];
+            }
+            return [entry.isDirectory() ? `${entryAccess.path}/` : entryAccess.path];
           })
           .sort((a, b) => a.localeCompare(b));
         if (names.length === 0) return `Empty directory: ${access.path}`;

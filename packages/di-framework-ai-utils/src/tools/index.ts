@@ -1,4 +1,8 @@
 export type {
+  AiIgnoreEnforcement,
+  AiIgnoreToolPolicy,
+} from './aiignore-enforcement.ts';
+export type {
   AskUserOption,
   AskUserQuestion,
   AskUserQuestionInput,

@@ -6,6 +6,7 @@ import {
 } from '../sandbox/allowed-directories.ts';
 import { errorMessage, nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { assertPathAllowed } from '../sandbox/paths.ts';
+import { type AiIgnoreToolPolicy, aiIgnoreRejection } from './aiignore-enforcement.ts';
 
 export const DEFAULT_READ_LIMIT = 2000;
 export const DEFAULT_MAX_LINE_CHARS = 2000;
@@ -13,6 +14,7 @@ export const DEFAULT_MAX_LINE_CHARS = 2000;
 export interface ReadToolOptions {
   readonly allowedDirectories: AllowedDirectories;
   readonly maxLineChars?: number;
+  readonly aiIgnore?: AiIgnoreToolPolicy;
 }
 
 export interface ReadInput {
@@ -60,6 +62,8 @@ Usage:
         resolveAllowedDirectories(options.allowedDirectories),
       );
       if (!access.ok) return access.error;
+      const ignored = aiIgnoreRejection(options.aiIgnore, access.path, 'read', 'file');
+      if (ignored != null) return ignored;
 
       const startLine = Math.max(1, input?.offset ?? 1);
       const maxLines = Math.max(1, input?.limit ?? DEFAULT_READ_LIMIT);

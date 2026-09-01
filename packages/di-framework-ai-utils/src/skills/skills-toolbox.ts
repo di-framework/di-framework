@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { ChatModel, ToolCallback } from '@di-framework/ai';
+import { loadAiIgnorePolicy } from '../policy/aiignore.ts';
 import { expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
 import type { AgentSourceDiagnostic, ResolvedAgentSource } from '../sources/index.ts';
+import type { AiIgnoreEnforcement, AiIgnoreToolPolicy } from '../tools/aiignore-enforcement.ts';
 import { askUserQuestionTool, type QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import { type BashConfirmInput, bashTool } from '../tools/bash-tool.ts';
 import { editTool } from '../tools/edit-tool.ts';
@@ -88,6 +90,8 @@ export interface SkillsToolboxOptions extends SkillsToolOptions {
   readonly grep?: boolean;
   readonly list?: boolean;
   readonly write?: boolean;
+  /** Opt in to root-workspace `.aiignore` enforcement for direct file tools. */
+  readonly aiIgnore?: AiIgnoreEnforcement;
   readonly todos?: boolean;
   readonly askUser?: QuestionHandler;
   readonly web?: boolean | SkillsToolboxWebOptions;
@@ -265,6 +269,13 @@ function assembleSkillsToolbox(
       sourceHash: '',
     }));
   const skillsByName = new Map(collected.map((skill) => [skill.name, skill]));
+  const aiIgnore: AiIgnoreToolPolicy | undefined =
+    options.aiIgnore == null
+      ? undefined
+      : {
+          enforcement: options.aiIgnore,
+          policy: loadAiIgnorePolicy({ workspace }),
+        };
 
   const buildSkillTool = (selected: readonly SkillDescriptor[]): ToolCallback =>
     gateToolCallback(
@@ -295,10 +306,15 @@ function assembleSkillsToolbox(
       runtime,
     );
 
-  const raw: ToolCallback[] = [buildSkillTool(descriptors), readTool({ allowedDirectories: dirs })];
+  const raw: ToolCallback[] = [
+    buildSkillTool(descriptors),
+    readTool({ allowedDirectories: dirs, aiIgnore }),
+  ];
 
   if (options.list !== false) {
-    raw.push(listDirectoryTool({ allowedDirectories: dirs, workingDirectory: workspace }));
+    raw.push(
+      listDirectoryTool({ allowedDirectories: dirs, workingDirectory: workspace, aiIgnore }),
+    );
   }
   if (options.glob !== false) {
     raw.push(globTool({ allowedDirectories: dirs, workingDirectory: workspace }));
@@ -307,7 +323,10 @@ function assembleSkillsToolbox(
     raw.push(grepTool({ allowedDirectories: dirs, workingDirectory: workspace }));
   }
   if (options.write) {
-    raw.push(writeTool({ allowedDirectories: dirs }), editTool({ allowedDirectories: dirs }));
+    raw.push(
+      writeTool({ allowedDirectories: dirs, aiIgnore }),
+      editTool({ allowedDirectories: dirs, aiIgnore }),
+    );
   }
   if (options.shell) {
     raw.push(
