@@ -31,6 +31,7 @@ di-framework <command> [args...]
 | **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
 | **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
 | **`agent audit`** | Audit resolved agent configuration and actionable findings without writing files |
+| **`agent init`** | Plan or create neutral agent configuration assets |
 | **`agent inspect`** | Read resolved skill roots, repository instructions, precedence, and `.aiignore` policy |
 | **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
 | **`skills index build`** | Build a semantic Agent Skills index |
@@ -68,6 +69,25 @@ Use `--workspace`, `--working-directory`, `--user-directory`, repeatable
 `--skills-dir`, repeatable `--skills-package`, `--source-mode`, repeatable
 `--instructions-fallback`, `--max-instruction-bytes`, and repeatable
 `--allowed-directory` to map directly to the typed audit options.
+
+### Agent configuration initialization
+
+```bash
+# Preview all neutral assets. Dry-run is the default.
+di-framework agent init
+
+# Create selected assets after reviewing the plan.
+di-framework agent init --asset AGENTS.md --asset .agents/skills --apply
+```
+
+`agent init` delegates both planning and execution to the typed
+`@di-framework/ai-utils` migration APIs. With no `--asset` option it requests
+`AGENTS.md`, `.agents/AGENTS.md`, `.agents/skills/`, and `.aiignore`; otherwise
+the option is repeatable and accepts only those exact neutral paths. The command
+prints the plan before its execution result and defaults to a no-write dry run.
+`--apply` executes the generated plan, while collisions are reported without
+silently replacing existing files. Audit-discovered vendor assets are never
+included in initialization.
 
 ### Agent configuration inspection
 
