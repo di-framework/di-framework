@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-/** Public host for Shields endpoint JSON published by Deploy Documentation. */
+/** Public host expected to serve the generated Shields endpoint JSON. */
 export const COVERAGE_BADGE_PUBLIC_BASE = 'https://docs.di-framework.dev/coverage';
 
 /** Shields.io endpoint badge URL for a package slug (e.g. "core"). */

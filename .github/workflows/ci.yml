@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  actions: write # dispatch Deploy Documentation to publish coverage badge JSON
 
 jobs:
   build-and-test:
@@ -138,23 +137,6 @@ jobs:
           file: cobertura.xml
           language: TypeScript
           label: code-coverage-agent
-
-  # After Test succeeds on main, redeploy docs so /coverage/*.json is public for Shields.
-  publish-coverage-badges:
-    name: Publish coverage badges
-    needs: build-and-test
-    if: ${{ !cancelled() && needs.build-and-test.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Dispatch Deploy Documentation
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run "Deploy Documentation" --repo "${{ github.repository }}" --ref main
 
   deno-examples:
     name: Deno examples
