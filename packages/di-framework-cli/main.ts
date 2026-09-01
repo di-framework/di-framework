@@ -11,6 +11,13 @@ import { publish } from './cmd/mx/publish';
 import { test } from './cmd/mx/test';
 import { typecheck } from './cmd/mx/typecheck';
 import {
+  runSkillsIndexBuild,
+  runSkillsIndexInspect,
+  runSkillsIndexMigrate,
+  runSkillsIndexQuery,
+  runSkillsIndexValidate,
+} from './cmd/skills/index';
+import {
   type CliIo,
   type CliStream,
   type CommandNode,
@@ -25,6 +32,11 @@ export type CliHandlers = {
   build(args: string[]): Promise<void>;
   check(args: string[]): Promise<void>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
+  skillsIndexBuild(args: string[]): Promise<CommandResult>;
+  skillsIndexInspect(args: string[]): Promise<CommandResult>;
+  skillsIndexValidate(args: string[]): Promise<CommandResult>;
+  skillsIndexQuery(args: string[]): Promise<CommandResult>;
+  skillsIndexMigrate(args: string[]): Promise<CommandResult>;
   mxBuild(options: MxBuildOptions): Promise<void>;
   mxTest(): Promise<void>;
   mxTypecheck(argv: string[]): Promise<void>;
@@ -37,6 +49,11 @@ const DEFAULT_HANDLERS: CliHandlers = {
   build,
   check,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
+  skillsIndexBuild: runSkillsIndexBuild,
+  skillsIndexInspect: runSkillsIndexInspect,
+  skillsIndexValidate: runSkillsIndexValidate,
+  skillsIndexQuery: runSkillsIndexQuery,
+  skillsIndexMigrate: runSkillsIndexMigrate,
   mxBuild,
   mxTest: test,
   mxTypecheck: typecheck,
@@ -95,6 +112,70 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
                   '--output <path>  Output file (default: openapi.json)',
                 ],
                 run: ({ args }) => handlers.httpOpenAPIGenerate(args),
+              },
+            },
+          },
+        },
+      },
+      skills: {
+        description: 'Agent Skills operations',
+        children: {
+          index: {
+            description: 'Semantic skills-index operations',
+            children: {
+              build: {
+                description: 'Build a skills index from explicit skill sources',
+                usage: 'di-framework skills index build [options]',
+                options: [
+                  '--skills-dir <path>  SKILL.md tree (repeatable)',
+                  '--skill-file <path>  Individual SKILL.md (repeatable)',
+                  '--output <path>  Index output file',
+                  '--threshold <count>  Minimum catalog size for embeddings',
+                  '--limit <count>  Retrieval candidate limit',
+                  '--batch-size <count>  Embedding batch size',
+                  '--chunk-tokens <count>  Tokens per source chunk',
+                  '--chunk-overlap <count>  Overlap between chunks',
+                  '--force  Rebuild an unchanged index',
+                ],
+                run: ({ args }) => handlers.skillsIndexBuild(args),
+              },
+              inspect: {
+                description: 'Inspect safe skills-index metadata',
+                usage: 'di-framework skills index inspect [--input <path>]',
+                options: ['--input <path>  Index file to inspect'],
+                run: ({ args }) => handlers.skillsIndexInspect(args),
+              },
+              validate: {
+                description: 'Validate index integrity and optional source drift',
+                usage: 'di-framework skills index validate [options]',
+                options: [
+                  '--input <path>  Index file to validate',
+                  '--skills-dir <path>  SKILL.md tree to compare (repeatable)',
+                  '--skill-file <path>  SKILL.md file to compare (repeatable)',
+                  '--allow-extra-skills  Allow indexed skills absent from sources',
+                ],
+                run: ({ args }) => handlers.skillsIndexValidate(args),
+              },
+              query: {
+                description: 'Query an existing skills index',
+                usage: 'di-framework skills index query --query <text> [options]',
+                options: [
+                  '--input <path>  Index file to query',
+                  '--query <text>  Search query (required)',
+                  '--limit <count>  Maximum matches',
+                  '--min-score <number>  Minimum match score',
+                  '--abstention-threshold <number>  Minimum selection confidence',
+                ],
+                run: ({ args }) => handlers.skillsIndexQuery(args),
+              },
+              migrate: {
+                description: 'Rewrite a skills index in the current format',
+                usage: 'di-framework skills index migrate [options]',
+                options: [
+                  '--input <path>  Source index file',
+                  '--output <path>  Migrated index output file',
+                ],
+                run: ({ args }) => handlers.skillsIndexMigrate(args),
               },
             },
           },

@@ -31,6 +31,11 @@ di-framework <command> [args...]
 | **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
 | **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
 | **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
+| **`skills index build`** | Build a semantic Agent Skills index |
+| **`skills index inspect`** | Inspect safe index metadata and sizes |
+| **`skills index validate`** | Validate integrity and optional source drift |
+| **`skills index query`** | Query an index and report selected matches or abstention |
+| **`skills index migrate`** | Rewrite an index in the current format |
 
 ```bash
 di-framework init my-api
@@ -55,6 +60,32 @@ and file writing to the typed `@di-framework/http` APIs. Add global `--json`
 anywhere in the invocation to receive the shared single-value envelope with
 `controllerModules`, `outputPath`, and `bytes`; failures use stable command
 codes and exit status `2` for usage or `3` for loading/writing failures.
+
+### Skills index operations
+
+```bash
+di-framework skills index build \
+  --skills-dir ./.agents/skills \
+  --output ./.di-framework/skills-index.json
+di-framework skills index inspect --input ./.di-framework/skills-index.json
+di-framework skills index validate \
+  --input ./.di-framework/skills-index.json \
+  --skills-dir ./.agents/skills
+di-framework skills index query \
+  --input ./.di-framework/skills-index.json \
+  --query 'review TypeScript authorization'
+di-framework skills index migrate \
+  --input ./legacy-skills-index.json \
+  --output ./.di-framework/skills-index.json
+```
+
+These leaves map their arguments directly to the typed
+`@di-framework/ai-utils` skills-index operations. Add global `--json` anywhere
+in an invocation for the shared one-value JSON envelope; its `data` is the
+package result. Text mode summarizes the same fields. Validation drift and
+query abstention exit `1`; invalid options, missing sources/indexes, and invalid
+indexes exit `2`; embedding, writing, dependency, and unexpected operation
+failures exit `3`.
 
 `init` wires `@di-framework/tsc` and `@di-framework/cli` by default (`plugins` in `tsconfig`; `"build"` / `"check"` scripts call `di-framework`; `ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Runtime parameter checks are injected on `ttsc --emit` (`bun run build` / `bun start`). `bun run dev` executes source with Bun and skips emit-time checks. The first `ttsc` build needs a Go toolchain.
 ### `init` options
