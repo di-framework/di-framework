@@ -164,6 +164,31 @@ export {
   SKILLS_INDEX_CLI_HELP,
 } from './skills-index-cli.ts';
 export type {
+  SkillsIndexOperation,
+  SkillsIndexOperationErrorCode,
+} from './skills-index-errors.ts';
+export { SkillsIndexOperationError } from './skills-index-errors.ts';
+export type {
+  InspectSkillsIndexOptions,
+  InspectSkillsIndexResult,
+  MigrateSkillsIndexOptions,
+  MigrateSkillsIndexResult,
+  QuerySkillsIndexOptions,
+  QuerySkillsIndexResult,
+  QuerySkillsIndexTimings,
+  SkillsIndexOperationPhase,
+  SkillsIndexOperationProgress,
+  SkillsIndexOperationProgressCallback,
+  ValidateSkillsIndexOptions,
+  ValidateSkillsIndexResult,
+} from './skills-index-operations.ts';
+export {
+  inspectSkillsIndex,
+  migrateSkillsIndex,
+  querySkillsIndex,
+  validateSkillsIndex,
+} from './skills-index-operations.ts';
+export type {
   SkillsRetrievalAdvisorOptions,
   SkillsRetrievalDiagnostic,
 } from './skills-retrieval-advisor.ts';

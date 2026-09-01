@@ -2,9 +2,8 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expandUserPath } from '../sandbox/paths.ts';
 import { DEFAULT_SKILL_DIRECTORY_CANDIDATES } from './load-skills.ts';
-import { type SkillEmbedder, TransformersJsSkillEmbedder } from './skill-embedder.ts';
+import type { SkillEmbedder } from './skill-embedder.ts';
 import {
-  assertSkillsIndexCurrent,
   type BuildSkillsIndexResult,
   DEFAULT_SKILLS_INDEX_BATCH_SIZE,
   DEFAULT_SKILLS_INDEX_CHUNK_OVERLAP_TOKENS,
@@ -12,12 +11,15 @@ import {
   DEFAULT_SKILLS_INDEX_FILE,
   DEFAULT_SKILLS_INDEX_THRESHOLD,
   DEFAULT_SKILLS_RETRIEVAL_LIMIT,
-  LocalSkillIndexWriter,
-  loadSkillsIndex,
-  rankHybridSkillsIndex,
   SkillsIndex,
 } from './skills-index.ts';
-import { collectSkills } from './skills-tool.ts';
+import { SkillsIndexOperationError } from './skills-index-errors.ts';
+import {
+  inspectSkillsIndex,
+  migrateSkillsIndex,
+  querySkillsIndex,
+  validateSkillsIndex,
+} from './skills-index-operations.ts';
 
 export type SkillsIndexCliCommand = 'build' | 'inspect' | 'validate' | 'query' | 'migrate';
 
@@ -183,90 +185,55 @@ export async function runSkillsIndexCli(
   io: SkillsIndexCliIo = console,
   cwd = process.cwd(),
   runtime: SkillsIndexCliRuntime = {},
-): Promise<BuildSkillsIndexResult | Record<string, unknown> | undefined> {
+): Promise<BuildSkillsIndexResult | object | undefined> {
   const options = parseSkillsIndexCliArgs(args);
   if (options.help) {
     io.log(SKILLS_INDEX_CLI_HELP);
     return undefined;
   }
 
-  const inputFile = resolve(cwd, expandUserPath(options.inputFile ?? options.outputFile));
   if (options.command !== 'build') {
-    const started = performance.now();
-    const rssBefore = process.memoryUsage.rss();
-    const index = loadSkillsIndex(inputFile);
-    const loadMs = performance.now() - started;
     if (options.command === 'migrate') {
-      const outputFile = resolve(cwd, expandUserPath(options.outputFile));
-      new LocalSkillIndexWriter(outputFile).writeIndex(index);
-      const result = diagnostic('migrate', {
-        inputFile,
-        outputFile,
-        fromVersion: index.metadata.version,
-        toVersion: 3,
-        loadMs,
+      const migrated = migrateSkillsIndex({
+        inputFile: options.inputFile ?? options.outputFile,
+        outputFile: options.outputFile,
+        cwd,
       });
+      const result = diagnostic('migrate', migrated);
       emitDiagnostic(io, result, options.json);
       return result;
     }
     if (options.command === 'inspect') {
-      const result = diagnostic('inspect', {
-        file: inputFile,
-        metadata: index.metadata,
-        manifestBytes: statSync(inputFile).size,
-        vectorBytes: index.metadata.vectorBytes ?? 0,
-        lexicalTerms: Object.keys(index.lexical?.postings ?? {}).length,
-        loadMs,
-        rssBytes: process.memoryUsage.rss() - rssBefore,
-      });
+      const result = diagnostic(
+        'inspect',
+        inspectSkillsIndex({ inputFile: options.inputFile ?? options.outputFile, cwd }),
+      );
       emitDiagnostic(io, result, options.json);
       return result;
     }
     if (options.command === 'validate') {
-      const directories = options.directories.map((source) => resolve(cwd, expandUserPath(source)));
-      const files = options.files.map((source) => resolve(cwd, expandUserPath(source)));
-      let sourceDrift: string | undefined;
-      if (directories.length > 0 || files.length > 0) {
-        try {
-          assertSkillsIndexCurrent(index, collectSkills({ directories, files }));
-        } catch (error) {
-          sourceDrift = error instanceof Error ? error.message : String(error);
-        }
-      }
-      const result = diagnostic('validate', {
-        file: inputFile,
-        integrity: 'valid',
-        sourceDrift: sourceDrift ?? null,
-        ready: index.metadata.indexed,
-        loadMs,
+      const validated = validateSkillsIndex({
+        inputFile: options.inputFile ?? options.outputFile,
+        directories: options.directories,
+        files: options.files,
+        cwd,
       });
+      const result = diagnostic('validate', validated);
       emitDiagnostic(io, result, options.json);
-      if (sourceDrift) throw new Error(sourceDrift);
+      if (validated.sourceDrift) {
+        throw new SkillsIndexOperationError('validate', 'SOURCE_DRIFT', validated.sourceDrift);
+      }
       return result;
     }
     if (!options.query?.trim()) throw new Error('query requires --query <text>');
-    const embedder =
-      runtime.embedder ??
-      new TransformersJsSkillEmbedder({
-        model: index.metadata.model,
-        revision: index.metadata.revision,
-      });
-    const embedStarted = performance.now();
-    const [vector] = await embedder.embed([options.query], { purpose: 'query' });
-    if (!vector) throw new Error('Skill embedder did not return a query vector');
-    const embedMs = performance.now() - embedStarted;
-    const searchStarted = performance.now();
-    const matches = rankHybridSkillsIndex(index, vector, options.query, {
+    const queried = await querySkillsIndex({
+      inputFile: options.inputFile ?? options.outputFile,
+      query: options.query,
+      embedder: runtime.embedder,
       limit: options.retrievalLimit,
+      cwd,
     });
-    const searchMs = performance.now() - searchStarted;
-    const result = diagnostic('query', {
-      file: inputFile,
-      decision: matches.length > 0 ? 'selected' : 'abstained',
-      matches,
-      timings: { loadMs, embedMs, searchMs, totalMs: performance.now() - started },
-      rssBytes: process.memoryUsage.rss() - rssBefore,
-    });
+    const result = diagnostic('query', queried);
     emitDiagnostic(io, result, options.json);
     return result;
   }
@@ -319,15 +286,11 @@ export async function runSkillsIndexCli(
   return result;
 }
 
-function diagnostic(command: SkillsIndexCliCommand, fields: Record<string, unknown>) {
+function diagnostic<T extends object>(command: SkillsIndexCliCommand, fields: T) {
   return { schema: '@di-framework/skills-index-diagnostic', version: 1, command, ...fields };
 }
 
-function emitDiagnostic(
-  io: SkillsIndexCliIo,
-  result: Record<string, unknown>,
-  _json: boolean,
-): void {
+function emitDiagnostic(io: SkillsIndexCliIo, result: object, _json: boolean): void {
   // Diagnostics are JSON in both modes so automation never needs to scrape prose.
   io.log(JSON.stringify(result));
 }
