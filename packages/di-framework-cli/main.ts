@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { runAgentInspect } from './cmd/agent/inspect';
 /** di-framework CLI — app tooling by default; monorepo maintainers use `mx`. */
 import { build } from './cmd/build';
 import { check } from './cmd/check';
@@ -32,6 +33,7 @@ export type CliHandlers = {
   generate(args: string[]): Promise<void>;
   build(args: string[]): Promise<void>;
   check(args: string[]): Promise<void>;
+  agentInspect(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   skillsIndexBuild(args: string[]): Promise<CommandResult>;
   skillsIndexInspect(args: string[]): Promise<CommandResult>;
@@ -50,6 +52,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   generate: generateCommand,
   build,
   check,
+  agentInspect: runAgentInspect,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   skillsIndexBuild: runSkillsIndexBuild,
   skillsIndexInspect: runSkillsIndexInspect,
@@ -98,6 +101,26 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
         run: async ({ args }) => {
           await handlers.check(args);
           return undefined;
+        },
+      },
+      agent: {
+        description: 'Inspect and manage agent configuration',
+        children: {
+          inspect: {
+            description: 'Inspect resolved agent configuration without changing files',
+            usage: 'di-framework agent inspect [options]',
+            options: [
+              '--workspace <path>  Workspace boundary (default: current directory)',
+              '--working-directory <path>  Instruction discovery location',
+              '--user-directory <path>  User-level neutral source root',
+              '--skills-dir <path>  Explicit skill root (repeatable)',
+              '--skills-package <name>  Package-provided skill root (repeatable)',
+              '--source-mode merge|replace  Merge with or replace neutral skill roots',
+              '--instructions-fallback <name>  Instruction fallback filename (repeatable)',
+              '--max-instruction-bytes <count>  Combined instruction byte limit',
+            ],
+            run: ({ args }) => handlers.agentInspect(args),
+          },
         },
       },
       http: {

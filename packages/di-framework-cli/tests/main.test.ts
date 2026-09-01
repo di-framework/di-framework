@@ -40,6 +40,7 @@ describe('CLI main router', () => {
       'generate',
       'build',
       'check',
+      'agent',
       'http',
       'skills',
       'mx',
@@ -93,6 +94,10 @@ describe('CLI main router', () => {
       generate: async (args) => void calls.push(['generate', args]),
       build: async (args) => void calls.push(['build', args]),
       check: async (args) => void calls.push(['check', args]),
+      agentInspect: async (args) => {
+        calls.push(['agent inspect', args]);
+        return {};
+      },
       httpOpenAPIGenerate: async (args) => {
         calls.push(['http openapi generate', args]);
         return { data: { outputPath: '/tmp/openapi.json', bytes: 10 } };
@@ -132,6 +137,7 @@ describe('CLI main router', () => {
       ['generate', '--check'],
       ['build', '--watch'],
       ['check', 'tsconfig.app.json'],
+      ['agent', 'inspect', '--source-mode', 'replace'],
       ['http', 'openapi', 'generate', '--controllers', './controllers.ts'],
       ['skills', 'index', 'build', '--skills-dir', '.agents/skills'],
       ['skills', 'index', 'inspect', '--input', 'skills.json'],
@@ -151,6 +157,7 @@ describe('CLI main router', () => {
       ['generate', ['--check']],
       ['build', ['--watch']],
       ['check', ['tsconfig.app.json']],
+      ['agent inspect', ['--source-mode', 'replace']],
       ['http openapi generate', ['--controllers', './controllers.ts']],
       ['skills index build', ['--skills-dir', '.agents/skills']],
       ['skills index inspect', ['--input', 'skills.json']],
