@@ -71,15 +71,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     return;
   }
 
-  // Friendly redirect if someone still types old maintainer commands at top level.
-  if (cmdName === 'test' || cmdName === 'typecheck' || cmdName === 'publish') {
-    console.error(
-      `Note: \`${cmdName}\` is a maintainer command. Use:\n  di-framework mx ${cmdName}\n`,
-    );
-    await mx([cmdName, ...args]);
-    return;
-  }
-
   const cmd = COMMANDS[cmdName];
   if (!cmd) {
     console.error(`Unknown command: ${cmdName}\n`);

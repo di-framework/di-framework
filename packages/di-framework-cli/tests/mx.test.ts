@@ -88,4 +88,22 @@ describe('mx (maintainer) router', () => {
     const { mx } = await import('../cmd/mx');
     await mx(['help']);
   });
+
+  it('routes canonical nested maintainer commands with their remaining arguments', async () => {
+    const { mx } = await import('../cmd/mx');
+    const originalArgv = process.argv;
+    const originalRun = MX_COMMANDS.build!.run;
+    let invoked = false;
+    MX_COMMANDS.build!.run = async () => {
+      invoked = true;
+      expect(process.argv.slice(2)).toEqual(['--sync-versions']);
+    };
+    try {
+      await mx(['build', '--sync-versions']);
+      expect(invoked).toBe(true);
+    } finally {
+      MX_COMMANDS.build!.run = originalRun;
+      process.argv = originalArgv;
+    }
+  });
 });

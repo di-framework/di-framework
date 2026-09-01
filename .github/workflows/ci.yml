@@ -106,7 +106,7 @@ jobs:
         run: cd packages/di-framework-cli && bun link
 
       - name: Run E2E test suite
-        run: di-framework test
+        run: di-framework mx test
 
       - name: Convert LCOV to Cobertura
         run: |

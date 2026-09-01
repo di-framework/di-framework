@@ -2,6 +2,10 @@
 
 CLI for apps built with `@di-framework/*`. Monorepo maintainer actions live under **`mx`**.
 
+The complete hierarchy, output format, error behavior, exit statuses, and package ownership boundaries are
+defined by the [unified CLI command contract](../../docs/cli-command-contract.md). That hierarchy is
+exhaustive: public aliases, legacy routes, and package-specific CLIs are not supported.
+
 Requires [Bun](https://bun.sh). The package ships TypeScript source as the `bin` entry — no platform-specific compiled binary.
 
 ## Install
@@ -54,9 +58,9 @@ di-framework mx typecheck   # language-service typecheck
 di-framework mx publish     # test → build → npm publish
 ```
 
-Legacy top-level `test` / `typecheck` / `publish` still redirect to `mx` with a note.
-
 ## Adding commands
 
-- App-facing: add a module under `cmd/` and register it in `main.ts`.
-- Maintainer: add under `cmd/mx/` and register in `cmd/mx.ts`.
+- Add terminal routing and presentation under this package.
+- Put domain behavior and typed results in the owning feature package; command handlers only translate
+  arguments and presentation.
+- Never add another executable or compatibility alias.

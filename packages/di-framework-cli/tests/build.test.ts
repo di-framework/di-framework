@@ -122,9 +122,8 @@ describe('build command', () => {
       const log = spyOn(console, 'log').mockImplementation(() => {});
 
       try {
-        process.chdir(root);
         const { build } = await import('../cmd/mx/build');
-        await build();
+        await build({ workspaceRoot: root });
 
         for (const pkgDir of PACKAGES) {
           // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
@@ -134,7 +133,6 @@ describe('build command', () => {
         expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
         expect(log.mock.calls.some((c) => String(c[0]).includes('Using version'))).toBe(false);
       } finally {
-        process.chdir(REPO_ROOT);
         log.mockRestore();
       }
     }, 30_000);
@@ -145,9 +143,8 @@ describe('build command', () => {
       const log = spyOn(console, 'log').mockImplementation(() => {});
 
       try {
-        process.chdir(root);
         const { build } = await import('../cmd/mx/build');
-        await build({ syncVersions: true });
+        await build({ syncVersions: true, workspaceRoot: root });
 
         for (const pkgDir of PACKAGES) {
           // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
@@ -157,7 +154,6 @@ describe('build command', () => {
         expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
         expect(log.mock.calls.some((c) => String(c[0]).includes('Using version 9.9.9'))).toBe(true);
       } finally {
-        process.chdir(REPO_ROOT);
         log.mockRestore();
       }
     }, 30_000);
@@ -184,13 +180,11 @@ describe('build command', () => {
 
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        process.chdir(root);
         const { build } = await import('../cmd/mx/build');
-        await build({ syncVersions: true });
+        await build({ syncVersions: true, workspaceRoot: root });
         expect(await Bun.file(join(root, PACKAGES[1]!, 'package.json')).exists()).toBe(false);
         expect(await Bun.file(join(root, PACKAGES[1]!, 'dist', 'index.js')).exists()).toBe(true);
       } finally {
-        process.chdir(REPO_ROOT);
         log.mockRestore();
       }
     }, 30_000);
@@ -202,11 +196,9 @@ describe('build command', () => {
 
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        process.chdir(root);
         const { build } = await import('../cmd/mx/build');
-        await expect(build({ syncVersions: true })).rejects.toThrow();
+        await expect(build({ syncVersions: true, workspaceRoot: root })).rejects.toThrow();
       } finally {
-        process.chdir(REPO_ROOT);
         log.mockRestore();
       }
     }, 30_000);
