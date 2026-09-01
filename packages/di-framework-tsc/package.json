@@ -10,16 +10,12 @@
   "exports": {
     ".": "./plugin.cjs"
   },
-  "bin": {
-    "dtsc": "bin/dtsc.cjs"
-  },
   "ttsc": {
     "plugin": {
       "transform": "@di-framework/tsc"
     }
   },
   "files": [
-    "bin",
     "plugin.cjs",
     "plugin",
     "README.md",

@@ -170,6 +170,16 @@ describe('publish command', () => {
         }
       }
     });
+
+    it('publishes only the canonical di-framework binary', async () => {
+      const publishedBins: Record<string, string> = {};
+      for (const pkg of PACKAGES) {
+        // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
+        const pkgJson = await Bun.file(join(REPO_ROOT, pkg, 'package.json')).json();
+        Object.assign(publishedBins, pkgJson.bin ?? {});
+      }
+      expect(publishedBins).toEqual({ 'di-framework': './main.ts' });
+    });
   });
 
   describe('publish pipeline order', () => {

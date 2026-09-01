@@ -112,7 +112,7 @@ export function SemanticSkillDiscovery(
 
 /**
  * Declares build-time skills index configuration. Does not build the index;
- * call {@link skillsIndexBuilderFrom} then `.build()`, or use `di-skills-index`.
+ * call {@link skillsIndexBuilderFrom} then `.build()`, or use `di-framework skills index build`.
  */
 export function SkillsIndexConfig(options: SkillsIndexConfigOptions = {}): ClassDecorator {
   return (target) => {

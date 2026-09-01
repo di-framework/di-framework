@@ -153,17 +153,6 @@ export {
   toSkillIndexWriteRequest,
 } from './skills-index.ts';
 export type {
-  SkillsIndexCliCommand,
-  SkillsIndexCliIo,
-  SkillsIndexCliOptions,
-  SkillsIndexCliRuntime,
-} from './skills-index-cli.ts';
-export {
-  parseSkillsIndexCliArgs,
-  runSkillsIndexCli,
-  SKILLS_INDEX_CLI_HELP,
-} from './skills-index-cli.ts';
-export type {
   SkillsIndexOperation,
   SkillsIndexOperationErrorCode,
 } from './skills-index-errors.ts';

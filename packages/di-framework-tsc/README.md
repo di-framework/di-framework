@@ -112,7 +112,6 @@ Isolated smoke fixture (pulls ttsc + TS7 via `@di-framework/tsc`):
 cd packages/di-framework-tsc/fixture
 bun install
 bun run smoke          # ttsc --emit + check injected guards
-# or: bun run smoke:dtsc
 ```
 
 ## Publish (maintainers)
