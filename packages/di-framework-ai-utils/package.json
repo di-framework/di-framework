@@ -7,9 +7,6 @@
   "types": "./dist/index.d.ts",
   "private": false,
   "type": "module",
-  "bin": {
-    "di-skills-index": "./dist/skills-index-cli.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -42,7 +39,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./src/index.ts ./src/skills-index-cli.ts --outdir ./dist --target node --external @di-framework/ai --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --external @di-framework/ai --external @di-framework/core && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "bun run build",
     "test": "bun test"
   },

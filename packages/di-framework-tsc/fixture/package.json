@@ -4,8 +4,7 @@
   "private": true,
   "description": "Isolated ttsc + TypeScript 7 smoke fixture for @di-framework/tsc (not part of the TS5 workspace graph)",
   "scripts": {
-    "smoke": "rm -rf dist && ttsc --emit && node ../scripts/check-emit.cjs && node ../scripts/check-runtime.cjs",
-    "smoke:dtsc": "rm -rf dist && dtsc --emit && node ../scripts/check-emit.cjs && node ../scripts/check-runtime.cjs"
+    "smoke": "rm -rf dist && ttsc --emit && node ../scripts/check-emit.cjs && node ../scripts/check-runtime.cjs"
   },
   "devDependencies": {
     "@di-framework/tsc": "file:.."

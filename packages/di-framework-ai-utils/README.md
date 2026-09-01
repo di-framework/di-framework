@@ -222,7 +222,7 @@ If you never call `addSkillsDirectory` / `addSkillsFile` / `addSkill` / `addPack
 By default, every skill name and description is placed in the `Skill` tool. For catalogs above the default threshold of 50, build a local semantic index instead:
 
 ```bash
-di-skills-index --skills-dir .claude/skills
+di-framework skills index build --skills-dir .claude/skills
 ```
 
 The equivalent programmatic build API is:
@@ -362,7 +362,7 @@ const mcp = skillsToolboxAsMcp({
 | `skillsToolboxAsMcp` | MCP descriptors + handlers |
 | File / shell | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |
-| Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-skills-index` CLI |
+| Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
 | Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill` |
 
 **Style:** `static of` / `static builder` and free functions for pure helpers. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).

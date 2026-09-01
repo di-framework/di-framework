@@ -1396,7 +1396,7 @@ function parseMetadata(
 
 function unsupportedIndexError(file: string): Error {
   return new Error(
-    `Unsupported skills index format or version: ${file}. Run: di-skills-index migrate --input "${file}" --output "${file}"`,
+    `Unsupported skills index format or version: ${file}. Run: di-framework skills index migrate --input "${file}" --output "${file}"`,
   );
 }
 

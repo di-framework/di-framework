@@ -245,9 +245,6 @@
     "packages/di-framework-ai-utils": {
       "name": "@di-framework/ai-utils",
       "version": "4.3.1",
-      "bin": {
-        "di-skills-index": "./dist/skills-index-cli.js",
-      },
       "devDependencies": {
         "@di-framework/ai": "workspace:*",
         "@di-framework/core": "workspace:*",
@@ -416,9 +413,6 @@
     "packages/di-framework-http": {
       "name": "@di-framework/http",
       "version": "4.2.3",
-      "bin": {
-        "di-framework-http": "./dist/src/cli.js",
-      },
       "dependencies": {
         "itty-router": "^5.0.22",
       },
@@ -483,9 +477,6 @@
     "packages/di-framework-tsc": {
       "name": "@di-framework/tsc",
       "version": "4.2.3",
-      "bin": {
-        "dtsc": "bin/dtsc.cjs",
-      },
       "dependencies": {
         "ttsc": ">=0.25.0",
         "typescript": "^7.0.0",

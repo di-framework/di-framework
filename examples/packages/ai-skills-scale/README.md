@@ -117,7 +117,7 @@ targets as pre-tuning expectations. It is intentionally marked `measuredResults:
 generated JSON/Markdown reports describe measured runs. The tiny `ci-fixture.v1.json` exercises
 the deterministic harness without downloading either real-world corpus.
 
-`@di-framework/ai-utils` owns the generic `di-skills-index` build CLI and `SkillsIndex.builder()` API. This example keeps a thin custom wrapper only because its third-party benchmark corpus intentionally reports and skips incompatible entries; production indexing remains fail-closed.
+`@di-framework/ai-utils` owns the generic skills-index API used by `di-framework skills index build` and `SkillsIndex.builder()`. This example keeps a thin custom wrapper only because its third-party benchmark corpus intentionally reports and skips incompatible entries; production indexing remains fail-closed.
 
 The indexer uses `@huggingface/transformers` with a pinned [`onnx-community/bge-small-en-v1.5-ONNX`](https://huggingface.co/onnx-community/bge-small-en-v1.5-ONNX) revision, CLS pooling, the model's recommended query prefix, normalized 384-dimensional embeddings, and cosine similarity. The generated file stays under `.cache/` and is not committed. The package's normal `bun run build` invokes the same index step automatically when the fetched corpus is present; on a clean checkout it skips it.
 
