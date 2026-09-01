@@ -122,21 +122,22 @@ router.post<RequestSpec<Multipart<UploadPayload>>, ResponseSpec<UploadResult>>(
 
 ### OpenAPI Generation
 
-`@di-framework/http` provides a built-in CLI and a registry to generate OpenAPI specs from your controllers.
+The package exposes CLI-independent OpenAPI operations. Controller loading,
+document generation, and writing are explicit:
 
-#### Using the CLI
+```ts
+import { generateOpenAPIDocument, writeOpenAPIDocument } from '@di-framework/http';
 
-The easiest way to generate a spec is using the provided CLI tool.
+const result = await generateOpenAPIDocument({
+  controllerModules: ['./src/index.ts'],
+  configuration: { title: 'My API', version: '1.0.0' },
+});
 
-```bash
-# Generate openapi.json from your controllers
-bun x di-framework-http generate --controllers ./src/index.ts
+writeOpenAPIDocument(result.document, './openapi.json');
 ```
 
-**Options:**
-
-- `--controllers <path>`: (Required) Path to the file that imports all your decorated controllers.
-- `--output <path>`: (Optional) Path to save the generated JSON (default: `openapi.json`).
+The unified command is `di-framework http openapi generate`; terminal output
+and exit codes belong to `@di-framework/cli`.
 
 #### Manual Generation
 

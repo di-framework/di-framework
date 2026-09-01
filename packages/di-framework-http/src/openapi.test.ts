@@ -1,10 +1,40 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { SCHEMAS } from './decorators.ts';
-import { generateOpenAPI } from './openapi.ts';
+import {
+  generateOpenAPI,
+  generateOpenAPIDocument,
+  type OpenAPIDocument,
+  type OpenAPIOperation,
+  OpenAPIOperationError,
+  writeOpenAPIDocument,
+} from './openapi.ts';
+
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+function temporaryDirectory(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'di-framework-openapi-'));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+function operationAt(document: OpenAPIDocument, path: string, method: string): OpenAPIOperation {
+  const operation = document.paths[path]?.[method];
+  if (!operation) throw new Error(`Missing OpenAPI operation ${method.toUpperCase()} ${path}`);
+  return operation;
+}
 
 describe('generateOpenAPI', () => {
   it('should generate a default OpenAPI spec with default options', () => {
-    const spec = generateOpenAPI({}, { getTargets: () => new Set() } as any);
+    const spec = generateOpenAPI({}, { getTargets: () => new Set() });
 
     expect(spec.openapi).toBe('3.1.0');
     expect(spec.info.title).toBe('Generated API');
@@ -22,7 +52,7 @@ describe('generateOpenAPI', () => {
     };
     const spec = generateOpenAPI(options, {
       getTargets: () => new Set(),
-    } as any);
+    });
 
     expect(spec.info.title).toBe('Custom API');
     expect(spec.info.version).toBe('2.0.0');
@@ -48,12 +78,11 @@ describe('generateOpenAPI', () => {
       responses: { '201': { description: 'Created' } },
     };
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
     expect(spec.paths['/test']).toBeDefined();
-    expect(spec.paths['/test'].post).toBeDefined();
-    const operation = spec.paths['/test'].post;
+    const operation = operationAt(spec, '/test', 'post');
     expect(operation.summary).toBe('Test Summary');
     expect(operation.description).toBe('Test Description');
     expect(operation.operationId).toBe('TestController.post');
@@ -72,13 +101,13 @@ describe('generateOpenAPI', () => {
     // @ts-expect-error
     mockController.get.method = 'get';
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
-    const operation = spec.paths['/simple'].get;
+    const operation = operationAt(spec, '/simple', 'get');
     expect(operation.summary).toBe('get'); // defaults to property key
     expect(operation.responses['200']).toBeDefined(); // default response
-    expect(operation.responses['200'].description).toBe('OK');
+    expect(operation.responses['200']?.description).toBe('OK');
   });
 
   it('should handle multiple endpoints on the same path', () => {
@@ -101,11 +130,11 @@ describe('generateOpenAPI', () => {
     // @ts-expect-error
     mockController.post.method = 'post';
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
-    expect(spec.paths['/resource'].get).toBeDefined();
-    expect(spec.paths['/resource'].post).toBeDefined();
+    expect(spec.paths['/resource']?.get).toBeDefined();
+    expect(spec.paths['/resource']?.post).toBeDefined();
   });
 
   it('should handle unknown path and method defaults', () => {
@@ -116,11 +145,11 @@ describe('generateOpenAPI', () => {
     mockController.weird.isEndpoint = true;
     // Note: missing path and method
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
     expect(spec.paths['/unknown']).toBeDefined();
-    expect(spec.paths['/unknown'].get).toBeDefined();
+    expect(spec.paths['/unknown']?.get).toBeDefined();
   });
 
   it('should convert :param paths to {param} and inject path parameters', () => {
@@ -134,21 +163,21 @@ describe('generateOpenAPI', () => {
     // @ts-expect-error
     mockController.getUser.method = 'get';
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
     const openApiPath = '/users/{userId}/posts/{postId}';
     expect(spec.paths[openApiPath]).toBeDefined();
-    const operation = spec.paths[openApiPath].get;
-    expect(operation.parameters).toBeDefined();
-    expect(operation.parameters.length).toBe(2);
-    expect(operation.parameters[0]).toEqual({
+    const operation = operationAt(spec, openApiPath, 'get');
+    const parameters = operation.parameters ?? [];
+    expect(parameters).toHaveLength(2);
+    expect(parameters[0]).toEqual({
       name: 'userId',
       in: 'path',
       required: true,
       schema: { type: 'string' },
     });
-    expect(operation.parameters[1].name).toBe('postId');
+    expect(parameters[1]?.name).toBe('postId');
   });
 
   it('should combine automatic path parameters with decorator parameters', () => {
@@ -166,16 +195,16 @@ describe('generateOpenAPI', () => {
       parameters: [{ name: 'filter', in: 'query' }],
     };
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
     const spec = generateOpenAPI({}, registry);
 
-    const operation = spec.paths['/items/{id}'].get;
-    expect(operation.parameters).toBeDefined();
-    expect(operation.parameters.length).toBe(2);
-    expect(operation.parameters[0].name).toBe('id');
-    expect(operation.parameters[0].in).toBe('path');
-    expect(operation.parameters[1].name).toBe('filter');
-    expect(operation.parameters[1].in).toBe('query');
+    const operation = operationAt(spec, '/items/{id}', 'get');
+    const parameters = operation.parameters ?? [];
+    expect(parameters).toHaveLength(2);
+    expect(parameters[0]?.name).toBe('id');
+    expect(parameters[0]?.in).toBe('path');
+    expect(parameters[1]?.name).toBe('filter');
+    expect(parameters[1]?.in).toBe('query');
   });
 
   it('should resolve referenced component schemas via the SCHEMAS symbol', () => {
@@ -183,7 +212,7 @@ describe('generateOpenAPI', () => {
     // @ts-expect-error
     mockController[SCHEMAS] = new Set(['User', 'Post']);
 
-    const registry = { getTargets: () => new Set([mockController]) } as any;
+    const registry = { getTargets: () => new Set([mockController]) };
 
     // Provide the schema definitions in options
     const schemas = {
@@ -210,5 +239,75 @@ describe('generateOpenAPI', () => {
     expect(resolved.Profile).toBeDefined(); // Transitively resolved!
     expect(resolved.Comment).toBeDefined(); // Transitively resolved from array!
     expect(resolved.Unused).toBeUndefined();
+  });
+});
+
+describe('programmatic OpenAPI operations', () => {
+  it('loads explicit controller modules and returns a typed document result', async () => {
+    const cwd = temporaryDirectory();
+    const loaded: string[] = [];
+    const result = await generateOpenAPIDocument({
+      controllerModules: ['./controllers.ts'],
+      cwd,
+      configuration: { title: 'Programmatic API', version: '2.1.0' },
+      registry: { getTargets: () => new Set() },
+      importModule: async (modulePath) => {
+        loaded.push(modulePath);
+        return {};
+      },
+    });
+
+    expect(loaded).toEqual([join(cwd, 'controllers.ts')]);
+    expect(result.controllerModules).toEqual(loaded);
+    expect(result.document.info).toEqual({
+      title: 'Programmatic API',
+      version: '2.1.0',
+      description: 'API documentation generated by @di-framework/http.',
+    });
+  });
+
+  it('returns typed failures for missing and unloadable controller inputs', async () => {
+    await expect(generateOpenAPIDocument({ controllerModules: [] })).rejects.toMatchObject({
+      name: 'OpenAPIOperationError',
+      code: 'controllers-required',
+    });
+
+    const cwd = temporaryDirectory();
+    const cause = new Error('module exploded');
+    try {
+      await generateOpenAPIDocument({
+        controllerModules: ['broken.ts'],
+        cwd,
+        importModule: async () => {
+          throw cause;
+        },
+      });
+      throw new Error('expected controller loading to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(OpenAPIOperationError);
+      expect(error).toMatchObject({
+        code: 'controller-load-failed',
+        path: join(cwd, 'broken.ts'),
+        cause,
+      });
+    }
+  });
+
+  it('writes formatted JSON explicitly and reports write failures', () => {
+    const cwd = temporaryDirectory();
+    const document = generateOpenAPI({}, { getTargets: () => new Set() });
+    const result = writeOpenAPIDocument(document, 'openapi.json', cwd);
+
+    expect(result.outputPath).toBe(join(cwd, 'openapi.json'));
+    expect(result.bytes).toBeGreaterThan(0);
+    expect(JSON.parse(readFileSync(result.outputPath, 'utf8'))).toEqual(document);
+
+    expect(() => writeOpenAPIDocument(document, cwd)).toThrow(
+      expect.objectContaining({
+        name: 'OpenAPIOperationError',
+        code: 'document-write-failed',
+        path: cwd,
+      }),
+    );
   });
 });
