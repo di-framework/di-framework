@@ -49,13 +49,13 @@
   "devDependencies": {
     "@di-framework/auth": "workspace:*",
     "@types/bun": "latest",
-    "typescript": "^5",
+    "typescript": "^7",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@di-framework/auth": "^4",
     "@di-framework/core": "^4",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependenciesMeta": {
     "@di-framework/auth": {

@@ -21,6 +21,6 @@
     "@di-framework/cli": "workspace:*",
     "@di-framework/tsc": "workspace:*",
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   }
 }
