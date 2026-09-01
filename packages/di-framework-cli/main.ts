@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { runAgentAudit } from './cmd/agent/audit';
+import { runAgentInit } from './cmd/agent/init';
 import { runAgentInspect } from './cmd/agent/inspect';
 /** di-framework CLI — app tooling by default; monorepo maintainers use `mx`. */
 import { build } from './cmd/build';
@@ -35,6 +36,7 @@ export type CliHandlers = {
   build(args: string[]): Promise<void>;
   check(args: string[]): Promise<void>;
   agentAudit(args: string[]): Promise<CommandResult>;
+  agentInit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   skillsIndexBuild(args: string[]): Promise<CommandResult>;
@@ -55,6 +57,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   build,
   check,
   agentAudit: runAgentAudit,
+  agentInit: runAgentInit,
   agentInspect: runAgentInspect,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   skillsIndexBuild: runSkillsIndexBuild,
@@ -124,6 +127,17 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
               '--allowed-directory <path>  Allowed-directory intersection (repeatable)',
             ],
             run: ({ args }) => handlers.agentAudit(args),
+          },
+          init: {
+            description: 'Plan or create neutral agent configuration assets',
+            usage: 'di-framework agent init [options]',
+            options: [
+              '--workspace <path>  Workspace boundary (default: current directory)',
+              '--asset <path>  Neutral asset to initialize (repeatable; defaults to all)',
+              '--dry-run  Plan without writing (default)',
+              '--apply  Apply the exact generated plan',
+            ],
+            run: ({ args }) => handlers.agentInit(args),
           },
           inspect: {
             description: 'Inspect resolved agent configuration without changing files',
