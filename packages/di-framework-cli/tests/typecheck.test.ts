@@ -1,13 +1,15 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { findTopmostTsconfig, parseArgs } from '../cmd/mx/typecheck';
+import type { CliIo } from '../command';
 import { CommandFailure } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+const SILENT_IO: CliIo = { stdout: { write: () => {} }, stderr: { write: () => {} } };
 
-async function withExitCapture(fn: () => Promise<void>): Promise<number> {
+async function withExitCapture(fn: () => Promise<unknown>): Promise<number> {
   try {
     await fn();
     return 0;
@@ -74,6 +76,19 @@ describe('typecheck command', () => {
       expect(args.tsconfigPath).toBe('foo.json');
       expect(args.from).toBe('cwd');
     });
+
+    it('strictly rejects unknown options, invalid values, and extra positionals', () => {
+      expect(() => parseArgs(['node', 'script.ts', '--watch'])).toThrow('Unknown mx typecheck');
+      expect(() => parseArgs(['node', 'script.ts', '--pretty=yes'])).toThrow(
+        'Invalid --pretty value',
+      );
+      expect(() => parseArgs(['node', 'script.ts', '--from=elsewhere'])).toThrow(
+        'Invalid --from value',
+      );
+      expect(() => parseArgs(['node', 'script.ts', 'one.json', 'two.json'])).toThrow(
+        'Unexpected mx typecheck argument',
+      );
+    });
   });
 
   describe('findTopmostTsconfig', () => {
@@ -118,17 +133,13 @@ describe('typecheck command', () => {
 
         const { typecheck } = await import('../cmd/mx/typecheck');
         const originalArgv = process.argv;
-        const log = spyOn(console, 'log').mockImplementation(() => {});
-        const err = spyOn(console, 'error').mockImplementation(() => {});
         try {
           process.chdir(dir);
           process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
-          expect(await withExitCapture(() => typecheck())).toBe(0);
+          expect(await withExitCapture(() => typecheck(process.argv, SILENT_IO))).toBe(0);
         } finally {
           process.chdir(REPO_ROOT);
           process.argv = originalArgv;
-          log.mockRestore();
-          err.mockRestore();
         }
       },
       FULL_TYPECHECK_TIMEOUT_MS,
@@ -137,13 +148,11 @@ describe('typecheck command', () => {
     it('exits 2 when the tsconfig path cannot be read', async () => {
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
         process.argv = ['bun', 'typecheck.ts', 'nonassigned_missing_tsconfig.json', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(2);
+        expect(await withExitCapture(() => typecheck(process.argv, SILENT_IO))).toBe(2);
       } finally {
         process.argv = originalArgv;
-        err.mockRestore();
       }
     });
 
@@ -152,18 +161,16 @@ describe('typecheck command', () => {
       temps.push(empty);
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
         process.chdir(empty);
         process.argv = ['bun', 'typecheck.ts', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(2);
-        expect(err.mock.calls.some((c) => String(c[0]).includes('Could not find tsconfig'))).toBe(
-          true,
-        );
+        await expect(typecheck(process.argv, SILENT_IO)).rejects.toMatchObject({
+          code: 'INVALID_CONFIG',
+          exitCode: 2,
+        });
       } finally {
         process.chdir(REPO_ROOT);
         process.argv = originalArgv;
-        err.mockRestore();
       }
     });
 
@@ -174,16 +181,16 @@ describe('typecheck command', () => {
 
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
         process.chdir(dir);
         process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(2);
-        expect(err.mock.calls.some((c) => String(c[0]).includes('Failed to parse'))).toBe(true);
+        await expect(typecheck(process.argv, SILENT_IO)).rejects.toMatchObject({
+          code: 'INVALID_CONFIG',
+          exitCode: 2,
+        });
       } finally {
         process.chdir(REPO_ROOT);
         process.argv = originalArgv;
-        err.mockRestore();
       }
     });
 
@@ -204,15 +211,13 @@ describe('typecheck command', () => {
 
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const err = spyOn(console, 'error').mockImplementation(() => {});
       try {
         process.chdir(dir);
         process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=1'];
-        expect(await withExitCapture(() => typecheck())).toBe(2);
+        expect(await withExitCapture(() => typecheck(process.argv, SILENT_IO))).toBe(2);
       } finally {
         process.chdir(REPO_ROOT);
         process.argv = originalArgv;
-        err.mockRestore();
       }
     });
 
@@ -236,23 +241,24 @@ describe('typecheck command', () => {
 
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const log = spyOn(console, 'log').mockImplementation(() => {});
+      const stderr: string[] = [];
+      const io: CliIo = {
+        stdout: { write: () => {} },
+        stderr: { write: (chunk) => stderr.push(chunk) },
+      };
       try {
         process.chdir(dir);
         // pretty=0 exercises stripAnsi; pretty=1 exercises the colored path.
         process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0'];
-        expect(await withExitCapture(() => typecheck())).toBe(1);
-        expect(err.mock.calls.some((c) => String(c[0]).includes('Typecheck failed'))).toBe(true);
+        expect(await withExitCapture(() => typecheck(process.argv, io))).toBe(1);
+        expect(stderr.join('')).toContain('not assignable');
 
-        err.mockClear();
+        stderr.length = 0;
         process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=1'];
-        expect(await withExitCapture(() => typecheck())).toBe(1);
+        expect(await withExitCapture(() => typecheck(process.argv, io))).toBe(1);
       } finally {
         process.chdir(REPO_ROOT);
         process.argv = originalArgv;
-        err.mockRestore();
-        log.mockRestore();
       }
     });
 
@@ -283,16 +289,21 @@ describe('typecheck command', () => {
 
       const { typecheck } = await import('../cmd/mx/typecheck');
       const originalArgv = process.argv;
-      const log = spyOn(console, 'log').mockImplementation(() => {});
+      const stdout: string[] = [];
+      const io: CliIo = {
+        stdout: { write: (chunk) => stdout.push(chunk) },
+        stderr: { write: () => {} },
+      };
       try {
         process.chdir(dir);
         process.argv = ['bun', 'typecheck.ts', 'tsconfig.json', '--pretty=0', '--from=cwd'];
-        expect(await withExitCapture(() => typecheck())).toBe(0);
-        expect(log.mock.calls.some((c) => String(c[0]).includes('Typecheck passed'))).toBe(true);
+        const result = await typecheck(process.argv, io);
+        expect(result.data).toMatchObject({ errors: 0, warnings: 0 });
+        expect((result.data as { files: number }).files).toBeGreaterThan(0);
+        expect(stdout.join('')).toContain('Using tsconfig');
       } finally {
         process.chdir(REPO_ROOT);
         process.argv = originalArgv;
-        log.mockRestore();
       }
     });
 
@@ -322,17 +333,13 @@ describe('typecheck command', () => {
 
         const { typecheck } = await import('../cmd/mx/typecheck');
         const originalArgv = process.argv;
-        const log = spyOn(console, 'log').mockImplementation(() => {});
-        const err = spyOn(console, 'error').mockImplementation(() => {});
         try {
           process.chdir(join(dir, 'nested'));
           process.argv = ['bun', fakeScript, '--from=script', '--pretty=0'];
-          expect(await withExitCapture(() => typecheck())).toBe(0);
+          expect(await withExitCapture(() => typecheck(process.argv, SILENT_IO))).toBe(0);
         } finally {
           process.chdir(REPO_ROOT);
           process.argv = originalArgv;
-          log.mockRestore();
-          err.mockRestore();
         }
       },
       FULL_TYPECHECK_TIMEOUT_MS,
@@ -340,29 +347,35 @@ describe('typecheck command', () => {
   });
 
   describe('CLI entrypoint', () => {
-    it('handleTypecheckFailure logs and exits 2', async () => {
-      const { handleTypecheckFailure } = await import('../cmd/mx/typecheck');
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
+    it('runTypecheckMain uses typed and fallback exit codes', async () => {
+      const { runTypecheckMain } = await import('../cmd/mx/typecheck');
       let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handleTypecheckFailure(new Error('boom'))).toThrow('EXIT_2');
-        expect(code).toBe(2);
-        expect(err.mock.calls[0]?.[0]).toContain('Fatal error while running typecheck');
-
-        expect(() =>
-          handleTypecheckFailure(new CommandFailure('TYPECHECK_FAILED', 'typed failure', 1)),
-        ).toThrow('EXIT_1');
-        expect(code).toBe(1);
-        expect(err.mock.calls[1]?.[0]).toBe('typed failure');
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+      await runTypecheckMain(
+        true,
+        async () => {
+          throw new Error('boom');
+        },
+        (value) => {
+          code = value;
+        },
+      );
+      expect(code).toBe(2);
+      await runTypecheckMain(
+        true,
+        async () => {
+          throw new CommandFailure('TYPECHECK_FAILED', 'typed failure', 1);
+        },
+        (value) => {
+          code = value;
+        },
+      );
+      expect(code).toBe(1);
+      const previousExitCode = process.exitCode;
+      await runTypecheckMain(true, async () => {
+        throw new Error('default setter');
+      });
+      expect(process.exitCode).toBe(2);
+      process.exitCode = previousExitCode;
     });
 
     it('runTypecheckMain invokes start only when isMain is true', async () => {
@@ -370,10 +383,11 @@ describe('typecheck command', () => {
       let calls = 0;
       const start = async () => {
         calls++;
+        return {};
       };
-      runTypecheckMain(false, start);
+      await runTypecheckMain(false, start);
       expect(calls).toBe(0);
-      runTypecheckMain(true, start);
+      await runTypecheckMain(true, start);
       expect(calls).toBe(1);
     });
 

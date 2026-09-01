@@ -96,10 +96,22 @@ describe('CLI main router', () => {
   it('delegates every registered leaf through injectable handlers', async () => {
     const calls: Array<[string, unknown]> = [];
     const handlers: CliHandlers = {
-      init: async (args) => void calls.push(['init', args]),
-      generate: async (args) => void calls.push(['generate', args]),
-      build: async (args) => void calls.push(['build', args]),
-      check: async (args) => void calls.push(['check', args]),
+      init: async (args) => {
+        calls.push(['init', args]);
+        return {};
+      },
+      generate: async (args) => {
+        calls.push(['generate', args]);
+        return {};
+      },
+      build: async (args) => {
+        calls.push(['build', args]);
+        return {};
+      },
+      check: async (args) => {
+        calls.push(['check', args]);
+        return {};
+      },
       agentAudit: async (args) => {
         calls.push(['agent audit', args]);
         return {};
@@ -144,10 +156,22 @@ describe('CLI main router', () => {
         calls.push(['skills validate', args]);
         return {};
       },
-      mxBuild: async (options) => void calls.push(['mx build', options]),
-      mxTest: async () => void calls.push(['mx test', undefined]),
-      mxTypecheck: async (argv) => void calls.push(['mx typecheck', argv]),
-      mxPublish: async () => void calls.push(['mx publish', undefined]),
+      mxBuild: async (options) => {
+        calls.push(['mx build', options]);
+        return {};
+      },
+      mxTest: async () => {
+        calls.push(['mx test', undefined]);
+        return {};
+      },
+      mxTypecheck: async (argv) => {
+        calls.push(['mx typecheck', argv]);
+        return {};
+      },
+      mxPublish: async () => {
+        calls.push(['mx publish', undefined]);
+        return {};
+      },
     };
     const tree = createCommandTree(handlers);
     for (const argv of [
@@ -189,9 +213,9 @@ describe('CLI main router', () => {
       ['skills index query', ['--query', 'review code']],
       ['skills index migrate', ['--output', 'current.json']],
       ['skills validate', ['--skills-dir', '.agents/skills']],
-      ['mx build', { syncVersions: true }],
+      ['mx build', ['--sync-versions']],
       ['mx test', undefined],
-      ['mx typecheck', ['bun', 'typecheck', '--pretty=0']],
+      ['mx typecheck', ['--pretty=0']],
       ['mx publish', undefined],
     ]);
   });

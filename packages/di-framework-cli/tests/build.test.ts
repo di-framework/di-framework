@@ -1,10 +1,24 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PACKAGES } from '../cmd/mx/build';
+import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+
+function captureIo(): { io: CliIo; stderr: string[]; stdout: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+    stderr,
+    stdout,
+  };
+}
 
 async function makeFakeWorkspace(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), 'build-cmd-'));
@@ -44,8 +58,7 @@ async function makeFakeWorkspace(): Promise<string> {
   );
   await Bun.write(join(first, 'src', 'index.ts'), 'export const x = 1;\n');
   // Drop the build script so only the tsc path is used for this package.
-  // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
-  const pkgJson = await Bun.file(join(first, 'package.json')).json();
+  const pkgJson = JSON.parse(await Bun.file(join(first, 'package.json')).text());
   delete pkgJson.scripts;
   await Bun.write(join(first, 'package.json'), `${JSON.stringify(pkgJson, null, 2)}\n`);
 
@@ -73,13 +86,15 @@ describe('build command', () => {
     it('defaults to no version sync', async () => {
       const { parseMxBuildArgs } = await import('../cmd/mx/build');
       expect(parseMxBuildArgs([])).toEqual({ syncVersions: false });
-      expect(parseMxBuildArgs(['--watch'])).toEqual({ syncVersions: false });
+      expect(() => parseMxBuildArgs(['--watch'])).toThrow('Unknown mx build argument');
     });
 
     it('enables version sync for --sync-versions', async () => {
       const { parseMxBuildArgs } = await import('../cmd/mx/build');
       expect(parseMxBuildArgs(['--sync-versions'])).toEqual({ syncVersions: true });
-      expect(parseMxBuildArgs(['--force', '--sync-versions'])).toEqual({ syncVersions: true });
+      expect(() => parseMxBuildArgs(['--sync-versions', '--sync-versions'])).toThrow(
+        'Duplicate mx build argument',
+      );
     });
   });
 
@@ -119,43 +134,33 @@ describe('build command', () => {
     it('cleans dist and builds each package without rewriting versions', async () => {
       const root = await makeFakeWorkspace();
       temps.push(root);
-      const log = spyOn(console, 'log').mockImplementation(() => {});
+      const output = captureIo();
 
-      try {
-        const { build } = await import('../cmd/mx/build');
-        await build({ workspaceRoot: root });
+      const { build } = await import('../cmd/mx/build');
+      await build({ workspaceRoot: root }, output.io);
 
-        for (const pkgDir of PACKAGES) {
-          // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
-          const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
-          expect(pkgJson.version).toBe('0.0.0');
-        }
-        expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
-        expect(log.mock.calls.some((c) => String(c[0]).includes('Using version'))).toBe(false);
-      } finally {
-        log.mockRestore();
+      for (const pkgDir of PACKAGES) {
+        const pkgJson = JSON.parse(await Bun.file(join(root, pkgDir, 'package.json')).text());
+        expect(pkgJson.version).toBe('0.0.0');
       }
+      expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
+      expect(output.stdout.join('')).not.toContain('Using version');
     }, 30_000);
 
     it('syncs versions when --sync-versions is set', async () => {
       const root = await makeFakeWorkspace();
       temps.push(root);
-      const log = spyOn(console, 'log').mockImplementation(() => {});
+      const output = captureIo();
 
-      try {
-        const { build } = await import('../cmd/mx/build');
-        await build({ syncVersions: true, workspaceRoot: root });
+      const { build } = await import('../cmd/mx/build');
+      await build({ syncVersions: true, workspaceRoot: root }, output.io);
 
-        for (const pkgDir of PACKAGES) {
-          // @ts-expect-error - Property 'json' does not exist on type 'BunFile'.
-          const pkgJson = await Bun.file(join(root, pkgDir, 'package.json')).json();
-          expect(pkgJson.version).toBe('9.9.9');
-        }
-        expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
-        expect(log.mock.calls.some((c) => String(c[0]).includes('Using version 9.9.9'))).toBe(true);
-      } finally {
-        log.mockRestore();
+      for (const pkgDir of PACKAGES) {
+        const pkgJson = JSON.parse(await Bun.file(join(root, pkgDir, 'package.json')).text());
+        expect(pkgJson.version).toBe('9.9.9');
       }
+      expect(await Bun.file(join(root, PACKAGES[0]!, 'dist', 'index.js')).exists()).toBe(true);
+      expect(output.stdout.join('')).toContain('Using version 9.9.9');
     }, 30_000);
 
     it('skips version sync when a package.json is missing', async () => {
@@ -178,15 +183,10 @@ describe('build command', () => {
       );
       await Bun.write(join(root, PACKAGES[1]!, 'src', 'index.ts'), 'export const y = 2;\n');
 
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        const { build } = await import('../cmd/mx/build');
-        await build({ syncVersions: true, workspaceRoot: root });
-        expect(await Bun.file(join(root, PACKAGES[1]!, 'package.json')).exists()).toBe(false);
-        expect(await Bun.file(join(root, PACKAGES[1]!, 'dist', 'index.js')).exists()).toBe(true);
-      } finally {
-        log.mockRestore();
-      }
+      const { build } = await import('../cmd/mx/build');
+      await build({ syncVersions: true, workspaceRoot: root }, captureIo().io);
+      expect(await Bun.file(join(root, PACKAGES[1]!, 'package.json')).exists()).toBe(false);
+      expect(await Bun.file(join(root, PACKAGES[1]!, 'dist', 'index.js')).exists()).toBe(true);
     }, 30_000);
 
     it('rethrows non-ENOENT errors while syncing versions', async () => {
@@ -194,34 +194,44 @@ describe('build command', () => {
       temps.push(root);
       await Bun.write(join(root, PACKAGES[1]!, 'package.json'), '{');
 
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        const { build } = await import('../cmd/mx/build');
-        await expect(build({ syncVersions: true, workspaceRoot: root })).rejects.toThrow();
-      } finally {
-        log.mockRestore();
-      }
+      const { build } = await import('../cmd/mx/build');
+      await expect(
+        build({ syncVersions: true, workspaceRoot: root }, captureIo().io),
+      ).rejects.toThrow();
     }, 30_000);
   });
 
   describe('CLI entrypoint', () => {
-    it('handleBuildFailure logs and exits 1', async () => {
-      const { handleBuildFailure } = await import('../cmd/mx/build');
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
+    it('runMxBuild rejects unsupported arguments before writing output', async () => {
+      const { runMxBuild } = await import('../cmd/mx/build');
+      const output = captureIo();
+      await expect(runMxBuild(['--watch'], output.io)).rejects.toMatchObject({
+        code: 'INVALID_USAGE',
+        exitCode: 2,
+      });
+      expect(output.stdout).toEqual([]);
+      expect(output.stderr).toEqual([]);
+    });
+
+    it('runBuildMain uses an injected exit-code setter', async () => {
+      const { runBuildMain } = await import('../cmd/mx/build');
       let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handleBuildFailure(new Error('boom'))).toThrow('EXIT_1');
-        expect(code).toBe(1);
-        expect(err.mock.calls[0]?.[0]).toContain('Build failed');
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+      await runBuildMain(
+        true,
+        async () => {
+          throw new Error('boom');
+        },
+        (value) => {
+          code = value;
+        },
+      );
+      expect(code).toBe(1);
+      const previousExitCode = process.exitCode;
+      await runBuildMain(true, async () => {
+        throw new Error('default setter');
+      });
+      expect(process.exitCode).toBe(1);
+      process.exitCode = previousExitCode;
     });
 
     it('runBuildMain invokes start only when isMain is true', async () => {
@@ -229,10 +239,11 @@ describe('build command', () => {
       let calls = 0;
       const start = async () => {
         calls++;
+        return {};
       };
-      runBuildMain(false, start);
+      await runBuildMain(false, start);
       expect(calls).toBe(0);
-      runBuildMain(true, start);
+      await runBuildMain(true, start);
       expect(calls).toBe(1);
     });
 

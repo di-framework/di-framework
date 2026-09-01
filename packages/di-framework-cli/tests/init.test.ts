@@ -11,8 +11,22 @@ import {
   runInitMain,
   scaffoldApp,
 } from '../cmd/init';
+import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+
+function captureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    stdout,
+    stderr,
+    io: {
+      stdout: { write: (chunk) => stdout.push(chunk) },
+      stderr: { write: (chunk) => stderr.push(chunk) },
+    },
+  };
+}
 
 describe('init command', () => {
   const temps: string[] = [];
@@ -67,6 +81,11 @@ describe('init command', () => {
     it('throws on unknown flags and missing --dir value', () => {
       expect(() => parseInitArgs(['--noop'])).toThrow('Unknown flag');
       expect(() => parseInitArgs(['--dir'])).toThrow('requires a path');
+    });
+
+    it('rejects missing names and extra positional arguments', () => {
+      expect(() => parseInitArgs(['--name'])).toThrow('requires a name');
+      expect(() => parseInitArgs(['one', 'two'])).toThrow('Unexpected argument: two');
     });
   });
 
@@ -173,16 +192,13 @@ describe('init command', () => {
       const root = mkdtempSync(join(tmpdir(), 'init-force-'));
       temps.push(root);
       const dir = join(root, 'elsewhere');
-      const logs: string[] = [];
-      const log = spyOn(console, 'log').mockImplementation((...a: unknown[]) => {
-        logs.push(a.map(String).join(' '));
-      });
+      const captured = captureIo();
       try {
-        scaffoldApp({ dir, name: 'app', force: false });
-        scaffoldApp({ dir, name: 'app', force: true });
-        expect(logs.some((l) => l.includes(dir))).toBe(true);
+        scaffoldApp({ dir, name: 'app', force: false }, captured.io);
+        scaffoldApp({ dir, name: 'app', force: true }, captured.io);
+        expect(captured.stdout.join('')).toContain(dir);
       } finally {
-        log.mockRestore();
+        // no global streams were replaced
       }
     });
 
@@ -206,21 +222,18 @@ describe('init command', () => {
   });
 
   describe('CLI entrypoint', () => {
-    it('handleInitFailure logs and exits 1', () => {
-      const err = spyOn(console, 'error').mockImplementation(() => {});
-      const originalExit = process.exit;
+    it('handleInitFailure logs and assigns exit code 1 without exiting', () => {
+      const captured = captureIo();
       let code: number | undefined;
-      (process as any).exit = (c: number) => {
-        code = c;
-        throw new Error(`EXIT_${c}`);
-      };
-      try {
-        expect(() => handleInitFailure(new Error('boom'))).toThrow('EXIT_1');
-        expect(code).toBe(1);
-      } finally {
-        process.exit = originalExit;
-        err.mockRestore();
-      }
+      handleInitFailure(new Error('boom'), captured.io, (value) => {
+        code = value;
+      });
+      expect(code).toBe(1);
+      expect(captured.stderr.join('')).toContain('init failed: boom');
+      const previousExitCode = process.exitCode;
+      handleInitFailure('default setter', captured.io);
+      expect(process.exitCode).toBe(1);
+      process.exitCode = previousExitCode;
     });
 
     it('runInitMain only when isMain', () => {

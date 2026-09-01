@@ -15,6 +15,8 @@ export type CliIo = {
   stderr: CliStream;
 };
 
+export const PROCESS_IO: CliIo = { stdout: process.stdout, stderr: process.stderr };
+
 export type CommandResult = {
   data?: JsonValue;
   text?: string;

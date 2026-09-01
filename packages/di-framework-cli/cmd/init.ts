@@ -1,5 +1,6 @@
 import { closeSync, constants, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { type CliIo, CommandFailure, type CommandResult, PROCESS_IO } from '../command';
 
 export type InitOptions = {
   /** Directory to create the app in (default: ./<name>). */
@@ -30,7 +31,9 @@ export function parseInitArgs(args: string[]): InitOptions {
       continue;
     }
     if (a === '--name' || a === '-n') {
-      name = args[++i] ?? name;
+      const value = args[++i];
+      if (!value) throw new Error(`${a} requires a name`);
+      name = value;
       continue;
     }
     if (a === '--help' || a === '-h') {
@@ -40,6 +43,7 @@ export function parseInitArgs(args: string[]): InitOptions {
       throw new Error(`Unknown flag: ${a}`);
     }
     if (!positional) positional = a;
+    else throw new Error(`Unexpected argument: ${a}`);
   }
 
   if (positional) name = positional;
@@ -69,10 +73,10 @@ function isErrno(err: unknown, code: string): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
 }
 
-function writeFile(path: string, content: string, force: boolean): boolean {
+function writeFile(path: string, content: string, force: boolean, io: CliIo): boolean {
   if (force) {
     writeFileSync(path, content, 'utf-8');
-    console.log(`  write ${path}`);
+    io.stdout.write(`  write ${path}\n`);
     return true;
   }
 
@@ -84,23 +88,23 @@ function writeFile(path: string, content: string, force: boolean): boolean {
     } finally {
       closeSync(fd);
     }
-    console.log(`  write ${path}`);
+    io.stdout.write(`  write ${path}\n`);
     return true;
   } catch (err) {
     if (isErrno(err, 'EEXIST')) {
-      console.log(`  skip  ${path} (exists; use --force to overwrite)`);
+      io.stdout.write(`  skip  ${path} (exists; use --force to overwrite)\n`);
       return false;
     }
     throw err;
   }
 }
 
-export function scaffoldApp(opts: InitOptions): void {
+export function scaffoldApp(opts: InitOptions, io: CliIo = PROCESS_IO): void {
   const { dir, name, force } = opts;
   mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, 'src'), { recursive: true });
 
-  console.log(`\nScaffolding di-framework app in ${dir}\n`);
+  io.stdout.write(`\nScaffolding di-framework app in ${dir}\n\n`);
 
   writeFile(
     join(dir, 'package.json'),
@@ -129,6 +133,7 @@ export function scaffoldApp(opts: InitOptions): void {
       2,
     ) + '\n',
     force,
+    io,
   );
 
   writeFile(
@@ -155,6 +160,7 @@ export function scaffoldApp(opts: InitOptions): void {
       2,
     ) + '\n',
     force,
+    io,
   );
 
   writeFile(
@@ -182,6 +188,7 @@ const app = useContainer().resolve(App);
 app.run();
 `,
     force,
+    io,
   );
 
   writeFile(
@@ -215,9 +222,10 @@ bun run dev
 - Add packages: \`bun add @di-framework/http\` (or graphql, auth, config, …)
 `,
     force,
+    io,
   );
 
-  console.log(`
+  io.stdout.write(`
 Done. Next:
 
   cd ${dir === resolve(process.cwd(), name) ? name : dir}
@@ -226,27 +234,37 @@ Done. Next:
 `);
 }
 
-export async function init(args: string[] = process.argv.slice(3)): Promise<void> {
+export async function init(
+  args: string[] = process.argv.slice(3),
+  io: CliIo = PROCESS_IO,
+): Promise<CommandResult> {
   try {
     const opts = parseInitArgs(args);
-    scaffoldApp(opts);
+    scaffoldApp(opts, io);
+    return { data: { directory: opts.dir, name: opts.name, force: opts.force } };
   } catch (err) {
     if (err instanceof Error && err.message === 'HELP') {
-      printInitHelp();
-      return;
+      printInitHelp(io.stderr as NodeJS.WritableStream);
+      return { data: { help: true } };
     }
-    throw err;
+    throw new CommandFailure('INVALID_USAGE', err instanceof Error ? err.message : String(err), 2);
   }
 }
 
-export function handleInitFailure(err: unknown): never {
-  console.error('init failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
+export function handleInitFailure(
+  err: unknown,
+  io: CliIo = PROCESS_IO,
+  setExitCode: (code: number) => void = (code) => {
+    process.exitCode = code;
+  },
+): void {
+  io.stderr.write(`init failed: ${err instanceof Error ? err.message : String(err)}\n`);
+  setExitCode(1);
 }
 
 export function runInitMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => init().catch(handleInitFailure),
+  start: () => Promise<unknown> = () => init().catch(handleInitFailure),
 ): void {
   if (isMain) void start();
 }
