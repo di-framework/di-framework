@@ -243,6 +243,7 @@ export type {
   SkillCatalogDiagnosticCode,
   SkillDiagnosticSource,
   SkillValidationResult,
+  ValidateResolvedSkillCatalogOptions,
   ValidateSkillDefinitionOptions,
 } from './validate-skill-catalog.ts';
 export {
