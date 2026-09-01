@@ -1,6 +1,13 @@
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+  type AiIgnorePolicy,
+  type AiIgnoreSuppressionDiagnostic,
+  aiIgnoreSuppressionDiagnostic,
+  evaluateAiIgnorePath,
+  loadAiIgnorePolicy,
+} from '../policy/index.ts';
 import { assertPathAllowed, expandUserPath } from '../sandbox/paths.ts';
 import type {
   AgentSourceDiagnostic,
@@ -21,6 +28,7 @@ export interface DiscoverAgentInstructionsOptions {
   readonly maxBytes?: number;
   /** Optional sandbox intersection; does not expand the workspace boundary. */
   readonly allowedDirectories?: readonly string[];
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
 }
 
 export interface AgentInstructionSource extends ResolvedAgentSource {
@@ -46,7 +54,10 @@ export interface AgentInstructionsLoadDiagnostic {
   readonly message: string;
 }
 
-export type AgentInstructionsDiagnostic = AgentSourceDiagnostic | AgentInstructionsLoadDiagnostic;
+export type AgentInstructionsDiagnostic =
+  | AgentSourceDiagnostic
+  | AgentInstructionsLoadDiagnostic
+  | AiIgnoreSuppressionDiagnostic;
 
 export interface DiscoverAgentInstructionsResult {
   readonly content: string;
@@ -86,6 +97,7 @@ export function discoverAgentInstructions(
       })),
     };
   }
+  const aiIgnorePolicy = options.aiIgnorePolicy ?? loadAiIgnorePolicy({ workspace });
 
   const allowedDirectories = options.allowedDirectories?.map((path) =>
     resolveFromWorkspace(path, workspace),
@@ -120,12 +132,21 @@ export function discoverAgentInstructions(
     })),
   );
   const resolution = resolveAgentSources(candidates, { workspace });
-  const selected = selectOnePerDirectory(resolution.sources);
-  const diagnostics: AgentInstructionsDiagnostic[] = relevantDiagnostics(
-    resolution.diagnostics,
-    selected,
-    filenames.length,
-  );
+  const suppressionDiagnostics: AiIgnoreSuppressionDiagnostic[] = [];
+  const permittedSources = resolution.sources.filter((source) => {
+    const evaluation = evaluateAiIgnorePath(aiIgnorePolicy, source.path, { kind: 'file' });
+    if (!evaluation.ignored) return true;
+    suppressionDiagnostics.push({
+      ...aiIgnoreSuppressionDiagnostic(evaluation, 'agent-instructions', 'file'),
+      precedence: source.precedence,
+    });
+    return false;
+  });
+  const selected = selectOnePerDirectory(permittedSources);
+  const diagnostics: AgentInstructionsDiagnostic[] = [
+    ...relevantDiagnostics(resolution.diagnostics, selected, filenames.length),
+    ...suppressionDiagnostics,
+  ];
   const sources: AgentInstructionSource[] = [];
   const parts: string[] = [];
   let bytes = 0;
@@ -192,7 +213,11 @@ export function discoverAgentInstructions(
     content: parts.join('\n\n'),
     bytes,
     sources,
-    diagnostics: diagnostics.sort((left, right) => left.precedence - right.precedence),
+    diagnostics: diagnostics.sort(
+      (left, right) =>
+        (left.precedence ?? Number.MAX_SAFE_INTEGER) -
+        (right.precedence ?? Number.MAX_SAFE_INTEGER),
+    ),
   };
 }
 

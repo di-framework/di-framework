@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { ChatModel, ToolCallback } from '@di-framework/ai';
-import { loadAiIgnorePolicy } from '../policy/aiignore.ts';
+import {
+  type AiIgnorePolicy,
+  type AiIgnoreSuppressionDiagnostic,
+  loadAiIgnorePolicy,
+} from '../policy/index.ts';
 import { expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
 import type { AgentSourceDiagnostic, ResolvedAgentSource } from '../sources/index.ts';
 import type { AiIgnoreEnforcement, AiIgnoreToolPolicy } from '../tools/aiignore-enforcement.ts';
@@ -117,7 +121,10 @@ export interface SkillsToolbox {
   readonly skillDiagnostics: readonly SkillSourceDiagnostic[];
 }
 
-export type SkillSourceDiagnostic = AgentSourceDiagnostic | SkillDuplicateDiagnostic;
+export type SkillSourceDiagnostic =
+  | AgentSourceDiagnostic
+  | SkillDuplicateDiagnostic
+  | AiIgnoreSuppressionDiagnostic;
 
 /** Preferred factory: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
 export const SkillsToolbox = {
@@ -159,26 +166,40 @@ export function skillsToolbox(options: SkillsToolboxOptions = {}): ToolCallback[
 }
 
 export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsToolbox {
-  const discovery = semanticDiscoveryOptions(options);
+  const effectiveOptions = withAiIgnorePolicy(options);
+  const discovery = semanticDiscoveryOptions(effectiveOptions);
   if (discovery.catalogStore) {
     throw new Error(
       'Asynchronous catalog stores require createSkillsToolboxAsync() or buildAsync()',
     );
   }
-  const sourceResolution = resolveSkillSources(options);
-  const files = options.files == null ? undefined : options.files.map(expandUserPath);
+  const sourceResolution = resolveSkillSources(effectiveOptions);
+  const files =
+    effectiveOptions.files == null ? undefined : effectiveOptions.files.map(expandUserPath);
   const duplicates: SkillDuplicateDiagnostic[] = [];
+  const suppressions: AiIgnoreSuppressionDiagnostic[] = [];
   const collected = collectSkills({
-    ...options,
+    ...effectiveOptions,
     directories: sourceResolution.directories,
     files,
     onDuplicate: (diagnostic) => {
       duplicates.push(diagnostic);
-      options.onDuplicate?.(diagnostic);
+      effectiveOptions.onDuplicate?.(diagnostic);
+    },
+    onSuppressed: (diagnostic) => {
+      suppressions.push(diagnostic);
+      effectiveOptions.onSuppressed?.(diagnostic);
     },
   });
 
-  return assembleSkillsToolbox(options, collected, undefined, sourceResolution, duplicates);
+  return assembleSkillsToolbox(
+    effectiveOptions,
+    collected,
+    undefined,
+    sourceResolution,
+    duplicates,
+    suppressions,
+  );
 }
 
 /** Build a toolbox without reading complete remote skill bodies during discovery. */
@@ -187,6 +208,7 @@ export async function createSkillsToolboxAsync(
 ): Promise<SkillsToolbox> {
   const discovery = semanticDiscoveryOptions(options);
   if (!discovery.catalogStore) return createSkillsToolbox(options);
+  const effectiveOptions = withAiIgnorePolicy(options);
   const catalogStore = discovery.catalogStore;
   const health = await runSkillAdapterOperation(
     'Checking skill catalog health',
@@ -223,7 +245,7 @@ export async function createSkillsToolboxAsync(
       );
   }
   return assembleSkillsToolbox(
-    options,
+    effectiveOptions,
     [],
     {
       store: catalogStore,
@@ -245,6 +267,7 @@ function assembleSkillsToolbox(
   },
   sourceResolution: ResolvedSkillSources = { directories: [], sources: [], diagnostics: [] },
   duplicateDiagnostics: readonly SkillDuplicateDiagnostic[] = [],
+  suppressionDiagnostics: readonly AiIgnoreSuppressionDiagnostic[] = [],
 ): SkillsToolbox {
   for (const skill of collected) {
     validateSkill(skill, { matchDirectoryName: skill.basePath !== '.' });
@@ -317,10 +340,24 @@ function assembleSkillsToolbox(
     );
   }
   if (options.glob !== false) {
-    raw.push(globTool({ allowedDirectories: dirs, workingDirectory: workspace }));
+    raw.push(
+      globTool({
+        allowedDirectories: dirs,
+        workingDirectory: workspace,
+        aiIgnorePolicy: options.aiIgnorePolicy,
+        onSuppressed: options.onSuppressed,
+      }),
+    );
   }
   if (options.grep !== false) {
-    raw.push(grepTool({ allowedDirectories: dirs, workingDirectory: workspace }));
+    raw.push(
+      grepTool({
+        allowedDirectories: dirs,
+        workingDirectory: workspace,
+        aiIgnorePolicy: options.aiIgnorePolicy,
+        onSuppressed: options.onSuppressed,
+      }),
+    );
   }
   if (options.write) {
     raw.push(
@@ -386,8 +423,20 @@ function assembleSkillsToolbox(
     runtime,
     retrievalAdvisor,
     skillSources: sourceResolution.sources,
-    skillDiagnostics: [...sourceResolution.diagnostics, ...duplicateDiagnostics],
+    skillDiagnostics: [
+      ...sourceResolution.diagnostics,
+      ...duplicateDiagnostics,
+      ...suppressionDiagnostics,
+    ],
   };
+}
+
+function withAiIgnorePolicy(options: SkillsToolboxOptions): SkillsToolboxOptions & {
+  readonly aiIgnorePolicy: AiIgnorePolicy;
+} {
+  if (options.aiIgnorePolicy != null) return { ...options, aiIgnorePolicy: options.aiIgnorePolicy };
+  const workspace = options.workspace ? expandUserPath(options.workspace) : process.cwd();
+  return { ...options, aiIgnorePolicy: loadAiIgnorePolicy({ workspace }) };
 }
 
 function createRetrievalAdvisor(

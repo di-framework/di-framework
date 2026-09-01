@@ -1,18 +1,26 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
+import type { AiIgnorePolicy, AiIgnoreSuppressionDiagnostic } from '../policy/index.ts';
 import { nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { expandUserPath } from '../sandbox/paths.ts';
+import { walkFiles } from '../tools/walk-files.ts';
 import { type AgentSkill, parseSkillMarkdown } from './parse-skill-markdown.ts';
 
 /** Vendor-neutral workspace and user locations used by merge discovery. */
 export const DEFAULT_SKILL_DIRECTORY_CANDIDATES = ['.agents/skills', '~/.agents/skills'] as const;
 
-const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist', 'coverage']);
+export interface LoadSkillsDirectoryOptions {
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
+  readonly onSuppressed?: (diagnostic: AiIgnoreSuppressionDiagnostic) => void;
+}
 
 /**
  * Recursively load every {@code SKILL.md} under {@code rootDirectory}.
  */
-export function loadSkillsDirectory(rootDirectory: string): AgentSkill[] {
+export function loadSkillsDirectory(
+  rootDirectory: string,
+  options: LoadSkillsDirectoryOptions = {},
+): AgentSkill[] {
   const rootPath = resolve(rootDirectory);
   let isDirectory = false;
   try {
@@ -25,7 +33,7 @@ export function loadSkillsDirectory(rootDirectory: string): AgentSkill[] {
   }
 
   const skills: AgentSkill[] = [];
-  for (const file of walkSkillFiles(rootPath)) {
+  for (const file of walkSkillFiles(rootPath, options)) {
     skills.push(loadSkillFile(file));
   }
   return skills;
@@ -34,10 +42,13 @@ export function loadSkillsDirectory(rootDirectory: string): AgentSkill[] {
 /**
  * Load {@code SKILL.md} files from each root directory.
  */
-export function loadSkillsDirectories(rootDirectories: readonly string[]): AgentSkill[] {
+export function loadSkillsDirectories(
+  rootDirectories: readonly string[],
+  options: LoadSkillsDirectoryOptions = {},
+): AgentSkill[] {
   const skills: AgentSkill[] = [];
   for (const root of rootDirectories) {
-    skills.push(...loadSkillsDirectory(root));
+    skills.push(...loadSkillsDirectory(root, options));
   }
   return skills;
 }
@@ -85,25 +96,24 @@ export function loadSkillFile(skillMdPath: string): AgentSkill {
   });
 }
 
-function walkSkillFiles(root: string): string[] {
+function walkSkillFiles(root: string, options: LoadSkillsDirectoryOptions): string[] {
   const out: string[] = [];
-  const stack = [root];
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    if (dir == null) break;
-    try {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (SKIP_DIR_NAMES.has(entry.name)) continue;
-        const full = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          stack.push(full);
-        } else if (entry.isFile() && entry.name === 'SKILL.md') {
-          out.push(full);
+  walkFiles(
+    root,
+    0,
+    Number.MAX_SAFE_INTEGER,
+    (file) => {
+      if (basename(file) === 'SKILL.md') out.push(file);
+    },
+    {
+      aiIgnorePolicy: options.aiIgnorePolicy,
+      surface: 'skill-discovery',
+      onSuppressed: (diagnostic) => {
+        if (diagnostic.kind === 'directory' || basename(diagnostic.path) === 'SKILL.md') {
+          options.onSuppressed?.(diagnostic);
         }
-      }
-    } catch {
-      // Unreadable directories are skipped.
-    }
-  }
+      },
+    },
+  );
   return out;
 }

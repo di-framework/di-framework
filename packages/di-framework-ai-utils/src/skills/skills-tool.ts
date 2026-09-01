@@ -1,4 +1,11 @@
+import { resolve } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import {
+  type AiIgnorePolicy,
+  type AiIgnoreSuppressionDiagnostic,
+  aiIgnoreSuppressionDiagnostic,
+  evaluateAiIgnorePath,
+} from '../policy/index.ts';
 import { loadSkillFile, loadSkillsDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
 import {
@@ -45,6 +52,8 @@ export interface SkillsToolOptions {
   readonly toolDescriptionTemplate?: string;
   readonly onActivate?: (skill: AgentSkill) => void;
   readonly onDuplicate?: (diagnostic: SkillDuplicateDiagnostic) => void;
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
+  readonly onSuppressed?: (diagnostic: AiIgnoreSuppressionDiagnostic) => void;
 }
 
 export interface SkillDuplicateDiagnostic {
@@ -71,11 +80,26 @@ export function collectSkills(options: SkillsToolOptions): AgentSkill[] {
   const collected: AgentSkill[] = [...(options.skills ?? [])];
   if (options.files?.length) {
     for (const file of options.files) {
-      collected.push(loadSkillFile(file));
+      const path = resolve(file);
+      const evaluation = options.aiIgnorePolicy
+        ? evaluateAiIgnorePath(options.aiIgnorePolicy, path, { kind: 'file' })
+        : undefined;
+      if (evaluation?.ignored) {
+        options.onSuppressed?.(
+          aiIgnoreSuppressionDiagnostic(evaluation, 'skill-discovery', 'file'),
+        );
+        continue;
+      }
+      collected.push(loadSkillFile(path));
     }
   }
   if (options.directories?.length) {
-    collected.push(...loadSkillsDirectories(options.directories));
+    collected.push(
+      ...loadSkillsDirectories(options.directories, {
+        aiIgnorePolicy: options.aiIgnorePolicy,
+        onSuppressed: options.onSuppressed,
+      }),
+    );
   }
   return [...toSkillsMap(collected, options.onDuplicate).values()];
 }

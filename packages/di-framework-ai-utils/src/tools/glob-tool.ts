@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs';
 import { relative } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
+import type { AiIgnorePolicy, AiIgnoreSuppressionDiagnostic } from '../policy/index.ts';
 import {
   type AllowedDirectories,
   resolveAllowedDirectories,
@@ -17,6 +18,8 @@ export interface GlobToolOptions {
   readonly workingDirectory?: string;
   readonly maxResults?: number;
   readonly maxDepth?: number;
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
+  readonly onSuppressed?: (diagnostic: AiIgnoreSuppressionDiagnostic) => void;
 }
 
 export interface GlobInput {
@@ -70,12 +73,22 @@ Supports globs like "**/*.md" or "scripts/*". Returns matching paths sorted by n
 
       const matcher = compileGlob(pattern);
       const matches: string[] = [];
-      walkFiles(access.path, 0, maxDepth, (file) => {
-        const rel = relative(access.path, file).split('\\').join('/');
-        if (matcher(rel) || matcher(file.split('\\').join('/'))) {
-          matches.push(file);
-        }
-      });
+      walkFiles(
+        access.path,
+        0,
+        maxDepth,
+        (file) => {
+          const rel = relative(access.path, file).split('\\').join('/');
+          if (matcher(rel) || matcher(file.split('\\').join('/'))) {
+            matches.push(file);
+          }
+        },
+        {
+          aiIgnorePolicy: options.aiIgnorePolicy,
+          surface: 'glob',
+          onSuppressed: options.onSuppressed,
+        },
+      );
       matches.sort((a, b) => a.localeCompare(b));
       const clipped = matches.slice(0, maxResults);
       if (clipped.length === 0) {
