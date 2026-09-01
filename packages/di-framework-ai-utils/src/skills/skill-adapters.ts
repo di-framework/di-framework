@@ -149,6 +149,12 @@ export interface SkillVectorSearch {
 export interface SkillIndexVector {
   readonly name: string;
   readonly description: string;
+  /**
+   * Exact source chunk used to produce the embedding. Writers may persist it as
+   * the vector document text, but search results and discovery prompts must not
+   * expose it.
+   */
+  readonly text?: string;
   readonly chunk: number;
   readonly source: SkillChunkSource;
   /** Optional source identity retained by deterministic artifact writers. */

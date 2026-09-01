@@ -20,6 +20,7 @@ export interface SkillSearchChunkRecord {
   readonly kind: typeof KIND_CHUNK;
   readonly name: string;
   readonly description: string;
+  readonly text?: string;
   readonly chunk: number;
   readonly source: SkillChunkSource;
   readonly namespace: string;
@@ -126,6 +127,7 @@ export function toChunkRecords(
     kind: KIND_CHUNK,
     name: vector.name,
     description: vector.description,
+    text: vector.text,
     chunk: vector.chunk,
     source: vector.source,
     namespace,
@@ -219,7 +221,7 @@ class VectorStoreConnection implements SkillSearchBackend {
       records.map((record) =>
         document({
           id: record.id,
-          text: record.description,
+          text: record.text ?? record.description,
           embedding: record.embedding,
           metadata: {
             kind: KIND_CHUNK,
