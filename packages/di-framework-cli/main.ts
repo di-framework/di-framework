@@ -1,99 +1,136 @@
 #!/usr/bin/env bun
-/**
- * di-framework CLI — app tooling by default; monorepo maintainers use `mx`.
- *
- * App:        di-framework init | build | check
- * Maintainer: di-framework mx <build|test|typecheck|publish>
- */
+/** di-framework CLI — app tooling by default; monorepo maintainers use `mx`. */
 import { build } from './cmd/build';
 import { check } from './cmd/check';
 import { generateCommand } from './cmd/generate';
 import { init } from './cmd/init';
-import { mx, printMxHelp } from './cmd/mx';
+import type { MxBuildOptions } from './cmd/mx/build';
+import { build as mxBuild, parseMxBuildArgs } from './cmd/mx/build';
+import { publish } from './cmd/mx/publish';
+import { test } from './cmd/mx/test';
+import { typecheck } from './cmd/mx/typecheck';
+import {
+  type CliIo,
+  type CliStream,
+  type CommandNode,
+  executeCommand,
+  formatCommandHelp,
+} from './command';
 
-type Command = {
-  description: string;
-  run: (args: string[]) => Promise<void>;
+export type CliHandlers = {
+  init(args: string[]): Promise<void>;
+  generate(args: string[]): Promise<void>;
+  build(args: string[]): Promise<void>;
+  check(args: string[]): Promise<void>;
+  mxBuild(options: MxBuildOptions): Promise<void>;
+  mxTest(): Promise<void>;
+  mxTypecheck(argv: string[]): Promise<void>;
+  mxPublish(): Promise<void>;
 };
 
-const COMMANDS: Record<string, Command> = {
-  init: {
-    description: 'Scaffold a new di-framework application',
-    run: (args) => init(args),
-  },
-  generate: {
-    description: 'Generates application surfaces from schema manifests',
-    run: (args) => generateCommand(args),
-  },
-  build: {
-    description: 'Build the current application (ttsc or tsc)',
-    run: (args) => build(args),
-  },
-  check: {
-    description: 'Typecheck the current application',
-    run: (args) => check(args),
-  },
-  mx: {
-    description: 'Maintainer tools for the di-framework monorepo',
-    run: (args) => mx(args),
-  },
+const DEFAULT_HANDLERS: CliHandlers = {
+  init,
+  generate: generateCommand,
+  build,
+  check,
+  mxBuild,
+  mxTest: test,
+  mxTypecheck: typecheck,
+  mxPublish: publish,
 };
 
-export function printHelp(stream: NodeJS.WritableStream = process.stderr): void {
-  stream.write(`di-framework — CLI for apps built with @di-framework/*
-
-Usage:
-  di-framework <command> [args...]
-
-Commands:
-`);
-  for (const [name, { description }] of Object.entries(COMMANDS)) {
-    if (name === 'mx') continue;
-    stream.write(`  ${name.padEnd(12)} ${description}\n`);
-  }
-  stream.write(`  ${'mx'.padEnd(12)} Maintainer tools (build / test / typecheck / publish)
-
-Examples:
-  di-framework init my-api
-  di-framework check
-  di-framework build
-  di-framework mx build          # monorepo maintainers only
-
-`);
+export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): CommandNode {
+  return {
+    description: 'CLI for apps built with @di-framework/*',
+    usage: 'di-framework <command> [args...]',
+    children: {
+      init: {
+        description: 'Scaffold a new di-framework application',
+        usage: 'di-framework init [name] [options]',
+        run: async ({ args }) => {
+          await handlers.init(args);
+          return undefined;
+        },
+      },
+      generate: {
+        description: 'Generate application surfaces from schema manifests',
+        usage: 'di-framework generate [options]',
+        run: async ({ args }) => {
+          await handlers.generate(args);
+          return undefined;
+        },
+      },
+      build: {
+        description: 'Build the current application (ttsc or tsc)',
+        usage: 'di-framework build [args...]',
+        run: async ({ args }) => {
+          await handlers.build(args);
+          return undefined;
+        },
+      },
+      check: {
+        description: 'Typecheck the current application',
+        usage: 'di-framework check [tsconfig.json] [options]',
+        run: async ({ args }) => {
+          await handlers.check(args);
+          return undefined;
+        },
+      },
+      mx: {
+        description: 'Maintainer tools for the di-framework monorepo',
+        children: {
+          build: {
+            description: 'Build all monorepo packages',
+            run: async ({ args }) => {
+              await handlers.mxBuild(parseMxBuildArgs(args));
+              return undefined;
+            },
+          },
+          test: {
+            description: 'Run the monorepo E2E test suite',
+            run: async () => {
+              await handlers.mxTest();
+              return undefined;
+            },
+          },
+          typecheck: {
+            description: 'Typecheck the monorepo with the language service',
+            run: async ({ args }) => {
+              await handlers.mxTypecheck(['bun', 'typecheck', ...args]);
+              return undefined;
+            },
+          },
+          publish: {
+            description: 'Test, build, and publish all packages to npm',
+            run: async () => {
+              await handlers.mxPublish();
+              return undefined;
+            },
+          },
+        },
+      },
+    },
+  };
 }
 
-export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const [cmdName, ...args] = argv;
+export const COMMAND_TREE = createCommandTree();
 
-  if (!cmdName || cmdName === 'help' || cmdName === '--help' || cmdName === '-h') {
-    printHelp();
-    if (!cmdName) process.exit(1);
-    return;
-  }
-
-  const cmd = COMMANDS[cmdName];
-  if (!cmd) {
-    console.error(`Unknown command: ${cmdName}\n`);
-    printHelp();
-    process.exit(1);
-  }
-
-  await cmd.run(args);
+export function printHelp(stream: CliStream = process.stdout): void {
+  stream.write(formatCommandHelp(COMMAND_TREE));
 }
 
-export function handleMainFailure(err: unknown): never {
-  console.error('Failed to execute command:', err instanceof Error ? err.message : err);
-  process.exit(1);
+export function main(argv: string[] = process.argv.slice(2), io?: CliIo): Promise<0 | 1 | 2 | 3> {
+  return executeCommand(COMMAND_TREE, argv, io);
 }
 
 export function runMain(
   isMain = import.meta.main,
-  start: () => Promise<void> = () => main().catch(handleMainFailure),
+  start: () => Promise<0 | 1 | 2 | 3> = () => main(),
+  setExitCode: (exitCode: 0 | 1 | 2 | 3) => void = (exitCode) => {
+    process.exitCode = exitCode;
+  },
 ): void {
-  if (isMain) void start();
+  if (isMain) void start().then(setExitCode);
 }
-
-// re-export for tests that want help for mx without importing cmd/mx
-export { printMxHelp };
 
 runMain();

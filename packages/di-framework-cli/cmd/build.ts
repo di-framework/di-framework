@@ -100,12 +100,15 @@ export async function buildApp(
   console.log('✅ Build finished');
 }
 
-export async function build(args: string[] = process.argv.slice(3)): Promise<void> {
+export async function build(
+  args: string[] = process.argv.slice(3),
+  cwd: string = process.cwd(),
+): Promise<void> {
   if (args[0] === '--help' || args[0] === '-h') {
     printBuildHelp();
     return;
   }
-  await buildApp(parseBuildArgs(args));
+  await buildApp(parseBuildArgs(args, cwd));
 }
 
 export function handleBuildFailure(err: unknown): never {

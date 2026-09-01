@@ -3,24 +3,17 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { findTopmostTsconfig, parseArgs } from '../cmd/mx/typecheck';
+import { CommandFailure } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
 async function withExitCapture(fn: () => Promise<void>): Promise<number> {
-  const originalExit = process.exit;
-  let exitCode: number | undefined;
-  (process as any).exit = (code: number) => {
-    exitCode = code;
-    throw new Error(`EXIT_${code}`);
-  };
   try {
     await fn();
-    throw new Error('typecheck did not exit');
-  } catch (err: any) {
-    if (!String(err?.message ?? err).startsWith('EXIT_')) throw err;
-    return exitCode!;
-  } finally {
-    process.exit = originalExit;
+    return 0;
+  } catch (err) {
+    if (!(err instanceof CommandFailure)) throw err;
+    return err.exitCode;
   }
 }
 
@@ -360,6 +353,12 @@ describe('typecheck command', () => {
         expect(() => handleTypecheckFailure(new Error('boom'))).toThrow('EXIT_2');
         expect(code).toBe(2);
         expect(err.mock.calls[0]?.[0]).toContain('Fatal error while running typecheck');
+
+        expect(() =>
+          handleTypecheckFailure(new CommandFailure('TYPECHECK_FAILED', 'typed failure', 1)),
+        ).toThrow('EXIT_1');
+        expect(code).toBe(1);
+        expect(err.mock.calls[1]?.[0]).toBe('typed failure');
       } finally {
         process.exit = originalExit;
         err.mockRestore();

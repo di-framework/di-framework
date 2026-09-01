@@ -61,6 +61,9 @@ di-framework mx publish     # test → build → npm publish
 ## Adding commands
 
 - Add terminal routing and presentation under this package.
+- Define nested command nodes with the shared `command.ts` dispatcher. Handlers receive command-local
+  arguments and injectable output streams, return structured data, and use `CommandFailure` for stable
+  failures; only the executable boundary assigns `process.exitCode`.
 - Put domain behavior and typed results in the owning feature package; command handlers only translate
   arguments and presentation.
 - Never add another executable or compatibility alias.
