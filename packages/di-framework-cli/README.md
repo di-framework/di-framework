@@ -36,6 +36,7 @@ di-framework <command> [args...]
 | **`skills index validate`** | Validate integrity and optional source drift |
 | **`skills index query`** | Query an index and report selected matches or abstention |
 | **`skills index migrate`** | Rewrite an index in the current format |
+| **`skills validate`** | Validate neutral default and explicit Agent Skills catalogs |
 
 ```bash
 di-framework init my-api
@@ -86,6 +87,33 @@ package result. Text mode summarizes the same fields. Validation drift and
 query abstention exit `1`; invalid options, missing sources/indexes, and invalid
 indexes exit `2`; embedding, writing, dependency, and unexpected operation
 failures exit `3`.
+
+### Skills validation
+
+```bash
+# Validate <workspace>/.agents/skills and ~/.agents/skills.
+di-framework skills validate
+
+# Add explicit directory and package sources before the neutral defaults.
+di-framework skills validate \
+  --workspace . \
+  --skills-dir ./team-skills \
+  --skills-package @example/shared-skills
+
+# Validate only explicitly configured sources.
+di-framework skills validate \
+  --skills-dir ./team-skills \
+  --source-mode replace \
+  --json
+```
+
+The command delegates resolution and every validation decision to
+`validateSkillCatalog` from `@di-framework/ai-utils`. Text output prints a
+summary followed by source-aware diagnostics. JSON output uses the shared
+envelope and includes `valid`, `skillCount`, and the package's typed
+`diagnostics`; skill bodies are not emitted. A valid catalog exits `0`,
+catalogs with error findings exit `1`, malformed CLI configuration exits `2`, and a
+missing package or unexpected execution failure exits `3`.
 
 `init` wires `@di-framework/tsc` and `@di-framework/cli` by default (`plugins` in `tsconfig`; `"build"` / `"check"` scripts call `di-framework`; `ttsc` and TypeScript 7+ come with `@di-framework/tsc`). Runtime parameter checks are injected on `ttsc --emit` (`bun run build` / `bun start`). `bun run dev` executes source with Bun and skips emit-time checks. The first `ttsc` build needs a Go toolchain.
 ### `init` options
