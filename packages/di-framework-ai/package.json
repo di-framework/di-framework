@@ -53,14 +53,9 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@di-framework/auth": "^4",
-    "@di-framework/core": "^4",
+    "@di-framework/auth": "^5",
+    "@di-framework/core": "^5",
     "typescript": "^5"
-  },
-  "peerDependenciesMeta": {
-    "@di-framework/auth": {
-      "optional": true
-    }
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"
