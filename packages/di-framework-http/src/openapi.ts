@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
 import { SCHEMAS } from './decorators.ts';
 import registry from './registry.ts';
 
@@ -12,6 +14,167 @@ export type OpenAPIOptions = {
   /** Document-level default `security` requirement. */
   security?: Array<Record<string, string[]>>;
 };
+
+export interface OpenAPIInfo {
+  readonly title: string;
+  readonly version: string;
+  readonly description: string;
+}
+
+export interface OpenAPIParameter extends Record<string, unknown> {
+  readonly name: string;
+  readonly in: string;
+  readonly required?: boolean;
+  readonly schema?: unknown;
+}
+
+export interface OpenAPIResponse extends Record<string, unknown> {
+  readonly description?: string;
+}
+
+export interface OpenAPIOperation extends Record<string, unknown> {
+  readonly summary?: string;
+  readonly description?: string;
+  readonly operationId?: string;
+  readonly requestBody?: unknown;
+  readonly responses: Record<string, OpenAPIResponse>;
+  parameters?: OpenAPIParameter[];
+  readonly security?: Array<Record<string, string[]>>;
+}
+
+export interface OpenAPIDocument {
+  readonly openapi: '3.1.0';
+  readonly info: OpenAPIInfo;
+  paths: Record<string, Record<string, OpenAPIOperation>>;
+  components: {
+    schemas: Record<string, unknown>;
+    securitySchemes?: Record<string, unknown>;
+  };
+  readonly security?: Array<Record<string, string[]>>;
+}
+
+export interface OpenAPIRegistry {
+  getTargets(): Iterable<unknown>;
+}
+
+interface OpenAPIEndpointDeclaration {
+  readonly isEndpoint?: boolean;
+  readonly path?: string;
+  readonly method?: string;
+  readonly metadata?: {
+    readonly summary?: string;
+    readonly description?: string;
+    readonly requestBody?: unknown;
+    readonly responses?: Record<string, unknown>;
+    readonly parameters?: unknown[];
+    readonly security?: unknown;
+  };
+}
+
+export interface GenerateOpenAPIDocumentOptions {
+  /** Modules imported to register their decorated controllers. */
+  readonly controllerModules: readonly string[];
+  /** OpenAPI metadata and schema configuration. */
+  readonly configuration?: OpenAPIOptions;
+  /** Base directory for relative controller module paths. */
+  readonly cwd?: string;
+  /** Registry populated by the controller modules. */
+  readonly registry?: OpenAPIRegistry;
+  /** Injectable module loader for embedders and tests. */
+  readonly importModule?: (absolutePath: string) => Promise<unknown>;
+}
+
+export interface OpenAPIGenerationResult {
+  readonly document: OpenAPIDocument;
+  readonly controllerModules: readonly string[];
+}
+
+export interface OpenAPIWriteResult {
+  readonly outputPath: string;
+  readonly bytes: number;
+}
+
+export type OpenAPIOperationErrorCode =
+  | 'controllers-required'
+  | 'controller-load-failed'
+  | 'document-write-failed';
+
+export class OpenAPIOperationError extends Error {
+  readonly code: OpenAPIOperationErrorCode;
+  readonly path?: string;
+
+  constructor(
+    code: OpenAPIOperationErrorCode,
+    message: string,
+    options: { path?: string; cause?: unknown } = {},
+  ) {
+    super(message, { cause: options.cause });
+    this.name = 'OpenAPIOperationError';
+    this.code = code;
+    this.path = options.path;
+  }
+}
+
+/**
+ * Load explicit controller modules and generate an OpenAPI document.
+ *
+ * This operation has no CLI concerns: paths, registry, module loading, and
+ * document configuration are supplied explicitly and the typed document is
+ * returned to the caller.
+ */
+export async function generateOpenAPIDocument(
+  options: GenerateOpenAPIDocumentOptions,
+): Promise<OpenAPIGenerationResult> {
+  if (options.controllerModules.length === 0) {
+    throw new OpenAPIOperationError(
+      'controllers-required',
+      'At least one controller module is required',
+    );
+  }
+
+  const cwd = resolve(options.cwd ?? process.cwd());
+  const controllerModules = options.controllerModules.map((modulePath) =>
+    isAbsolute(modulePath) ? resolve(modulePath) : resolve(cwd, modulePath),
+  );
+  const importModule = options.importModule ?? ((modulePath: string) => import(modulePath));
+
+  for (const modulePath of controllerModules) {
+    try {
+      await importModule(modulePath);
+    } catch (cause) {
+      throw new OpenAPIOperationError(
+        'controller-load-failed',
+        `Unable to load controller module: ${modulePath}`,
+        { path: modulePath, cause },
+      );
+    }
+  }
+
+  return {
+    document: generateOpenAPI(options.configuration, options.registry ?? registry),
+    controllerModules,
+  };
+}
+
+/** Write a generated document as formatted JSON. Writing is always explicit. */
+export function writeOpenAPIDocument(
+  document: OpenAPIDocument,
+  outputPath: string,
+  cwd = process.cwd(),
+): OpenAPIWriteResult {
+  const absolutePath = isAbsolute(outputPath) ? resolve(outputPath) : resolve(cwd, outputPath);
+  const contents = `${JSON.stringify(document, null, 2)}\n`;
+  try {
+    writeFileSync(absolutePath, contents, 'utf8');
+  } catch (cause) {
+    throw new OpenAPIOperationError(
+      'document-write-failed',
+      `Unable to write OpenAPI document: ${absolutePath}`,
+      { path: absolutePath, cause },
+    );
+  }
+  return { outputPath: absolutePath, bytes: Buffer.byteLength(contents, 'utf8') };
+}
 
 const COLLECT_REFS_MAX_DEPTH = 64;
 
@@ -83,8 +246,11 @@ function extractPathParams(path: string): string[] {
   return names;
 }
 
-export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = registry) {
-  const spec: any = {
+export function generateOpenAPI(
+  options: OpenAPIOptions = {},
+  registryToUse: OpenAPIRegistry = registry,
+): OpenAPIDocument {
+  const spec: OpenAPIDocument = {
     openapi: '3.1.0',
     info: {
       title: options.title || 'Generated API',
@@ -101,18 +267,24 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
 
   const targets = registryToUse.getTargets();
 
-  const metaParamsMap = new Map<string, unknown[]>();
+  const metaParamsMap = new Map<string, OpenAPIParameter[]>();
 
   for (const target of targets) {
+    const controller = target as Record<string | symbol, unknown> & { name?: unknown };
+    const controllerName =
+      typeof controller.name === 'string' ? controller.name : 'AnonymousController';
     // Look for endpoints on the target (static properties)
-    for (const key of Object.getOwnPropertyNames(target)) {
-      const property = (target as any)[key];
+    for (const key of Object.getOwnPropertyNames(controller)) {
+      const property = controller[key] as OpenAPIEndpointDeclaration | undefined;
       if (property?.isEndpoint) {
         const path = property.path || '/unknown';
         const method = (property.method || 'get').toLowerCase();
 
         if (property.metadata?.parameters) {
-          metaParamsMap.set(`${path}|${method}`, property.metadata.parameters as unknown[]);
+          metaParamsMap.set(
+            `${path}|${method}`,
+            property.metadata.parameters as OpenAPIParameter[],
+          );
         }
 
         if (!spec.paths[path]) {
@@ -122,9 +294,9 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
         spec.paths[path][method] = {
           summary: property.metadata?.summary || key,
           description: property.metadata?.description,
-          operationId: `${target.name}.${key}`,
+          operationId: `${controllerName}.${key}`,
           requestBody: property.metadata?.requestBody,
-          responses: property.metadata?.responses || {
+          responses: (property.metadata?.responses as Record<string, OpenAPIResponse>) || {
             '200': {
               description: 'OK',
             },
@@ -133,7 +305,7 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
           // meaningful in OpenAPI — it opts an operation out of the
           // document-level `security` default.
           ...(property.metadata?.security !== undefined
-            ? { security: property.metadata.security }
+            ? { security: property.metadata.security as Array<Record<string, string[]>> }
             : {}),
         };
       }
@@ -141,7 +313,7 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
   }
 
   // Rewrite paths: convert :param → {param} and inject parameters
-  const rewrittenPaths: Record<string, Record<string, unknown>> = {};
+  const rewrittenPaths: Record<string, Record<string, OpenAPIOperation>> = {};
 
   for (const [rawPath, methods] of Object.entries(spec.paths)) {
     const openApiPath = toOpenAPIPath(rawPath);
@@ -156,7 +328,7 @@ export function generateOpenAPI(options: OpenAPIOptions = {}, registryToUse = re
 
     rewrittenPaths[openApiPath] ??= {};
 
-    for (const [method, operation] of Object.entries(methods as Record<string, any>)) {
+    for (const [method, operation] of Object.entries(methods)) {
       const decoratorParams = metaParamsMap.get(`${rawPath}|${method}`) ?? [];
       if (autoParams.length > 0 || decoratorParams.length > 0) {
         operation.parameters = [...autoParams, ...decoratorParams];
