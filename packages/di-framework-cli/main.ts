@@ -3,6 +3,7 @@
 import { build } from './cmd/build';
 import { check } from './cmd/check';
 import { generateCommand } from './cmd/generate';
+import { runHttpOpenAPIGenerate } from './cmd/http/openapi-generate';
 import { init } from './cmd/init';
 import type { MxBuildOptions } from './cmd/mx/build';
 import { build as mxBuild, parseMxBuildArgs } from './cmd/mx/build';
@@ -13,6 +14,7 @@ import {
   type CliIo,
   type CliStream,
   type CommandNode,
+  type CommandResult,
   executeCommand,
   formatCommandHelp,
 } from './command';
@@ -22,6 +24,7 @@ export type CliHandlers = {
   generate(args: string[]): Promise<void>;
   build(args: string[]): Promise<void>;
   check(args: string[]): Promise<void>;
+  httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   mxBuild(options: MxBuildOptions): Promise<void>;
   mxTest(): Promise<void>;
   mxTypecheck(argv: string[]): Promise<void>;
@@ -33,6 +36,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   generate: generateCommand,
   build,
   check,
+  httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   mxBuild,
   mxTest: test,
   mxTypecheck: typecheck,
@@ -74,6 +78,26 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
         run: async ({ args }) => {
           await handlers.check(args);
           return undefined;
+        },
+      },
+      http: {
+        description: 'HTTP application operations',
+        children: {
+          openapi: {
+            description: 'OpenAPI document operations',
+            children: {
+              generate: {
+                description: 'Generate an OpenAPI document from controller modules',
+                usage:
+                  'di-framework http openapi generate --controllers <module> [--controllers <module> ...] [--output <path>]',
+                options: [
+                  '--controllers <module>  Controller module to load (repeatable)',
+                  '--output <path>  Output file (default: openapi.json)',
+                ],
+                run: ({ args }) => handlers.httpOpenAPIGenerate(args),
+              },
+            },
+          },
         },
       },
       mx: {

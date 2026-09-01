@@ -40,6 +40,7 @@ describe('CLI main router', () => {
       'generate',
       'build',
       'check',
+      'http',
       'mx',
     ]);
     expect(Object.keys(COMMAND_TREE.children?.mx?.children ?? {})).toEqual([
@@ -87,6 +88,10 @@ describe('CLI main router', () => {
       generate: async (args) => void calls.push(['generate', args]),
       build: async (args) => void calls.push(['build', args]),
       check: async (args) => void calls.push(['check', args]),
+      httpOpenAPIGenerate: async (args) => {
+        calls.push(['http openapi generate', args]);
+        return { data: { outputPath: '/tmp/openapi.json', bytes: 10 } };
+      },
       mxBuild: async (options) => void calls.push(['mx build', options]),
       mxTest: async () => void calls.push(['mx test', undefined]),
       mxTypecheck: async (argv) => void calls.push(['mx typecheck', argv]),
@@ -98,6 +103,7 @@ describe('CLI main router', () => {
       ['generate', '--check'],
       ['build', '--watch'],
       ['check', 'tsconfig.app.json'],
+      ['http', 'openapi', 'generate', '--controllers', './controllers.ts'],
       ['mx', 'build', '--sync-versions'],
       ['mx', 'test'],
       ['mx', 'typecheck', '--pretty=0'],
@@ -110,6 +116,7 @@ describe('CLI main router', () => {
       ['generate', ['--check']],
       ['build', ['--watch']],
       ['check', ['tsconfig.app.json']],
+      ['http openapi generate', ['--controllers', './controllers.ts']],
       ['mx build', { syncVersions: true }],
       ['mx test', undefined],
       ['mx typecheck', ['bun', 'typecheck', '--pretty=0']],
