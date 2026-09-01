@@ -188,15 +188,23 @@ jobs:
 
           favicon = '<link rel="icon" type="image/png" href="/favicon.png">'
           patched = 0
+          skipped = 0
           for html_path in Path("dir").rglob("*.html"):
               html = html_path.read_text()
               if favicon in html:
                   continue
-              if "</head>" not in html:
-                  raise RuntimeError(f"Missing </head> in {html_path}")
-              html_path.write_text(html.replace("</head>", f"  {favicon}\n</head>", 1))
+              if "</head>" in html:
+                  html = html.replace("</head>", f"  {favicon}\n</head>", 1)
+              elif "<title>" in html:
+                  # The generated redirect index uses an implicit HTML head.
+                  html = html.replace("<title>", f"{favicon}\n<title>", 1)
+              else:
+                  print(f"Skipping headless HTML file: {html_path}")
+                  skipped += 1
+                  continue
+              html_path.write_text(html)
               patched += 1
-          print(f"Added favicon link to {patched} HTML files")
+          print(f"Added favicon link to {patched} HTML files; skipped {skipped}")
           PY
           cp docs/Writerside/images/favicon.png dir/favicon.png
           cp docs/Writerside/images/favicon.png dir/favicon.ico
