@@ -87,6 +87,7 @@ export type {
   SkillSourceMode,
   SkillsAgentBundle,
   SkillsAgentFromOverrides,
+  SkillsAgentInstructionDiscoveryOptions,
   SkillsDecoratorOptions,
   SkillsIndexChunk,
   SkillsIndexChunkSource,

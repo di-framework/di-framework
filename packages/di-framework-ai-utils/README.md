@@ -64,6 +64,7 @@ import { SkillsAgent } from '@di-framework/ai-utils';
 const agent = SkillsAgent.builder()
   .chatModel(new OpenAiChatModel({ model: 'gpt-4o-mini' }))
   .system('You help with TypeScript code review.')
+  .instructionDiscovery({ workingDirectory: 'packages/api' })
   .addSkillsDirectory('.agents/skills')
   .workspace(process.cwd())
   .write()
@@ -224,7 +225,30 @@ Builders remain the supported escape hatch. Decorators do not run indexing or lo
 
 ### `SkillsAgent.builder()` extras
 
-`system`, `chatModel`, `chatClient`, `extraTools`, `advisors`, `conversationMemory`, `defaultConversationId`, `defaultOptions`, `clientBuilderOptions`. `build()` returns `ChatAgent`; `buildBundle()` also returns the toolbox.
+`system`, `instructionDiscovery`, `chatModel`, `chatClient`, `extraTools`, `advisors`, `conversationMemory`, `defaultConversationId`, `defaultOptions`, `clientBuilderOptions`. `build()` returns `ChatAgent`; `buildBundle()` also returns the toolbox and the repository instruction discovery result.
+
+Repository instruction discovery is enabled by default and is always bounded by
+the agent's `workspace`. Configure hierarchy traversal with
+`.instructionDiscovery({ workingDirectory, fallbackFilenames, maxBytes,
+allowedDirectories })`, or disable it with `.instructionDiscovery(false)` (the
+options-object equivalent is `instructionDiscovery: false`). Instruction files
+only contribute text to the system prompt: they cannot add tools or expand file
+tool roots.
+
+System prompt sections are assembled deterministically in this order:
+
+1. caller-provided `system` instructions;
+2. repository instructions, ordered from the workspace root to the working
+   directory; and
+3. the memory-tool instructions when `memories` is enabled.
+
+Caller instructions have the highest authority. Within repository instructions,
+the file closest to the working directory is the most specific and takes
+precedence over broader files. Memory instructions describe the configured
+memory tools and do not override caller or repository policy. Use
+`buildBundle().instructions` to inspect the exact ordered sources, combined
+content, byte count, and diagnostics; it is `undefined` when discovery is
+disabled.
 
 ## Toolbox tools
 

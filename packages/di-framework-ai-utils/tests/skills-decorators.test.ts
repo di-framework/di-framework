@@ -267,6 +267,7 @@ describe('skills decorators', () => {
       conversationMemory: memory,
       defaultConversationId: 'c1',
       builder: builderOptions,
+      instructionDiscovery: false,
     }).toAgentOptions();
 
     expect(options.system).toBe('Hello');
@@ -275,6 +276,7 @@ describe('skills decorators', () => {
     expect(options.conversationMemory).toBe(memory);
     expect(options.defaultConversationId).toBe('c1');
     expect(options.builder).toBe(builderOptions);
+    expect(options.instructionDiscovery).toBe(false);
   });
 
   test('builderFrom applies files and extraAllowedDirectories', () => {

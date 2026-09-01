@@ -1,4 +1,8 @@
-export type { CreateSkillsAgentOptions, SkillsAgentBundle } from './create-skills-agent.ts';
+export type {
+  CreateSkillsAgentOptions,
+  SkillsAgentBundle,
+  SkillsAgentInstructionDiscoveryOptions,
+} from './create-skills-agent.ts';
 export {
   createSkillsAgent,
   createSkillsAgentAsync,
