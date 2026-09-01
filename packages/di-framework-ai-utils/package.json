@@ -52,9 +52,9 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/ai": "^4",
-    "@di-framework/core": "^4",
-    "@di-framework/repo": "^4",
+    "@di-framework/ai": "^5",
+    "@di-framework/core": "^5",
+    "@di-framework/repo": "^5",
     "@huggingface/transformers": "4.2.0",
     "typescript": "^5"
   },
