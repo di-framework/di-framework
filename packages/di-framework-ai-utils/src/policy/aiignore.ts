@@ -64,6 +64,26 @@ export interface AiIgnoreEvaluation {
   readonly pathAccess: PathAccessResult;
 }
 
+export type AiIgnoreDiscoverySurface =
+  | 'recursive-walk'
+  | 'glob'
+  | 'grep'
+  | 'skill-discovery'
+  | 'agent-instructions';
+
+/** Content-free record emitted when discovery suppresses an operational path. */
+export interface AiIgnoreSuppressionDiagnostic {
+  readonly code: 'aiignore-suppressed';
+  readonly severity: 'warning';
+  readonly path: string;
+  readonly kind: 'file' | 'directory';
+  readonly surface: AiIgnoreDiscoverySurface;
+  readonly policyPath: string;
+  readonly policyLine?: number;
+  readonly precedence?: number;
+  readonly message: string;
+}
+
 export type AiIgnorePolicyErrorCode =
   | 'WORKSPACE_UNAVAILABLE'
   | 'POLICY_OUTSIDE_WORKSPACE'
@@ -221,6 +241,24 @@ export function evaluateAiIgnorePath(
     source: policy.source,
     rule: matched,
     pathAccess,
+  };
+}
+
+/** Convert an ignored evaluation into a content-free discovery diagnostic. */
+export function aiIgnoreSuppressionDiagnostic(
+  evaluation: AiIgnoreEvaluation,
+  surface: AiIgnoreDiscoverySurface,
+  kind: 'file' | 'directory',
+): AiIgnoreSuppressionDiagnostic {
+  return {
+    code: 'aiignore-suppressed',
+    severity: 'warning',
+    path: evaluation.path,
+    kind,
+    surface,
+    policyPath: evaluation.source.path,
+    policyLine: evaluation.rule?.line,
+    message: `Discovery suppressed ${kind} ${evaluation.path} by policy ${evaluation.source.path}`,
   };
 }
 

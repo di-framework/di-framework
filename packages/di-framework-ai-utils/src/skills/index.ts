@@ -11,6 +11,7 @@ export {
   SkillsAgent,
   SkillsAgentBuilder,
 } from './create-skills-agent.ts';
+export type { LoadSkillsDirectoryOptions } from './load-skills.ts';
 export {
   DEFAULT_SKILL_DIRECTORY_CANDIDATES,
   existingSkillDirectories,

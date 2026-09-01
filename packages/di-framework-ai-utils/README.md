@@ -332,6 +332,36 @@ otherwise ignore it. `.aiignore` does not replace `.gitignore`, and its decision
 cannot grant access denied by the filesystem sandbox. Lexical escapes and
 symlinks that leave the workspace are denied before rules are considered.
 
+Discovery uses the root policy consistently. `SkillsToolbox` loads it from the
+configured workspace and applies it to recursive Glob/Grep walking and skill
+catalog discovery; `discoverAgentInstructions` applies it before reading each
+instruction source. Ignored directories are pruned before their entries are
+visited. Direct low-level factories accept an `aiIgnorePolicy`, and
+`onSuppressed` receives content-free `aiignore-suppressed` diagnostics:
+
+```ts
+const suppressed = [];
+const policy = loadAiIgnorePolicy({ workspace: process.cwd() });
+const tools = SkillsToolbox.builder()
+  .workspace(process.cwd())
+  .aiIgnorePolicy(policy)
+  .onSuppressed((diagnostic) => suppressed.push(diagnostic))
+  .buildTools();
+
+const instructions = discoverAgentInstructions({
+  workspace: process.cwd(),
+  aiIgnorePolicy: policy,
+});
+```
+
+Diagnostics contain the suppressed path, path kind, discovery surface, policy
+path, and matching line number, but never the suppressed file content or rule
+text. The fixed `node_modules`, `.git`, `dist`, and `coverage` traversal skips,
+maximum depth, allowed-directory checks, and filesystem sandbox remain stronger
+than `.aiignore`; a negated rule cannot re-enable them. This section covers
+discovery only. Enforcement for direct Read/Write/Edit/List access is configured
+separately.
+
 ```ts
 const isolated = SkillsToolbox.builder()
   .addSkillsDirectory('./team-skills')
@@ -499,6 +529,7 @@ const mcp = skillsToolboxAsMcp({
 ## Safety
 
 - Path jail rejects raw `..`, sibling prefix matches, and escaping symlinks.
+- `.aiignore` prunes Glob, Grep, skill, and `AGENTS.md` discovery after sandbox checks.
 - `Write` / `Edit` / `Bash` are off until you enable them.
 - `allowed-tools` is enforced only after `Skill` runs.
 - `WebSearch` needs `BRAVE_API_KEY` or `.web({ braveApiKey })`.
@@ -515,7 +546,7 @@ const mcp = skillsToolboxAsMcp({
 | `skillsToolboxAsMcp` | MCP descriptors + handlers |
 | File / shell | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |
-| Discovery | `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
+| Discovery | `discoverAgentInstructions`, `loadAiIgnorePolicy`, `evaluateAiIgnorePath`, `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
 | Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill`, `validateSkillDefinition`, `validateSkillDirectory`, `validateSkillsDirectory`, `validateSkillCatalog`, `validateResolvedSkillCatalog` |
 
 **Style:** `static of` / `static builder` and free functions for pure helpers. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).

@@ -2,6 +2,12 @@ import { readFileSync, statSync } from 'node:fs';
 import { relative } from 'node:path';
 import { functionToolCallback, type ToolCallback } from '@di-framework/ai';
 import {
+  type AiIgnorePolicy,
+  type AiIgnoreSuppressionDiagnostic,
+  aiIgnoreSuppressionDiagnostic,
+  evaluateAiIgnorePath,
+} from '../policy/index.ts';
+import {
   type AllowedDirectories,
   resolveAllowedDirectories,
 } from '../sandbox/allowed-directories.ts';
@@ -17,6 +23,8 @@ export interface GrepToolOptions {
   readonly maxResults?: number;
   readonly maxDepth?: number;
   readonly maxLineChars?: number;
+  readonly aiIgnorePolicy?: AiIgnorePolicy;
+  readonly onSuppressed?: (diagnostic: AiIgnoreSuppressionDiagnostic) => void;
 }
 
 export interface GrepInput {
@@ -117,9 +125,20 @@ Usage:
         return `Error: Path does not exist: ${searchRoot}`;
       }
       if (stat.isFile()) {
-        files.push(access.path);
+        const evaluation = options.aiIgnorePolicy
+          ? evaluateAiIgnorePath(options.aiIgnorePolicy, access.path, { kind: 'file' })
+          : undefined;
+        if (evaluation?.ignored) {
+          options.onSuppressed?.(aiIgnoreSuppressionDiagnostic(evaluation, 'grep', 'file'));
+        } else {
+          files.push(access.path);
+        }
       } else if (stat.isDirectory()) {
-        walkFiles(access.path, 0, maxDepth, (file) => files.push(file));
+        walkFiles(access.path, 0, maxDepth, (file) => files.push(file), {
+          aiIgnorePolicy: options.aiIgnorePolicy,
+          surface: 'grep',
+          onSuppressed: options.onSuppressed,
+        });
       } else {
         return `Error: Path is not a file or directory: ${searchRoot}`;
       }

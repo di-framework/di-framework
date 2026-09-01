@@ -1,4 +1,5 @@
 import type { ChatModel } from '@di-framework/ai';
+import type { AiIgnorePolicy, AiIgnoreSuppressionDiagnostic } from '../policy/index.ts';
 import type { AiIgnoreEnforcement } from '../tools/aiignore-enforcement.ts';
 import type { QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import type { BashConfirmInput } from '../tools/bash-tool.ts';
@@ -72,6 +73,16 @@ export class SkillsFluent<T extends SkillsFluent<T>> {
 
   userDirectory(path: string): T {
     this.draft.userDirectory = path;
+    return this.self();
+  }
+
+  aiIgnorePolicy(policy: AiIgnorePolicy): T {
+    this.draft.aiIgnorePolicy = policy;
+    return this.self();
+  }
+
+  onSuppressed(handler: (diagnostic: AiIgnoreSuppressionDiagnostic) => void): T {
+    this.draft.onSuppressed = handler;
     return this.self();
   }
 

@@ -1,10 +1,12 @@
 export type {
   AiIgnoreDecision,
+  AiIgnoreDiscoverySurface,
   AiIgnoreEvaluation,
   AiIgnorePolicy,
   AiIgnorePolicyErrorCode,
   AiIgnorePolicySource,
   AiIgnoreRule,
+  AiIgnoreSuppressionDiagnostic,
   CompileAiIgnorePolicyOptions,
   EvaluateAiIgnorePathOptions,
   LoadAiIgnorePolicyOptions,
@@ -12,6 +14,7 @@ export type {
 export {
   AIIGNORE_FILE,
   AiIgnorePolicyError,
+  aiIgnoreSuppressionDiagnostic,
   compileAiIgnorePolicy,
   evaluateAiIgnorePath,
   loadAiIgnorePolicy,
