@@ -176,6 +176,7 @@ jobs:
           SERVICE_URL="${ENDPOINT}/preview-search/Writerside/d"
           python3 - <<PY
           import json
+          import re
           from pathlib import Path
           p = Path("dir/config.json")
           cfg = json.loads(p.read_text())
@@ -186,13 +187,22 @@ jobs:
           p.write_text(json.dumps(cfg, separators=(",", ":")))
           print("config.json:", p.read_text())
 
-          favicon = '<link rel="icon" type="image/png" href="/favicon.png">'
+          icon_link = re.compile(
+              r'<link\b[^>]*\brel=(["\'])[^"\']*icon[^"\']*\1[^>]*>',
+              re.IGNORECASE,
+          )
+          favicon = "\n".join((
+              '<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">',
+              '<link rel="icon" type="image/png" sizes="16x16" href="/favicon.png">',
+              '<link rel="apple-touch-icon" href="/favicon.png">',
+          ))
           patched = 0
           skipped = 0
           for html_path in Path("dir").rglob("*.html"):
               html = html_path.read_text()
-              if favicon in html:
-                  continue
+              # Writerside emits JetBrains icon links by default. Remove every
+              # icon candidate so browsers cannot prefer one over ours.
+              html = icon_link.sub("", html)
               if "</head>" in html:
                   html = html.replace("</head>", f"  {favicon}\n</head>", 1)
               elif "<title>" in html:
