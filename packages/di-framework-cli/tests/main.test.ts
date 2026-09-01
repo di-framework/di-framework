@@ -41,6 +41,7 @@ describe('CLI main router', () => {
       'build',
       'check',
       'http',
+      'skills',
       'mx',
     ]);
     expect(Object.keys(COMMAND_TREE.children?.mx?.children ?? {})).toEqual([
@@ -92,6 +93,26 @@ describe('CLI main router', () => {
         calls.push(['http openapi generate', args]);
         return { data: { outputPath: '/tmp/openapi.json', bytes: 10 } };
       },
+      skillsIndexBuild: async (args) => {
+        calls.push(['skills index build', args]);
+        return {};
+      },
+      skillsIndexInspect: async (args) => {
+        calls.push(['skills index inspect', args]);
+        return {};
+      },
+      skillsIndexValidate: async (args) => {
+        calls.push(['skills index validate', args]);
+        return {};
+      },
+      skillsIndexQuery: async (args) => {
+        calls.push(['skills index query', args]);
+        return {};
+      },
+      skillsIndexMigrate: async (args) => {
+        calls.push(['skills index migrate', args]);
+        return {};
+      },
       mxBuild: async (options) => void calls.push(['mx build', options]),
       mxTest: async () => void calls.push(['mx test', undefined]),
       mxTypecheck: async (argv) => void calls.push(['mx typecheck', argv]),
@@ -104,6 +125,11 @@ describe('CLI main router', () => {
       ['build', '--watch'],
       ['check', 'tsconfig.app.json'],
       ['http', 'openapi', 'generate', '--controllers', './controllers.ts'],
+      ['skills', 'index', 'build', '--skills-dir', '.agents/skills'],
+      ['skills', 'index', 'inspect', '--input', 'skills.json'],
+      ['skills', 'index', 'validate'],
+      ['skills', 'index', 'query', '--query', 'review code'],
+      ['skills', 'index', 'migrate', '--output', 'current.json'],
       ['mx', 'build', '--sync-versions'],
       ['mx', 'test'],
       ['mx', 'typecheck', '--pretty=0'],
@@ -117,6 +143,11 @@ describe('CLI main router', () => {
       ['build', ['--watch']],
       ['check', ['tsconfig.app.json']],
       ['http openapi generate', ['--controllers', './controllers.ts']],
+      ['skills index build', ['--skills-dir', '.agents/skills']],
+      ['skills index inspect', ['--input', 'skills.json']],
+      ['skills index validate', []],
+      ['skills index query', ['--query', 'review code']],
+      ['skills index migrate', ['--output', 'current.json']],
       ['mx build', { syncVersions: true }],
       ['mx test', undefined],
       ['mx typecheck', ['bun', 'typecheck', '--pretty=0']],
