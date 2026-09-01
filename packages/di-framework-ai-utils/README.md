@@ -301,6 +301,36 @@ and `SkillsToolbox.skillDiagnostics` reports every shadowed definition with its
 kept and ignored source paths. `SkillsToolbox.skillSources` retains each
 resolved root's origin and precedence.
 
+### `.aiignore` policy
+
+Root-workspace `.aiignore` rules can be loaded and evaluated independently of
+agent construction, tools, and CLI behavior:
+
+```ts
+import { evaluateAiIgnorePath, loadAiIgnorePolicy } from '@di-framework/ai-utils';
+
+const policy = loadAiIgnorePolicy({ workspace: process.cwd() });
+const evaluation = evaluateAiIgnorePath(policy, 'build/generated.ts');
+
+if (!evaluation.pathAccess.ok) {
+  // The filesystem sandbox denied the path before policy evaluation.
+} else if (evaluation.ignored) {
+  console.log(evaluation.rule?.source.path, evaluation.rule?.line);
+}
+```
+
+The syntax follows `.gitignore` conventions: comments, `*`, `**`, `?`,
+character ranges, directory-only and root-relative patterns, `!` negation, and
+last-match-wins precedence. Evaluations report the effective rule and policy
+source. `compileAiIgnorePolicy` provides the same behavior for explicitly
+supplied policy text.
+
+Only `<workspace>/.aiignore` is discovered; nested policy files are not loaded.
+The root policy file is always returned as `policy-file`, even if a rule would
+otherwise ignore it. `.aiignore` does not replace `.gitignore`, and its decisions
+cannot grant access denied by the filesystem sandbox. Lexical escapes and
+symlinks that leave the workspace are denied before rules are considered.
+
 ```ts
 const isolated = SkillsToolbox.builder()
   .addSkillsDirectory('./team-skills')
