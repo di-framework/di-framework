@@ -17,6 +17,7 @@ import {
   runSkillsIndexQuery,
   runSkillsIndexValidate,
 } from './cmd/skills/index';
+import { runSkillsValidate } from './cmd/skills/validate';
 import {
   type CliIo,
   type CliStream,
@@ -37,6 +38,7 @@ export type CliHandlers = {
   skillsIndexValidate(args: string[]): Promise<CommandResult>;
   skillsIndexQuery(args: string[]): Promise<CommandResult>;
   skillsIndexMigrate(args: string[]): Promise<CommandResult>;
+  skillsValidate(args: string[]): Promise<CommandResult>;
   mxBuild(options: MxBuildOptions): Promise<void>;
   mxTest(): Promise<void>;
   mxTypecheck(argv: string[]): Promise<void>;
@@ -54,6 +56,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   skillsIndexValidate: runSkillsIndexValidate,
   skillsIndexQuery: runSkillsIndexQuery,
   skillsIndexMigrate: runSkillsIndexMigrate,
+  skillsValidate: runSkillsValidate,
   mxBuild,
   mxTest: test,
   mxTypecheck: typecheck,
@@ -178,6 +181,18 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
                 run: ({ args }) => handlers.skillsIndexMigrate(args),
               },
             },
+          },
+          validate: {
+            description: 'Validate discovered Agent Skills catalogs',
+            usage: 'di-framework skills validate [options]',
+            options: [
+              '--workspace <path>  Workspace root (default: current directory)',
+              '--user-directory <path>  User root for neutral default discovery',
+              '--skills-dir <path>  Explicit SKILL.md tree (repeatable)',
+              '--skills-package <name-or-path>  Package skill source (repeatable)',
+              '--source-mode <merge|replace>  Merge with or replace neutral defaults',
+            ],
+            run: ({ args }) => handlers.skillsValidate(args),
           },
         },
       },

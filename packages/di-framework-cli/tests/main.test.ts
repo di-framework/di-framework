@@ -50,6 +50,10 @@ describe('CLI main router', () => {
       'typecheck',
       'publish',
     ]);
+    expect(Object.keys(COMMAND_TREE.children?.skills?.children ?? {})).toEqual([
+      'index',
+      'validate',
+    ]);
   });
 
   it('prints root help to an injected stream', () => {
@@ -113,6 +117,10 @@ describe('CLI main router', () => {
         calls.push(['skills index migrate', args]);
         return {};
       },
+      skillsValidate: async (args) => {
+        calls.push(['skills validate', args]);
+        return {};
+      },
       mxBuild: async (options) => void calls.push(['mx build', options]),
       mxTest: async () => void calls.push(['mx test', undefined]),
       mxTypecheck: async (argv) => void calls.push(['mx typecheck', argv]),
@@ -130,6 +138,7 @@ describe('CLI main router', () => {
       ['skills', 'index', 'validate'],
       ['skills', 'index', 'query', '--query', 'review code'],
       ['skills', 'index', 'migrate', '--output', 'current.json'],
+      ['skills', 'validate', '--skills-dir', '.agents/skills'],
       ['mx', 'build', '--sync-versions'],
       ['mx', 'test'],
       ['mx', 'typecheck', '--pretty=0'],
@@ -148,6 +157,7 @@ describe('CLI main router', () => {
       ['skills index validate', []],
       ['skills index query', ['--query', 'review code']],
       ['skills index migrate', ['--output', 'current.json']],
+      ['skills validate', ['--skills-dir', '.agents/skills']],
       ['mx build', { syncVersions: true }],
       ['mx test', undefined],
       ['mx typecheck', ['bun', 'typecheck', '--pretty=0']],
