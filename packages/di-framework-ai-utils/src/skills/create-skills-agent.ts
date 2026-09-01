@@ -8,6 +8,11 @@ import {
   type ChatOptions,
   type ToolSource,
 } from '@di-framework/ai';
+import {
+  type DiscoverAgentInstructionsOptions,
+  type DiscoverAgentInstructionsResult,
+  discoverAgentInstructions,
+} from '../instructions/discover-agent-instructions.ts';
 import { formatMemorySystemPrompt } from '../tools/memory-tools.ts';
 import { SkillsFluent } from './skills-fluent.ts';
 import {
@@ -16,6 +21,11 @@ import {
   type SkillsToolbox,
   type SkillsToolboxOptions,
 } from './skills-toolbox.ts';
+
+export type SkillsAgentInstructionDiscoveryOptions = Omit<
+  DiscoverAgentInstructionsOptions,
+  'workspace'
+>;
 
 export interface CreateSkillsAgentOptions extends SkillsToolboxOptions {
   readonly chatModel?: ChatModel;
@@ -27,11 +37,15 @@ export interface CreateSkillsAgentOptions extends SkillsToolboxOptions {
   readonly conversationMemory?: ChatMemory;
   readonly defaultConversationId?: string;
   readonly builder?: ChatClientBuilderOptions;
+  /** Repository instruction discovery is enabled by default; pass false to disable it. */
+  readonly instructionDiscovery?: false | SkillsAgentInstructionDiscoveryOptions;
 }
 
 export interface SkillsAgentBundle {
   readonly agent: ChatAgent;
   readonly toolbox: SkillsToolbox;
+  /** Loaded repository instruction content, provenance, and diagnostics; absent when disabled. */
+  readonly instructions?: DiscoverAgentInstructionsResult;
 }
 
 export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
@@ -43,6 +57,7 @@ export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
   private memory?: ChatMemory;
   private conversationId?: string;
   private clientBuilder?: ChatClientBuilderOptions;
+  private instructionDiscoveryOptions?: false | SkillsAgentInstructionDiscoveryOptions;
 
   system(text: string): this {
     this.systemText = text;
@@ -84,6 +99,11 @@ export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
     return this;
   }
 
+  instructionDiscovery(options: false | SkillsAgentInstructionDiscoveryOptions = {}): this {
+    this.instructionDiscoveryOptions = options;
+    return this;
+  }
+
   build(): ChatAgent {
     return this.buildBundle().agent;
   }
@@ -111,6 +131,7 @@ export class SkillsAgentBuilder extends SkillsFluent<SkillsAgentBuilder> {
       conversationMemory: this.memory,
       defaultConversationId: this.conversationId,
       builder: this.clientBuilder,
+      instructionDiscovery: this.instructionDiscoveryOptions,
     };
   }
 }
@@ -160,14 +181,24 @@ function assembleSkillsAgent(
   options: CreateSkillsAgentOptions,
   toolbox: SkillsToolbox,
 ): SkillsAgentBundle {
+  const workspace = options.workspace ?? process.cwd();
+  const instructions =
+    options.instructionDiscovery === false
+      ? undefined
+      : discoverAgentInstructions({
+          ...options.instructionDiscovery,
+          workspace,
+          workingDirectory: options.instructionDiscovery?.workingDirectory ?? workspace,
+        });
   const memoriesDir =
     options.memories === true
-      ? `${(options.workspace ?? process.cwd()).replace(/[/\\]$/, '')}/.memory`
+      ? `${workspace.replace(/[/\\]$/, '')}/.memory`
       : options.memories && typeof options.memories === 'object'
         ? options.memories.directory
         : undefined;
   const systemParts = [
     options.system,
+    instructions?.content,
     memoriesDir ? formatMemorySystemPrompt(memoriesDir) : undefined,
   ].filter((part): part is string => Boolean(part?.trim()));
 
@@ -184,5 +215,5 @@ function assembleSkillsAgent(
     defaultConversationId: options.defaultConversationId,
     builder: options.builder,
   });
-  return { agent, toolbox };
+  return { agent, toolbox, instructions };
 }

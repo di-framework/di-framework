@@ -243,6 +243,9 @@ export function skillsAgentBuilderFrom(
     builder.defaultConversationId(overrides.defaultConversationId);
   }
   if (overrides.builder != null) builder.clientBuilderOptions(overrides.builder);
+  if (overrides.instructionDiscovery !== undefined) {
+    builder.instructionDiscovery(overrides.instructionDiscovery);
+  }
   return builder;
 }
 
