@@ -153,6 +153,7 @@ description: Build spreadsheets when asked for a spreadsheet.
       directories: [],
       packages: [pkg],
       workspace: pkg,
+      sourceMode: 'replace',
     });
     expect(box.skills.map((s) => s.name)).toEqual(['xlsx']);
   });

@@ -44,6 +44,15 @@ export interface SkillsToolOptions {
   readonly toolName?: string;
   readonly toolDescriptionTemplate?: string;
   readonly onActivate?: (skill: AgentSkill) => void;
+  readonly onDuplicate?: (diagnostic: SkillDuplicateDiagnostic) => void;
+}
+
+export interface SkillDuplicateDiagnostic {
+  readonly code: 'skill-duplicate';
+  readonly severity: 'warning';
+  readonly name: string;
+  readonly keptSource: string;
+  readonly ignoredSource: string;
 }
 
 export interface AsyncSkillsToolOptions
@@ -56,22 +65,19 @@ export interface AsyncSkillsToolOptions
 
 /**
  * Collect skills from in-memory records, directories, and SKILL.md files.
- * Later entries with the same name win.
+ * Sources are ordered by precedence. The first entry with a name wins.
  */
 export function collectSkills(options: SkillsToolOptions): AgentSkill[] {
-  const collected: AgentSkill[] = [];
-  if (options.directories?.length) {
-    collected.push(...loadSkillsDirectories(options.directories));
-  }
+  const collected: AgentSkill[] = [...(options.skills ?? [])];
   if (options.files?.length) {
     for (const file of options.files) {
       collected.push(loadSkillFile(file));
     }
   }
-  if (options.skills?.length) {
-    collected.push(...options.skills);
+  if (options.directories?.length) {
+    collected.push(...loadSkillsDirectories(options.directories));
   }
-  return [...toSkillsMap(collected).values()];
+  return [...toSkillsMap(collected, options.onDuplicate).values()];
 }
 
 export function skillToXml(skill: Pick<AgentSkill, 'name' | 'description'>): string {
@@ -258,9 +264,23 @@ export const SkillsTool = {
   },
 };
 
-function toSkillsMap(skills: readonly AgentSkill[]): Map<string, AgentSkill> {
+function toSkillsMap(
+  skills: readonly AgentSkill[],
+  onDuplicate?: (diagnostic: SkillDuplicateDiagnostic) => void,
+): Map<string, AgentSkill> {
   const map = new Map<string, AgentSkill>();
   for (const skill of skills) {
+    const kept = map.get(skill.name);
+    if (kept) {
+      onDuplicate?.({
+        code: 'skill-duplicate',
+        severity: 'warning',
+        name: skill.name,
+        keptSource: kept.basePath,
+        ignoredSource: skill.basePath,
+      });
+      continue;
+    }
     map.set(skill.name, skill);
   }
   return map;

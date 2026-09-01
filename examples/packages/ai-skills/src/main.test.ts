@@ -18,7 +18,7 @@ import {
 
 const checklist = join(
   exampleRoot,
-  '.claude',
+  '.agents',
   'skills',
   'code-reviewer',
   'references',

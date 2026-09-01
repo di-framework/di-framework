@@ -242,14 +242,14 @@ describe('skillsTool', () => {
     expect(await tool.call('{}')).toBe(formatSkillNotFound(''));
   });
 
-  test('later skills with the same name win', async () => {
+  test('first skill with the same name wins', async () => {
     const tool = skillsTool({
       skills: [
         agentSkill({ name: 'pdf', content: 'v1' }),
         agentSkill({ name: 'pdf', content: 'v2' }),
       ],
     });
-    expect(await tool.call(JSON.stringify({ command: 'pdf' }))).toContain('v2');
+    expect(await tool.call(JSON.stringify({ command: 'pdf' }))).toContain('v1');
   });
 
   test('escapes XML special characters in the tool description', () => {

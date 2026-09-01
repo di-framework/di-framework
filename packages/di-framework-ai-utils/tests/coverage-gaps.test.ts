@@ -132,7 +132,7 @@ body
     expect(resolveSkillPackageDirectories([withMissing])).toEqual([]);
 
     const fallback = join(root, 'fb');
-    mkdirSync(join(fallback, '.claude', 'skills'), { recursive: true });
+    mkdirSync(join(fallback, '.agents', 'skills'), { recursive: true });
     writeFileSync(join(fallback, 'package.json'), JSON.stringify({ name: 'fb' }));
     expect(resolveSkillPackageDirectories([fallback]).some((d) => d.endsWith('skills'))).toBe(true);
 
@@ -171,7 +171,7 @@ description: Reviews TypeScript when asked to review or audit code.
       .addSkillsFile(join(root, 'code-reviewer', 'SKILL.md'))
       .addPackage(root)
       .addPackages([])
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .workspace(root)
       .extraAllowedDirectory(extra)
       .extraAllowedDirectories([])
@@ -202,7 +202,7 @@ description: Reviews TypeScript when asked to review or audit code.
     expect(tools.some((t) => t.toolDefinition.name === 'Task')).toBe(true);
     expect(tools.some((t) => t.toolDefinition.name === 'AskUserQuestion')).toBe(true);
     const withTaskTrue = SkillsToolbox.builder()
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .addSkill(
         agentSkill({
           name: 'code-reviewer',
@@ -239,7 +239,7 @@ description: Reviews TypeScript when asked to review or audit code.
       .defaultConversationId('c1')
       .conversationMemory({} as never)
       .clientBuilderOptions({})
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .addSkill(
         agentSkill({
           name: 'code-reviewer',

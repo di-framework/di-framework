@@ -307,7 +307,7 @@ describe('asynchronous skill activation', () => {
     expect((await SkillsToolbox.ofAsync(options)).descriptors).toHaveLength(2);
     const builder = SkillsToolbox.builder()
       .workspace(process.cwd())
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .semanticDiscovery(options.semanticDiscovery)
       .todos(false)
       .list(false)
@@ -320,6 +320,7 @@ describe('asynchronous skill activation', () => {
       (
         await createSkillsToolboxAsync({
           skills: [alpha],
+          sourceMode: 'replace',
           semanticDiscovery: false,
           todos: false,
         })
@@ -360,7 +361,7 @@ describe('asynchronous skill activation', () => {
     const agentBuilder = SkillsAgent.builder()
       .chatModel(chatModel)
       .workspace(process.cwd())
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .semanticDiscovery(options.semanticDiscovery)
       .todos(false)
       .list(false)
@@ -371,7 +372,7 @@ describe('asynchronous skill activation', () => {
     expect(
       SkillsAgent.builder()
         .chatModel(chatModel)
-        .noDefaultDirectories()
+        .sourceMode('replace')
         .addSkill(alpha)
         .todos(false)
         .build(),
@@ -446,7 +447,7 @@ describe('asynchronous skill activation', () => {
     const builder = SkillsAgent.builder()
       .chatModel(chatModel)
       .workspace(process.cwd())
-      .noDefaultDirectories()
+      .sourceMode('replace')
       .semanticDiscovery(options.semanticDiscovery)
       .todos(false)
       .list(false)

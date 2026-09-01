@@ -155,10 +155,11 @@ describe('skillsToolbox', () => {
     expect(content).toBe('Review done using the checklist.');
   });
 
-  test('in-memory skills do not load default disk directories', () => {
+  test('replace mode keeps an in-memory catalog isolated from default directories', () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
     const box = createSkillsToolbox({
       workspace: root,
+      sourceMode: 'replace',
       skills: [
         agentSkill({
           name: 'xlsx',
@@ -175,6 +176,7 @@ describe('skillsToolbox', () => {
     writeValidSkill(root, 'code-reviewer');
     const box = SkillsToolbox.builder()
       .addSkillsDirectory(root)
+      .sourceMode('replace')
       .workspace(root)
       .write()
       .shell()
@@ -190,7 +192,9 @@ describe('skillsToolbox', () => {
       'Edit',
       'Bash',
     ]);
-    expect(SkillsToolbox.of({ directories: [root], workspace: root }).skills).toHaveLength(1);
+    expect(
+      SkillsToolbox.of({ directories: [root], workspace: root, sourceMode: 'replace' }).skills,
+    ).toHaveLength(1);
 
     const model = new ScriptedChatModel([
       { respond: toolCallResponse([toolCall('c1', 'Skill', { command: 'code-reviewer' })]) },
@@ -199,6 +203,7 @@ describe('skillsToolbox', () => {
     const agent = SkillsAgent.builder()
       .chatModel(model)
       .addSkillsDirectory(root)
+      .sourceMode('replace')
       .workspace(root)
       .todos(false)
       .build();
@@ -208,7 +213,11 @@ describe('skillsToolbox', () => {
   test('createSkillsToolbox exposes allowed directories including skill bases', () => {
     const root = mkdtempSync(join(tmpdir(), 'ai-utils-box-'));
     const skillDir = writeValidSkill(root, 'code-reviewer');
-    const box = createSkillsToolbox({ directories: [root], workspace: root });
+    const box = createSkillsToolbox({
+      directories: [root],
+      workspace: root,
+      sourceMode: 'replace',
+    });
     expect(box.skills).toHaveLength(1);
     expect(box.allowedDirectories.some((d) => d === skillDir)).toBe(true);
   });
