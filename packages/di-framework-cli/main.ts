@@ -2,6 +2,7 @@
 import { runAgentAudit } from './cmd/agent/audit';
 import { runAgentInit } from './cmd/agent/init';
 import { runAgentInspect } from './cmd/agent/inspect';
+import { runAgentMigrate } from './cmd/agent/migrate';
 /** di-framework CLI — app tooling by default; monorepo maintainers use `mx`. */
 import { build } from './cmd/build';
 import { check } from './cmd/check';
@@ -38,6 +39,7 @@ export type CliHandlers = {
   agentAudit(args: string[]): Promise<CommandResult>;
   agentInit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
+  agentMigrate(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   skillsIndexBuild(args: string[]): Promise<CommandResult>;
   skillsIndexInspect(args: string[]): Promise<CommandResult>;
@@ -59,6 +61,7 @@ const DEFAULT_HANDLERS: CliHandlers = {
   agentAudit: runAgentAudit,
   agentInit: runAgentInit,
   agentInspect: runAgentInspect,
+  agentMigrate: runAgentMigrate,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   skillsIndexBuild: runSkillsIndexBuild,
   skillsIndexInspect: runSkillsIndexInspect,
@@ -153,6 +156,25 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
               '--max-instruction-bytes <count>  Combined instruction byte limit',
             ],
             run: ({ args }) => handlers.agentInspect(args),
+          },
+          migrate: {
+            description: 'Plan or apply neutral agent-configuration migrations',
+            usage: 'di-framework agent migrate [--plan | --apply] [options]',
+            options: [
+              '--plan  Display a migration plan without changing files (default)',
+              '--apply  Apply exactly the generated migration plan',
+              '--workspace <path>  Workspace boundary (default: current directory)',
+              '--working-directory <path>  Instruction audit location',
+              '--user-directory <path>  User-level neutral source root',
+              '--skills-dir <path>  Explicit skill root to audit (repeatable)',
+              '--skills-package <name>  Package-provided skill root (repeatable)',
+              '--source-mode merge|replace  Merge with or replace neutral skill roots',
+              '--instructions-fallback <name>  Instruction fallback filename (repeatable)',
+              '--max-instruction-bytes <count>  Combined instruction byte limit',
+              '--source <path>  Select an audited migration source (repeatable)',
+              '--replace-existing  Plan explicit recoverable file replacement',
+            ],
+            run: ({ args }) => handlers.agentMigrate(args),
           },
         },
       },
