@@ -9,6 +9,34 @@ from that package into `SkillSearchConnection.fromStorageAdapter`.
 
 Agentic extras for [`@di-framework/ai`](../di-framework-ai). **Agent Skills** (`SKILL.md`, progressive disclosure) plus jailed file tools, HITL questions, todos, optional web / memory / task, and opt-in `Write` / `Edit` / `Bash`.
 
+## Repository instructions
+
+`discoverAgentInstructions` loads hierarchical `AGENTS.md` files from the
+workspace root through the working directory, returning combined
+broad-to-specific content, ordered file provenance, and typed diagnostics:
+
+```ts
+import { discoverAgentInstructions } from '@di-framework/ai-utils';
+
+const instructions = discoverAgentInstructions({
+  workspace: process.cwd(),
+  workingDirectory: 'packages/api',
+  maxBytes: 32 * 1024,
+});
+```
+
+Discovery never walks above the workspace and rejects symlink escapes. Pass
+`allowedDirectories` to further restrict (not expand) the workspace boundary.
+Whitespace-only files are skipped. A file that cannot fit wholly within the
+combined UTF-8 byte limit is skipped with an
+`instructions-max-bytes-exceeded` diagnostic; the default limit is 32 KiB.
+
+Only `AGENTS.md` is automatic. Extra names are explicit fallbacks tried after
+`AGENTS.md` at each directory, for example
+`fallbackFilenames: ['TEAM_INSTRUCTIONS.md']`. `.agents.md` has no special
+meaning. `.agents/AGENTS.md` participates naturally when the working directory
+is inside `.agents/**`.
+
 This is the TypeScript counterpart of [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils). Skills run in your process. It is not Anthropic’s hosted Skills API.
 
 Prefer **builders**: `SkillsAgent.builder()`, `SkillsToolbox.builder()`, `SkillsTool.builder()`, `SkillsIndex.builder()`. Free-function aliases remain. Skills stay in this package — `configureAi` / `@Agent` in `@di-framework/ai` are unchanged.
