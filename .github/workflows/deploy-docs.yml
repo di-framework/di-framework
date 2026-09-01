@@ -163,7 +163,9 @@ jobs:
       # Writerside only shows the search UI when config.json has a truthy
       # searchService. Some builder versions do not emit these keys from
       # <search-endpoint> alone — patch so the bar always appears.
-      - name: Ensure custom search is enabled in config.json
+      # custom-favicons renders its value as page text in this builder, so add
+      # the favicon link directly to the generated HTML instead.
+      - name: Patch generated Writerside site
         env:
           SEARCH_ENDPOINT: ${{ vars.DOCS_SEARCH_URL }}
         run: |
@@ -183,6 +185,18 @@ jobs:
           cfg["searchServiceUrl"] = "${SERVICE_URL}"
           p.write_text(json.dumps(cfg, separators=(",", ":")))
           print("config.json:", p.read_text())
+
+          favicon = '<link rel="icon" type="image/png" href="/favicon.png">'
+          patched = 0
+          for html_path in Path("dir").rglob("*.html"):
+              html = html_path.read_text()
+              if favicon in html:
+                  continue
+              if "</head>" not in html:
+                  raise RuntimeError(f"Missing </head> in {html_path}")
+              html_path.write_text(html.replace("</head>", f"  {favicon}\n</head>", 1))
+              patched += 1
+          print(f"Added favicon link to {patched} HTML files")
           PY
           cp docs/Writerside/images/favicon.png dir/favicon.png
           cp docs/Writerside/images/favicon.png dir/favicon.ico

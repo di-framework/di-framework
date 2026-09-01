@@ -4,7 +4,7 @@
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
     <variables>
-        <custom-favicons>favicon.png</custom-favicons>
+        <!-- The deploy workflow injects the favicon link; custom-favicons leaks its value into the page body. -->
         <search-endpoint>https://di-framework-docs-search.seemueller.workers.dev/api/docs/search</search-endpoint>
         <header-logo>favicon.png</header-logo>
         <!-- Hosted at the GitHub Pages root; regenerated on each docs deploy. -->
