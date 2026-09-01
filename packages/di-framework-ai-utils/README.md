@@ -260,21 +260,54 @@ indexes remain hard errors and never fall back to the full catalog.
 
 ### Index operations
 
-Use versioned JSON diagnostics in CI and production troubleshooting:
+The package exports CLI-independent functions for every index workflow. They accept explicit options,
+return typed results, and never parse arguments, print output, or terminate the process:
 
-```bash
-di-skills-index inspect --input .di-framework/skills-index.json --json
-di-skills-index validate --input .di-framework/skills-index.json --skills-dir .claude/skills --json
-di-skills-index query --input .di-framework/skills-index.json --query "review RLS" --json
-di-skills-index migrate --input old-index.jsonl --output skills-index.json --json
+```ts
+import {
+  buildSkillsIndex,
+  inspectSkillsIndex,
+  migrateSkillsIndex,
+  querySkillsIndex,
+  SkillsIndexOperationError,
+  validateSkillsIndex,
+} from '@di-framework/ai-utils';
+
+const built = await buildSkillsIndex({
+  directories: ['.agents/skills'],
+  outputFile: '.di-framework/skills-index.json',
+  onProgress(completed, total) {
+    reportEmbeddingProgress(completed, total);
+  },
+});
+
+const inspection = inspectSkillsIndex({ inputFile: built.outputFile });
+const validation = validateSkillsIndex({
+  inputFile: built.outputFile,
+  directories: ['.agents/skills'],
+});
+const query = await querySkillsIndex({
+  inputFile: built.outputFile,
+  query: 'review row-level security',
+});
+const migration = migrateSkillsIndex({
+  inputFile: 'old-index.jsonl',
+  outputFile: built.outputFile,
+});
 ```
 
-`inspect` reports format/model metadata, integrity sizes, scoring configuration,
-load latency, and memory. `validate` additionally reports source drift. `query`
-reports safe names/descriptions, dense and lexical score components, matched
-chunk numbers, and load/embed/search timing. Bodies and vector contents are
-never printed. Runtime retrieval offers an opt-in `onDiagnostic` callback with
-the same selected/abstained/error decisions for local and adapter backends.
+`inspectSkillsIndex` reports format/model metadata, integrity sizes, scoring configuration, load
+latency, and memory. `validateSkillsIndex` reports source drift as a typed negative result (`valid:
+false`) while corrupt or unreadable indexes throw. `querySkillsIndex` returns safe names and
+descriptions, dense and lexical score components, matched chunk numbers, and load/embed/search timing.
+`migrateSkillsIndex` reads version 2 or 3 and explicitly writes version 3. Bodies and vector contents
+are not included in any result.
+
+The non-build operations accept `onProgress(event)` with typed operation and phase values. Build keeps
+its existing chunk-oriented `onProgress(completed, total)` callback. Operational failures throw
+`SkillsIndexOperationError`, whose stable `operation` and `code` fields let callers distinguish invalid
+options, missing sources or indexes, invalid indexes, embedding failures, write failures, and unexpected
+operation failures. CLI layers are responsible for presentation and exit-status mapping.
 
 Configure `.threshold()`, `.chunkTokens()`, `.chunkOverlapTokens()`, `.retrievalLimit()`, or `.embedder()` on `SkillsIndex.builder()` when the defaults do not fit the corpus. The `buildSkillsIndex(options)` free-function alias remains available. Runtime `.semanticDiscovery({ limit, minScore, embedder })` can override candidate count and query embedding.
 

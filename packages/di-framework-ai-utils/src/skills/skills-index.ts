@@ -25,6 +25,7 @@ import {
   type SkillVectorSearch,
 } from './skill-adapters.ts';
 import { type SkillEmbedder, TransformersJsSkillEmbedder } from './skill-embedder.ts';
+import { asSkillsIndexOperationError, SkillsIndexOperationError } from './skills-index-errors.ts';
 import { collectSkills } from './skills-tool.ts';
 import { validateSkill } from './validate-skill.ts';
 
@@ -288,6 +289,24 @@ export function skillIndexText(skill: Pick<AgentSkill, 'source'>): string {
 export async function buildSkillsIndex(
   options: BuildSkillsIndexOptions = {},
 ): Promise<BuildSkillsIndexResult> {
+  try {
+    return await buildSkillsIndexUnchecked(options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = /must be|must not|At least one|Duplicate skill/.test(message)
+      ? 'INVALID_OPTIONS'
+      : /does not exist|not a directory|not a file/.test(message)
+        ? 'SOURCE_NOT_FOUND'
+        : /embed|embedding|tokenizer|chunk vector|dimensions/.test(message)
+          ? 'EMBEDDING_FAILED'
+          : 'OPERATION_FAILED';
+    throw asSkillsIndexOperationError('build', code, error);
+  }
+}
+
+async function buildSkillsIndexUnchecked(
+  options: BuildSkillsIndexOptions,
+): Promise<BuildSkillsIndexResult> {
   const threshold = nonNegativeInteger(
     options.threshold ?? DEFAULT_SKILLS_INDEX_THRESHOLD,
     'threshold',
@@ -342,7 +361,13 @@ export async function buildSkillsIndex(
       indexed: false,
       chunkCount: 0,
     };
-    new LocalSkillIndexWriter(outputFile).writeIndex({ metadata, entries: [] });
+    try {
+      new LocalSkillIndexWriter(outputFile).writeIndex({ metadata, entries: [] });
+    } catch (error) {
+      throw new SkillsIndexOperationError('build', 'WRITE_FAILED', 'Failed to write skills index', {
+        cause: error,
+      });
+    }
     return { outputFile, indexed: false, skillCount: skills.length, chunkCount: 0 };
   }
 
@@ -454,11 +479,17 @@ export async function buildSkillsIndex(
   });
   const index = { metadata, entries, lexical: buildLexicalIndex(skills) } satisfies SkillsIndex;
   let receipt: SkillIndexWriteReceipt | undefined;
-  if (options.writer) {
-    receipt = await options.writer.replace(toSkillIndexWriteRequest(index));
-    if (!receipt.ready) throw new Error('Skill index writer did not return a ready receipt');
-  } else {
-    new LocalSkillIndexWriter(outputFile).writeIndex(index);
+  try {
+    if (options.writer) {
+      receipt = await options.writer.replace(toSkillIndexWriteRequest(index));
+      if (!receipt.ready) throw new Error('Skill index writer did not return a ready receipt');
+    } else {
+      new LocalSkillIndexWriter(outputFile).writeIndex(index);
+    }
+  } catch (error) {
+    throw new SkillsIndexOperationError('build', 'WRITE_FAILED', 'Failed to write skills index', {
+      cause: error,
+    });
   }
   return {
     outputFile,
