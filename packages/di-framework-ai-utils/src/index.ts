@@ -195,6 +195,17 @@ export {
   validateSkillName,
 } from './skills/index.ts';
 export type {
+  AgentSourceCandidate,
+  AgentSourceDiagnostic,
+  AgentSourceDiagnosticCode,
+  AgentSourceKind,
+  AgentSourceOrigin,
+  ResolveAgentSourcesOptions,
+  ResolveAgentSourcesResult,
+  ResolvedAgentSource,
+} from './sources/index.ts';
+export { resolveAgentSources } from './sources/index.ts';
+export type {
   AskUserOption,
   AskUserQuestion,
   AskUserQuestionInput,

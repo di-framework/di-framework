@@ -182,6 +182,37 @@ File tools are limited to `workspace` ∪ skill folders (and extras). After a sk
 
 ## Discovery
 
+### Shared source resolution
+
+Operational features can resolve candidate files and directories before loading
+their contents. `resolveAgentSources` is independent of agent construction and
+CLI formatting:
+
+```ts
+import { resolveAgentSources } from '@di-framework/ai-utils';
+
+const resolution = resolveAgentSources(
+  [
+    { path: '.agents/skills', origin: 'workspace', kind: 'directory' },
+    { path: '~/.agents/skills', origin: 'user', kind: 'directory' },
+  ],
+  { workspace: process.cwd() },
+);
+```
+
+Resolution is synchronous because it performs only local filesystem metadata
+checks; it never reads source contents. Candidates are evaluated in array order
+and every resolved source retains its `origin` and zero-based `precedence`. The
+first occurrence of a real path wins;
+later aliases and symlinks produce `source-duplicate` diagnostics. Missing,
+unreadable, wrong-kind, broken-symlink, and boundary failures also have stable
+typed diagnostic codes.
+
+Relative paths resolve from `workspace`. Workspace sources cannot leave the
+workspace, including through symlinks; user sources are similarly contained by
+the home directory. Explicit, package, fallback, vendor, and migration sources
+must remain within the workspace or an `allowedDirectories` root.
+
 If you never call `addSkillsDirectory` / `addSkillsFile` / `addSkill` / `addPackage`, existing **`.claude/skills`** (cwd) and **`~/.claude/skills`** are loaded. Missing dirs are skipped. `noDefaultDirectories()` or an empty `directories: []` disables that.
 
 `addPackage('@scope/pack')` resolves `pack/package.json` from the workspace, then uses the `skills` field (string or string[]) or falls back to `.claude/skills` and `skills` under the package root.
