@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { ChatModel, ToolCallback } from '@di-framework/ai';
 import { expandUserPath, uniqueResolvedRoots } from '../sandbox/paths.ts';
+import type { AgentSourceDiagnostic, ResolvedAgentSource } from '../sources/index.ts';
 import { askUserQuestionTool, type QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import { type BashConfirmInput, bashTool } from '../tools/bash-tool.ts';
 import { editTool } from '../tools/edit-tool.ts';
@@ -16,9 +17,12 @@ import { todoWriteTool } from '../tools/todo-write-tool.ts';
 import { webFetchTool } from '../tools/web-fetch-tool.ts';
 import { webSearchTool } from '../tools/web-search-tool.ts';
 import { writeTool } from '../tools/write-tool.ts';
-import { existingSkillDirectories } from './load-skills.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
-import { resolveSkillPackageDirectories } from './resolve-packages.ts';
+import {
+  type ResolvedSkillSources,
+  resolveSkillSources,
+  type SkillSourceMode,
+} from './resolve-skill-sources.ts';
 import {
   runSkillAdapterOperation,
   SkillAdapterError,
@@ -31,7 +35,7 @@ import { SkillsFluent } from './skills-fluent.ts';
 import { DEFAULT_SKILLS_INDEX_FILE, loadSkillsIndex } from './skills-index.ts';
 import { SkillsRetrievalAdvisor } from './skills-retrieval-advisor.ts';
 import { createSkillsRuntime, type SkillsRuntime } from './skills-runtime.ts';
-import type { SkillsToolOptions } from './skills-tool.ts';
+import type { SkillDuplicateDiagnostic, SkillsToolOptions } from './skills-tool.ts';
 import {
   asyncSkillsTool,
   collectSkills,
@@ -70,6 +74,10 @@ export interface SkillsSemanticDiscoveryOptions {
 
 export interface SkillsToolboxOptions extends SkillsToolOptions {
   readonly workspace?: string;
+  /** Home root used for user-default discovery; defaults to the process home. */
+  readonly userDirectory?: string;
+  /** Merge explicit roots before defaults, or replace defaults entirely. */
+  readonly sourceMode?: SkillSourceMode;
   readonly extraAllowedDirectories?: readonly string[];
   /** npm package names or paths that contain skill folders. */
   readonly packages?: readonly string[];
@@ -101,7 +109,11 @@ export interface SkillsToolbox {
   readonly tools: readonly ToolCallback[];
   readonly runtime: SkillsRuntime;
   readonly retrievalAdvisor?: SkillsRetrievalAdvisor;
+  readonly skillSources: readonly ResolvedAgentSource[];
+  readonly skillDiagnostics: readonly SkillSourceDiagnostic[];
 }
+
+export type SkillSourceDiagnostic = AgentSourceDiagnostic | SkillDuplicateDiagnostic;
 
 /** Preferred factory: {@code SkillsToolbox.builder().addSkillsDirectory(...).build()}. */
 export const SkillsToolbox = {
@@ -149,15 +161,20 @@ export function createSkillsToolbox(options: SkillsToolboxOptions = {}): SkillsT
       'Asynchronous catalog stores require createSkillsToolboxAsync() or buildAsync()',
     );
   }
-  const directories = resolveToolboxDirectories(options);
+  const sourceResolution = resolveSkillSources(options);
   const files = options.files == null ? undefined : options.files.map(expandUserPath);
+  const duplicates: SkillDuplicateDiagnostic[] = [];
   const collected = collectSkills({
     ...options,
-    directories,
+    directories: sourceResolution.directories,
     files,
+    onDuplicate: (diagnostic) => {
+      duplicates.push(diagnostic);
+      options.onDuplicate?.(diagnostic);
+    },
   });
 
-  return assembleSkillsToolbox(options, collected);
+  return assembleSkillsToolbox(options, collected, undefined, sourceResolution, duplicates);
 }
 
 /** Build a toolbox without reading complete remote skill bodies during discovery. */
@@ -201,11 +218,17 @@ export async function createSkillsToolboxAsync(
         `Invalid descriptor '${descriptor.name}': ${error}`,
       );
   }
-  return assembleSkillsToolbox(options, [], {
-    store: catalogStore,
-    descriptors,
-    namespace: discovery.namespace,
-  });
+  return assembleSkillsToolbox(
+    options,
+    [],
+    {
+      store: catalogStore,
+      descriptors,
+      namespace: discovery.namespace,
+    },
+    { directories: [], sources: [], diagnostics: [] },
+    [],
+  );
 }
 
 function assembleSkillsToolbox(
@@ -216,6 +239,8 @@ function assembleSkillsToolbox(
     readonly descriptors: readonly SkillDescriptor[];
     readonly namespace?: string;
   },
+  sourceResolution: ResolvedSkillSources = { directories: [], sources: [], diagnostics: [] },
+  duplicateDiagnostics: readonly SkillDuplicateDiagnostic[] = [],
 ): SkillsToolbox {
   for (const skill of collected) {
     validateSkill(skill, { matchDirectoryName: skill.basePath !== '.' });
@@ -334,7 +359,16 @@ function assembleSkillsToolbox(
     descriptors,
     buildSkillTool,
   );
-  return { skills: collected, descriptors, allowedDirectories, tools, runtime, retrievalAdvisor };
+  return {
+    skills: collected,
+    descriptors,
+    allowedDirectories,
+    tools,
+    runtime,
+    retrievalAdvisor,
+    skillSources: sourceResolution.sources,
+    skillDiagnostics: [...sourceResolution.diagnostics, ...duplicateDiagnostics],
+  };
 }
 
 function createRetrievalAdvisor(
@@ -393,18 +427,6 @@ function semanticDiscoveryOptions(options: SkillsToolboxOptions): SkillsSemantic
   return options.semanticDiscovery && typeof options.semanticDiscovery === 'object'
     ? options.semanticDiscovery
     : {};
-}
-
-function resolveToolboxDirectories(options: SkillsToolboxOptions): string[] {
-  const fromPackages = options.packages?.length
-    ? resolveSkillPackageDirectories(options.packages, options.workspace ?? process.cwd())
-    : [];
-  if (options.directories != null) {
-    return [...options.directories.map(expandUserPath), ...fromPackages];
-  }
-  const hasExplicitSkills = (options.files?.length ?? 0) > 0 || (options.skills?.length ?? 0) > 0;
-  if (hasExplicitSkills) return fromPackages;
-  return [...existingSkillDirectories(), ...fromPackages];
 }
 
 function normalizeWeb(web: SkillsToolboxOptions['web']): {

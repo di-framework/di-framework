@@ -2,7 +2,7 @@
 
 [`@di-framework/ai-utils`](../../../packages/di-framework-ai-utils) `SkillsAgent.builder()` / `SkillsToolbox.builder()` attached to a `ChatAgent`.
 
-The bundled skill is `.claude/skills/code-reviewer/`:
+The bundled skill is `.agents/skills/code-reviewer/`:
 
 - `SKILL.md` — when to review code
 - `references/checklist.md` — loaded with `Read` after the skill activates
@@ -18,7 +18,8 @@ import { SkillsAgent } from '@di-framework/ai-utils';
 
 const agent = SkillsAgent.builder()
   .chatModel(new OpenAiChatModel({ model: 'gpt-4o-mini', apiKey: process.env.OPENAI_API_KEY }))
-  .addSkillsDirectory('.claude/skills')
+  .addSkillsDirectory('.agents/skills')
+  .sourceMode('replace')
   .workspace(process.cwd())
   .build();
 ```

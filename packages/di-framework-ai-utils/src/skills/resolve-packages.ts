@@ -7,7 +7,7 @@ import { expandUserPath } from '../sandbox/paths.ts';
  * Resolve npm package names or paths to skill root directories.
  *
  * Looks at {@code package.json} {@code skills} (string or string[]), then
- * {@code .claude/skills} and {@code skills} under the package root.
+ * {@code .agents/skills}, then {@code skills} under the package root.
  */
 export function resolveSkillPackageDirectories(
   packages: readonly string[],
@@ -23,12 +23,12 @@ export function resolveSkillPackageDirectories(
 function skillDirectoriesForPackage(spec: string, fromDirectory: string): string[] {
   const root = resolvePackageRoot(spec, fromDirectory);
   const declared = readPackageSkillsField(root);
-  if (declared.length > 0) {
-    return declared.filter((dir) => isExistingDirectory(dir));
-  }
-  return [join(root, '.claude', 'skills'), join(root, 'skills')].filter((dir) =>
-    isExistingDirectory(dir),
-  );
+  const declaredExisting = declared.filter((dir) => isExistingDirectory(dir));
+  if (declaredExisting.length > 0) return declaredExisting;
+  const neutral = join(root, '.agents', 'skills');
+  if (isExistingDirectory(neutral)) return [neutral];
+  const conventional = join(root, 'skills');
+  return isExistingDirectory(conventional) ? [conventional] : [];
 }
 
 function resolvePackageRoot(spec: string, fromDirectory: string): string {

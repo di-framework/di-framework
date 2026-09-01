@@ -50,10 +50,10 @@ const passthroughAdvisor: Advisor = {
 describe('skills decorators', () => {
   test('Skills and SemanticSkillDiscovery store metadata', () => {
     @Skills({
-      directories: ['.claude/skills'],
+      directories: ['.agents/skills'],
       packages: ['@company/skills'],
       workspace: '/tmp/app',
-      noDefaultDirectories: true,
+      sourceMode: 'replace',
     })
     @SemanticSkillDiscovery({
       indexFile: '.di-framework/skills-index.jsonl',
@@ -63,10 +63,10 @@ describe('skills decorators', () => {
     class ApplicationSkills {}
 
     expect(getSkillsMetadata(ApplicationSkills)).toEqual({
-      directories: ['.claude/skills'],
+      directories: ['.agents/skills'],
       packages: ['@company/skills'],
       workspace: '/tmp/app',
-      noDefaultDirectories: true,
+      sourceMode: 'replace',
     });
     expect(getSemanticSkillDiscoveryMetadata(ApplicationSkills)).toEqual({
       indexFile: '.di-framework/skills-index.jsonl',
@@ -99,7 +99,7 @@ describe('skills decorators', () => {
 
   test('skillsToolboxOptionsFrom matches SkillsToolbox.builder().toOptions()', () => {
     @Skills({
-      directories: ['.claude/skills'],
+      directories: ['.agents/skills'],
       packages: ['@company/skills'],
       workspace: '/tmp/app',
     })
@@ -116,7 +116,7 @@ describe('skills decorators', () => {
 
     const fromDecorators = skillsToolboxOptionsFrom(ApplicationSkills);
     const fromBuilder = SkillsToolbox.builder()
-      .addSkillsDirectories(['.claude/skills'])
+      .addSkillsDirectories(['.agents/skills'])
       .addPackages(['@company/skills'])
       .workspace('/tmp/app')
       .addSkill(
@@ -137,7 +137,7 @@ describe('skills decorators', () => {
   });
 
   test('apply helpers accept embedder and chatModel overrides without storing them on metadata', () => {
-    @Skills({ directories: ['.claude/skills'], noDefaultDirectories: true })
+    @Skills({ directories: ['.agents/skills'], sourceMode: 'replace' })
     @SemanticSkillDiscovery({ limit: 5 })
     class ApplicationSkills {}
 
@@ -168,7 +168,7 @@ describe('skills decorators', () => {
 
   test('skillsIndexBuilderFrom matches SkillsIndex.builder().toOptions()', () => {
     @SkillsIndexConfig({
-      directories: ['.claude/skills'],
+      directories: ['.agents/skills'],
       threshold: 50,
       retrievalLimit: 10,
       outputFile: '.di-framework/skills-index.jsonl',
@@ -176,7 +176,7 @@ describe('skills decorators', () => {
     class ApplicationSkillsIndex {}
 
     expect(getSkillsIndexMetadata(ApplicationSkillsIndex)).toEqual({
-      directories: ['.claude/skills'],
+      directories: ['.agents/skills'],
       threshold: 50,
       retrievalLimit: 10,
       outputFile: '.di-framework/skills-index.jsonl',
@@ -184,7 +184,7 @@ describe('skills decorators', () => {
 
     const fromDecorators = skillsIndexBuilderFrom(ApplicationSkillsIndex).toOptions();
     const fromBuilder = SkillsIndex.builder()
-      .addSkillsDirectories(['.claude/skills'])
+      .addSkillsDirectories(['.agents/skills'])
       .threshold(50)
       .retrievalLimit(10)
       .outputFile('.di-framework/skills-index.jsonl')
@@ -194,7 +194,7 @@ describe('skills decorators', () => {
   });
 
   test('skillsAgentBuilderFrom prefilled options match SkillsAgent.builder()', () => {
-    @Skills({ directories: ['skills'], noDefaultDirectories: true })
+    @Skills({ directories: ['skills'], sourceMode: 'replace' })
     class ApplicationSkills {}
 
     const model = new ScriptedChatModel([]);
@@ -204,6 +204,7 @@ describe('skills decorators', () => {
     }).toAgentOptions();
     const handBuilt = SkillsAgent.builder()
       .addSkillsDirectories(['skills'])
+      .sourceMode('replace')
       .chatModel(model)
       .write()
       .toAgentOptions();
@@ -211,12 +212,12 @@ describe('skills decorators', () => {
     expect(decorated).toEqual(handBuilt);
   });
 
-  test('noDefaultDirectories yields empty directories', () => {
-    @Skills({ noDefaultDirectories: true })
+  test('replace mode is preserved without explicit directories', () => {
+    @Skills({ sourceMode: 'replace' })
     class EmptyCatalog {}
 
-    expect(skillsToolboxOptionsFrom(EmptyCatalog).directories).toEqual([]);
-    expect(skillsToolboxBuilderFrom(EmptyCatalog).toOptions().directories).toEqual([]);
+    expect(skillsToolboxOptionsFrom(EmptyCatalog).directories).toBeUndefined();
+    expect(skillsToolboxBuilderFrom(EmptyCatalog).toOptions().sourceMode).toBe('replace');
   });
 
   test('skillsToolboxFrom and skillsAgentFrom build through existing factories', () => {
@@ -228,7 +229,7 @@ describe('skills decorators', () => {
           content: 'Do the thing.',
         }),
       ],
-      noDefaultDirectories: true,
+      sourceMode: 'replace',
     })
     class ApplicationSkills {}
 
@@ -249,7 +250,7 @@ describe('skills decorators', () => {
           content: 'Do the thing.',
         }),
       ],
-      noDefaultDirectories: true,
+      sourceMode: 'replace',
     })
     class ApplicationSkills {}
 
@@ -277,7 +278,7 @@ describe('skills decorators', () => {
   });
 
   test('builderFrom applies files and extraAllowedDirectories', () => {
-    @Skills({ noDefaultDirectories: true })
+    @Skills({ sourceMode: 'replace' })
     class ApplicationSkills {}
 
     const options = skillsToolboxBuilderFrom(ApplicationSkills, {

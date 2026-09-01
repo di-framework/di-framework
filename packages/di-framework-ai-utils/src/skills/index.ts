@@ -24,6 +24,12 @@ export type {
 export { agentSkill, parseAllowedTools, parseSkillMarkdown } from './parse-skill-markdown.ts';
 export { resolveSkillPackageDirectories } from './resolve-packages.ts';
 export type {
+  ResolvedSkillSources,
+  ResolveSkillSourcesOptions,
+  SkillSourceMode,
+} from './resolve-skill-sources.ts';
+export { resolveSkillSources } from './resolve-skill-sources.ts';
+export type {
   SkillAdapterBenchmarkCase,
   SkillAdapterBenchmarkOptions,
   SkillAdapterEvaluationQuality,
@@ -189,7 +195,12 @@ export {
 } from './skills-retrieval-advisor.ts';
 export type { SkillsRuntime, SkillsRuntimeOptions } from './skills-runtime.ts';
 export { createSkillsRuntime } from './skills-runtime.ts';
-export type { AsyncSkillsToolOptions, SkillsInput, SkillsToolOptions } from './skills-tool.ts';
+export type {
+  AsyncSkillsToolOptions,
+  SkillDuplicateDiagnostic,
+  SkillsInput,
+  SkillsToolOptions,
+} from './skills-tool.ts';
 export {
   asyncSkillsTool,
   collectSkills,
@@ -202,6 +213,7 @@ export {
   skillToXml,
 } from './skills-tool.ts';
 export type {
+  SkillSourceDiagnostic,
   SkillsSemanticDiscoveryOptions,
   SkillsToolboxMemoriesOptions,
   SkillsToolboxOptions,

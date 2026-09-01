@@ -7,7 +7,7 @@ import {
 } from '@di-framework/examples-shared';
 
 export const exampleRoot = join(import.meta.dir, '..');
-export const skillsDirectory = join(exampleRoot, '.claude', 'skills');
+export const skillsDirectory = join(exampleRoot, '.agents', 'skills');
 export const sampleUserPath = join(exampleRoot, 'fixtures', 'sample-user.ts');
 
 export const REVIEW_SYSTEM =
@@ -16,6 +16,7 @@ export const REVIEW_SYSTEM =
 export function exampleSkillsToolbox(options: { shell?: boolean } = {}) {
   return SkillsToolbox.builder()
     .addSkillsDirectory(skillsDirectory)
+    .sourceMode('replace')
     .workspace(exampleRoot)
     .shell(options.shell ?? false)
     .confirmShell(({ command }) => command.includes('count-lines.sh'))
@@ -27,6 +28,7 @@ export function createReviewAgent(chatModel: ChatModel, options: { shell?: boole
     .chatModel(chatModel)
     .system(REVIEW_SYSTEM)
     .addSkillsDirectory(skillsDirectory)
+    .sourceMode('replace')
     .workspace(exampleRoot)
     .shell(options.shell ?? false)
     .confirmShell(({ command }) => command.includes('count-lines.sh'))

@@ -15,6 +15,7 @@ import {
   type AgentSkillCreateOptions,
   agentSkill,
 } from './parse-skill-markdown.ts';
+import type { SkillSourceMode } from './resolve-skill-sources.ts';
 import type { SkillsFluent } from './skills-fluent.ts';
 import {
   type BuildSkillsIndexOptions,
@@ -42,8 +43,8 @@ export interface SkillsDecoratorOptions {
   readonly files?: readonly string[];
   readonly skills?: readonly AgentSkill[];
   readonly workspace?: string;
-  /** When true and {@link directories} is omitted, disables default skill directory discovery. */
-  readonly noDefaultDirectories?: boolean;
+  readonly userDirectory?: string;
+  readonly sourceMode?: SkillSourceMode;
 }
 
 /**
@@ -172,12 +173,7 @@ export function skillsToolboxOptionsFrom(
   const semantic = getSemanticSkillDiscoveryMetadata(target);
   const declared = getDeclaredSkills(target);
 
-  const directories =
-    overrides.directories !== undefined
-      ? overrides.directories
-      : catalog.noDefaultDirectories && catalog.directories == null
-        ? []
-        : catalog.directories;
+  const directories = overrides.directories ?? catalog.directories;
 
   const skills = [...(catalog.skills ?? []), ...declared, ...(overrides.skills ?? [])];
 
@@ -196,7 +192,7 @@ export function skillsToolboxOptionsFrom(
     semanticDiscovery = { ...semantic };
   }
 
-  const { noDefaultDirectories: _ignored, skills: _catalogSkills, ...catalogRest } = catalog;
+  const { skills: _catalogSkills, ...catalogRest } = catalog;
 
   return {
     ...catalogRest,
@@ -205,6 +201,8 @@ export function skillsToolboxOptionsFrom(
     packages: overrides.packages ?? catalog.packages,
     files: overrides.files ?? catalog.files,
     workspace: overrides.workspace ?? catalog.workspace,
+    userDirectory: overrides.userDirectory ?? catalog.userDirectory,
+    sourceMode: overrides.sourceMode ?? catalog.sourceMode,
     skills: skills.length > 0 ? skills : undefined,
     semanticDiscovery,
   };
@@ -291,10 +289,7 @@ function applyToolboxOptions<T extends SkillsFluent<T>>(
 ): T {
   let b = builder;
   if (options.directories != null) {
-    b =
-      options.directories.length === 0
-        ? b.noDefaultDirectories()
-        : b.addSkillsDirectories(options.directories);
+    b = b.addSkillsDirectories(options.directories);
   }
   if (options.files?.length) {
     for (const file of options.files) b = b.addSkillsFile(file);
@@ -302,6 +297,8 @@ function applyToolboxOptions<T extends SkillsFluent<T>>(
   if (options.packages?.length) b = b.addPackages(options.packages);
   if (options.skills?.length) b = b.addSkills(options.skills);
   if (options.workspace != null) b = b.workspace(options.workspace);
+  if (options.userDirectory != null) b = b.userDirectory(options.userDirectory);
+  if (options.sourceMode != null) b = b.sourceMode(options.sourceMode);
   if (options.extraAllowedDirectories?.length) {
     b = b.extraAllowedDirectories(options.extraAllowedDirectories);
   }

@@ -4,8 +4,8 @@ import { nodeErrnoCode } from '../sandbox/fs-error.ts';
 import { expandUserPath } from '../sandbox/paths.ts';
 import { type AgentSkill, parseSkillMarkdown } from './parse-skill-markdown.ts';
 
-/** Claude-style locations scanned when no directories are given. */
-export const DEFAULT_SKILL_DIRECTORY_CANDIDATES = ['.claude/skills', '~/.claude/skills'] as const;
+/** Vendor-neutral workspace and user locations used by merge discovery. */
+export const DEFAULT_SKILL_DIRECTORY_CANDIDATES = ['.agents/skills', '~/.agents/skills'] as const;
 
 const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist', 'coverage']);
 
@@ -44,7 +44,7 @@ export function loadSkillsDirectories(rootDirectories: readonly string[]): Agent
 
 /**
  * Candidates that exist as directories. Missing paths are skipped so default
- * {@code ~/.claude/skills} does not fail closed on a fresh machine.
+ * {@code ~/.agents/skills} does not fail closed on a fresh machine.
  */
 export function existingSkillDirectories(
   candidates: readonly string[] = DEFAULT_SKILL_DIRECTORY_CANDIDATES,
@@ -60,7 +60,7 @@ export function existingSkillDirectories(
       // Missing or unreadable candidates are skipped.
     }
   }
-  return out;
+  return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /**

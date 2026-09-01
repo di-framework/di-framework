@@ -2,6 +2,7 @@ import type { ChatModel } from '@di-framework/ai';
 import type { QuestionHandler } from '../tools/ask-user-question-tool.ts';
 import type { BashConfirmInput } from '../tools/bash-tool.ts';
 import type { AgentSkill } from './parse-skill-markdown.ts';
+import type { SkillSourceMode } from './resolve-skill-sources.ts';
 import type {
   SkillsSemanticDiscoveryOptions,
   SkillsToolboxMemoriesOptions,
@@ -57,14 +58,19 @@ export class SkillsFluent<T extends SkillsFluent<T>> {
     return this.self();
   }
 
-  /** Disable default {@code .claude/skills} / {@code ~/.claude/skills} discovery. */
-  noDefaultDirectories(): T {
-    this.draft.directories = this.draft.directories ?? [];
+  /** Choose whether explicit sources supplement or replace neutral defaults. */
+  sourceMode(mode: SkillSourceMode): T {
+    this.draft.sourceMode = mode;
     return this.self();
   }
 
   workspace(path: string): T {
     this.draft.workspace = path;
+    return this.self();
+  }
+
+  userDirectory(path: string): T {
+    this.draft.userDirectory = path;
     return this.self();
   }
 

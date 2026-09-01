@@ -36,7 +36,7 @@ import { SkillsAgent } from '@di-framework/ai-utils';
 const agent = SkillsAgent.builder()
   .chatModel(new OpenAiChatModel({ model: 'gpt-4o-mini' }))
   .system('You help with TypeScript code review.')
-  .addSkillsDirectory('.claude/skills')
+  .addSkillsDirectory('.agents/skills')
   .workspace(process.cwd())
   .write()
   .shell()
@@ -52,7 +52,7 @@ import { ChatClient } from '@di-framework/ai';
 import { SkillsToolbox } from '@di-framework/ai-utils';
 
 const tools = SkillsToolbox.builder()
-  .addSkillsDirectory('.claude/skills')
+  .addSkillsDirectory('.agents/skills')
   .workspace(process.cwd())
   .buildTools();
 
@@ -66,7 +66,7 @@ See [`examples/packages/ai-skills`](../../examples/packages/ai-skills) (`bun sta
 A skill is a folder with a `SKILL.md` (YAML front matter + instructions). Optional `scripts/`, `references/`, and other files stay on disk until the model reads them.
 
 ```
-.claude/skills/
+.agents/skills/
 └── code-reviewer/
     ├── SKILL.md
     ├── references/
@@ -115,7 +115,7 @@ Optional thin decorators map onto the builders above. They only store metadata; 
 
 | Decorator | Apply helper |
 | --- | --- |
-| `@Skills({ directories, packages, files, workspace, noDefaultDirectories })` | `skillsToolboxBuilderFrom` / `skillsAgentBuilderFrom` |
+| `@Skills({ directories, packages, files, workspace, sourceMode })` | `skillsToolboxBuilderFrom` / `skillsAgentBuilderFrom` |
 | `@SemanticSkillDiscovery({ indexFile, limit, ... })` | merged into `semanticDiscovery` (embedder/stores via overrides) |
 | `@SkillsIndexConfig({ directories, threshold, retrievalLimit, ... })` | `skillsIndexBuilderFrom` then `.build()` |
 | `@Skill({ name, description, content? })` | collected into catalog options |
@@ -130,14 +130,14 @@ import {
   skillsIndexBuilderFrom,
 } from '@di-framework/ai-utils';
 
-@Skills({ directories: ['.claude/skills'] })
+@Skills({ directories: ['.agents/skills'] })
 @SemanticSkillDiscovery({ limit: 10 })
 @Skill({ name: 'code-reviewer', description: 'Reviews TypeScript code.' })
 class ApplicationSkills {}
 
 const agent = skillsAgentFrom(ApplicationSkills, { chatModel: model });
 
-@SkillsIndexConfig({ directories: ['.claude/skills'], threshold: 50 })
+@SkillsIndexConfig({ directories: ['.agents/skills'], threshold: 50 })
 class ApplicationSkillsIndex {}
 
 await skillsIndexBuilderFrom(ApplicationSkillsIndex).build();
@@ -152,8 +152,8 @@ Builders remain the supported escape hatch. Decorators do not run indexing or lo
 | `addSkillsDirectory` / `addSkillsDirectories` | Load `SKILL.md` trees |
 | `addSkillsFile` | Load one `SKILL.md` |
 | `addSkill` / `addSkills` | In-memory skills |
-| `addPackage` / `addPackages` | npm package or path (`package.json` `skills`, else `.claude/skills` / `skills`) |
-| `noDefaultDirectories` | Do not scan `.claude/skills` and `~/.claude/skills` |
+| `addPackage` / `addPackages` | npm package or path (`package.json` `skills`, else `.agents/skills`, else `skills`) |
+| `sourceMode('merge' \| 'replace')` | Supplement neutral defaults (default) or use only explicit sources |
 | `workspace` | Default cwd / search root (also an allowed file root) |
 | `extraAllowedDirectory(s)` | Extra sandbox roots |
 | `write()` / `shell()` | Opt-in `Write`+`Edit` / `Bash` |
@@ -213,16 +213,32 @@ workspace, including through symlinks; user sources are similarly contained by
 the home directory. Explicit, package, fallback, vendor, and migration sources
 must remain within the workspace or an `allowedDirectories` root.
 
-If you never call `addSkillsDirectory` / `addSkillsFile` / `addSkill` / `addPackage`, existing **`.claude/skills`** (cwd) and **`~/.claude/skills`** are loaded. Missing dirs are skipped. `noDefaultDirectories()` or an empty `directories: []` disables that.
+The only automatic roots are **`<workspace>/.agents/skills`** and
+**`~/.agents/skills`**, in that order. `sourceMode` defaults to `merge`: explicit
+directories and packages precede the workspace and user roots. In `replace`
+mode, only explicit sources are used. The first definition of a skill name wins,
+and `SkillsToolbox.skillDiagnostics` reports every shadowed definition with its
+kept and ignored source paths. `SkillsToolbox.skillSources` retains each
+resolved root's origin and precedence.
 
-`addPackage('@scope/pack')` resolves `pack/package.json` from the workspace, then uses the `skills` field (string or string[]) or falls back to `.claude/skills` and `skills` under the package root.
+```ts
+const isolated = SkillsToolbox.builder()
+  .addSkillsDirectory('./team-skills')
+  .sourceMode('replace')
+  .workspace(process.cwd())
+  .build();
+```
+
+`addPackage('@scope/pack')` resolves `pack/package.json` from the workspace,
+then uses its `skills` field (string or string[]). Without that field, it tries
+`.agents/skills`, then `skills` under the package root.
 
 ### Large catalogs
 
 By default, every skill name and description is placed in the `Skill` tool. For catalogs above the default threshold of 50, build a local semantic index instead:
 
 ```bash
-di-framework skills index build --skills-dir .claude/skills
+di-framework skills index build --skills-dir .agents/skills
 ```
 
 The equivalent programmatic build API is:
@@ -231,7 +247,7 @@ The equivalent programmatic build API is:
 import { SkillsIndex } from '@di-framework/ai-utils';
 
 await SkillsIndex.builder()
-  .addSkillsDirectory('.claude/skills')
+  .addSkillsDirectory('.agents/skills')
   .build();
 ```
 
@@ -242,7 +258,7 @@ build script), then enable fail-closed runtime retrieval:
 ```ts
 const agent = SkillsAgent.builder()
   .chatModel(model)
-  .addSkillsDirectory('.claude/skills')
+  .addSkillsDirectory('.agents/skills')
   .semanticDiscovery()
   .build();
 ```
@@ -336,7 +352,7 @@ const skillOnly = SkillsTool.builder()
   .build();
 
 const mcp = skillsToolboxAsMcp({
-  directories: ['.claude/skills'],
+  directories: ['.agents/skills'],
   workspace: process.cwd(),
 });
 ```
