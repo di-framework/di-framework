@@ -12,6 +12,10 @@ jobs:
   build-and-test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      code-quality: write
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -119,22 +123,10 @@ jobs:
           name: coverage-report-typescript
           path: coverage/cobertura.xml
 
-  upload-coverage-typescript:
-    needs: build-and-test
-    if: ${{ !cancelled() && needs.build-and-test.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      code-quality: write
-      pull-requests: read
-    steps:
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: coverage-report-typescript
       - uses: actions/upload-code-coverage@v1
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         with:
-          file: cobertura.xml
+          file: coverage/cobertura.xml
           language: TypeScript
           label: code-coverage-agent
 
