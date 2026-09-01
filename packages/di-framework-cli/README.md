@@ -30,6 +30,7 @@ di-framework <command> [args...]
 | **`init [name]`** | Scaffold a new app (`package.json`, `tsconfig` with `@di-framework/tsc`, sample `src/index.ts`) |
 | **`build`** | Emit with `ttsc --emit` when available, otherwise `tsc -p tsconfig.json` |
 | **`check`** | Typecheck with `ttsc --noEmit` when available, otherwise `tsc --noEmit` |
+| **`agent audit`** | Audit resolved agent configuration and actionable findings without writing files |
 | **`agent inspect`** | Read resolved skill roots, repository instructions, precedence, and `.aiignore` policy |
 | **`http openapi generate`** | Generate and write OpenAPI 3.1 from explicit controller modules |
 | **`skills index build`** | Build a semantic Agent Skills index |
@@ -46,6 +47,27 @@ cd my-api && bun install && bun run dev
 di-framework check
 di-framework build
 ```
+
+### Agent configuration audit
+
+```bash
+di-framework agent audit
+di-framework agent audit --working-directory packages/api --json
+```
+
+`agent audit` delegates every rule to the typed `auditAgentConfiguration` API.
+Text output groups findings under Error, Warning, and Info headings and includes
+provenance, precedence, related paths, and recommended actions when present.
+JSON `data` is the unchanged typed audit report. A report without error-severity
+findings exits `0`; a report with any error-severity finding exits `1`; invalid
+CLI configuration exits `2`; and package-loading or unexpected failures exit
+`3`. The command reads configuration for analysis but never writes files or
+loads vendor-specific assets implicitly.
+
+Use `--workspace`, `--working-directory`, `--user-directory`, repeatable
+`--skills-dir`, repeatable `--skills-package`, `--source-mode`, repeatable
+`--instructions-fallback`, `--max-instruction-bytes`, and repeatable
+`--allowed-directory` to map directly to the typed audit options.
 
 ### Agent configuration inspection
 

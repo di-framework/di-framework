@@ -19,7 +19,6 @@ export type {
   VendorAgentAssetKind,
 } from './audit-agent-configuration.ts';
 export { auditAgentConfiguration } from './audit-agent-configuration.ts';
-
 export type {
   AgentInstructionSource,
   AgentInstructionsDiagnostic,
@@ -33,6 +32,28 @@ export {
   DEFAULT_AGENT_INSTRUCTIONS_MAX_BYTES,
   discoverAgentInstructions,
 } from './instructions/index.ts';
+export type {
+  AgentConfigurationMigrationAction,
+  AgentConfigurationMigrationActionResult,
+  AgentConfigurationMigrationActionStatus,
+  AgentConfigurationMigrationExecutionCode,
+  AgentConfigurationMigrationExecutionResult,
+  AgentConfigurationMigrationFileSource,
+  AgentConfigurationMigrationInlineSource,
+  AgentConfigurationMigrationOperation,
+  AgentConfigurationMigrationPlan,
+  AgentConfigurationMigrationPlanCode,
+  AgentConfigurationMigrationRequest,
+  AgentConfigurationMigrationSource,
+  AgentConfigurationMigrationTargetState,
+  ExecuteAgentConfigurationMigrationOptions,
+  NeutralAgentAssetPath,
+  PlanAgentConfigurationMigrationOptions,
+} from './migrate-agent-configuration.ts';
+export {
+  executeAgentConfigurationMigration,
+  planAgentConfigurationMigration,
+} from './migrate-agent-configuration.ts';
 export type {
   AiIgnoreDecision,
   AiIgnoreDiscoverySurface,
