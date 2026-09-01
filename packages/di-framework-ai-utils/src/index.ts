@@ -7,6 +7,20 @@
  */
 
 export type {
+  AgentInstructionSource,
+  AgentInstructionsDiagnostic,
+  AgentInstructionsDiagnosticCode,
+  AgentInstructionsLoadDiagnostic,
+  DiscoverAgentInstructionsOptions,
+  DiscoverAgentInstructionsResult,
+} from './instructions/index.ts';
+export {
+  DEFAULT_AGENT_INSTRUCTIONS_FILENAME,
+  DEFAULT_AGENT_INSTRUCTIONS_MAX_BYTES,
+  discoverAgentInstructions,
+} from './instructions/index.ts';
+
+export type {
   AllowedDirectories,
   PathAccessDenied,
   PathAccessOk,
