@@ -3,6 +3,7 @@
   "name": "di-framework-docs-search",
   "main": "src/index.ts",
   "compatibility_date": "2025-11-09",
+  "compatibility_flags": ["nodejs_compat"],
   // Apex route: di-framework.dev/api/docs/search* (see routes below).
   // Also expose *.workers.dev as a CI/fallback URL when apex DNS is flaky.
   "workers_dev": true,
