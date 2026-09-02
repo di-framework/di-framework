@@ -36,7 +36,9 @@
     "tools",
     "rag",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "a2a",
+    "agent-to-agent"
   ],
   "files": [
     "src",
