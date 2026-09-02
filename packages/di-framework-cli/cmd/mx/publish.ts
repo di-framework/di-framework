@@ -1,5 +1,9 @@
 import { join } from 'node:path';
 import { $ as defaultShell } from 'bun';
+import {
+  preparePublishManifest,
+  validateInternalFrameworkDeps,
+} from '../../../../scripts/internal-framework-deps';
 import type { CliIo, CommandResult } from '../../command';
 import { CommandFailure } from '../../command';
 
@@ -51,21 +55,16 @@ export async function publish(
 
     io.stdout.write(`\n🚢 Publishing ${pkgJson.name}@${pkgJson.version}...\n`);
 
-    // Prepare package.json for npm publish: replace workspace:* with ^version
-    const publishPkgJson = JSON.parse(rawPkgJson);
-    const replaceWorkspaceSpecs = (deps?: Record<string, string>) => {
-      if (!deps) return;
-      for (const depKey of Object.keys(deps)) {
-        if (
-          depKey.startsWith('@di-framework/') &&
-          (deps[depKey] === 'workspace:*' || deps[depKey] === 'workspace:^')
-        ) {
-          deps[depKey] = `^${pkgJson.version}`;
-        }
+    // Align workspace protocols and stale internal @di-framework/* ranges to ^<major>.
+    const publishPkgJson = preparePublishManifest(JSON.parse(rawPkgJson), pkgJson.version);
+    const internalIssues = validateInternalFrameworkDeps(publishPkgJson, pkgJson.version);
+    if (internalIssues.length > 0) {
+      for (const issue of internalIssues) {
+        io.stderr.write(`  ❌ ${pkgJson.name}: ${issue.message}\n`);
       }
-    };
-    replaceWorkspaceSpecs(publishPkgJson.peerDependencies);
-    replaceWorkspaceSpecs(publishPkgJson.dependencies);
+      failed.push(pkgJson.name);
+      continue;
+    }
 
     try {
       writeFileSync(pkgJsonPath, `${JSON.stringify(publishPkgJson, null, 2)}\n`);

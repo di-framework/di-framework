@@ -36,9 +36,9 @@
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
-    "@di-framework/auth": "^4",
-    "@di-framework/core": "^4",
-    "@di-framework/http": "^4",
+    "@di-framework/auth": "^5",
+    "@di-framework/core": "^5",
+    "@di-framework/http": "^5",
     "typescript": "^5"
   },
   "devDependencies": {

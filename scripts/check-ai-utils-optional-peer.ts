@@ -94,7 +94,7 @@ try {
     run('mkdir', ['-p', fixture]);
     writeFileSync(
       join(fixture, 'package.json'),
-      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@di-framework/ai': `file:${ai.path}`, '@di-framework/ai-utils': `file:${utils.path}`, '@di-framework/auth': '^4', '@di-framework/core': '^4' } }, null, 2)}\n`,
+      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@di-framework/ai': `file:${ai.path}`, '@di-framework/ai-utils': `file:${utils.path}`, '@di-framework/auth': '^5', '@di-framework/core': '^5' } }, null, 2)}\n`,
     );
     writeFileSync(join(fixture, 'consumer.mjs'), source);
     run(manager.command, manager.install, fixture);

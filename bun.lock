@@ -292,10 +292,10 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4",
-        "@di-framework/graphql": "^4",
-        "@di-framework/http": "^4",
-        "@di-framework/repo": "^4",
+        "@di-framework/core": "^5",
+        "@di-framework/graphql": "^5",
+        "@di-framework/http": "^5",
+        "@di-framework/repo": "^5",
         "graphql": "^16.8.0 || ^17.0.0",
         "typescript": "^5",
       },
@@ -317,9 +317,9 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/auth": "^4",
-        "@di-framework/core": "^4",
-        "@di-framework/http": "^4",
+        "@di-framework/auth": "^5",
+        "@di-framework/core": "^5",
+        "@di-framework/http": "^5",
         "typescript": "^5",
       },
       "optionalPeers": [
@@ -333,7 +333,7 @@
         "di-framework": "./main.ts",
       },
       "dependencies": {
-        "@di-framework/codegen": "^4",
+        "@di-framework/codegen": "^5",
         "bun": "^1.3.14",
       },
       "devDependencies": {
@@ -351,7 +351,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4",
+        "@di-framework/core": "^5",
         "typescript": "^5",
       },
     },
@@ -366,7 +366,7 @@
         "zod": "^3.24.0",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4",
+        "@di-framework/core": "^5",
         "smol-toml": "^1.3.0",
         "typescript": "^5",
         "yaml": "^2.6.0",
@@ -398,7 +398,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4.1.1",
+        "@di-framework/core": "^5",
         "kafkajs": "^2.2.0",
         "nats": "^2.28.0",
         "typescript": "^5",
@@ -417,7 +417,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4",
+        "@di-framework/core": "^5",
         "graphql": "^16.8.0 || ^17.0.0",
         "typescript": "^5",
       },
@@ -436,7 +436,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "^4",
+        "@di-framework/core": "^5",
         "typescript": "^5",
       },
     },
@@ -444,7 +444,7 @@
       "name": "@di-framework/repo",
       "version": "4.2.3",
       "peerDependencies": {
-        "@di-framework/core": "^4",
+        "@di-framework/core": "^5",
         "typescript": "^5",
       },
     },
@@ -462,8 +462,8 @@
         "@bufbuild/protobuf": "^2.13.0",
         "@connectrpc/connect": "^2.1.2",
         "@connectrpc/connect-node": "^2.1.2",
-        "@di-framework/core": "workspace:^",
-        "@di-framework/socket": "workspace:^",
+        "@di-framework/core": "^5",
+        "@di-framework/socket": "^5",
         "typescript": "^5",
       },
       "optionalPeers": [
@@ -485,7 +485,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@di-framework/core": "workspace:*",
+        "@di-framework/core": "^5",
         "typescript": "^5",
       },
     },
@@ -1175,6 +1175,8 @@
 
     "@di-framework/authz/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
+    "@di-framework/cli/@di-framework/codegen": ["@di-framework/codegen@5.2.0", "", { "peerDependencies": { "@di-framework/core": "^4", "typescript": "^5" } }, "sha512-zan2skjsRyO5O5B7jyXSZ/QPka/jFJbuROh0nG4tJo0uHJnCLdFOk8G+KE9mQDTuqXKDdHetBEibwLi3EYI6Jw=="],
+
     "@di-framework/cli/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@di-framework/codegen/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
@@ -1183,11 +1185,17 @@
 
     "@di-framework/config/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
+    "@di-framework/events/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "@di-framework/examples-shared/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@di-framework/graphql/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@di-framework/http/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@di-framework/rpc/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@di-framework/socket/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@di-framework/tsc/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
@@ -1231,11 +1239,17 @@
 
     "@di-framework/config/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
+    "@di-framework/events/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
     "@di-framework/examples-shared/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@di-framework/graphql/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@di-framework/http/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@di-framework/rpc/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@di-framework/socket/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "miniflare/sharp/@img/sharp-darwin-arm64": ["@img/sharp-darwin-arm64@0.35.2", "", { "optionalDependencies": { "@img/sharp-libvips-darwin-arm64": "1.3.1" }, "os": "darwin", "cpu": "arm64" }, "sha512-eEieHsMksAW4IiO5NzauESRl2D2qz3J/kwUxUrSfV06A93eEaRfMpHXyUb1mAqrR7i8U9A0GRqE9pjn6u1Jjpg=="],
 
