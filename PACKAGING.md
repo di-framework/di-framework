@@ -40,13 +40,18 @@ workspace with `npm pack`, reads the packed `package.json`, and fails for:
   `DI_RELEASE_VERSION` when set). A `5.2.0` release must ship compatible
   ranges such as `^5`, not a stale `^4`.
 
-Release runs `bun scripts/prepare-publish-manifests.ts` before the pack audit
-and publish. That step rewrites `workspace:*` / `workspace:^` and any stale
-internal range to `^<major>` derived from the version being released. Intentional
-cross-major relationships must be listed in
+Release runs `bun scripts/release-prepublish.ts` after `mx build --sync-versions`
+and before publish. That step rewrites `workspace:*` / `workspace:^` and any stale
+internal range to `^<major>` derived from the version being released, then audits
+packed tarballs. Intentional cross-major relationships must be listed in
 `INTERNAL_CROSS_MAJOR_ALLOWLIST` in `scripts/internal-framework-deps.ts` as
 `@di-framework/consuming>@di-framework/dependency` and documented here when
 added.
+
+`release/v*` pull requests run the same prepublish gate without uploading:
+`bun run release:dry-run` (`--sync-versions`, packed-manifest audit, and
+`npm publish --dry-run`). Test CI also installs Node 24 + current npm before
+`check-packaging` so pack JSON matches the Release toolchain.
 
 GraphQL's dist-compatibility tests additionally exercise decorator registration
 from compiled artifacts in Bun and Node ESM. Declaration builds cover every

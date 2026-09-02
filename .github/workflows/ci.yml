@@ -31,8 +31,23 @@ jobs:
       - name: Build packages
         run: bun run build
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+
+      - name: Ensure modern npm for pack audit
+        run: npm install -g npm@latest
+
       - name: Check package tarballs
         run: bun run check-packaging
+
+      - name: Release dry-run
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/v')
+        run: |
+          set -euo pipefail
+          bun run packages/di-framework-cli/main.ts mx build --sync-versions
+          bun scripts/release-prepublish.ts --publish-dry-run
+          git checkout -- packages/*/package.json
 
       - name: Verify optional Transformers.js peer installs
         run: bun run check-ai-utils-optional-peer
