@@ -349,37 +349,103 @@ and `SkillsToolbox.skillDiagnostics` reports every shadowed definition with its
 kept and ignored source paths. `SkillsToolbox.skillSources` retains each
 resolved root's origin and precedence.
 
-### Antigravity plugins
+### Plugins
 
-`resolvePluginSources`, `loadPluginDirectory`, and `validatePluginCatalog`
-discover Antigravity-shaped plugin bundles. Automatic roots are
-**`<workspace>/.agents/plugins`** and **`~/.agents/plugins`** (same merge /
-replace precedence as skills). Each plugin is an immediate child directory:
+Plugins are filesystem bundles under `.agents/plugins/<id>/` (and
+`~/.agents/plugins/<id>/`). Layout:
 
 ```
 .agents/plugins/<plugin-id>/
   plugin.json          # required; name optional (defaults to directory name)
-  mcp_config.json      # optional MCP servers
-  hooks.json           # optional hooks object
+  mcp_config.json      # optional { mcpServers: ... }
+  hooks.json           # optional object
   skills/              # optional nested SKILL.md trees
   rules/               # optional *.md rule files
 ```
 
+`SkillsAgent` / `SkillsToolbox` do **not** load plugins by themselves. Wiring is
+one of three modes:
+
+#### Automatic (discovery only)
+
+Calling the plugin APIs with no explicit roots uses the same merge/replace model
+as skills. Defaults are **`<workspace>/.agents/plugins`** then
+**`~/.agents/plugins`**. Explicit `directories` / `packages` and `sourceMode`
+work like `resolveSkillSources`. Nested `skills/` are validated with the skill
+catalog rules when you validate a plugin catalog.
+
 ```ts
-import {
-  loadPluginDirectory,
-  resolvePluginSources,
-  validatePluginCatalog,
-} from '@di-framework/ai-utils';
+import { resolvePluginSources, validatePluginCatalog } from '@di-framework/ai-utils';
 
 const resolution = resolvePluginSources({ workspace: process.cwd() });
 const catalog = validatePluginCatalog({ workspace: process.cwd() });
-const plugin = loadPluginDirectory('.agents/plugins/di-framework');
 ```
 
-Nested `skills/` are validated with the existing skill catalog rules. This cut
-does **not** auto-compose plugin skills into `SkillsAgent` / `SkillsToolbox`,
-and it does not spawn MCP servers or execute hooks.
+Automatic here means **where plugins are found**, not that agents consume them.
+
+#### Programmatic
+
+Load or validate a specific bundle (or an already-resolved catalog) without
+depending on defaults:
+
+```ts
+import {
+  loadPluginDirectory,
+  loadPluginsDirectory,
+  validatePluginDirectory,
+  validateResolvedPluginCatalog,
+} from '@di-framework/ai-utils';
+
+const plugin = loadPluginDirectory('.agents/plugins/di-framework');
+const fromRoot = loadPluginsDirectory('.agents/plugins');
+const one = validatePluginDirectory('.agents/plugins/di-framework');
+```
+
+`AgentPlugin` exposes `skillsDirectory`, `mcpConfig`, `rules`, and `hooks` for
+callers to consume. This package does not start MCP servers or run hooks.
+
+#### Elective (opt into an agent)
+
+Feed plugin pieces into the skills / instructions stack yourself. Typical
+pattern: validate the catalog, then pass each plugin’s `skills/` root into
+skill discovery and append rule markdown to system context:
+
+```ts
+import {
+  SkillsAgent,
+  validatePluginCatalog,
+} from '@di-framework/ai-utils';
+
+const workspace = process.cwd();
+const catalog = validatePluginCatalog({ workspace });
+if (!catalog.valid) {
+  throw new Error(catalog.diagnostics.map((d) => d.message).join('\n'));
+}
+
+const pluginSkillDirs = catalog.plugins
+  .map((plugin) => plugin.skillsDirectory)
+  .filter((path): path is string => path != null);
+
+const ruleText = catalog.plugins
+  .flatMap((plugin) => plugin.rules)
+  .map((rule) => rule.content)
+  .join('\n\n');
+
+const agent = SkillsAgent.builder()
+  .chatModel(model)
+  .workspace(workspace)
+  .addSkillsDirectories(pluginSkillDirs)
+  .system(
+    ruleText
+      ? `You help with this codebase.\n\n${ruleText}`
+      : 'You help with this codebase.',
+  )
+  .build();
+```
+
+MCP is elective the same way: read `plugin.mcpConfig.mcpServers` and register
+those entries with whatever MCP client your process uses. Hooks stay data until
+you interpret `hooks.json`.
 
 ### `.aiignore` policy
 
