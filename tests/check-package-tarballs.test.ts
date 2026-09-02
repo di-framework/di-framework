@@ -21,6 +21,16 @@ describe('parseNpmPackJson', () => {
     expect(parseNpmPackJson(JSON.stringify(sample))?.filename).toBe('di-framework-http-5.2.1.tgz');
   });
 
+  it('accepts npm latest keyed-by-package-name output', () => {
+    expect(parseNpmPackJson(JSON.stringify({ [sample.name]: sample }))).toEqual(sample);
+  });
+
+  it('skips non-pack values in a name-keyed map', () => {
+    expect(parseNpmPackJson(JSON.stringify({ skip: {}, [sample.name]: sample }))).toEqual(sample);
+    expect(parseNpmPackJson(JSON.stringify({ skip: [], [sample.name]: sample }))).toEqual(sample);
+    expect(parseNpmPackJson(JSON.stringify({ '@di-framework/ai': { name: 'x' } }))).toBeUndefined();
+  });
+
   it('skips leading npm notices before JSON', () => {
     const stdout = `npm notice\n${JSON.stringify(sample)}`;
     expect(parseNpmPackJson(stdout)?.filename).toBe('di-framework-http-5.2.1.tgz');
@@ -30,5 +40,20 @@ describe('parseNpmPackJson', () => {
     expect(parseNpmPackJson('[]')).toBeUndefined();
     expect(parseNpmPackJson('{}')).toBeUndefined();
     expect(parseNpmPackJson('')).toBeUndefined();
+    expect(parseNpmPackJson('{not-json')).toBeUndefined();
+    expect(parseNpmPackJson('npm notice only')).toBeUndefined();
+  });
+
+  it('defaults missing pack fields when filename is present', () => {
+    expect(parseNpmPackJson(JSON.stringify({ filename: 'pkg.tgz', files: 'nope' }))).toEqual({
+      id: '',
+      name: '',
+      version: '',
+      filename: 'pkg.tgz',
+      size: 0,
+      unpackedSize: 0,
+      entryCount: 0,
+      files: [],
+    });
   });
 });

@@ -84,9 +84,41 @@ function readReleaseVersion(cwd: string): string {
   return rootPkg.version;
 }
 
+function asPackResult(value: unknown): PackJsonResult | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+
+  const filename = (value as { filename?: unknown }).filename;
+  if (typeof filename !== 'string' || filename.length === 0) return undefined;
+
+  const files = Array.isArray((value as { files?: unknown }).files)
+    ? (value as PackJsonResult).files
+    : [];
+
+  return {
+    id: typeof (value as PackJsonResult).id === 'string' ? (value as PackJsonResult).id : '',
+    name: typeof (value as PackJsonResult).name === 'string' ? (value as PackJsonResult).name : '',
+    version:
+      typeof (value as PackJsonResult).version === 'string'
+        ? (value as PackJsonResult).version
+        : '',
+    filename,
+    size: typeof (value as PackJsonResult).size === 'number' ? (value as PackJsonResult).size : 0,
+    unpackedSize:
+      typeof (value as PackJsonResult).unpackedSize === 'number'
+        ? (value as PackJsonResult).unpackedSize
+        : 0,
+    entryCount:
+      typeof (value as PackJsonResult).entryCount === 'number'
+        ? (value as PackJsonResult).entryCount
+        : files.length,
+    files,
+  };
+}
+
 /**
- * npm 10 emits `[{ filename, files, ... }]`. npm 11 / some Bun shims emit a
- * single object. Notices may precede the JSON on stdout.
+ * npm 10 emits `[{ filename, files, ... }]`. Some npm 11 / Bun shims emit a
+ * single pack object. Current npm latest keys that object by package name:
+ * `{ "@scope/name": { filename, files, ... } }`. Notices may precede JSON.
  */
 export function parseNpmPackJson(stdout: string): PackJsonResult | undefined {
   const trimmed = stdout.trim();
@@ -104,36 +136,17 @@ export function parseNpmPackJson(stdout: string): PackJsonResult | undefined {
     return undefined;
   }
 
-  const result = Array.isArray(parsed) ? parsed[0] : parsed;
-  if (!result || typeof result !== 'object') return undefined;
+  if (Array.isArray(parsed)) return asPackResult(parsed[0]);
 
-  const filename = (result as { filename?: unknown }).filename;
-  if (typeof filename !== 'string' || filename.length === 0) return undefined;
+  const direct = asPackResult(parsed);
+  if (direct) return direct;
 
-  const files = Array.isArray((result as { files?: unknown }).files)
-    ? ((result as PackJsonResult).files ?? [])
-    : [];
-
-  return {
-    id: typeof (result as PackJsonResult).id === 'string' ? (result as PackJsonResult).id : '',
-    name:
-      typeof (result as PackJsonResult).name === 'string' ? (result as PackJsonResult).name : '',
-    version:
-      typeof (result as PackJsonResult).version === 'string'
-        ? (result as PackJsonResult).version
-        : '',
-    filename,
-    size: typeof (result as PackJsonResult).size === 'number' ? (result as PackJsonResult).size : 0,
-    unpackedSize:
-      typeof (result as PackJsonResult).unpackedSize === 'number'
-        ? (result as PackJsonResult).unpackedSize
-        : 0,
-    entryCount:
-      typeof (result as PackJsonResult).entryCount === 'number'
-        ? (result as PackJsonResult).entryCount
-        : files.length,
-    files,
-  };
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  for (const value of Object.values(parsed)) {
+    const nested = asPackResult(value);
+    if (nested) return nested;
+  }
+  return undefined;
 }
 
 export function listTarballEntryPaths(tarballPath: string): PackedFile[] {
