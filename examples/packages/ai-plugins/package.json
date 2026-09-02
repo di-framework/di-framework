@@ -1,0 +1,28 @@
+{
+  "name": "@di-framework/ai-plugins-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Official @di-framework/plugin discovery and MCP wiring example for @di-framework/ai-utils",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "di-framework check",
+    "build": "di-framework build",
+    "check": "di-framework check"
+  },
+  "dependencies": {
+    "@di-framework/ai": "workspace:*",
+    "@di-framework/ai-utils": "workspace:*",
+    "@di-framework/core": "workspace:*",
+    "@di-framework/examples-shared": "workspace:*",
+    "@di-framework/plugin": "^1.1.0",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/tsc": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

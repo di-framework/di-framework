@@ -116,6 +116,11 @@ export function loadPluginsDirectory(rootDirectory: string): AgentPlugin[] {
     throw new Error(`Path is not a directory: ${rootDirectory}`);
   }
 
+  // A package root that is itself a plugin (has plugin.json) is a single-plugin root.
+  if (isExistingFile(join(rootPath, 'plugin.json'))) {
+    return [loadPluginDirectory(rootPath)];
+  }
+
   const plugins: AgentPlugin[] = [];
   for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
@@ -215,6 +220,14 @@ function loadHooks(basePath: string): Readonly<Record<string, unknown>> | undefi
 function isExistingDirectory(dir: string): boolean {
   try {
     return statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isExistingFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
   } catch {
     return false;
   }

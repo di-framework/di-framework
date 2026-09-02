@@ -68,6 +68,9 @@ describe('plugin coverage edges', () => {
     mkdirSync(join(pluginsRoot, 'no-manifest'), { recursive: true });
     expect(loadPluginsDirectory(pluginsRoot).map((plugin) => plugin.name)).toEqual(['ok']);
     expect(loadPluginsDirectories([pluginsRoot]).map((plugin) => plugin.name)).toEqual(['ok']);
+
+    const singleRoot = writeMinimalPlugin(workspace, 'single-root');
+    expect(loadPluginsDirectory(singleRoot).map((plugin) => plugin.name)).toEqual(['single-root']);
   });
 
   test('loadPluginDirectory rejects invalid mcp_config and hooks', () => {
