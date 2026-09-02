@@ -22,6 +22,8 @@ interface PackJsonResult {
   files: PackedFile[];
 }
 
+export type { PackedFile, PackJsonResult };
+
 // Packages allowed to include raw .ts source implementation files
 const RAW_TS_ALLOWED_PACKAGES = new Set([
   '@di-framework/cli',
@@ -82,11 +84,130 @@ function readReleaseVersion(cwd: string): string {
   return rootPkg.version;
 }
 
+/**
+ * npm 10 emits `[{ filename, files, ... }]`. npm 11 / some Bun shims emit a
+ * single object. Notices may precede the JSON on stdout.
+ */
+export function parseNpmPackJson(stdout: string): PackJsonResult | undefined {
+  const trimmed = stdout.trim();
+  if (!trimmed) return undefined;
+
+  const objectStart = trimmed.indexOf('{');
+  const arrayStart = trimmed.indexOf('[');
+  const candidates = [objectStart, arrayStart].filter((index) => index >= 0);
+  if (candidates.length === 0) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed.slice(Math.min(...candidates)));
+  } catch {
+    return undefined;
+  }
+
+  const result = Array.isArray(parsed) ? parsed[0] : parsed;
+  if (!result || typeof result !== 'object') return undefined;
+
+  const filename = (result as { filename?: unknown }).filename;
+  if (typeof filename !== 'string' || filename.length === 0) return undefined;
+
+  const files = Array.isArray((result as { files?: unknown }).files)
+    ? ((result as PackJsonResult).files ?? [])
+    : [];
+
+  return {
+    id: typeof (result as PackJsonResult).id === 'string' ? (result as PackJsonResult).id : '',
+    name:
+      typeof (result as PackJsonResult).name === 'string' ? (result as PackJsonResult).name : '',
+    version:
+      typeof (result as PackJsonResult).version === 'string'
+        ? (result as PackJsonResult).version
+        : '',
+    filename,
+    size: typeof (result as PackJsonResult).size === 'number' ? (result as PackJsonResult).size : 0,
+    unpackedSize:
+      typeof (result as PackJsonResult).unpackedSize === 'number'
+        ? (result as PackJsonResult).unpackedSize
+        : 0,
+    entryCount:
+      typeof (result as PackJsonResult).entryCount === 'number'
+        ? (result as PackJsonResult).entryCount
+        : files.length,
+    files,
+  };
+}
+
+export function listTarballEntryPaths(tarballPath: string): PackedFile[] {
+  const listing = execFileSync('tar', ['-tzf', tarballPath], { encoding: 'utf8' });
+  const files: PackedFile[] = [];
+  for (const line of listing.split('\n')) {
+    const entry = line.trim().replace(/\/$/, '');
+    if (!entry || entry === 'package') continue;
+    const packedPath = entry.replace(/^package\//, '');
+    if (!packedPath) continue;
+    files.push({ path: packedPath, size: 0 });
+  }
+  return files;
+}
+
 function readPackedPackageJson(tarballPath: string): Record<string, unknown> {
   const raw = execFileSync('tar', ['-xOf', tarballPath, 'package/package.json'], {
     encoding: 'utf8',
   });
   return JSON.parse(raw) as Record<string, unknown>;
+}
+
+function findPackedTarball(destDir: string, preferredFilename?: string): string | undefined {
+  if (preferredFilename) {
+    const preferred = path.join(destDir, path.basename(preferredFilename));
+    if (fs.existsSync(preferred)) return preferred;
+  }
+  const matches = fs.readdirSync(destDir).filter((name) => name.endsWith('.tgz'));
+  const only = matches.length === 1 ? matches[0] : undefined;
+  return only ? path.join(destDir, only) : undefined;
+}
+
+function packPackage(
+  pkgDirPath: string,
+  destDir: string,
+): { packData: PackJsonResult; tarballPath: string } {
+  fs.mkdirSync(destDir, { recursive: true });
+  let stdout = '';
+  let stderr = '';
+  try {
+    stdout = execFileSync('npm', ['pack', '--json', '--pack-destination', destDir], {
+      cwd: pkgDirPath,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    const failure = err as { stdout?: string; stderr?: string; message?: string };
+    stdout = failure.stdout ?? stdout;
+    stderr = failure.stderr ?? String(failure.message ?? err);
+  }
+
+  const parsed = parseNpmPackJson(stdout);
+  const tarballPath = findPackedTarball(destDir, parsed?.filename);
+  if (!tarballPath) {
+    throw new Error(
+      `npm pack produced no tarball in ${destDir}. stdout=${stdout.slice(0, 400)} stderr=${stderr.slice(0, 400)}`,
+    );
+  }
+
+  const files = parsed?.files?.length ? parsed.files : listTarballEntryPaths(tarballPath);
+  const packData: PackJsonResult = parsed
+    ? { ...parsed, files, filename: path.basename(tarballPath) }
+    : {
+        id: '',
+        name: '',
+        version: '',
+        filename: path.basename(tarballPath),
+        size: fs.statSync(tarballPath).size,
+        unpackedSize: 0,
+        entryCount: files.length,
+        files,
+      };
+
+  return { packData, tarballPath };
 }
 
 export function checkPackageTarballs(): boolean {
@@ -127,14 +248,9 @@ export function checkPackageTarballs(): boolean {
       let packData: PackJsonResult;
       let packedManifest: Record<string, unknown>;
       try {
-        const out = execFileSync('npm', ['pack', '--json', '--pack-destination', packDir], {
-          cwd: pkgDirPath,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        packData = JSON.parse(out)[0] as PackJsonResult;
-        const tarballPath = path.join(packDir, packData.filename);
-        packedManifest = readPackedPackageJson(tarballPath);
+        const packed = packPackage(pkgDirPath, path.join(packDir, pkg.dirName));
+        packData = packed.packData;
+        packedManifest = readPackedPackageJson(packed.tarballPath);
       } catch (err) {
         console.error(`❌ Failed to pack ${pkgName}:`, err);
         totalErrors++;
