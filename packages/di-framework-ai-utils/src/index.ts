@@ -55,6 +55,42 @@ export {
   planAgentConfigurationMigration,
 } from './migrate-agent-configuration.ts';
 export type {
+  AgentPlugin,
+  AgentPluginManifest,
+  AgentPluginMcpConfig,
+  AgentPluginMcpServer,
+  AgentPluginRule,
+  ParseMcpConfigError,
+  ParseMcpConfigResult,
+  ParsePluginManifestOptions,
+  PluginCatalogDiagnostic,
+  PluginCatalogDiagnosticCode,
+  PluginDiagnosticSource,
+  PluginSourceMode,
+  PluginValidationResult,
+  ResolvedPluginSources,
+  ResolvePluginSourcesOptions,
+  ValidatePluginDefinitionOptions,
+} from './plugins/index.ts';
+export {
+  DEFAULT_PLUGIN_DIRECTORY_CANDIDATES,
+  existingPluginDirectories,
+  loadPluginDirectory,
+  loadPluginsDirectories,
+  loadPluginsDirectory,
+  parseMcpConfig,
+  parsePluginManifest,
+  resolvePluginPackageDirectories,
+  resolvePluginSources,
+  validatePlugin,
+  validatePluginCatalog,
+  validatePluginDefinition,
+  validatePluginDirectory,
+  validatePluginName,
+  validatePluginsDirectory,
+  validateResolvedPluginCatalog,
+} from './plugins/index.ts';
+export type {
   AiIgnoreDecision,
   AiIgnoreDiscoverySurface,
   AiIgnoreEvaluation,
@@ -75,7 +111,6 @@ export {
   evaluateAiIgnorePath,
   loadAiIgnorePolicy,
 } from './policy/index.ts';
-
 export type {
   AllowedDirectories,
   PathAccessDenied,
