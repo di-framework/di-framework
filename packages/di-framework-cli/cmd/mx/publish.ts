@@ -1,9 +1,6 @@
 import { join } from 'node:path';
 import { $ as defaultShell } from 'bun';
-import {
-  preparePublishManifest,
-  validateInternalFrameworkDeps,
-} from '../../../../scripts/internal-framework-deps';
+import { preparePublishManifest } from '../../../../scripts/internal-framework-deps';
 import type { CliIo, CommandResult } from '../../command';
 import { CommandFailure } from '../../command';
 
@@ -56,15 +53,8 @@ export async function publish(
     io.stdout.write(`\n🚢 Publishing ${pkgJson.name}@${pkgJson.version}...\n`);
 
     // Align workspace protocols and stale internal @di-framework/* ranges to ^<major>.
+    // Release also runs prepare-publish-manifests + check-packaging before any publish.
     const publishPkgJson = preparePublishManifest(JSON.parse(rawPkgJson), pkgJson.version);
-    const internalIssues = validateInternalFrameworkDeps(publishPkgJson, pkgJson.version);
-    if (internalIssues.length > 0) {
-      for (const issue of internalIssues) {
-        io.stderr.write(`  ❌ ${pkgJson.name}: ${issue.message}\n`);
-      }
-      failed.push(pkgJson.name);
-      continue;
-    }
 
     try {
       writeFileSync(pkgJsonPath, `${JSON.stringify(publishPkgJson, null, 2)}\n`);
