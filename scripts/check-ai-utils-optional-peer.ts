@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { parseNpmPackJson } from './check-package-tarballs';
 
 interface PackResult {
   filename: string;
@@ -25,9 +26,11 @@ function available(command: string): boolean {
 }
 
 function pack(directory: string): { path: string; result: PackResult } {
-  const [result] = JSON.parse(
-    run('npm', ['pack', '--json', '--pack-destination', temporary], directory),
-  );
+  const stdout = run('npm', ['pack', '--json', '--pack-destination', temporary], directory);
+  const result = parseNpmPackJson(stdout);
+  if (!result) {
+    throw new Error(`Unexpected npm pack --json output: ${stdout.slice(0, 400)}`);
+  }
   return { path: join(temporary, result.filename), result };
 }
 
