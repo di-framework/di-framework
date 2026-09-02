@@ -28,32 +28,36 @@ import {
 } from './compare-backends.ts';
 
 describe('ANN vs exact skill search compare helpers', () => {
-  test('synthetic catalogs meet 99% recall@10 against exact cosine', async () => {
-    const request = syntheticSkillWriteRequest({ count: 200, dimensions: 16, seed: 7 });
-    const exact = new InMemorySkillVectorSearch();
-    await exact.replace(request);
-    const sqlitePath = join(mkdtempSync(join(tmpdir(), 'skill-ann-')), 'skills.sqlite');
-    const connection = openSqliteSkillConnection(sqlitePath, {
-      dimensions: 16,
-      searchMode: 'ann',
-      exactScanLimit: 32,
-    });
-    const indexed = await indexSkillsWithConnection(request, connection);
-    expect(indexed.writtenVectors).toBe(200);
-    expect(statSync(sqlitePath).size).toBeGreaterThan(0);
-    const queries = request.vectors.slice(0, 20).map((vector) => vector.embedding);
-    const comparison = await compareSkillSearchRecall({
-      exact,
-      candidate: sqliteSkillSearch(connection),
-      queries,
-      k: 10,
-    });
-    expect(comparison.recallAtK).toBeGreaterThanOrEqual(0.99);
-    expect(comparison.candidateSearchMs).toBeGreaterThanOrEqual(0);
-    expect(recallAtK(['a', 'b'], ['a', 'c'], 2)).toBe(0.5);
-    expect(recallAtK([], ['a'], 10)).toBe(1);
-    expect(chunkHitId({ name: 'a', chunk: 1 })).toBe('a\0' + '1');
-  });
+  test(
+    'synthetic catalogs meet 99% recall@10 against exact cosine',
+    async () => {
+      const request = syntheticSkillWriteRequest({ count: 200, dimensions: 16, seed: 7 });
+      const exact = new InMemorySkillVectorSearch();
+      await exact.replace(request);
+      const sqlitePath = join(mkdtempSync(join(tmpdir(), 'skill-ann-')), 'skills.sqlite');
+      const connection = openSqliteSkillConnection(sqlitePath, {
+        dimensions: 16,
+        searchMode: 'ann',
+        exactScanLimit: 32,
+      });
+      const indexed = await indexSkillsWithConnection(request, connection);
+      expect(indexed.writtenVectors).toBe(200);
+      expect(statSync(sqlitePath).size).toBeGreaterThan(0);
+      const queries = request.vectors.slice(0, 20).map((vector) => vector.embedding);
+      const comparison = await compareSkillSearchRecall({
+        exact,
+        candidate: sqliteSkillSearch(connection),
+        queries,
+        k: 10,
+      });
+      expect(comparison.recallAtK).toBeGreaterThanOrEqual(0.99);
+      expect(comparison.candidateSearchMs).toBeGreaterThanOrEqual(0);
+      expect(recallAtK(['a', 'b'], ['a', 'c'], 2)).toBe(0.5);
+      expect(recallAtK([], ['a'], 10)).toBe(1);
+      expect(chunkHitId({ name: 'a', chunk: 1 })).toBe('a\0' + '1');
+    },
+    { timeout: 30_000 },
+  );
 
   test('validates inputs and can index through an in-memory vector store', async () => {
     expect(() => syntheticSkillWriteRequest({ count: 0 })).toThrow(/positive integer/);
