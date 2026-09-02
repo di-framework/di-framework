@@ -170,7 +170,7 @@ describe('A2AClient', () => {
               description: 'Sample description',
               mimeType: 'text/plain',
               uri: 'file:///tmp/art1.txt',
-              parts: [{ text: 'Hello Artifact' }],
+              parts: [{ kind: 'text', text: 'Hello Artifact' }],
             },
           ],
         };

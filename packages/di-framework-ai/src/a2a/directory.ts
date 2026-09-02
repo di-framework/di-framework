@@ -36,7 +36,7 @@ export class A2ADirectory {
   private readonly customFetch?: A2AFetchLike;
   private readonly headers?: A2AHeadersInit | (() => A2AHeadersInit | Promise<A2AHeadersInit>);
 
-  private constructor(options: A2ADirectoryOptions = {}) {
+  constructor(options: A2ADirectoryOptions = {}) {
     this.customFetch = options.fetch;
     this.headers = options.headers;
     if (options.origins) {
@@ -95,7 +95,7 @@ export class A2ADirectory {
    * for the first matching peer. Fails closed with an AiError if not found.
    */
   async find(options: FindAgentOptions): Promise<A2AClient> {
-    if (!options || !options.skill) {
+    if (!options?.skill) {
       throw new AiError("Find options require a non-empty 'skill' ID", 'invalid-request');
     }
 
