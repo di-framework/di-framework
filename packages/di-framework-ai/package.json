@@ -51,13 +51,13 @@
   "devDependencies": {
     "@di-framework/auth": "workspace:*",
     "@types/bun": "latest",
-    "typescript": "^5",
+    "typescript": "^7",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@di-framework/auth": "^5",
     "@di-framework/core": "^5",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"

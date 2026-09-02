@@ -45,7 +45,7 @@
   "homepage": "https://github.com/di-framework/di-framework#readme",
   "dependencies": {
     "ttsc": ">=0.25.0",
-    "typescript": "^7.0.0"
+    "typescript": "^7.0.2"
   },
   "publishConfig": {
     "access": "public"

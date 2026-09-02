@@ -41,10 +41,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/core": "^4",
-    "typescript": "^5"
+    "typescript": "^7"
   }
 }
