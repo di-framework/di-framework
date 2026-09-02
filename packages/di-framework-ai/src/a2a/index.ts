@@ -7,3 +7,4 @@ export * from './http-handler.ts';
 export * from './client.ts';
 export * from './directory.ts';
 export * from './chat-agent-executor.ts';
+export * from './auth.ts';
