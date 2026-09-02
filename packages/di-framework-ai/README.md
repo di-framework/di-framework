@@ -297,22 +297,76 @@ const { answer, plan, rounds } = await pe.run('Weather in Yorktown?', {
 });
 ```
 
-### In-process A2A (multi-agent)
+### Network A2A 1.0 (Agent-to-Agent Protocol over HTTP)
 
-Thin local agent-to-agent bus with human-in-the-loop hooks (no network transport):
+`@di-framework/ai` implements the standard [AAIF Agent-to-Agent (A2A) 1.0 Protocol](https://github.com/google/A2A) over HTTP JSON-RPC.
+
+- **Agent Cards**: Discover skills and capabilities at `GET {url}/.well-known/agent-card.json`.
+- **JSON-RPC Operations**: Standard 1.0 methods (`SendMessage`, `GetTask`, `ListTasks`, `CancelTask`) over HTTP POST.
+- **Task Lifecycle**: Strict states (`submitted` → `working` → `completed` | `failed` | `canceled` | `rejected` | `input-required` | `auth-required`).
+- **Discovery**: `A2ADirectory` fetches cards from registered origins and returns connected `A2AClient` instances.
+- **Process Boundary Opacity**: Wire representation carries only messages, tasks, and artifacts. Internal prompts, tool definitions (MCP), and memory keys remain completely private inside the serving process.
+- **MCP vs A2A**: MCP equips agents with internal tools and resources; A2A dispatches tasks and work across independent agent services over the network.
+
+#### Exposing an Agent over A2A
+
+```ts
+import { Agent, EnableAi } from '@di-framework/ai';
+
+@Agent({
+  name: 'ReviewAgent',
+  description: 'Automated code review agent',
+  skills: [{ id: 'dev.review', description: 'Review pull request diffs' }],
+  a2a: { url: 'https://agents.example.com/review' },
+  system: 'You are an expert code reviewer.',
+  tools: [/* internal MCP tools */],
+})
+export class ReviewAgent {}
+
+@EnableAi({
+  a2a: true, // opts into serving Agent Card and JSON-RPC HTTP handlers
+})
+export class AppModule {}
+```
+
+#### Discovering and Dispatching Work via `A2ADirectory` and `A2AClient`
+
+```ts
+import { A2ADirectory, A2AClient } from '@di-framework/ai';
+
+// Initialize directory with remote origins
+const directory = A2ADirectory.create({
+  origins: [
+    'https://agents.example.com/aria',
+    'https://agents.example.com/ravi',
+  ],
+});
+
+// Discover a peer advertising the required skill
+const reviewer: A2AClient = await directory.find({ skill: 'dev.review' });
+
+// Dispatch task and await completion
+const task = await reviewer.sendAndWait({
+  skill: 'dev.review',
+  message: 'git diff main...feature',
+  metadata: { workId: 'ticket-456' },
+});
+
+console.log(task.status.state); // 'completed'
+console.log(task.artifacts); // array of A2AArtifact
+```
+
+### In-process Local Bus (Non-network)
+
+> [!NOTE]
+> `A2ABus` is an in-process memory event bus for local co-located callbacks and is **not** the network A2A protocol. Use `A2ADirectory` and `A2AClient` for standard network A2A 1.0 communication.
 
 ```ts
 import { A2ABus } from '@di-framework/ai';
 
-const bus = A2ABus.create({
-  onHumanInTheLoop: async (msg) => msg, // approve / rewrite / return null to reject
-});
+const bus = A2ABus.create();
 bus.register('researcher', async (msg) => `notes:${msg.content}`);
-bus.register('writer', async (msg, b) => {
-  const research = await b.request('writer', 'researcher', msg.content);
-  return `Article: ${research.content}`;
-});
-const reply = await bus.request('user', 'writer', 'Graph workflows');
+const reply = await bus.request('user', 'researcher', 'topic');
 ```
 
 ## Providers
