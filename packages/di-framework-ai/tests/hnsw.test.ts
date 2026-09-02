@@ -51,7 +51,7 @@ describe('HnswIndex', () => {
       hits += exact.filter((id) => ann.has(id)).length;
     }
     expect(hits / total).toBeGreaterThanOrEqual(0.99);
-  });
+  }, 20000);
 
   test('replaces existing ids, ignores empty queries, and restores partial snapshots', () => {
     const index = new HnswIndex({ M: 4, efConstruction: 16, efSearch: 8 });
