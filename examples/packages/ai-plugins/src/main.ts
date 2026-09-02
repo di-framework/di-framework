@@ -67,8 +67,11 @@ export function loadOfficialPluginCatalog(workspace = exampleRoot) {
 }
 
 /** Resolve the installed package root and load it as a single plugin bundle. */
-export function loadOfficialPlugin(workspace = exampleRoot): AgentPlugin {
-  const [pluginRoot] = resolvePluginPackageDirectories([OFFICIAL_PLUGIN_PACKAGE], workspace);
+export function loadOfficialPlugin(
+  workspace = exampleRoot,
+  resolveDirs: typeof resolvePluginPackageDirectories = resolvePluginPackageDirectories,
+): AgentPlugin {
+  const [pluginRoot] = resolveDirs([OFFICIAL_PLUGIN_PACKAGE], workspace);
   if (pluginRoot == null) {
     throw new Error(
       `Could not resolve ${OFFICIAL_PLUGIN_PACKAGE} as a plugin package from ${workspace}`,
@@ -122,7 +125,7 @@ export interface LiveExampleResult {
   readonly scaffoldPreview: string;
 }
 
-function listPluginSkillNames(plugin: AgentPlugin): string[] {
+export function listPluginSkillNames(plugin: AgentPlugin): string[] {
   if (plugin.skillsDirectory == null) return [];
   try {
     return readdirSync(plugin.skillsDirectory, { withFileTypes: true })
@@ -140,8 +143,9 @@ function listPluginSkillNames(plugin: AgentPlugin): string[] {
  */
 export async function runLiveExample(
   connect: typeof connectOfficialPluginMcp = connectOfficialPluginMcp,
+  loadCatalog: typeof loadOfficialPluginCatalog = loadOfficialPluginCatalog,
 ): Promise<LiveExampleResult> {
-  const catalog = loadOfficialPluginCatalog();
+  const catalog = loadCatalog();
   if (!catalog.valid) {
     throw new Error(catalog.diagnostics.map((d) => d.message).join('\n'));
   }
