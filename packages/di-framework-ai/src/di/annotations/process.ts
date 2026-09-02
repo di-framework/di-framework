@@ -1,3 +1,7 @@
+import { AgentCardHelper } from '../../a2a/agent-card.ts';
+import { createChatAgentA2AExecutor } from '../../a2a/chat-agent-executor.ts';
+import { createA2AHttpHandler } from '../../a2a/http-handler.ts';
+import type { A2ATaskStore } from '../../a2a/task-store.ts';
 import { ChainWorkflow } from '../../agent/chain-workflow.ts';
 import { ChatAgent } from '../../agent/chat-agent.ts';
 import { EvaluatorOptimizerWorkflow } from '../../agent/evaluator-optimizer-workflow.ts';
@@ -97,7 +101,7 @@ export function processAiAnnotations(
 
     if (getAgentOptions(ctor)) {
       agents.push(ctor);
-      registerAgent(container, ctor);
+      registerAgent(container, ctor, options.configure);
     }
 
     if (getChainOptions(ctor)) {
@@ -125,10 +129,52 @@ function registerAiService(container: AiContainer, ctor: AnyConstructor): void {
   registerFactoryForCtor(container, ctor, factory);
 }
 
-function registerAgent(container: AiContainer, ctor: AnyConstructor): void {
+function registerAgent(
+  container: AiContainer,
+  ctor: AnyConstructor,
+  configure?: ConfigureAiOptions,
+): void {
   const opts = getAgentOptions(ctor) ?? {};
   const factory = () => createAgentFromAnnotations(container, ctor, opts);
   registerFactoryForCtor(container, ctor, factory);
+
+  if (opts.a2a && configure?.a2a) {
+    const a2aUrl = typeof opts.a2a === 'object' ? opts.a2a.url : 'http://localhost/a2a';
+    const binding = typeof opts.a2a === 'object' ? opts.a2a.binding : 'JSONRPC';
+
+    const handlerFactory = () => {
+      const card = AgentCardHelper.create({
+        name: opts.name ?? ctor.name,
+        description: opts.description,
+        version: opts.version,
+        skills: opts.skills,
+        a2a: { url: a2aUrl, binding },
+      });
+
+      const agent = container.resolve<ChatAgent>(ctor as unknown as string);
+      const executor = createChatAgentA2AExecutor(agent);
+      const taskStore = container.resolve<A2ATaskStore>(AiTokens.A2A_TASK_STORE);
+
+      return createA2AHttpHandler({ card, executor, taskStore });
+    };
+
+    registerOnContainer(
+      container,
+      AiTokens.A2A_HTTP_HANDLER,
+      handlerFactory as unknown as () => object,
+      {
+        singleton: true,
+      },
+    );
+    registerOnContainer(
+      container,
+      `${ctor.name}A2AHttpHandler`,
+      handlerFactory as unknown as () => object,
+      {
+        singleton: true,
+      },
+    );
+  }
 }
 
 function registerFactoryForCtor(

@@ -35,6 +35,12 @@ export const AiTokens = {
   ADVISORS: 'ai.advisors',
   /** MCP client session token. */
   MCP_CLIENT: 'mcpClient',
+  /** Default A2A directory token. */
+  A2A_DIRECTORY: 'a2aDirectory',
+  /** Default A2A task store token. */
+  A2A_TASK_STORE: 'a2aTaskStore',
+  /** Primary A2A HTTP handler token. */
+  A2A_HTTP_HANDLER: 'a2aHttpHandler',
 } as const;
 
 export type AiToken = (typeof AiTokens)[keyof typeof AiTokens];

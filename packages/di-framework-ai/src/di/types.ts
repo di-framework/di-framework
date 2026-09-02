@@ -92,10 +92,23 @@ export interface ConfigureAiOptions {
    * {@link import("./tokens.ts").AiTokens.CHAT_AGENT}.
    */
   readonly agent?: boolean | { readonly system?: string; readonly token?: string };
+  /**
+   * Opt in to serving A2A HTTP interfaces, task store, and directory of remote origins.
+   */
+  readonly a2a?:
+    | boolean
+    | {
+        readonly origins?: readonly string[];
+        readonly taskStoreToken?: string;
+        readonly directoryToken?: string;
+        readonly httpHandlerToken?: string;
+      };
 }
 
 export interface ConfigureAiResult {
   readonly container: ContainerLike;
   readonly chatModelToken: string;
   readonly chatClientToken?: string;
+  readonly a2aDirectoryToken?: string;
+  readonly a2aHttpHandlerToken?: string;
 }
