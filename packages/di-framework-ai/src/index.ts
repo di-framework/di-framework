@@ -644,3 +644,6 @@ export {
   similaritySearchQuery,
   VectorizeVectorStore,
 } from './vectorstore/index.ts';
+// A2A Protocol 1.0
+export * from './a2a/index.ts';
+
