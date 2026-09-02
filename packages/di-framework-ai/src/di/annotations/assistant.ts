@@ -28,15 +28,20 @@ export function AiService(options: AiServiceOptions = {}): ClassDecorator {
 export const Assistant = AiService;
 
 export interface AgentOptions {
+  readonly name?: string;
+  readonly description?: string;
+  readonly version?: string;
   readonly system?: string;
   readonly tools?: readonly (AnyConstructor | object | ToolSource)[];
   readonly memory?: boolean;
   readonly maxIterations?: number;
   readonly chatModel?: string;
   readonly defaultConversationId?: string;
+  readonly skills?: readonly import('../../a2a/types.ts').AgentSkill[];
+  readonly a2a?: { readonly url: string; readonly binding?: 'JSONRPC' | 'HTTP' };
 }
 
-/** Declarative ChatAgent bean with tools/memory. */
+/** Declarative ChatAgent bean with tools/memory and optional A2A network interface. */
 export function Agent(options: AgentOptions = {}): ClassDecorator {
   return (target) => {
     defineOnCtor(AiAnnKeys.AGENT, options, target as object);

@@ -1,3 +1,5 @@
+import { A2ADirectory } from '../a2a/directory.ts';
+import { A2ATaskStore } from '../a2a/task-store.ts';
 import { ChatAgent } from '../agent/chat-agent.ts';
 import type { Advisor } from '../chat/client/advisor/advisor.ts';
 import { MessageChatMemoryAdvisor } from '../chat/client/advisor/message-chat-memory-advisor.ts';
@@ -271,6 +273,32 @@ export function configureAi(options: ConfigureAiOptions): ConfigureAiResult {
     );
   }
 
+  // --- A2A Protocol 1.0 (Task Store, Directory, HTTP Serving) ---
+  let a2aDirectoryToken: string | undefined;
+  let a2aHttpHandlerToken: string | undefined;
+
+  if (merged.a2a) {
+    const a2aOpts = typeof merged.a2a === 'object' ? merged.a2a : {};
+    const taskStoreToken = a2aOpts.taskStoreToken ?? AiTokens.A2A_TASK_STORE;
+    const directoryToken = a2aOpts.directoryToken ?? AiTokens.A2A_DIRECTORY;
+    a2aDirectoryToken = directoryToken;
+    a2aHttpHandlerToken = a2aOpts.httpHandlerToken ?? AiTokens.A2A_HTTP_HANDLER;
+
+    registerFactoryAliases(
+      container,
+      () => A2ATaskStore.create(),
+      [taskStoreToken, A2ATaskStore as unknown as string],
+      singleton,
+    );
+
+    registerFactoryAliases(
+      container,
+      () => A2ADirectory.create({ origins: a2aOpts.origins }),
+      [directoryToken, A2ADirectory as unknown as string],
+      singleton,
+    );
+  }
+
   // --- Annotation scan ---
   if (merged.scanAnnotations !== false) {
     processAiAnnotations({ container, configure: merged });
@@ -280,6 +308,8 @@ export function configureAi(options: ConfigureAiOptions): ConfigureAiResult {
     container,
     chatModelToken,
     chatClientToken: registerClient ? chatClientToken : undefined,
+    a2aDirectoryToken,
+    a2aHttpHandlerToken,
   };
 }
 
