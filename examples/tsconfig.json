@@ -25,6 +25,7 @@
     "packages/cf-worker/**/*.ts",
     "packages/ai-chat/**/*.ts",
     "packages/ai-skills/**/*.ts",
+    "packages/ai-plugins/**/*.ts",
     "packages/ai-skills-scale/**/*.ts",
     "packages/auth/**/*.ts",
     "packages/authz/**/*.ts",

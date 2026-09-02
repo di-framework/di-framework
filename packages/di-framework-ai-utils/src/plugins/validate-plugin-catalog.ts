@@ -337,6 +337,10 @@ export function validatePluginCatalog(
 }
 
 function listPluginChildren(root: string): string[] {
+  // Single-plugin roots publish {@code plugin.json} at the catalog path itself.
+  if (isExistingFile(join(root, 'plugin.json'))) {
+    return [root];
+  }
   const out: string[] = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
@@ -503,6 +507,14 @@ function readRules(
 function isExistingDirectory(dir: string): boolean {
   try {
     return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isExistingFile(path: string): boolean {
+  try {
+    return fs.statSync(path).isFile();
   } catch {
     return false;
   }

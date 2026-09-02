@@ -135,7 +135,7 @@ const tools = SkillsToolbox.builder()
 const client = ChatClient.builder(model).defaultTools(...tools).build();
 ```
 
-See [`examples/packages/ai-skills`](../../examples/packages/ai-skills) (`bun start` uses `process.env.OPENAI_API_KEY`).
+See [`examples/packages/ai-skills`](../../examples/packages/ai-skills) (`bun start` uses `process.env.OPENAI_API_KEY`) and [`examples/packages/ai-plugins`](../../examples/packages/ai-plugins) for official `@di-framework/plugin` discovery plus elective MCP wiring.
 
 ## What a skill is
 
@@ -371,14 +371,20 @@ one of three modes:
 Calling the plugin APIs with no explicit roots uses the same merge/replace model
 as skills. Defaults are **`<workspace>/.agents/plugins`** then
 **`~/.agents/plugins`**. Explicit `directories` / `packages` and `sourceMode`
-work like `resolveSkillSources`. Nested `skills/` are validated with the skill
-catalog rules when you validate a plugin catalog.
+work like `resolveSkillSources`. A package that publishes `plugin.json` at its
+own root (for example `@di-framework/plugin`) resolves as a single-plugin source.
+Nested `skills/` are validated with the skill catalog rules when you validate a
+plugin catalog.
 
 ```ts
 import { resolvePluginSources, validatePluginCatalog } from '@di-framework/ai-utils';
 
 const resolution = resolvePluginSources({ workspace: process.cwd() });
 const catalog = validatePluginCatalog({ workspace: process.cwd() });
+const fromPackage = validatePluginCatalog({
+  packages: ['@di-framework/plugin'],
+  sourceMode: 'replace',
+});
 ```
 
 Automatic here means **where plugins are found**, not that agents consume them.

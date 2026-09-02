@@ -96,17 +96,19 @@ describe('neutral plugin source resolution', () => {
     ]);
   });
 
-  test('package discovery prefers declarations, then .agents/plugins, then plugins', () => {
+  test('package discovery prefers declarations, then .agents/plugins, then plugins, then root plugin.json', () => {
     const { workspace } = roots();
     const declaredPackage = join(workspace, 'declared-package');
     const neutralPackage = join(workspace, 'neutral-package');
     const conventionalPackage = join(workspace, 'conventional-package');
+    const rootPluginPackage = join(workspace, 'root-plugin-package');
     const declared = join(declaredPackage, 'catalog');
     mkdirSync(declared, { recursive: true });
     mkdirSync(join(declaredPackage, '.agents', 'plugins'), { recursive: true });
     mkdirSync(join(neutralPackage, '.agents', 'plugins'), { recursive: true });
     mkdirSync(join(neutralPackage, 'plugins'), { recursive: true });
     mkdirSync(join(conventionalPackage, 'plugins'), { recursive: true });
+    mkdirSync(rootPluginPackage, { recursive: true });
     writeFileSync(
       join(declaredPackage, 'package.json'),
       JSON.stringify({ name: 'declared', plugins: './catalog' }),
@@ -116,16 +118,22 @@ describe('neutral plugin source resolution', () => {
       join(conventionalPackage, 'package.json'),
       JSON.stringify({ name: 'conventional' }),
     );
+    writeFileSync(join(rootPluginPackage, 'package.json'), JSON.stringify({ name: 'root-plugin' }));
+    writeFileSync(
+      join(rootPluginPackage, 'plugin.json'),
+      JSON.stringify({ name: 'di-framework', description: 'Official-shaped root plugin' }),
+    );
 
     expect(
       resolvePluginPackageDirectories(
-        [declaredPackage, neutralPackage, conventionalPackage],
+        [declaredPackage, neutralPackage, conventionalPackage, rootPluginPackage],
         workspace,
       ),
     ).toEqual([
       declared,
       join(neutralPackage, '.agents', 'plugins'),
       join(conventionalPackage, 'plugins'),
+      rootPluginPackage,
     ]);
     expect(
       resolvePluginSources({
@@ -134,5 +142,13 @@ describe('neutral plugin source resolution', () => {
         sourceMode: 'replace',
       }).sources[0]?.origin,
     ).toBe('package');
+
+    const catalog = validatePluginCatalog({
+      packages: [rootPluginPackage],
+      workspace,
+      sourceMode: 'replace',
+    });
+    expect(catalog.valid).toBe(true);
+    expect(catalog.plugins.map((plugin) => plugin.name)).toEqual(['di-framework']);
   });
 });
