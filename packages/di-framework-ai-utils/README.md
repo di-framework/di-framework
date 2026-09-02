@@ -349,6 +349,38 @@ and `SkillsToolbox.skillDiagnostics` reports every shadowed definition with its
 kept and ignored source paths. `SkillsToolbox.skillSources` retains each
 resolved root's origin and precedence.
 
+### Antigravity plugins
+
+`resolvePluginSources`, `loadPluginDirectory`, and `validatePluginCatalog`
+discover Antigravity-shaped plugin bundles. Automatic roots are
+**`<workspace>/.agents/plugins`** and **`~/.agents/plugins`** (same merge /
+replace precedence as skills). Each plugin is an immediate child directory:
+
+```
+.agents/plugins/<plugin-id>/
+  plugin.json          # required; name optional (defaults to directory name)
+  mcp_config.json      # optional MCP servers
+  hooks.json           # optional hooks object
+  skills/              # optional nested SKILL.md trees
+  rules/               # optional *.md rule files
+```
+
+```ts
+import {
+  loadPluginDirectory,
+  resolvePluginSources,
+  validatePluginCatalog,
+} from '@di-framework/ai-utils';
+
+const resolution = resolvePluginSources({ workspace: process.cwd() });
+const catalog = validatePluginCatalog({ workspace: process.cwd() });
+const plugin = loadPluginDirectory('.agents/plugins/di-framework');
+```
+
+Nested `skills/` are validated with the existing skill catalog rules. This cut
+does **not** auto-compose plugin skills into `SkillsAgent` / `SkillsToolbox`,
+and it does not spawn MCP servers or execute hooks.
+
 ### `.aiignore` policy
 
 Root-workspace `.aiignore` rules can be loaded and evaluated independently of
@@ -593,7 +625,7 @@ const mcp = skillsToolboxAsMcp({
 | `skillsToolboxAsMcp` | MCP descriptors + handlers |
 | File / shell | `readTool`, `listDirectoryTool`, `globTool`, `grepTool`, `writeTool`, `editTool`, `bashTool` |
 | Agent extras | `todoWriteTool`, `askUserQuestionTool`, `webFetchTool`, `webSearchTool`, `memoryTools`, `taskTool` |
-| Discovery | `discoverAgentInstructions`, `loadAiIgnorePolicy`, `evaluateAiIgnorePath`, `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
-| Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill`, `validateSkillDefinition`, `validateSkillDirectory`, `validateSkillsDirectory`, `validateSkillCatalog`, `validateResolvedSkillCatalog` |
+| Discovery | `discoverAgentInstructions`, `loadAiIgnorePolicy`, `evaluateAiIgnorePath`, `loadSkillsDirectory`, `resolveSkillPackageDirectories`, `existingSkillDirectories`, `resolvePluginSources`, `loadPluginDirectory`, `loadPluginsDirectory`, `resolvePluginPackageDirectories`, `existingPluginDirectories`, `SkillsIndex.builder()`, `searchSkillsIndex`, `di-framework skills index` commands |
+| Parse / validate | `parseSkillMarkdown`, `parseYaml`, `agentSkill`, `validateSkill`, `validateSkillDefinition`, `validateSkillDirectory`, `validateSkillsDirectory`, `validateSkillCatalog`, `validateResolvedSkillCatalog`, `parsePluginManifest`, `parseMcpConfig`, `validatePlugin`, `validatePluginDefinition`, `validatePluginDirectory`, `validatePluginsDirectory`, `validatePluginCatalog`, `validateResolvedPluginCatalog` |
 
 **Style:** `static of` / `static builder` and free functions for pure helpers. See [docs/static-methods-convention.md](../../docs/static-methods-convention.md).
