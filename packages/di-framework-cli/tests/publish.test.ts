@@ -151,14 +151,27 @@ describe('publish command', () => {
     it('Release workflow syncs versions, aligns peers, and audits packs before publish', async () => {
       const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
       expect(workflow).toContain('mx build --sync-versions');
-      expect(workflow).toContain('bun scripts/prepare-publish-manifests.ts');
-      expect(workflow).toContain('bun run check-packaging');
-      const prepareIndex = workflow.indexOf('bun scripts/prepare-publish-manifests.ts');
-      const packIndex = workflow.indexOf('bun run check-packaging');
-      const publishIndex = workflow.indexOf('npm publish');
+      expect(workflow).toContain('bun scripts/release-prepublish.ts');
+      const prepareIndex = workflow.indexOf('bun scripts/release-prepublish.ts');
+      const publishIndex = workflow.indexOf('npm publish --access public --provenance');
       expect(prepareIndex).toBeGreaterThan(-1);
-      expect(packIndex).toBeGreaterThan(prepareIndex);
-      expect(publishIndex).toBeGreaterThan(packIndex);
+      expect(publishIndex).toBeGreaterThan(prepareIndex);
+      expect(workflow).toContain("if: github.event_name != 'pull_request'");
+    });
+
+    it('Test workflow dry-runs release prepublish on release/v* PRs', async () => {
+      const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/ci.yml')).text();
+      expect(workflow).toContain('node-version: "24.x"');
+      expect(workflow).toContain('npm install -g npm@latest');
+      expect(workflow).toContain("startsWith(github.head_ref, 'release/v')");
+      expect(workflow).toContain('mx build --sync-versions');
+      expect(workflow).toContain('bun scripts/release-prepublish.ts --publish-dry-run');
+      const npmLatest = workflow.indexOf('npm install -g npm@latest');
+      const packAudit = workflow.indexOf('bun run check-packaging');
+      const dryRun = workflow.indexOf('bun scripts/release-prepublish.ts --publish-dry-run');
+      expect(npmLatest).toBeGreaterThan(-1);
+      expect(packAudit).toBeGreaterThan(npmLatest);
+      expect(dryRun).toBeGreaterThan(packAudit);
     });
 
     it('matches the Release workflow publish list', async () => {

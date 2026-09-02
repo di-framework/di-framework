@@ -121,6 +121,10 @@ jobs:
               --body "$(printf '%s\n' \
                 "Automated version bump \`$CURRENT\` → \`$NEXT\` from Auto Tag." \
                 "" \
+                "The Test workflow runs a Release dry-run on \`release/v*\` PRs" \
+                "(\`mx build --sync-versions\`, packed-manifest audit, and" \
+                "\`npm publish --dry-run\`) before merge." \
+                "" \
                 "After merge, Auto Tag will create tag \`v$NEXT\` and dispatch the Release workflow.")" \
               --base main \
               --head "$BRANCH"

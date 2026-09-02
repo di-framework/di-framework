@@ -35,15 +35,13 @@ jobs:
       - name: Ensure modern npm for OIDC trusted publishing
         run: npm install -g npm@latest
 
-      - name: Align internal dependency ranges for publish
-        run: bun scripts/prepare-publish-manifests.ts
-
-      - name: Verify packed manifests before publish
-        run: bun run check-packaging
+      - name: Align manifests and verify packed packages
+        run: bun scripts/release-prepublish.ts
         env:
           DI_RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
       - name: Publish packages to npm
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           cleanup() {
@@ -51,7 +49,7 @@ jobs:
           }
           trap cleanup EXIT
           # Must stay in step with PACKAGES in packages/di-framework-cli/cmd/mx/build.ts.
-          # Manifests were already aligned by prepare-publish-manifests.ts; this loop only
+          # Manifests were already aligned by release-prepublish.ts; this loop only
           # publishes. package.json files are restored via trap.
           for pkg in packages/di-framework-core \
           packages/di-framework-repo \
