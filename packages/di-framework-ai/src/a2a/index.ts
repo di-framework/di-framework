@@ -6,3 +6,4 @@ export * from './jsonrpc.ts';
 export * from './http-handler.ts';
 export * from './client.ts';
 export * from './directory.ts';
+export * from './chat-agent-executor.ts';
