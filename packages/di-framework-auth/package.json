@@ -95,10 +95,10 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/core": "^4",
-    "@di-framework/graphql": "^4",
-    "@di-framework/http": "^4",
-    "@di-framework/repo": "^4",
+    "@di-framework/core": "^5",
+    "@di-framework/graphql": "^5",
+    "@di-framework/http": "^5",
+    "@di-framework/repo": "^5",
     "graphql": "^16.8.0 || ^17.0.0",
     "typescript": "^5"
   },

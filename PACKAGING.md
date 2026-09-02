@@ -28,13 +28,25 @@ packed and 32.3–48.2% unpacked, depending on package. Source-package exception
 were unchanged. The current audit prints packed bytes, unpacked bytes, and entry
 counts for every package on every CI run so later changes remain reviewable.
 
-Run `bun run build && bun run check-packaging`. The audit uses
-`npm pack --dry-run --json` for every public workspace and fails for:
+Run `bun run build && bun run check-packaging`. The audit packs every public
+workspace with `npm pack`, reads the packed `package.json`, and fails for:
 
 - missing `main`, `module`, `types`, export, or binary targets;
 - tests, examples, or unapproved raw TypeScript in a tarball;
 - unresolved `workspace:` versions in dependencies, optional dependencies, or
-  peer dependencies.
+  peer dependencies;
+- internal `@di-framework/*` ranges in those fields that do not accept the
+  release version (workspace root `package.json` version, or
+  `DI_RELEASE_VERSION` when set). A `5.2.0` release must ship compatible
+  ranges such as `^5`, not a stale `^4`.
+
+Release runs `bun scripts/prepare-publish-manifests.ts` before the pack audit
+and publish. That step rewrites `workspace:*` / `workspace:^` and any stale
+internal range to `^<major>` derived from the version being released. Intentional
+cross-major relationships must be listed in
+`INTERNAL_CROSS_MAJOR_ALLOWLIST` in `scripts/internal-framework-deps.ts` as
+`@di-framework/consuming>@di-framework/dependency` and documented here when
+added.
 
 GraphQL's dist-compatibility tests additionally exercise decorator registration
 from compiled artifacts in Bun and Node ESM. Declaration builds cover every

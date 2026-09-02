@@ -35,10 +35,24 @@ jobs:
       - name: Ensure modern npm for OIDC trusted publishing
         run: npm install -g npm@latest
 
+      - name: Align internal dependency ranges for publish
+        run: bun scripts/prepare-publish-manifests.ts
+
+      - name: Verify packed manifests before publish
+        run: bun run check-packaging
+        env:
+          DI_RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
       - name: Publish packages to npm
         run: |
           set -euo pipefail
+          cleanup() {
+            git checkout -- packages/*/package.json || true
+          }
+          trap cleanup EXIT
           # Must stay in step with PACKAGES in packages/di-framework-cli/cmd/mx/build.ts.
+          # Manifests were already aligned by prepare-publish-manifests.ts; this loop only
+          # publishes. package.json files are restored via trap.
           for pkg in packages/di-framework-core \
           packages/di-framework-repo \
           packages/di-framework-http \
@@ -61,24 +75,7 @@ jobs:
               continue
             fi
             echo "Publishing $name@$version from $pkg"
-            node -e "
-              const fs = require('fs');
-              const file = './$pkg/package.json';
-              const json = JSON.parse(fs.readFileSync(file, 'utf8'));
-              const fix = (deps) => {
-                if (!deps) return;
-                for (const k of Object.keys(deps)) {
-                  if (k.startsWith('@di-framework/') && (deps[k] === 'workspace:*' || deps[k] === 'workspace:^')) {
-                    deps[k] = '^' + '$version';
-                  }
-                }
-              };
-              fix(json.peerDependencies);
-              fix(json.dependencies);
-              fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
-            "
             (cd "$pkg" && npm publish --access public --provenance --ignore-scripts)
-            git checkout "./$pkg/package.json"
           done
 
       - name: Notify the documentation repository

@@ -148,9 +148,17 @@ describe('publish command', () => {
       expect(PACKAGES).toEqual(BUILD_PACKAGES);
     });
 
-    it('Release workflow syncs versions before publish', async () => {
+    it('Release workflow syncs versions, aligns peers, and audits packs before publish', async () => {
       const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
       expect(workflow).toContain('mx build --sync-versions');
+      expect(workflow).toContain('bun scripts/prepare-publish-manifests.ts');
+      expect(workflow).toContain('bun run check-packaging');
+      const prepareIndex = workflow.indexOf('bun scripts/prepare-publish-manifests.ts');
+      const packIndex = workflow.indexOf('bun run check-packaging');
+      const publishIndex = workflow.indexOf('npm publish');
+      expect(prepareIndex).toBeGreaterThan(-1);
+      expect(packIndex).toBeGreaterThan(prepareIndex);
+      expect(publishIndex).toBeGreaterThan(packIndex);
     });
 
     it('matches the Release workflow publish list', async () => {
