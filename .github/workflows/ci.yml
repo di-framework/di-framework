@@ -130,6 +130,29 @@ jobs:
           language: TypeScript
           label: code-coverage-agent
 
+  publish-coverage-badges:
+    name: Dispatch docs deploy for coverage badges
+    needs: build-and-test
+    if: ${{ !cancelled() && needs.build-and-test.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch coverage update to di-framework/docs
+        env:
+          DOCS_REPOSITORY_TOKEN: ${{ secrets.DOCS_REPOSITORY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCS_REPOSITORY_TOKEN:-}" ]]; then
+            echo "::warning::DOCS_REPOSITORY_TOKEN is not configured; di-framework/docs was not notified of coverage update"
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            -X POST https://api.github.com/repos/di-framework/docs/dispatches \
+            -H "Authorization: Bearer $DOCS_REPOSITORY_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"event_type":"coverage-update"}'
+          echo "Dispatched coverage update to di-framework/docs"
+
   deno-examples:
     name: Deno examples
     runs-on: ubuntu-latest
