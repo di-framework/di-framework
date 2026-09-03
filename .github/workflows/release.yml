@@ -76,6 +76,20 @@ jobs:
             (cd "$pkg" && npm publish --access public --provenance --ignore-scripts)
           done
 
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+            echo "Created GitHub Release $TAG"
+          else
+            echo "GitHub Release $TAG already exists"
+          fi
+
       - name: Notify the documentation repository
         if: github.ref_type == 'tag'
         env:
