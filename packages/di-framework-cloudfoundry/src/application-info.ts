@@ -60,7 +60,7 @@ export function parseVcapApplication(
     }
   }
 
-  if (!rawObj) {
+  if (!rawObj || typeof rawObj !== 'object') {
     return null;
   }
 

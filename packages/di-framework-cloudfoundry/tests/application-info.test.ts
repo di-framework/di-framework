@@ -93,6 +93,8 @@ describe('parseVcapApplication', () => {
 
   it('should handle non-object or invalid types gracefully', () => {
     expect(parseVcapApplication(null as any)).toBeNull();
+    expect(parseVcapApplication('null')).toBeNull();
+    expect(parseVcapApplication('123')).toBeNull();
     expect(parseVcapApplication(undefined)).toBeNull();
     expect(
       parseVcapApplication({ instance_index: 'invalid-number', port: 'invalid-port' })
