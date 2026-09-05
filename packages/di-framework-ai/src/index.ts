@@ -137,6 +137,8 @@ export { media } from './content/media.ts';
 
 // ChatClient is a value (factory) + interface type via declaration merge in default-chat-client.
 
+// A2A Protocol 1.0
+export * from './a2a/index.ts';
 // Agents / workflows (Spring AI effective-agent patterns + graph / planner / A2A)
 export type {
   A2AAgentHandler,
@@ -611,6 +613,14 @@ export type {
   FilterValue,
   PgClient,
   PgVectorStoreOptions,
+  S3VectorRecord,
+  S3VectorStoreOptions,
+  S3VectorsClient,
+  S3VectorsDeleteInput,
+  S3VectorsGetInput,
+  S3VectorsPutInput,
+  S3VectorsQueryInput,
+  S3VectorsQueryResult,
   SearchRequest,
   SearchRequestOptions,
   SimpleVectorStoreOptions,
@@ -632,9 +642,12 @@ export {
   filterGroup,
   filterKey,
   filterValue,
+  InMemoryS3VectorsClient,
   isFilterExpression,
+  matchesS3Filter,
   PgVectorStore,
   parseFilterExpression,
+  S3VectorStore,
   SearchRequestBuilder,
   SIMILARITY_THRESHOLD_ACCEPT_ALL,
   SimpleVectorStore,
@@ -642,8 +655,6 @@ export {
   searchRequest,
   searchRequestBuilder,
   similaritySearchQuery,
+  translateS3FilterExpression,
   VectorizeVectorStore,
 } from './vectorstore/index.ts';
-// A2A Protocol 1.0
-export * from './a2a/index.ts';
-

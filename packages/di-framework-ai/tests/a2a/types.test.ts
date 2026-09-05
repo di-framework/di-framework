@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 import {
   A2A_PROTOCOL_VERSION,
+  type A2AArtifact,
+  type A2AMessage,
   A2AMethods,
+  type A2ATask,
   AGENT_CARD_WELL_KNOWN_PATH,
+  type AgentCard,
   createTextMessage,
   isTerminalTaskState,
   TERMINAL_TASK_STATES,
-  type A2AArtifact,
-  type A2AMessage,
-  type A2ATask,
-  type AgentCard,
 } from '../../src/a2a/index.ts';
 
 describe('A2A 1.0 Types', () => {
