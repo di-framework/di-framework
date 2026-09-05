@@ -2,6 +2,7 @@ export * from './adapter.js';
 export * from './adapters/bun-sqlite.js';
 export * from './adapters/d1.js';
 export * from './adapters/sql.js';
+export * from './blob/index.js';
 export * from './decorators.js';
 export * from './in-memory.js';
 export * from './query-derivation.js';

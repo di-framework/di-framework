@@ -238,3 +238,59 @@ if (supportsConditionalWrite(adapter)) {
 
 Built-in adapters (`InMemoryRepository`, `SqlStorageAdapter`, `BunSqliteAdapter`, `D1Adapter`) implement `ConditionalStorageAdapter`. Custom `StorageAdapter` implementations do not require source changes unless conditional write capability is desired.
 
+## Blob Storage Primitives & S3 Adapters
+
+For binary assets, large files, media uploads, and documents, `@di-framework/repo` provides first-class Blob storage primitives:
+
+- `BaseBlobRepository`: Abstract base class for type-safe binary asset repositories.
+- `BlobStorageAdapter`: Contract for blob storage engines.
+- `InMemoryBlobStorageAdapter`: In-memory implementation with full pagination and delimiter support for testing.
+- `S3BlobStorageAdapter`: Production adapter supporting AWS S3, Cloudflare R2, MinIO, Wasabi, and S3-compatible APIs, including automatic multipart uploads for large files and presigned URLs.
+
+### Usage Example
+
+```typescript
+import {
+  BaseBlobRepository,
+  InMemoryBlobStorageAdapter,
+  S3BlobStorageAdapter,
+} from '@di-framework/repo';
+
+class MediaRepository extends BaseBlobRepository {
+  constructor() {
+    super(
+      new S3BlobStorageAdapter({
+        bucket: 'my-app-media',
+        region: 'us-east-1',
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }),
+    );
+  }
+}
+
+const mediaRepo = new MediaRepository();
+
+// Put file (supports string, Buffer, Uint8Array, ReadableStream, Blob)
+await mediaRepo.put('uploads/doc.pdf', fileStream, {
+  contentType: 'application/pdf',
+  customMetadata: { userId: '123' },
+});
+
+// Read file
+const blob = await mediaRepo.get('uploads/doc.pdf');
+if (blob) {
+  console.log(blob.metadata.size);
+  const text = await blob.text();
+}
+
+// Generate presigned URL
+const signedUrl = await mediaRepo.getSignedUrl('uploads/doc.pdf', {
+  operation: 'get',
+  expiresInSeconds: 3600,
+});
+
+// List with pagination and prefix
+const results = await mediaRepo.list({ prefix: 'uploads/', delimiter: '/' });
+```
+
