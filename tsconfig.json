@@ -54,6 +54,8 @@
       "@di-framework/ai/*": ["packages/di-framework-ai/src/*"],
       "@di-framework/ai-utils": ["packages/di-framework-ai-utils/src/index.ts"],
       "@di-framework/ai-utils/*": ["packages/di-framework-ai-utils/src/*"],
+      "@di-framework/cloudfoundry": ["packages/di-framework-cloudfoundry/src/index.ts"],
+      "@di-framework/cloudfoundry/*": ["packages/di-framework-cloudfoundry/src/*"],
       "@di-framework/codegen": ["packages/di-framework-codegen/index.ts"],
       "@di-framework/codegen/*": ["packages/di-framework-codegen/*"]
     }

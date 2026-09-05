@@ -343,6 +343,14 @@
         "typescript": "^5",
       },
     },
+    "packages/di-framework-cloudfoundry": {
+      "name": "@di-framework/cloudfoundry",
+      "version": "4.2.3",
+      "peerDependencies": {
+        "@di-framework/core": "^5",
+        "typescript": "^5",
+      },
+    },
     "packages/di-framework-codegen": {
       "name": "@di-framework/codegen",
       "version": "4.2.3",
@@ -556,6 +564,8 @@
     "@di-framework/authz": ["@di-framework/authz@workspace:packages/di-framework-authz"],
 
     "@di-framework/cli": ["@di-framework/cli@workspace:packages/di-framework-cli"],
+
+    "@di-framework/cloudfoundry": ["@di-framework/cloudfoundry@workspace:packages/di-framework-cloudfoundry"],
 
     "@di-framework/codegen": ["@di-framework/codegen@workspace:packages/di-framework-codegen"],
 
