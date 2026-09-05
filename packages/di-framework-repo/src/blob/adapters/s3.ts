@@ -8,7 +8,7 @@ import type {
   BlobPutOptions,
   BlobSignedUrlOptions,
 } from '../types.js';
-import { bodyToUint8Array, computeEtag, createBlobObject, uint8ArrayToStream } from '../utils.js';
+import { bodyToUint8Array, computeEtag, createBlobObject } from '../utils.js';
 
 export interface S3ClientLike {
   getObject?(params: { Bucket: string; Key: string }): Promise<{
@@ -191,10 +191,11 @@ export class S3BlobStorageAdapter implements BlobStorageAdapter {
     if (options.forcePathStyle !== undefined) {
       this.forcePathStyle = options.forcePathStyle;
     } else {
+      const parsed = new URL(this.endpoint);
+      const isAwsHost =
+        parsed.hostname === 'amazonaws.com' || parsed.hostname.endsWith('.amazonaws.com');
       const isCustomOrLocal =
-        this.endpoint.includes('localhost') ||
-        this.endpoint.includes('127.0.0.1') ||
-        !this.endpoint.includes('amazonaws.com');
+        parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || !isAwsHost;
       this.forcePathStyle = isCustomOrLocal;
     }
   }
