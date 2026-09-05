@@ -8,9 +8,7 @@ function matchesAny(str: string, patterns: readonly string[]): boolean {
   return patterns.some((p) => lower.includes(p));
 }
 
-export class RedisServiceInfoCreator
-  implements CloudFoundryServiceInfoCreator<RedisServiceInfo>
-{
+export class RedisServiceInfoCreator implements CloudFoundryServiceInfoCreator<RedisServiceInfo> {
   accept(serviceData: RawVcapServiceData): boolean {
     const label = serviceData.label || '';
     const tags = (serviceData.tags || []).map((t) => String(t).toLowerCase());

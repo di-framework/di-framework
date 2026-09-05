@@ -94,9 +94,10 @@ export class RelationalServiceInfoCreator
     }
 
     let database = String(creationalDbName(creds));
-    let username = creds.username ?? creds.user ? String(creds.username ?? creds.user) : undefined;
+    let username =
+      (creds.username ?? creds.user) ? String(creds.username ?? creds.user) : undefined;
     let password =
-      creds.password ?? creds.pass ? String(creds.password ?? creds.pass) : undefined;
+      (creds.password ?? creds.pass) ? String(creds.password ?? creds.pass) : undefined;
     let ssl = typeof creds.ssl === 'boolean' ? creds.ssl : undefined;
 
     if (rawUri.startsWith('jdbc:')) {
@@ -114,7 +115,9 @@ export class RelationalServiceInfoCreator
         if (parsed.username) username = decodeURIComponent(parsed.username);
         if (parsed.password) password = decodeURIComponent(parsed.password);
         if (parsed.searchParams.has('ssl') || parsed.searchParams.has('sslmode')) {
-          ssl = parsed.searchParams.get('ssl') === 'true' || parsed.searchParams.get('sslmode') === 'require';
+          ssl =
+            parsed.searchParams.get('ssl') === 'true' ||
+            parsed.searchParams.get('sslmode') === 'require';
         }
       } catch {
         // preserve original
@@ -132,7 +135,9 @@ export class RelationalServiceInfoCreator
         if (parsed.username) username = decodeURIComponent(parsed.username);
         if (parsed.password) password = decodeURIComponent(parsed.password);
         if (parsed.searchParams.has('ssl') || parsed.searchParams.has('sslmode')) {
-          ssl = parsed.searchParams.get('ssl') === 'true' || parsed.searchParams.get('sslmode') === 'require';
+          ssl =
+            parsed.searchParams.get('ssl') === 'true' ||
+            parsed.searchParams.get('sslmode') === 'require';
         }
       } catch {
         // ignore url parse error
@@ -151,7 +156,7 @@ export class RelationalServiceInfoCreator
       mariadb: 3306,
       sqlite: 0,
     };
-    if (!port || port === 5432 && dialect === 'mysql') {
+    if (!port || (port === 5432 && dialect === 'mysql')) {
       port = defaultPorts[dialect];
     }
 

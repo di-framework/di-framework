@@ -71,8 +71,7 @@ export function parseVcapApplication(
     rawObj.application_name ?? rawObj.applicationName ?? rawObj.name ?? '',
   );
 
-  const rawUris =
-    rawObj.application_uris ?? rawObj.applicationUris ?? rawObj.uris ?? [];
+  const rawUris = rawObj.application_uris ?? rawObj.applicationUris ?? rawObj.uris ?? [];
   const applicationUris: readonly string[] = Array.isArray(rawUris)
     ? rawUris.map(String)
     : typeof rawUris === 'string'
@@ -83,10 +82,8 @@ export function parseVcapApplication(
     rawObj.application_version ?? rawObj.applicationVersion ?? rawObj.version;
   const spaceId = String(rawObj.space_id ?? rawObj.spaceId ?? '');
   const spaceName = String(rawObj.space_name ?? rawObj.spaceName ?? '');
-  const organizationId =
-    rawObj.organization_id ?? rawObj.organizationId ?? rawObj.org_id;
-  const organizationName =
-    rawObj.organization_name ?? rawObj.organizationName ?? rawObj.org_name;
+  const organizationId = rawObj.organization_id ?? rawObj.organizationId ?? rawObj.org_id;
+  const organizationName = rawObj.organization_name ?? rawObj.organizationName ?? rawObj.org_name;
   const instanceId = rawObj.instance_id ?? rawObj.instanceId;
 
   let instanceIndex: number | undefined;

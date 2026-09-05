@@ -64,6 +64,7 @@ jobs:
           packages/di-framework-ai \
           packages/di-framework-ai-utils \
           packages/di-framework-codegen \
+          packages/di-framework-cloudfoundry \
           packages/di-framework-cli \
           packages/di-framework-tsc; do
             name=$(node -p "require('./$pkg/package.json').name")

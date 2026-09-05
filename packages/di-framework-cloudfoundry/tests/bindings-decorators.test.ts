@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { Container as CoreContainer } from '@di-framework/core';
+import { Container as CoreContainer } from '@di-framework/core/container';
 import { Container } from '@di-framework/core/decorators';
 import {
   bindCloudFoundryConnectors,
@@ -55,7 +55,7 @@ describe('bindCloudFoundryConnectors & Decorators', () => {
             credentials: { uri: 'amqp://guest:guest@localhost:5672' },
           },
         ],
-        'minio': [
+        minio: [
           {
             name: 'media-blob',
             label: 'minio',
@@ -72,9 +72,15 @@ describe('bindCloudFoundryConnectors & Decorators', () => {
     // Verify tokens in container
     expect(testContainer.resolve<CloudFoundryEnvironment>(CF_ENVIRONMENT_TOKEN)).toBe(env);
     expect(testContainer.resolve<CloudFoundryEnvironment>(CloudFoundryEnvironment)).toBe(env);
-    expect((testContainer.resolve(CF_APPLICATION_TOKEN) as CloudFoundryApplicationInfo).applicationName).toBe('orders-app');
-    expect((testContainer.resolve(CF_RELATIONAL_TOKEN) as RelationalServiceInfo).dialect).toBe('mysql');
-    expect((testContainer.resolve('cf:service:orders-mysql') as RelationalServiceInfo).name).toBe('orders-mysql');
+    expect(
+      (testContainer.resolve(CF_APPLICATION_TOKEN) as CloudFoundryApplicationInfo).applicationName,
+    ).toBe('orders-app');
+    expect((testContainer.resolve(CF_RELATIONAL_TOKEN) as RelationalServiceInfo).dialect).toBe(
+      'mysql',
+    );
+    expect((testContainer.resolve('cf:service:orders-mysql') as RelationalServiceInfo).name).toBe(
+      'orders-mysql',
+    );
     expect((testContainer.resolve(CF_REDIS_TOKEN) as RedisServiceInfo).host).toBe('localhost');
     expect(testContainer.resolve(CF_AMQP_TOKEN)).toBeDefined();
     expect(testContainer.resolve(CF_BLOB_TOKEN)).toBeDefined();
@@ -88,7 +94,7 @@ describe('bindCloudFoundryConnectors & Decorators', () => {
         space_name: 'staging',
       }),
       VCAP_SERVICES: JSON.stringify({
-        'elephantsql': [
+        elephantsql: [
           {
             name: 'pg-db',
             label: 'elephantsql',
@@ -108,7 +114,11 @@ describe('bindCloudFoundryConnectors & Decorators', () => {
       @CloudFoundryService('pg-db', { container: testContainer })
       dbService!: RelationalServiceInfo;
 
-      @CloudFoundryService('missing-service', { required: false, defaultValue: { name: 'default' }, container: testContainer })
+      @CloudFoundryService('missing-service', {
+        required: false,
+        defaultValue: { name: 'default' },
+        container: testContainer,
+      })
       optionalService!: any;
     }
 

@@ -113,6 +113,7 @@ describe('build command', () => {
       expect(PACKAGES).toContain('packages/di-framework-ai');
       expect(PACKAGES).toContain('packages/di-framework-ai-utils');
       expect(PACKAGES).toContain('packages/di-framework-codegen');
+      expect(PACKAGES).toContain('packages/di-framework-cloudfoundry');
       expect(PACKAGES).toContain('packages/di-framework-cli');
       expect(PACKAGES).toContain('packages/di-framework-tsc');
     });

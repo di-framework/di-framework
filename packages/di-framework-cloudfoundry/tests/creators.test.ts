@@ -105,7 +105,9 @@ describe('RelationalServiceInfoCreator', () => {
   });
 
   it('should reject non-relational services', () => {
-    expect(creator.accept({ name: 'redis', label: 'p-redis', tags: ['redis'], credentials: {} })).toBe(false);
+    expect(
+      creator.accept({ name: 'redis', label: 'p-redis', tags: ['redis'], credentials: {} }),
+    ).toBe(false);
   });
 });
 

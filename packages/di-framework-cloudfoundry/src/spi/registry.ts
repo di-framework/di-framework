@@ -43,9 +43,7 @@ export class ServiceInfoCreatorRegistry {
   /**
    * Finds the first matching creator for the given raw service entry.
    */
-  findCreator(
-    serviceData: RawVcapServiceData,
-  ): CloudFoundryServiceInfoCreator | undefined {
+  findCreator(serviceData: RawVcapServiceData): CloudFoundryServiceInfoCreator | undefined {
     return this.creators.find((c) => {
       try {
         return c.accept(serviceData);
@@ -58,9 +56,7 @@ export class ServiceInfoCreatorRegistry {
   /**
    * Converts a single raw service data object into a typed ServiceInfo model.
    */
-  createServiceInfo(
-    serviceData: RawVcapServiceData,
-  ): CloudFoundryServiceInfo {
+  createServiceInfo(serviceData: RawVcapServiceData): CloudFoundryServiceInfo {
     const creator = this.findCreator(serviceData);
     if (creator) {
       return creator.createServiceInfo(serviceData);
@@ -154,9 +150,7 @@ function extractRawServices(
             credentials: (rawItem.credentials || {}) as Record<string, unknown>,
             volume_mounts: Array.isArray(rawItem.volume_mounts) ? rawItem.volume_mounts : undefined,
             syslog_drain_url:
-              typeof rawItem.syslog_drain_url === 'string'
-                ? rawItem.syslog_drain_url
-                : undefined,
+              typeof rawItem.syslog_drain_url === 'string' ? rawItem.syslog_drain_url : undefined,
             provider: typeof rawItem.provider === 'string' ? rawItem.provider : undefined,
             binding_name:
               typeof rawItem.binding_name === 'string' ? rawItem.binding_name : undefined,

@@ -13,9 +13,8 @@ export class UserProvidedServiceInfoCreator
     const creds = (serviceData.credentials || {}) as Record<string, unknown>;
     const tags = (serviceData.tags || []).map(String);
 
-    const uri = creds.uri ?? creds.url ? String(creds.uri ?? creds.url) : undefined;
-    const host =
-      creds.host ?? creds.hostname ? String(creds.host ?? creds.hostname) : undefined;
+    const uri = (creds.uri ?? creds.url) ? String(creds.uri ?? creds.url) : undefined;
+    const host = (creds.host ?? creds.hostname) ? String(creds.host ?? creds.hostname) : undefined;
 
     let port: number | undefined;
     if (typeof creds.port === 'number') {
@@ -26,9 +25,9 @@ export class UserProvidedServiceInfoCreator
     }
 
     const username =
-      creds.username ?? creds.user ? String(creds.username ?? creds.user) : undefined;
+      (creds.username ?? creds.user) ? String(creds.username ?? creds.user) : undefined;
     const password =
-      creds.password ?? creds.pass ? String(creds.password ?? creds.pass) : undefined;
+      (creds.password ?? creds.pass) ? String(creds.password ?? creds.pass) : undefined;
 
     return {
       id: serviceData.name,

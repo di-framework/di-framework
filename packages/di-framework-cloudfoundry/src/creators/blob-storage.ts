@@ -26,7 +26,11 @@ export class BlobStorageServiceInfoCreator
 
     if (
       (creds.bucket || creds.bucket_name || creds.bucketName) &&
-      (creds.access_key_id || creds.accessKeyId || creds.access_key || creds.aws_access_key_id || creds.endpoint)
+      (creds.access_key_id ||
+        creds.accessKeyId ||
+        creds.access_key ||
+        creds.aws_access_key_id ||
+        creds.endpoint)
     ) {
       return true;
     }
@@ -44,41 +48,31 @@ export class BlobStorageServiceInfoCreator
     const tags = (serviceData.tags || []).map(String);
 
     let bucketName = String(
-      creds.bucket_name ??
-        creds.bucketName ??
-        creds.bucket ??
-        creds.name ??
-        serviceData.name,
+      creds.bucket_name ?? creds.bucketName ?? creds.bucket ?? creds.name ?? serviceData.name,
     );
 
-    let endpoint =
-      creds.endpoint ?? creds.endpoint_url ?? creds.endpointUrl ?? creds.host
+    const endpoint =
+      (creds.endpoint ?? creds.endpoint_url ?? creds.endpointUrl ?? creds.host)
         ? String(creds.endpoint ?? creds.endpoint_url ?? creds.endpointUrl ?? creds.host)
         : undefined;
 
-    let region =
-      creds.region ?? creds.aws_region ?? creds.s3_region
+    const region =
+      (creds.region ?? creds.aws_region ?? creds.s3_region)
         ? String(creds.region ?? creds.aws_region ?? creds.s3_region)
         : undefined;
 
     let accessKeyId =
-      creds.access_key_id ??
-      creds.accessKeyId ??
-      creds.access_key ??
-      creds.aws_access_key_id
+      (creds.access_key_id ?? creds.accessKeyId ?? creds.access_key ?? creds.aws_access_key_id)
         ? String(
-            creds.access_key_id ??
-              creds.accessKeyId ??
-              creds.access_key ??
-              creds.aws_access_key_id,
+            creds.access_key_id ?? creds.accessKeyId ?? creds.access_key ?? creds.aws_access_key_id,
           )
         : undefined;
 
     let secretAccessKey =
-      creds.secret_access_key ??
+      (creds.secret_access_key ??
       creds.secretAccessKey ??
       creds.secret_key ??
-      creds.aws_secret_access_key
+      creds.aws_secret_access_key)
         ? String(
             creds.secret_access_key ??
               creds.secretAccessKey ??
@@ -94,7 +88,7 @@ export class BlobStorageServiceInfoCreator
           ? creds.pathStyle
           : undefined;
 
-    let rawUri = creds.uri ?? creds.url ? String(creds.uri ?? creds.url) : undefined;
+    let rawUri = (creds.uri ?? creds.url) ? String(creds.uri ?? creds.url) : undefined;
     if (rawUri?.startsWith('s3://')) {
       try {
         const parsed = new URL(rawUri);
@@ -107,9 +101,10 @@ export class BlobStorageServiceInfoCreator
     }
 
     if (!rawUri && endpoint) {
-      rawUri = endpoint.startsWith('http://') || endpoint.startsWith('https://')
-        ? `${endpoint}/${bucketName}`
-        : `https://${endpoint}/${bucketName}`;
+      rawUri =
+        endpoint.startsWith('http://') || endpoint.startsWith('https://')
+          ? `${endpoint}/${bucketName}`
+          : `https://${endpoint}/${bucketName}`;
     }
 
     return {

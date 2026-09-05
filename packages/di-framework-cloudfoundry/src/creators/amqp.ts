@@ -8,9 +8,7 @@ function matchesAny(str: string, patterns: readonly string[]): boolean {
   return patterns.some((p) => lower.includes(p));
 }
 
-export class AmqpServiceInfoCreator
-  implements CloudFoundryServiceInfoCreator<AmqpServiceInfo>
-{
+export class AmqpServiceInfoCreator implements CloudFoundryServiceInfoCreator<AmqpServiceInfo> {
   accept(serviceData: RawVcapServiceData): boolean {
     const label = serviceData.label || '';
     const tags = (serviceData.tags || []).map((t) => String(t).toLowerCase());
@@ -20,7 +18,9 @@ export class AmqpServiceInfoCreator
       return true;
     }
 
-    if (tags.some((t) => matchesAny(t, AMQP_PATTERNS) || t === 'messaging' || t === 'message-queue')) {
+    if (
+      tags.some((t) => matchesAny(t, AMQP_PATTERNS) || t === 'messaging' || t === 'message-queue')
+    ) {
       return true;
     }
 
@@ -62,10 +62,12 @@ export class AmqpServiceInfoCreator
       if (!Number.isNaN(p)) port = p;
     }
 
-    let username = creds.username ?? creds.user ? String(creds.username ?? creds.user) : undefined;
-    let password = creds.password ?? creds.pass ? String(creds.password ?? creds.pass) : undefined;
+    let username =
+      (creds.username ?? creds.user) ? String(creds.username ?? creds.user) : undefined;
+    let password =
+      (creds.password ?? creds.pass) ? String(creds.password ?? creds.pass) : undefined;
     let virtualHost =
-      creds.vhost ?? creds.virtual_host ?? creds.virtualHost
+      (creds.vhost ?? creds.virtual_host ?? creds.virtualHost)
         ? String(creds.vhost ?? creds.virtual_host ?? creds.virtualHost)
         : undefined;
 
@@ -77,7 +79,7 @@ export class AmqpServiceInfoCreator
           : undefined;
 
     const httpManagementUri =
-      creds.http_api_uri ?? creds.http_management_uri ?? creds.httpManagementUri
+      (creds.http_api_uri ?? creds.http_management_uri ?? creds.httpManagementUri)
         ? String(creds.http_api_uri ?? creds.http_management_uri ?? creds.httpManagementUri)
         : undefined;
 

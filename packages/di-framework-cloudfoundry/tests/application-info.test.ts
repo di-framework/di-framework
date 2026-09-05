@@ -23,7 +23,10 @@ describe('parseVcapApplication', () => {
     expect(info).not.toBeNull();
     expect(info?.applicationId).toBe('app-123');
     expect(info?.applicationName).toBe('orders-service');
-    expect(info?.applicationUris).toEqual(['orders.apps.example.com', 'orders-internal.example.com']);
+    expect(info?.applicationUris).toEqual([
+      'orders.apps.example.com',
+      'orders-internal.example.com',
+    ]);
     expect(info?.applicationVersion).toBe('v1.2.0');
     expect(info?.spaceId).toBe('space-456');
     expect(info?.spaceName).toBe('prod');
@@ -91,6 +94,9 @@ describe('parseVcapApplication', () => {
   it('should handle non-object or invalid types gracefully', () => {
     expect(parseVcapApplication(null as any)).toBeNull();
     expect(parseVcapApplication(undefined)).toBeNull();
-    expect(parseVcapApplication({ instance_index: 'invalid-number', port: 'invalid-port' })?.instanceIndex).toBeUndefined();
+    expect(
+      parseVcapApplication({ instance_index: 'invalid-number', port: 'invalid-port' })
+        ?.instanceIndex,
+    ).toBeUndefined();
   });
 });

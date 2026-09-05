@@ -1,8 +1,4 @@
-import {
-  defineMetadata,
-  getOwnMetadata,
-  useContainer,
-} from '@di-framework/core';
+import { defineMetadata, getOwnMetadata, useContainer } from '@di-framework/core/container';
 import { bindCloudFoundryConnectors, CF_APPLICATION_TOKEN } from './bindings.js';
 import { getDefaultEnvironment } from './environment.js';
 import type {
@@ -55,14 +51,13 @@ export function CloudFoundryService(
       defineMetadata(INJECT_METADATA_KEY, metadata, targetClass);
 
       if (targetClass.constructor && targetClass.constructor !== Object) {
-        const ctorMetadata =
-          getOwnMetadata(INJECT_METADATA_KEY, targetClass.constructor) || {};
+        const ctorMetadata = getOwnMetadata(INJECT_METADATA_KEY, targetClass.constructor) || {};
         ctorMetadata[propertyKey as string] = token;
         defineMetadata(INJECT_METADATA_KEY, ctorMetadata, targetClass.constructor);
       }
 
       // Define property getter fallback in case accessed without DI resolution
-      let cachedValue: unknown = undefined;
+      let cachedValue: unknown;
       Object.defineProperty(targetClass, propertyKey, {
         configurable: true,
         enumerable: true,
@@ -70,7 +65,8 @@ export function CloudFoundryService(
           if (cachedValue !== undefined) return cachedValue;
 
           // Attempt container resolution first
-          const container = (options.container as { resolve?: (t: string) => unknown }) ?? useContainer();
+          const container =
+            (options.container as { resolve?: (t: string) => unknown }) ?? useContainer();
           if (container && typeof container.resolve === 'function') {
             try {
               const res = container.resolve(token);
@@ -107,7 +103,13 @@ export function CloudFoundryService(
             for (const key of keys) {
               const val = process.env[key];
               if (val) {
-                cachedValue = { uri: val, name: key, label: 'fallback', tags: [], credentials: { uri: val } };
+                cachedValue = {
+                  uri: val,
+                  name: key,
+                  label: 'fallback',
+                  tags: [],
+                  credentials: { uri: val },
+                };
                 return cachedValue;
               }
             }
@@ -142,9 +144,7 @@ export function CloudFoundryService(
 /**
  * Injects Cloud Foundry application metadata (VCAP_APPLICATION).
  */
-export function VcapApplication(
-  options: { required?: boolean; container?: unknown } = {},
-) {
+export function VcapApplication(options: { required?: boolean; container?: unknown } = {}) {
   return (
     // biome-ignore lint/suspicious/noExplicitAny: decorator target
     targetClass: any,
@@ -159,20 +159,20 @@ export function VcapApplication(
       defineMetadata(INJECT_METADATA_KEY, metadata, targetClass);
 
       if (targetClass.constructor && targetClass.constructor !== Object) {
-        const ctorMetadata =
-          getOwnMetadata(INJECT_METADATA_KEY, targetClass.constructor) || {};
+        const ctorMetadata = getOwnMetadata(INJECT_METADATA_KEY, targetClass.constructor) || {};
         ctorMetadata[propertyKey as string] = token;
         defineMetadata(INJECT_METADATA_KEY, ctorMetadata, targetClass.constructor);
       }
 
-      let cachedAppInfo: CloudFoundryApplicationInfo | null | undefined = undefined;
+      let cachedAppInfo: CloudFoundryApplicationInfo | null | undefined;
       Object.defineProperty(targetClass, propertyKey, {
         configurable: true,
         enumerable: true,
         get() {
           if (cachedAppInfo !== undefined) return cachedAppInfo;
 
-          const container = (options.container as { resolve?: (t: string) => unknown }) ?? useContainer();
+          const container =
+            (options.container as { resolve?: (t: string) => unknown }) ?? useContainer();
           if (container && typeof container.resolve === 'function') {
             try {
               const res = container.resolve(token);
@@ -187,7 +187,9 @@ export function VcapApplication(
 
           const info = getDefaultEnvironment().getApplicationInfo();
           if (!info && options.required === true) {
-            throw new Error('Cloud Foundry application info (VCAP_APPLICATION) is required but not present');
+            throw new Error(
+              'Cloud Foundry application info (VCAP_APPLICATION) is required but not present',
+            );
           }
           cachedAppInfo = info;
           return cachedAppInfo;
@@ -207,9 +209,7 @@ export function VcapApplication(
 /**
  * Class decorator that enables Cloud Foundry connector auto-configuration on the DI container.
  */
-export function EnableCloudFoundryConnectors(
-  options: EnableCloudFoundryConnectorsOptions = {},
-) {
+export function EnableCloudFoundryConnectors(options: EnableCloudFoundryConnectorsOptions = {}) {
   // biome-ignore lint/suspicious/noExplicitAny: class constructor
   return <T extends new (...args: any[]) => any>(ctor: T): T => {
     bindCloudFoundryConnectors(options.container, options);
@@ -221,10 +221,20 @@ function deriveServiceToken(serviceNameOrFilter?: string | RegExp | ServiceFilte
   if (typeof serviceNameOrFilter === 'string') {
     return `cf:service:${serviceNameOrFilter}`;
   }
-  if (serviceNameOrFilter && typeof serviceNameOrFilter === 'object' && 'name' in serviceNameOrFilter && typeof serviceNameOrFilter.name === 'string') {
+  if (
+    serviceNameOrFilter &&
+    typeof serviceNameOrFilter === 'object' &&
+    'name' in serviceNameOrFilter &&
+    typeof serviceNameOrFilter.name === 'string'
+  ) {
     return `cf:service:${serviceNameOrFilter.name}`;
   }
-  if (serviceNameOrFilter && typeof serviceNameOrFilter === 'object' && 'label' in serviceNameOrFilter && typeof serviceNameOrFilter.label === 'string') {
+  if (
+    serviceNameOrFilter &&
+    typeof serviceNameOrFilter === 'object' &&
+    'label' in serviceNameOrFilter &&
+    typeof serviceNameOrFilter.label === 'string'
+  ) {
     return `cf:service:${serviceNameOrFilter.label}`;
   }
   return 'cf:service:default';

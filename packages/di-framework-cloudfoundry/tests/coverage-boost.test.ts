@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { parseVcapApplication } from '../src/application-info.ts';
-import { bindCloudFoundryConnectors, CF_APPLICATION_TOKEN, CF_ENVIRONMENT_TOKEN } from '../src/bindings.ts';
+import {
+  bindCloudFoundryConnectors,
+  CF_APPLICATION_TOKEN,
+  CF_ENVIRONMENT_TOKEN,
+} from '../src/bindings.ts';
 import { AmqpServiceInfoCreator } from '../src/creators/amqp.ts';
 import { BlobStorageServiceInfoCreator } from '../src/creators/blob-storage.ts';
 import { RedisServiceInfoCreator } from '../src/creators/redis.ts';
@@ -51,21 +55,69 @@ describe('100% Coverage Verification', () => {
   it('should cover creators branch conditions', () => {
     // AMQP
     const amqpCreator = new AmqpServiceInfoCreator();
-    expect(amqpCreator.accept({ name: 'q', label: 'custom', tags: ['message-queue'], credentials: {} })).toBe(true);
-    expect(amqpCreator.accept({ name: 'q', label: 'custom', tags: [], credentials: { uri: 'amqp://localhost' } })).toBe(true);
-    expect(amqpCreator.accept({ name: 'q', label: 'custom', tags: [], credentials: { uris: ['amqps://localhost'] } })).toBe(true);
+    expect(
+      amqpCreator.accept({ name: 'q', label: 'custom', tags: ['message-queue'], credentials: {} }),
+    ).toBe(true);
+    expect(
+      amqpCreator.accept({
+        name: 'q',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'amqp://localhost' },
+      }),
+    ).toBe(true);
+    expect(
+      amqpCreator.accept({
+        name: 'q',
+        label: 'custom',
+        tags: [],
+        credentials: { uris: ['amqps://localhost'] },
+      }),
+    ).toBe(true);
 
     // BlobStorage
     const blobCreator = new BlobStorageServiceInfoCreator();
-    expect(blobCreator.accept({ name: 'b', label: 'custom', tags: ['s3'], credentials: {} })).toBe(true);
-    expect(blobCreator.accept({ name: 'b', label: 'custom', tags: [], credentials: { uri: 's3://my-bucket' } })).toBe(true);
-    expect(blobCreator.accept({ name: 'b', label: 'custom', tags: [], credentials: { bucketName: 'my-bucket', endpoint: 'http://localhost' } })).toBe(true);
+    expect(blobCreator.accept({ name: 'b', label: 'custom', tags: ['s3'], credentials: {} })).toBe(
+      true,
+    );
+    expect(
+      blobCreator.accept({
+        name: 'b',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 's3://my-bucket' },
+      }),
+    ).toBe(true);
+    expect(
+      blobCreator.accept({
+        name: 'b',
+        label: 'custom',
+        tags: [],
+        credentials: { bucketName: 'my-bucket', endpoint: 'http://localhost' },
+      }),
+    ).toBe(true);
 
     // Redis
     const redisCreator = new RedisServiceInfoCreator();
-    expect(redisCreator.accept({ name: 'r', label: 'custom', tags: ['cache'], credentials: {} })).toBe(true);
-    expect(redisCreator.accept({ name: 'r', label: 'custom', tags: [], credentials: { uri: 'redis://localhost' } })).toBe(true);
-    expect(redisCreator.accept({ name: 'r', label: 'custom', tags: [], credentials: { uri: 'rediss://localhost' } })).toBe(true);
+    expect(
+      redisCreator.accept({ name: 'r', label: 'custom', tags: ['cache'], credentials: {} }),
+    ).toBe(true);
+    expect(
+      redisCreator.accept({
+        name: 'r',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'redis://localhost' },
+      }),
+    ).toBe(true);
+    expect(
+      redisCreator.accept({
+        name: 'r',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'rediss://localhost' },
+      }),
+    ).toBe(true);
     const rInfo = redisCreator.createServiceInfo({
       name: 'r2',
       label: 'p-redis',
@@ -76,10 +128,38 @@ describe('100% Coverage Verification', () => {
 
     // Relational
     const relationalCreator = new RelationalServiceInfoCreator();
-    expect(relationalCreator.accept({ name: 'db', label: 'custom', tags: [], credentials: { uri: 'postgres://localhost' } })).toBe(true);
-    expect(relationalCreator.accept({ name: 'db', label: 'custom', tags: [], credentials: { uri: 'mysql://localhost' } })).toBe(true);
-    expect(relationalCreator.accept({ name: 'db', label: 'custom', tags: [], credentials: { uri: 'sqlite://file.db' } })).toBe(true);
-    expect(relationalCreator.accept({ name: 'db', label: 'custom', tags: [], credentials: { jdbcUrl: 'jdbc:mysql://localhost:3306/db' } })).toBe(true);
+    expect(
+      relationalCreator.accept({
+        name: 'db',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'postgres://localhost' },
+      }),
+    ).toBe(true);
+    expect(
+      relationalCreator.accept({
+        name: 'db',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'mysql://localhost' },
+      }),
+    ).toBe(true);
+    expect(
+      relationalCreator.accept({
+        name: 'db',
+        label: 'custom',
+        tags: [],
+        credentials: { uri: 'sqlite://file.db' },
+      }),
+    ).toBe(true);
+    expect(
+      relationalCreator.accept({
+        name: 'db',
+        label: 'custom',
+        tags: [],
+        credentials: { jdbcUrl: 'jdbc:mysql://localhost:3306/db' },
+      }),
+    ).toBe(true);
 
     // Relational unknown scheme in JDBC or URI
     const unknownDialect = relationalCreator.createServiceInfo({
@@ -103,7 +183,9 @@ describe('100% Coverage Verification', () => {
   it('should cover decorators fallback, token derivation, and property getters', () => {
     resetDefaultEnvironment();
     process.env.VCAP_SERVICES = JSON.stringify({
-      'p-mysql': [{ name: 'env-mysql', label: 'p-mysql', credentials: { uri: 'mysql://localhost/db' } }],
+      'p-mysql': [
+        { name: 'env-mysql', label: 'p-mysql', credentials: { uri: 'mysql://localhost/db' } },
+      ],
     });
     process.env.VCAP_APPLICATION = JSON.stringify({
       application_name: 'env-app',

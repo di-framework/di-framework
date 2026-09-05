@@ -19,7 +19,9 @@ describe('CloudFoundryDetector', () => {
   it('should return false when environment is empty or whitespace', () => {
     expect(CloudFoundryDetector.isCloudFoundry({})).toBe(false);
     expect(isCloudFoundry({})).toBe(false);
-    expect(CloudFoundryDetector.isCloudFoundry({ VCAP_APPLICATION: '  ', VCAP_SERVICES: '' })).toBe(false);
+    expect(CloudFoundryDetector.isCloudFoundry({ VCAP_APPLICATION: '  ', VCAP_SERVICES: '' })).toBe(
+      false,
+    );
     expect(CloudFoundryDetector.getApplicationJson({})).toBeUndefined();
     expect(CloudFoundryDetector.getServicesJson({})).toBeUndefined();
   });

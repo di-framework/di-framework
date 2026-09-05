@@ -1,4 +1,4 @@
-import { useContainer } from '@di-framework/core';
+import { useContainer } from '@di-framework/core/container';
 import { CloudFoundryEnvironment } from './environment.js';
 import type {
   AmqpServiceInfo,

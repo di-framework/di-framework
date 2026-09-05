@@ -1,6 +1,4 @@
-export {
-  parseVcapApplication,
-} from './application-info.js';
+export { parseVcapApplication } from './application-info.js';
 
 export {
   bindCloudFoundryConnectors,
@@ -11,26 +9,12 @@ export {
   CF_REDIS_TOKEN,
   CF_RELATIONAL_TOKEN,
 } from './bindings.js';
+export { AmqpServiceInfoCreator } from './creators/amqp.js';
+export { BlobStorageServiceInfoCreator } from './creators/blob-storage.js';
+export { RedisServiceInfoCreator } from './creators/redis.js';
+export { RelationalServiceInfoCreator } from './creators/relational.js';
 
-export {
-  RelationalServiceInfoCreator,
-} from './creators/relational.js';
-
-export {
-  RedisServiceInfoCreator,
-} from './creators/redis.js';
-
-export {
-  AmqpServiceInfoCreator,
-} from './creators/amqp.js';
-
-export {
-  BlobStorageServiceInfoCreator,
-} from './creators/blob-storage.js';
-
-export {
-  UserProvidedServiceInfoCreator,
-} from './creators/user-provided.js';
+export { UserProvidedServiceInfoCreator } from './creators/user-provided.js';
 
 export {
   CloudFoundryService,
@@ -50,9 +34,7 @@ export {
   resetDefaultEnvironment,
 } from './environment.js';
 
-export type {
-  CloudFoundryServiceInfoCreator,
-} from './spi/creator.js';
+export type { CloudFoundryServiceInfoCreator } from './spi/creator.js';
 
 export {
   getDefaultRegistry,

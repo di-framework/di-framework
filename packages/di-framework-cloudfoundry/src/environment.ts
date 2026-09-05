@@ -1,6 +1,10 @@
 import { parseVcapApplication } from './application-info.js';
 import { CloudFoundryDetector } from './detector.js';
-import { getDefaultRegistry, parseVcapServices, type ServiceInfoCreatorRegistry } from './spi/registry.js';
+import {
+  getDefaultRegistry,
+  parseVcapServices,
+  type ServiceInfoCreatorRegistry,
+} from './spi/registry.js';
 import type {
   AmqpServiceInfo,
   BlobStorageServiceInfo,
@@ -100,7 +104,10 @@ export class CloudFoundryEnvironment {
           return false;
       }
       if (filter.dialect) {
-        if (!('dialect' in service) || (service as unknown as RelationalServiceInfo).dialect !== filter.dialect) {
+        if (
+          !('dialect' in service) ||
+          (service as unknown as RelationalServiceInfo).dialect !== filter.dialect
+        ) {
           return false;
         }
       }
@@ -124,9 +131,7 @@ export class CloudFoundryEnvironment {
   /**
    * Retrieves relational database service info (PostgreSQL, MySQL, MariaDB, SQLite).
    */
-  getRelationalServiceInfo(
-    filter?: string | RegExp | ServiceFilter,
-  ): RelationalServiceInfo | null {
+  getRelationalServiceInfo(filter?: string | RegExp | ServiceFilter): RelationalServiceInfo | null {
     if (typeof filter === 'string' || filter instanceof RegExp) {
       const found = this.getServiceInfo<RelationalServiceInfo>(filter);
       if (found && 'dialect' in found) return found;
@@ -143,9 +148,7 @@ export class CloudFoundryEnvironment {
   /**
    * Retrieves Redis service info.
    */
-  getRedisServiceInfo(
-    filter?: string | RegExp | ServiceFilter,
-  ): RedisServiceInfo | null {
+  getRedisServiceInfo(filter?: string | RegExp | ServiceFilter): RedisServiceInfo | null {
     if (typeof filter === 'string' || filter instanceof RegExp) {
       const found = this.getServiceInfo<RedisServiceInfo>(filter);
       if (found && isRedisInfo(found)) return found;
@@ -161,9 +164,7 @@ export class CloudFoundryEnvironment {
   /**
    * Retrieves AMQP / RabbitMQ service info.
    */
-  getAmqpServiceInfo(
-    filter?: string | RegExp | ServiceFilter,
-  ): AmqpServiceInfo | null {
+  getAmqpServiceInfo(filter?: string | RegExp | ServiceFilter): AmqpServiceInfo | null {
     if (typeof filter === 'string' || filter instanceof RegExp) {
       const found = this.getServiceInfo<AmqpServiceInfo>(filter);
       if (found && isAmqpInfo(found)) return found;
@@ -353,7 +354,9 @@ function isRedisInfo(s: CloudFoundryServiceInfo): boolean {
   return (
     'host' in s &&
     'port' in s &&
-    (s.label.toLowerCase().includes('redis') || s.tags.includes('redis') || s.tags.includes('cache'))
+    (s.label.toLowerCase().includes('redis') ||
+      s.tags.includes('redis') ||
+      s.tags.includes('cache'))
   );
 }
 

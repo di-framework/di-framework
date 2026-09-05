@@ -30,7 +30,7 @@ describe('CloudFoundryEnvironment', () => {
             credentials: { uri: 'redis://:pass@redishost:6379' },
           },
         ],
-        'cloudamqp': [
+        cloudamqp: [
           {
             name: 'events-mq',
             label: 'cloudamqp',
@@ -38,7 +38,7 @@ describe('CloudFoundryEnvironment', () => {
             credentials: { uri: 'amqp://guest:guest@localhost:5672' },
           },
         ],
-        'minio': [
+        minio: [
           {
             name: 'attachments-s3',
             label: 'minio',
@@ -92,7 +92,9 @@ describe('CloudFoundryEnvironment', () => {
     expect(ups?.credentials.secretKey).toBe('sk_live_123');
     expect(cf.getUserProvidedServiceInfo({ tag: 'stripe' })?.name).toBe('stripe-creds');
 
-    expect(cf.getServiceCredentials<{ secretKey: string }>('stripe-creds')?.secretKey).toBe('sk_live_123');
+    expect(cf.getServiceCredentials<{ secretKey: string }>('stripe-creds')?.secretKey).toBe(
+      'sk_live_123',
+    );
     expect(cf.getServiceCredentials('non-existent')).toBeNull();
   });
 

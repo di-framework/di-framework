@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
+import type { CloudFoundryServiceInfoCreator } from '../src/spi/creator.ts';
 import {
   getDefaultRegistry,
   parseVcapServices,
   ServiceInfoCreatorRegistry,
 } from '../src/spi/registry.ts';
-import type { CloudFoundryServiceInfoCreator } from '../src/spi/creator.ts';
 import type { CloudFoundryServiceInfo, RawVcapServiceData } from '../src/types.ts';
 
 describe('ServiceInfoCreatorRegistry', () => {
@@ -12,7 +12,7 @@ describe('ServiceInfoCreatorRegistry', () => {
     const registry = new ServiceInfoCreatorRegistry();
 
     const vcap = {
-      'elephantsql': [
+      elephantsql: [
         {
           name: 'db-orders',
           label: 'elephantsql',
@@ -20,7 +20,7 @@ describe('ServiceInfoCreatorRegistry', () => {
           credentials: { uri: 'postgres://u:p@db:5432/orders' },
         },
       ],
-      'rediscloud': [
+      rediscloud: [
         {
           name: 'redis-cache',
           label: 'rediscloud',
@@ -59,14 +59,15 @@ describe('ServiceInfoCreatorRegistry', () => {
 
     const customCreator: CloudFoundryServiceInfoCreator = {
       accept: (data) => data.label === 'custom-broker',
-      createServiceInfo: (data) => ({
-        id: data.name,
-        name: data.name,
-        label: data.label,
-        tags: ['custom'],
-        credentials: data.credentials || {},
-        customProperty: true,
-      } as any),
+      createServiceInfo: (data) =>
+        ({
+          id: data.name,
+          name: data.name,
+          label: data.label,
+          tags: ['custom'],
+          credentials: data.credentials || {},
+          customProperty: true,
+        }) as any,
     };
 
     registry.registerCreator(customCreator, { priority: 'high' });
@@ -105,7 +106,9 @@ describe('ServiceInfoCreatorRegistry', () => {
       expect(parseVcapServices()).toEqual([]);
 
       process.env.VCAP_SERVICES = JSON.stringify({
-        'p-mysql': [{ name: 'mysql-1', label: 'p-mysql', credentials: { uri: 'mysql://root@localhost/db' } }],
+        'p-mysql': [
+          { name: 'mysql-1', label: 'p-mysql', credentials: { uri: 'mysql://root@localhost/db' } },
+        ],
       });
       const fromEnv = parseVcapServices();
       expect(fromEnv.length).toBe(1);

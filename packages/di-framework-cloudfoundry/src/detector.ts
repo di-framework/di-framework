@@ -7,9 +7,7 @@ export class CloudFoundryDetector {
    * Returns true if running within a Cloud Foundry runtime environment
    * (determined by presence of VCAP_APPLICATION or VCAP_SERVICES).
    */
-  static isCloudFoundry(
-    env: Record<string, string | undefined> = process.env,
-  ): boolean {
+  static isCloudFoundry(env: Record<string, string | undefined> = process.env): boolean {
     const vcapApp = env.VCAP_APPLICATION;
     const vcapServices = env.VCAP_SERVICES;
     return Boolean(
@@ -42,8 +40,6 @@ export class CloudFoundryDetector {
 /**
  * Convenient standalone check for Cloud Foundry runtime.
  */
-export function isCloudFoundry(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
+export function isCloudFoundry(env: Record<string, string | undefined> = process.env): boolean {
   return CloudFoundryDetector.isCloudFoundry(env);
 }
