@@ -3,6 +3,13 @@ import { createWasmcloudCommand } from './command.js';
 
 export { parseAppCommandArgs, parsePlatformCommandArgs, parsePlatformInitArgs } from './args.js';
 export {
+  type BindingRecord,
+  defaultSecretName,
+  discoverBindings,
+  parseBindingsFile,
+  requirementsFromBindings,
+} from './bindings.js';
+export {
   BUILD_PROFILE,
   buildComponent,
   canonicalBuildDigest,

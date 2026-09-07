@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@di-framework/core": ["../di-framework-core/dist/container.d.ts"],
+      "@di-framework/core/*": ["../di-framework-core/dist/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

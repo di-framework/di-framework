@@ -2,6 +2,7 @@ import { createHash, type Hash } from 'node:crypto';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
+import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
 import { loadProject, type WasmcloudProject } from './project.js';
@@ -32,8 +33,69 @@ export type BuildSummary = {
   profile: string;
 };
 
-export function requirementsForProject(_project: WasmcloudProject): WitRequirement[] {
-  return defaultProjectRequirements();
+export function requirementsForProject(
+  project: WasmcloudProject,
+  deps: WasmcloudDeps = DEFAULT_DEPS,
+): WitRequirement[] {
+  const bindings = discoverBindings(project, deps);
+  return [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+}
+
+function writeGuestsModule(generatedDirectory: string, bindings: readonly BindingRecord[]): void {
+  const lines = ['export const guests = {'];
+  for (const binding of bindings) {
+    const specifier = binding.requirement.instanceName ?? binding.requirement.package;
+    lines.push(`  ${JSON.stringify(binding.name)}: { specifier: ${JSON.stringify(specifier)} },`);
+  }
+  lines.push('};', '');
+  writeFileSync(join(generatedDirectory, 'guests.js'), `${lines.join('\n')}\n`);
+}
+
+function isWasmMagic(path: string): boolean {
+  const header = readFileSync(path).subarray(0, 4);
+  return (
+    header.length === 4 &&
+    header[0] === 0 &&
+    header[1] === 0x61 &&
+    header[2] === 0x73 &&
+    header[3] === 0x6d
+  );
+}
+
+async function inspectComponentImports(
+  project: WasmcloudProject,
+  requirements: readonly WitRequirement[],
+  deps: WasmcloudDeps,
+): Promise<void> {
+  if (!isWasmMagic(project.outputPath)) return;
+  const captured = await deps.runCaptured(
+    requireNodeBinary(deps.nodeBinaryPath()),
+    [deps.jcoCliPath(), 'wit', project.outputPath],
+    { cwd: project.projectRoot },
+  );
+  if (captured.exitCode !== 0) {
+    throw new CommandFailure(
+      'WASMCLOUD_COMPONENT_IMPORTS_UNREADABLE',
+      `Could not inspect component imports for ${project.applicationName}`,
+      3,
+      { application: project.applicationName },
+    );
+  }
+  const wit = `${captured.stdout}\n${captured.stderr}`;
+  for (const requirement of requirements) {
+    if (requirement.direction !== 'import') continue;
+    for (const iface of requirement.interfaces) {
+      const needle = `${requirement.package}/${iface}@${requirement.version}`;
+      if (!wit.includes(needle)) {
+        throw new CommandFailure(
+          'WASMCLOUD_COMPONENT_IMPORTS_MISMATCH',
+          `Compiled component is missing declared import ${needle} (binding ${requirement.source})`,
+          3,
+          { application: project.applicationName, source: requirement.source, iface },
+        );
+      }
+    }
+  }
 }
 
 /** The disposable `.di-framework/` build directory: WIT world, bundle, and manifests. */
@@ -45,7 +107,8 @@ export async function buildComponent(
   const generatedDirectory = join(project.projectRoot, '.di-framework');
   const generatedWit = join(generatedDirectory, 'wit');
   const bundledJavaScript = join(generatedDirectory, 'component.js');
-  const requirements = requirementsForProject(project);
+  const bindings = discoverBindings(project, deps);
+  const requirements = requirementsForProject(project, deps);
 
   rmSync(generatedDirectory, { recursive: true, force: true });
   mkdirSync(join(generatedWit, 'deps'), { recursive: true });
@@ -64,6 +127,7 @@ export async function buildComponent(
     join(generatedDirectory, 'oci-config.json'),
     `${JSON.stringify(OCI_ARTIFACT_PLATFORM, null, 2)}\n`,
   );
+  if (bindings.length > 0) writeGuestsModule(generatedDirectory, bindings);
 
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
@@ -71,6 +135,7 @@ export async function buildComponent(
       adapterPath: join(deps.assetsDirectory(), 'http-adapter.js'),
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
+      guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
     });
   } catch (error) {
     throw new CommandFailure(
@@ -101,6 +166,7 @@ export async function buildComponent(
   if (componentize.exitCode !== 0) {
     throw toolFailed('jco componentize', componentize.exitCode);
   }
+  await inspectComponentImports(project, requirements, deps);
 
   const deploymentDigest = canonicalBuildDigest(
     bundledJavaScript,

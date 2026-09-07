@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { runWasmcloudDoctor } from '../src/doctor';
 import { captureIo, fakeDeps, makeProject } from './helpers';
 
@@ -53,6 +55,59 @@ describe('runWasmcloudDoctor', () => {
     expect(result.exitCode).toBe(1);
     expect(result.text).toContain('✗ Docker is unavailable');
     expect(result.text).toContain('✗ @di-framework/core is unavailable');
+  });
+
+  it('lists discovered bindings and missing catalog as a failed check', async () => {
+    const root = makeProject();
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('users')
+export class Users extends Postgres {}
+`,
+    );
+    const missing = await runWasmcloudDoctor(
+      [],
+      captureIo().io,
+      fakeDeps({ cwd: root, ...HEALTHY }),
+    );
+    expect(missing.exitCode).toBe(1);
+    expect(missing.text).toContain('✗ @di-framework/wasmcloud is unavailable');
+
+    const catalogPath = join(root, 'catalog.json');
+    writeFileSync(
+      catalogPath,
+      `${JSON.stringify({
+        Postgres: {
+          kind: 'Postgres',
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          primaryInterface: 'query',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-postgres',
+          usesSecret: true,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const ok = await runWasmcloudDoctor(
+      [],
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        ...HEALTHY,
+        resolutions: {
+          ...HEALTHY.resolutions,
+          '@di-framework/wasmcloud': catalogPath,
+          '@di-framework/wasmcloud/catalog.json': catalogPath,
+        },
+      }),
+    );
+    expect(ok.exitCode).toBe(0);
+    expect(ok.text).toContain('binding users');
+    expect(ok.text).toContain('Users');
   });
 
   it('rejects arguments', async () => {

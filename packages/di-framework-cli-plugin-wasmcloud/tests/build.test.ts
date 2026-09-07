@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildComponent, runWasmcloudBuild } from '../src/build';
+import { buildComponent, requirementsForProject, runWasmcloudBuild } from '../src/build';
 import { loadProject } from '../src/project';
 import { captureIo, fakeDeps, makeAssets, makeProject, type RunnerInvocation } from './helpers';
 
@@ -78,6 +78,175 @@ describe('buildComponent', () => {
     });
     expect(output.stdout.join('')).toContain('Building Demo App');
     expect(output.stdout.join('')).toContain('Built dist/demo-app.wasm');
+    expect(existsSync(join(generated, 'guests.js'))).toBe(false);
+  });
+
+  it('writes a guests module when bindings are discovered', async () => {
+    const root = makeProject();
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { Config, Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('user-database')
+export class UserDatabase extends Postgres {}
+@WasmCloudBinding('app-config')
+export class AppConfig extends Config {}
+`,
+    );
+    writeFileSync(
+      join(root, 'catalog.json'),
+      `${JSON.stringify({
+        Postgres: {
+          kind: 'Postgres',
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          primaryInterface: 'query',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-postgres',
+          usesSecret: true,
+          configKeys: [],
+        },
+        Config: {
+          kind: 'Config',
+          package: 'wasi:config',
+          version: '0.2.0-rc.1',
+          interfaces: ['store'],
+          primaryInterface: 'store',
+          namedInstance: false,
+          sharedResources: [],
+          witDep: 'wasi-config',
+          usesSecret: false,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const assets = makeAssets();
+    const summary = await buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        resolutions: { '@di-framework/wasmcloud/catalog.json': join(root, 'catalog.json') },
+      }),
+    );
+    expect(summary.application).toBe('Demo App');
+    const guests = readFileSync(join(root, '.di-framework', 'guests.js'), 'utf8');
+    expect(guests).toContain('user-database');
+    expect(guests).toContain('wasi:config');
+    expect(readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8')).toContain(
+      'import user-database: wasmcloud:postgres/query@0.2.0;',
+    );
+  });
+
+  it('inspects real wasm imports and fails when they disagree with the WIT graph', async () => {
+    const root = makeProject();
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('user-database')
+export class UserDatabase extends Postgres {}
+`,
+    );
+    writeFileSync(
+      join(root, 'catalog.json'),
+      `${JSON.stringify({
+        Postgres: {
+          kind: 'Postgres',
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          primaryInterface: 'query',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-postgres',
+          usesSecret: true,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const assets = makeAssets();
+    await expect(
+      buildComponent(
+        loadProject(root),
+        captureIo().io,
+        fakeDeps({
+          cwd: root,
+          assets,
+          resolutions: { '@di-framework/wasmcloud/catalog.json': join(root, 'catalog.json') },
+          componentOutput: () => `\0asm missing-imports`,
+          capturedStdout: { wit: 'world application {\n  export wasi:http/handler@0.3.0;\n}\n' },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'WASMCLOUD_COMPONENT_IMPORTS_MISMATCH', exitCode: 3 });
+  });
+
+  it('accepts a component whose extracted WIT includes declared imports', async () => {
+    const root = makeProject();
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('user-database')
+export class UserDatabase extends Postgres {}
+`,
+    );
+    writeFileSync(
+      join(root, 'catalog.json'),
+      `${JSON.stringify({
+        Postgres: {
+          kind: 'Postgres',
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          primaryInterface: 'query',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-postgres',
+          usesSecret: true,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const assets = makeAssets();
+    const summary = await buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        resolutions: { '@di-framework/wasmcloud/catalog.json': join(root, 'catalog.json') },
+        componentOutput: () => `\0asm ok`,
+        capturedStdout: {
+          wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import wasmcloud:postgres/query@0.2.0;
+  import wasmcloud:postgres/prepared@0.2.0;
+  import wasmcloud:postgres/types@0.2.0;
+}
+`,
+        },
+      }),
+    );
+    expect(summary.componentModel).toBe('0.3');
+  });
+
+  it('fails when component WIT cannot be extracted from a real wasm', async () => {
+    const root = makeProject();
+    const assets = makeAssets();
+    await expect(
+      buildComponent(
+        loadProject(root),
+        captureIo().io,
+        fakeDeps({
+          cwd: root,
+          assets,
+          componentOutput: () => `\0asm unreadable`,
+          exitCodes: { wit: 1 },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'WASMCLOUD_COMPONENT_IMPORTS_UNREADABLE', exitCode: 3 });
   });
 
   it('keeps the deployment version stable when componentizer bytes vary for identical inputs', async () => {
@@ -121,6 +290,20 @@ describe('buildComponent', () => {
       code: 'WASMCLOUD_TOOL_FAILED',
       exitCode: 3,
     });
+  });
+});
+
+describe('requirementsForProject', () => {
+  it('returns HTTP adapter requirements when no bindings file exists', () => {
+    const root = makeProject();
+    const requirements = requirementsForProject(loadProject(root), fakeDeps({ cwd: root }));
+    expect(requirements).toEqual([
+      expect.objectContaining({
+        package: 'wasi:http',
+        interfaces: ['handler'],
+        direction: 'export',
+      }),
+    ]);
   });
 });
 

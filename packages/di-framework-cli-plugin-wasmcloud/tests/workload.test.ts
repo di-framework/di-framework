@@ -42,6 +42,59 @@ describe('workload manifests', () => {
     expect(yaml).not.toContain('Pulumi');
   });
 
+  it('renders named hostInterfaces with secretFrom from binding records', () => {
+    const { greeter } = makeWorkspace();
+    const project = loadProject(greeter);
+    const yaml = renderWorkloadManifest(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/greeter:sha256-abc',
+      [
+        {
+          package: 'wasi:http',
+          version: '0.3.0',
+          interfaces: ['handler'],
+          direction: 'export',
+          source: 'http-adapter',
+        },
+        {
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          direction: 'import',
+          instanceName: 'user-database',
+          source: 'UserDatabase',
+        },
+      ],
+      [
+        {
+          className: 'UserDatabase',
+          name: 'user-database',
+          kind: 'Postgres',
+          requirement: {
+            package: 'wasmcloud:postgres',
+            version: '0.2.0',
+            interfaces: ['query', 'prepared', 'types'],
+            direction: 'import',
+            instanceName: 'user-database',
+            source: 'UserDatabase',
+          },
+          secretFrom: 'orders-user-database',
+        },
+      ],
+    );
+    expect(yaml).toContain('name: "user-database"');
+    expect(yaml).toContain('package: postgres');
+    expect(yaml).toContain('version: "0.2.0"');
+    expect(yaml).toContain('secretFrom:');
+    expect(yaml).toContain('name: "orders-user-database"');
+  });
+
   it('treats unparseable kubectl output as not ready and times out', async () => {
     const { greeter } = makeWorkspace();
     const project = loadProject(greeter);

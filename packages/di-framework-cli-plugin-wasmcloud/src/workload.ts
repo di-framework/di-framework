@@ -1,12 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
+import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import type { WasmcloudDeps } from './deps.js';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
 import { captureKubectl, runKubectl } from './kubernetes.js';
 import type { WasmcloudProject } from './project.js';
 import type { ClusterConnection } from './target.js';
-import { defaultProjectRequirements } from './wit.js';
+import { defaultProjectRequirements, type WitRequirement } from './wit.js';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;
@@ -26,6 +27,8 @@ export function renderWorkloadManifest(
   project: WasmcloudProject,
   connection: ClusterConnection,
   image: string,
+  requirements: readonly WitRequirement[] = defaultProjectRequirements(),
+  bindings: readonly BindingRecord[] = [],
 ): string {
   const name = deploymentResourceName(project);
   const labels = [
@@ -69,9 +72,17 @@ spec:
         - name: ${name}
           image: ${yamlQuote(image)}
 ${renderHostInterfacesYaml(
-  hostInterfacesFromRequirements(defaultProjectRequirements(), {
-    httpHost: project.applicationName,
-  }),
+  hostInterfacesFromRequirements(
+    requirements,
+    { httpHost: project.applicationName },
+    bindings.map((binding) => ({
+      name: binding.name,
+      className: binding.className,
+      config: binding.config,
+      configFrom: binding.configFrom,
+      secretFrom: binding.secretFrom,
+    })),
+  ),
 )}
 `;
 }
@@ -83,7 +94,9 @@ export async function applyWorkload(
   io: CliIo,
   deps: WasmcloudDeps,
 ): Promise<string> {
-  const manifest = renderWorkloadManifest(project, connection, image);
+  const bindings = discoverBindings(project, deps);
+  const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings);
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);

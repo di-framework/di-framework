@@ -10,6 +10,10 @@ declare module 'virtual:di-framework-application' {
   export default application;
 }
 
+declare module 'virtual:di-framework-wasmcloud-guests' {
+  export const guests: Record<string, unknown>;
+}
+
 declare module 'wasi:http/types@0.3.0' {
   export const Fields: {
     fromList(entries: Array<[string, Uint8Array]>): unknown;

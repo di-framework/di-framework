@@ -14,6 +14,15 @@ describe('nodeCompatibilityPlugin', () => {
     expect(plugin.load('\0node:fs')).toContain('unavailable in a WebAssembly component');
     expect(plugin.load('\0node:path')).toContain('isAbsolute');
     expect(plugin.load('/project/src/app.ts')).toBeNull();
+    expect(plugin.resolveId('virtual:di-framework-wasmcloud-guests')).toBe(
+      '\0virtual:di-framework-wasmcloud-guests-empty',
+    );
+    expect(plugin.load('\0virtual:di-framework-wasmcloud-guests-empty')).toContain('guests');
+    expect(
+      nodeCompatibilityPlugin('/app.ts', '/generated/guests.js').resolveId(
+        'virtual:di-framework-wasmcloud-guests',
+      ),
+    ).toBe('/generated/guests.js');
   });
 });
 

@@ -51,6 +51,9 @@ describe('loadProject', () => {
     expect(project.outputPath).toBe(join(root, 'dist', 'demo-app.wasm'));
     expect(project.projectRoot).toBe(root);
     expect(project.version).toBe('1.2.3');
+    expect(project.bindingsRelative).toBe('src/bindings.ts');
+    expect(project.bindingsConfigured).toBe(false);
+    expect(project.bindingsPath).toBe(join(root, 'src', 'bindings.ts'));
   });
 
   it('honors an explicit output path and falls back on invalid versions', () => {
@@ -83,6 +86,7 @@ describe('loadProject', () => {
       { name: 'demo' },
       { name: 'demo', entry: '' },
       { name: 'demo', entry: 'src/app.ts', output: 7 },
+      { name: 'demo', entry: 'src/app.ts', bindings: 7 },
     ]) {
       const root = mkdtempSync(join(tmpdir(), 'wasmcloud-invalid-'));
       writeFileSync(join(root, 'di-framework.config.json'), `${JSON.stringify(config)}\n`);

@@ -100,11 +100,11 @@ export function aggregateRequirements(
   return [...groups.values()];
 }
 
-function importClause(requirement: AggregatedRequirement, iface: string): string {
+function importClause(requirement: AggregatedRequirement, iface: string, labeled: boolean): string {
   const { namespace, name } = parsePackageId(requirement.package);
   const target = `${namespace}:${name}/${iface}@${requirement.version}`;
   if (requirement.direction === 'export') return `export ${target};`;
-  if (requirement.instanceName !== undefined && requirement.interfaces.length === 1) {
+  if (labeled && requirement.instanceName !== undefined) {
     return `import ${requirement.instanceName}: ${target};`;
   }
   return `import ${target};`;
@@ -116,9 +116,16 @@ export function renderWorldWit(
   requirements: readonly WitRequirement[],
 ): string {
   const lines = [`package local:${packageName}@${version};`, '', 'world application {'];
+  const unlabeled = new Set<string>();
   for (const requirement of aggregateRequirements(requirements)) {
-    for (const iface of requirement.interfaces) {
-      lines.push(`  ${importClause(requirement, iface)}`);
+    for (const [index, iface] of requirement.interfaces.entries()) {
+      const labeled = index === 0 && requirement.instanceName !== undefined;
+      const clause = importClause(requirement, iface, labeled);
+      if (!labeled) {
+        if (unlabeled.has(clause)) continue;
+        unlabeled.add(clause);
+      }
+      lines.push(`  ${clause}`);
     }
   }
   lines.push('}', '');

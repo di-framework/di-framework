@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import { relative } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
+import { discoverBindings } from './bindings.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { resolveDevRunner } from './dev-runner.js';
 import { loadProject } from './project.js';
@@ -23,6 +25,14 @@ export async function runWasmcloudDoctor(
     check('Node.js', deps.nodeBinaryPath() && deps.capture('node', ['--version'])),
     check('@di-framework/core', deps.resolveFromProject(project.projectRoot, '@di-framework/core')),
     check('@di-framework/http', deps.resolveFromProject(project.projectRoot, '@di-framework/http')),
+    ...(existsSync(project.bindingsPath ?? '')
+      ? [
+          check(
+            '@di-framework/wasmcloud',
+            deps.resolveFromProject(project.projectRoot, '@di-framework/wasmcloud'),
+          ),
+        ]
+      : []),
     check('Pulumi', deps.capture('pulumi', ['version'])),
     check('Docker', deps.capture('docker', ['version', '--format', '{{.Server.Version}}'])),
     check('kubectl', deps.capture('kubectl', ['version', '--client', '--output=yaml'])),
@@ -35,6 +45,26 @@ export async function runWasmcloudDoctor(
     runnerDetail = undefined;
   }
   checks.push(check('dev runner', runnerDetail));
+  if (existsSync(project.bindingsPath ?? '')) {
+    try {
+      const bindings = discoverBindings(project, deps);
+      for (const binding of bindings) {
+        const secret =
+          binding.secretFrom === undefined ? 'no secret ref' : `secretFrom ${binding.secretFrom}`;
+        checks.push({
+          name: `binding ${binding.name}`,
+          ok: true,
+          detail: `${binding.className} ${binding.requirement.package}@${binding.requirement.version} (${secret})`,
+        });
+      }
+    } catch (error) {
+      checks.push({
+        name: 'bindings',
+        ok: false,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   const failed = checks.some((entry) => !entry.ok);
   const lines = [
     `${project.applicationName}`,

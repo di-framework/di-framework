@@ -35,6 +35,7 @@ export type BundleOptions = {
   adapterPath: string;
   entryPath: string;
   outFile: string;
+  guestsPath?: string;
 };
 
 export type Bundler = (options: BundleOptions) => Promise<void>;
@@ -63,15 +64,20 @@ export type WasmcloudDeps = {
 };
 
 /** Resolves `virtual:di-framework-application` to the app entry and stubs node built-ins. */
-export function nodeCompatibilityPlugin(entryPath: string) {
+export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) {
   return {
     name: 'di-framework-component-runtime',
     resolveId(source: string) {
       if (source === 'virtual:di-framework-application') return entryPath;
+      if (source === 'virtual:di-framework-wasmcloud-guests') {
+        return guestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
+      }
       if (source === 'node:fs' || source === 'node:path') return `\0${source}`;
       return null;
     },
     load(id: string) {
+      if (id === '\0virtual:di-framework-wasmcloud-guests-empty')
+        return 'export const guests = {};\n';
       if (id === '\0node:fs') {
         return "export const writeFileSync = () => { throw new Error('node:fs is unavailable in a WebAssembly component'); };";
       }
@@ -135,11 +141,11 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     return { exitCode: await child.exited, stdout, stderr };
   },
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  bundler: async ({ adapterPath, entryPath, outFile }) => {
+  bundler: async ({ adapterPath, entryPath, outFile, guestsPath }) => {
     const bundle = await rolldown({
       input: adapterPath,
       external: COMPONENT_IMPORT_EXTERNAL,
-      plugins: [nodeCompatibilityPlugin(entryPath)],
+      plugins: [nodeCompatibilityPlugin(entryPath, guestsPath)],
       treeshake: { moduleSideEffects: false },
     });
     try {

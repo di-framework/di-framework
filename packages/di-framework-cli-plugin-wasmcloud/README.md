@@ -29,6 +29,12 @@ A component project is marked by `di-framework.config.json`:
 { "name": "my-app", "entry": "src/app.ts", "output": "dist/my-app.wasm" }
 ```
 
+Named wasmCloud host-interface bindings live in `src/bindings.ts` (override with `"bindings"`).
+Each exported class extending a `@di-framework/wasmcloud` base and decorated with
+`@WasmCloudBinding('name')` is discovered statically and added to the WIT requirement graph.
+The binding name becomes the labeled WIT import and `hostInterfaces[].name`. Secret values are
+never taken from source; `secretFrom` defaults to `<application>-<binding>`.
+
 The configured `name` is the only project identity. The extension owns the WebAssembly/WASI
 boundary: it records WIT requirements (the HTTP adapter exports `wasi:http/handler@0.3.0` today),
 generates one world and a `wit.lock.json` from that graph, bundles the entry behind a WASI-HTTP ↔

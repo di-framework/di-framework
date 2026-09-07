@@ -42,6 +42,10 @@ const wasiState = {
     defaultOutgoing(headers, contents, trailers),
 };
 
+mock.module('virtual:di-framework-wasmcloud-guests', () => ({
+  guests: {},
+}));
+
 mock.module('virtual:di-framework-application', () => ({
   default: (request: Request) => {
     const current = applicationState.current;

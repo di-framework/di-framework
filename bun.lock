@@ -358,6 +358,7 @@
         "@bytecodealliance/jco": "1.32.1",
         "@di-framework/cli-extension": "^5",
         "rolldown": "1.2.7",
+        "typescript": "^5",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -525,6 +526,14 @@
         "typescript": "^7.0.0",
       },
     },
+    "packages/di-framework-wasmcloud": {
+      "name": "@di-framework/wasmcloud",
+      "version": "5.2.6",
+      "peerDependencies": {
+        "@di-framework/core": "^5",
+        "typescript": "^5",
+      },
+    },
   },
   "packages": {
     "@andreiltd/componentize-qjs-binding-darwin-arm64": ["@andreiltd/componentize-qjs-binding-darwin-arm64@0.4.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Qufqt1QmpILYcwVbFUGvCaAAzoTgq8o62lg4ayB9lYjdt2zvB0uMljonvC8e5IkmXWGuf/B+KucFD5M4OE2ufg=="],
@@ -682,6 +691,8 @@
     "@di-framework/socket": ["@di-framework/socket@workspace:packages/di-framework-socket"],
 
     "@di-framework/tsc": ["@di-framework/tsc@workspace:packages/di-framework-tsc"],
+
+    "@di-framework/wasmcloud": ["@di-framework/wasmcloud@workspace:packages/di-framework-wasmcloud"],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 

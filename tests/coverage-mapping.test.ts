@@ -53,6 +53,12 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
     expect(getPackageSlugFromPath('packages/di-framework-cli/cmd/build.ts')).toBe('cli');
     expect(getPackageSlugFromPath('packages/di-framework-codegen/index.ts')).toBe('codegen');
     expect(getPackageSlugFromPath('packages/di-framework-ai-utils/src/index.ts')).toBe('ai-utils');
+    expect(getPackageSlugFromPath('packages/di-framework-wasmcloud/src/index.ts')).toBe(
+      'wasmcloud',
+    );
+    expect(getPackageSlugFromPath('packages/di-framework-cloudfoundry/src/index.ts')).toBe(
+      'cloudfoundry',
+    );
     expect(getPackageSlugFromPath('examples/packages/basic/index.ts')).toBeNull();
   });
 

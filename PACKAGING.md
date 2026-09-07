@@ -11,7 +11,7 @@ semver ranges rather than monorepo-only `workspace:` protocols.
 | Package | Published files | Classification |
 | --- | --- | --- |
 | `core` | `dist`, README, licenses, migration guide | runtime |
-| `repo`, `http`, `graphql`, `events`, `config`, `auth`, `authz`, `socket`, `rpc`, `codegen`, `ai-utils` | `dist`, README | runtime |
+| `repo`, `http`, `graphql`, `events`, `config`, `auth`, `authz`, `socket`, `rpc`, `codegen`, `ai-utils`, `cloudfoundry`, `wasmcloud` | `dist`, README | runtime |
 | `ai` | `src`, README | intentional TypeScript source package |
 | `cli` | `main.ts`, `command.ts`, `cmd`, `extensions`, `scripts`, README | intentional Bun source CLI |
 | `cli-extension` | `dist`, `src`, README | runtime with a TypeScript `bun` export condition |

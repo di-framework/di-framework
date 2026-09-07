@@ -20,6 +20,7 @@ describe('npm artifact', () => {
       scripts: { build: string };
     };
     expect(pkg.scripts.build).toContain("--external 'virtual:di-framework-application'");
+    expect(pkg.scripts.build).toContain("--external 'virtual:di-framework-wasmcloud-guests'");
   });
 
   it('ships every self-contained generated platform asset', () => {

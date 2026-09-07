@@ -10,6 +10,11 @@ export type WasmcloudProject = {
   configPath: string;
   entryPath: string;
   outputPath: string;
+  /** Absolute path to the bindings file when present or configured. */
+  bindingsPath: string | undefined;
+  /** True when `bindings` was set in di-framework.config.json. */
+  bindingsConfigured: boolean;
+  bindingsRelative: string;
   projectRoot: string;
   version: string;
   /** `name` slugified into a WIT package identifier. */
@@ -93,6 +98,9 @@ export function loadProject(startDirectory: string): WasmcloudProject {
   if (config.output !== undefined && typeof config.output !== 'string') {
     configInvalid(`${CONFIG_FILE_NAME} "output" must be a string when present`, configPath);
   }
+  if (config.bindings !== undefined && typeof config.bindings !== 'string') {
+    configInvalid(`${CONFIG_FILE_NAME} "bindings" must be a string when present`, configPath);
+  }
 
   const witName = asWitIdentifier(config.name);
   const entryPath = resolveInside(projectRoot, config.entry, 'entry', configPath);
@@ -102,6 +110,10 @@ export function loadProject(startDirectory: string): WasmcloudProject {
     'output',
     configPath,
   );
+  const bindingsValue = typeof config.bindings === 'string' ? config.bindings.trim() : '';
+  const bindingsConfigured = bindingsValue !== '';
+  const bindingsRelative = bindingsConfigured ? bindingsValue : 'src/bindings.ts';
+  const bindingsPath = resolveInside(projectRoot, bindingsRelative, 'bindings', configPath);
 
   try {
     accessSync(entryPath, constants.R_OK);
@@ -124,6 +136,9 @@ export function loadProject(startDirectory: string): WasmcloudProject {
     configPath,
     entryPath,
     outputPath,
+    bindingsPath,
+    bindingsConfigured,
+    bindingsRelative,
     projectRoot,
     version,
     witName,

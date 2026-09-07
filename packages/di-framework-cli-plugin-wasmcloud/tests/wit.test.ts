@@ -138,9 +138,8 @@ describe('WIT requirement registry', () => {
         source: 'kv',
       },
     ]);
-    expect(world).toContain('import wasi:keyvalue/store@0.2.0-draft;');
+    expect(world).toContain('import cache: wasi:keyvalue/store@0.2.0-draft;');
     expect(world).toContain('import wasi:keyvalue/atomics@0.2.0-draft;');
-    expect(world).not.toContain('import cache:');
   });
 
   it('merges duplicate sources and interfaces across requirement groups', () => {
@@ -182,6 +181,30 @@ describe('WIT requirement registry', () => {
     writeFileSync(join(root, 'wasi-http', 'package.wit'), 'package wasi:http@0.3.0;\n');
     const lock = buildWitLock(defaultProjectRequirements(), root);
     expect(lock.packages.map((entry) => entry.id)).toEqual(['wasi:http']);
+  });
+
+  it('labels only the primary interface of a named multi-interface group', () => {
+    const world = renderWorldWit('orders', '1.0.0', [
+      {
+        package: 'wasmcloud:keyvalue',
+        version: '0.2.0',
+        interfaces: ['store', 'atomics', 'types'],
+        direction: 'import',
+        instanceName: 'sessions',
+        source: 'Sessions',
+      },
+      {
+        package: 'wasmcloud:keyvalue',
+        version: '0.2.0',
+        interfaces: ['store', 'atomics', 'types'],
+        direction: 'import',
+        instanceName: 'cache',
+        source: 'Cache',
+      },
+    ]);
+    expect(world).toContain('import sessions: wasmcloud:keyvalue/store@0.2.0;');
+    expect(world).toContain('import cache: wasmcloud:keyvalue/store@0.2.0;');
+    expect(world.match(/import wasmcloud:keyvalue\/atomics@0\.2\.0;/g)).toHaveLength(1);
   });
 
   it('renders named host interface YAML entries', () => {

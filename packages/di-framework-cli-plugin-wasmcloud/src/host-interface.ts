@@ -14,10 +14,20 @@ export type HostInterface = {
   version: string;
   interfaces: string[];
   config?: Record<string, string>;
+  configFrom?: Array<{ name: string }>;
+  secretFrom?: Array<{ name: string }>;
 };
 
 export type HostInterfaceOptions = {
   httpHost?: string;
+};
+
+export type BindingHostOverlay = {
+  name: string;
+  className: string;
+  config?: Record<string, string>;
+  configFrom?: string;
+  secretFrom?: string;
 };
 
 function hostInterfaceFromRequirement(
@@ -45,10 +55,21 @@ function hostInterfaceFromRequirement(
 export function hostInterfacesFromRequirements(
   requirements: readonly WitRequirement[],
   options: HostInterfaceOptions = {},
+  overlays: readonly BindingHostOverlay[] = [],
 ): HostInterface[] {
-  return aggregateRequirements(requirements).map((requirement) =>
-    hostInterfaceFromRequirement(requirement, options),
-  );
+  const byName = new Map(overlays.map((overlay) => [overlay.name, overlay]));
+  return aggregateRequirements(requirements).map((requirement) => {
+    const entry = hostInterfaceFromRequirement(requirement, options);
+    const overlay =
+      requirement.instanceName !== undefined ? byName.get(requirement.instanceName) : undefined;
+    if (overlay === undefined) return entry;
+    if (overlay.config !== undefined) {
+      entry.config = { ...entry.config, ...overlay.config };
+    }
+    if (overlay.configFrom !== undefined) entry.configFrom = [{ name: overlay.configFrom }];
+    if (overlay.secretFrom !== undefined) entry.secretFrom = [{ name: overlay.secretFrom }];
+    return entry;
+  });
 }
 
 export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): string {
@@ -70,6 +91,14 @@ export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): 
       for (const [key, value] of Object.entries(entry.config)) {
         lines.push(`            ${key}: ${yamlQuote(value)}`);
       }
+    }
+    if (entry.configFrom !== undefined) {
+      lines.push('          configFrom:');
+      for (const ref of entry.configFrom) lines.push(`            - name: ${yamlQuote(ref.name)}`);
+    }
+    if (entry.secretFrom !== undefined) {
+      lines.push('          secretFrom:');
+      for (const ref of entry.secretFrom) lines.push(`            - name: ${yamlQuote(ref.name)}`);
     }
   }
   return lines.join('\n');

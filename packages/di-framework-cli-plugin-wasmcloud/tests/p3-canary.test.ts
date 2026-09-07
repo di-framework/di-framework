@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,6 +67,45 @@ describe('P3 TypeScript toolchain canary', () => {
 
   it('componentizes exported async funcs, futures, streams, cancellation, and a shared resource type', async () => {
     const result = await componentize(join(FIXTURE, 'wit'), 'canary.wasm');
+    expect(result.exitCode).toBe(0);
+  }, 60_000);
+
+  it('componentizes imported func returning future and stream', async () => {
+    const futureDir = mkdtempSync(join(tmpdir(), 'p3-future-'));
+    writeFileSync(
+      join(futureDir, 'world.wit'),
+      `package local:p3-canary@0.1.0;
+interface store {
+  put: func(key: string) -> future<string>;
+  get: func(key: string) -> stream<u8>;
+}
+world application {
+  import store;
+  export probe: async func() -> string;
+}
+`,
+    );
+    const result = await componentize(futureDir, 'future.wasm');
+    expect(result.exitCode).toBe(0);
+  }, 60_000);
+
+  it('componentizes two named inline interface instances', async () => {
+    const namedDir = mkdtempSync(join(tmpdir(), 'p3-inline-'));
+    writeFileSync(
+      join(namedDir, 'world.wit'),
+      `package local:p3-canary@0.1.0;
+world application {
+  import cache: interface {
+    open: func(name: string) -> string;
+  }
+  import durable: interface {
+    open: func(name: string) -> string;
+  }
+  export probe: async func() -> string;
+}
+`,
+    );
+    const result = await componentize(namedDir, 'inline.wasm');
     expect(result.exitCode).toBe(0);
   }, 60_000);
 
