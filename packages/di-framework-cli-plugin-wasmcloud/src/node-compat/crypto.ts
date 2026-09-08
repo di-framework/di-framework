@@ -84,12 +84,17 @@ export function randomInt(
     high = max;
   }
   const range = high - low;
-  if (!Number.isInteger(range) || range <= 0) {
+  if (!Number.isSafeInteger(low) || !Number.isSafeInteger(high) || range <= 0 || range >= 2 ** 48) {
     throw new RangeError('The value of "max" is out of range');
   }
-  const bytes = getRandomBytes(6);
-  let value = 0;
-  for (const byte of bytes) value = value * 256 + byte;
+  const sampleSpace = 2 ** 48;
+  const limit = sampleSpace - (sampleSpace % range);
+  let value: number;
+  do {
+    const bytes = getRandomBytes(6);
+    value = 0;
+    for (const byte of bytes) value = value * 256 + byte;
+  } while (value >= limit);
   const result = low + (value % range);
   if (cb !== undefined) {
     queueMicrotask(() => cb(null, result));
