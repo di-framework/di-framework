@@ -69,6 +69,21 @@ describe('DI resolution', () => {
     expect(bindings.cache.bindingName).toBe('cache');
   });
 
+  it('reads guests installed on globalThis by the generated guests module', async () => {
+    const key = Symbol.for('di-framework.wasmcloud.guests');
+    (globalThis as Record<symbol, unknown>)[key] = {
+      sessions: {
+        open: async (identifier: string) => ({ identifier, via: 'global' }),
+      },
+    };
+
+    @WasmCloudBinding('sessions')
+    class Sessions extends KeyValue {}
+
+    const store = new Sessions();
+    await expect(store.open('bucket')).resolves.toEqual({ identifier: 'bucket', via: 'global' });
+  });
+
   it('delegates to generated guests without buffering the caller payload', async () => {
     const seen: unknown[] = [];
     setGuests({

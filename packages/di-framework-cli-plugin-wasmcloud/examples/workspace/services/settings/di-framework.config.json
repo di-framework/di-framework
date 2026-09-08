@@ -1,0 +1,4 @@
+{
+  "name": "settings",
+  "entry": "src/app.ts"
+}

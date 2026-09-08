@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rolldown } from 'rolldown';
+import { emptyGuestsModule } from './guests.js';
 
 export type ProcessRunOptions = {
   cwd: string;
@@ -52,6 +53,12 @@ export type WasmcloudDeps = {
   wait(ms: number): Promise<void>;
   bundler: Bundler;
   jcoCliPath(): string;
+  /**
+   * Optional componentize-qjs CLI built against wasmtime 48+ with
+   * `concurrency_support`. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses
+   * wasmtime 47, which cannot stub imported `async func`s during wizer.
+   */
+  componentizeQjsPath(): string | undefined;
   /** jco needs real Node.js; it uses node internals Bun does not implement. */
   nodeBinaryPath(): string | undefined;
   /** wasmtime serve hosts WASI 0.3 HTTP components locally. */
@@ -76,8 +83,7 @@ export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) 
       return null;
     },
     load(id: string) {
-      if (id === '\0virtual:di-framework-wasmcloud-guests-empty')
-        return 'export const guests = {};\n';
+      if (id === '\0virtual:di-framework-wasmcloud-guests-empty') return emptyGuestsModule();
       if (id === '\0node:fs') {
         return "export const writeFileSync = () => { throw new Error('node:fs is unavailable in a WebAssembly component'); };";
       }
@@ -89,8 +95,18 @@ export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) 
   };
 }
 
+/** Points at a wasmtime-48+ componentize-qjs CLI that can stub imported `async func`s. */
+export const COMPONENTIZE_QJS_ENV = 'DI_FRAMEWORK_COMPONENTIZE_QJS';
+
 // Real path, not a store symlink, so walking up reaches this package's node_modules.
 const packageRoot = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), '..');
+
+export function resolveComponentizeQjsPath(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const explicit = env[COMPONENTIZE_QJS_ENV]?.trim();
+  return explicit === undefined || explicit === '' ? undefined : explicit;
+}
 
 /**
  * jco's entry inside a real node_modules tree, walking up from this package.
@@ -146,7 +162,18 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
       input: adapterPath,
       external: COMPONENT_IMPORT_EXTERNAL,
       plugins: [nodeCompatibilityPlugin(entryPath, guestsPath)],
-      treeshake: { moduleSideEffects: false },
+      transform: {
+        decorator: { legacy: true },
+      },
+      treeshake: {
+        moduleSideEffects(id) {
+          return (
+            id.includes('virtual:di-framework-wasmcloud-guests') ||
+            id.endsWith('/guests.js') ||
+            id.endsWith('\\guests.js')
+          );
+        },
+      },
     });
     try {
       await bundle.write({ file: outFile, format: 'esm' });
@@ -157,6 +184,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
   jcoCliPath: () =>
     findJcoEntry(packageRoot) ??
     join(dirname(fileURLToPath(import.meta.resolve('@bytecodealliance/jco'))), 'jco.js'),
+  componentizeQjsPath: () => resolveComponentizeQjsPath(process.env),
   nodeBinaryPath: () => Bun.which('node') ?? undefined,
   wasmtimeBinaryPath: () => Bun.which('wasmtime') ?? undefined,
   washBinaryPath: () => Bun.which('wash') ?? undefined,

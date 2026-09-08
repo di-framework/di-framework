@@ -1,6 +1,10 @@
 import './fetch-runtime.ts';
-import 'virtual:di-framework-wasmcloud-guests';
+import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import application from 'virtual:di-framework-application';
+
+if (typeof wasmcloudGuests !== 'object' || wasmcloudGuests === null) {
+  throw new TypeError('wasmCloud guests module must export a guests object');
+}
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 
 type Application =

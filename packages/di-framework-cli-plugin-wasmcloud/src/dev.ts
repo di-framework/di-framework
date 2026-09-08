@@ -1,9 +1,11 @@
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
-import { buildComponent } from './build.js';
+import { discoverBindings } from './bindings.js';
+import { buildComponent, requirementsForProject } from './build.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { resolveDevRunner } from './dev-runner.js';
 import { loadProject } from './project.js';
 import { invalidUsage, readOptionValue, toolFailed } from './support.js';
+import { writeWashDevConfig } from './wash-dev.js';
 
 export type DevOptions = { host: string; port: string };
 
@@ -37,6 +39,19 @@ export async function runWasmcloudDev(
   const project = loadProject(deps.cwd());
   await buildComponent(project, io, deps);
   const runner = resolveDevRunner(deps);
+  const washConfigPath =
+    runner.kind === 'wash'
+      ? writeWashDevConfig(
+          project,
+          requirementsForProject(project, deps),
+          discoverBindings(project, deps),
+          {
+            host: options.host,
+            port: options.port,
+            postgresUrl: deps.env.WASMCLOUD_POSTGRES_URL,
+          },
+        )
+      : undefined;
   io.stdout.write(`Serving on http://${options.host}:${options.port} (${runner.kind})\n`);
   const served = await deps.runner(
     runner.command,
@@ -44,6 +59,7 @@ export async function runWasmcloudDev(
       componentPath: project.outputPath,
       host: options.host,
       port: options.port,
+      washConfigPath,
     }),
     { cwd: project.projectRoot },
   );

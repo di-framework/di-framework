@@ -1,5 +1,5 @@
 import { expect } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { CliIo } from '@di-framework/cli-extension';
@@ -61,6 +61,14 @@ export function makeAssets(): string {
   return root;
 }
 
+/** wasmtime-48+ componentize-qjs CLI that can stub imported `async func`s. */
+export function patchedComponentizeQjsPath(): string | undefined {
+  const fromEnv = process.env.DI_FRAMEWORK_COMPONENTIZE_QJS?.trim();
+  if (fromEnv !== undefined && fromEnv !== '' && existsSync(fromEnv)) return fromEnv;
+  const local = '/tmp/componentize-qjs/target/release/componentize-qjs';
+  return existsSync(local) ? local : undefined;
+}
+
 export function invocationKey(command: string, args: readonly string[]): string {
   if (command === 'pulumi') {
     return args.includes('output') ? 'pulumi stack output' : `pulumi ${args[0]}`;
@@ -73,6 +81,7 @@ export function invocationKey(command: string, args: readonly string[]): string 
   if (command === 'wasmtime' || /(?:^|\/)wasmtime$/.test(command)) {
     return args[0] === 'serve' ? 'wasmtime serve' : `wasmtime ${args[0]}`;
   }
+  if (/componentize-qjs/.test(command)) return 'componentize-qjs';
   return args[1] ?? command;
 }
 
@@ -93,6 +102,8 @@ export function fakeDeps(options: {
   wasmtimeBinaryPath?: string | null;
   /** null = no wash binary available. */
   washBinaryPath?: string | null;
+  /** Patched componentize-qjs CLI; undefined uses jco. */
+  componentizeQjsPath?: string;
 }): WasmcloudDeps {
   const invocations = options.invocations ?? [];
   let componentBuilds = 0;
@@ -109,9 +120,9 @@ export function fakeDeps(options: {
       env: runOptions.env,
       captured,
     });
-    if (args.includes('componentize')) {
-      const outputIndex = args.indexOf('-o');
-      const outputPath = args[outputIndex + 1];
+    if (args.includes('componentize') || /componentize-qjs/.test(command)) {
+      const outputFlag = args.includes('--output') ? '--output' : '-o';
+      const outputPath = args[args.indexOf(outputFlag) + 1];
       if (outputPath !== undefined) {
         mkdirSync(dirname(outputPath), { recursive: true });
         componentBuilds += 1;
@@ -144,6 +155,7 @@ export function fakeDeps(options: {
       writeFileSync(outFile, 'export const bundled = true;\n');
     },
     jcoCliPath: () => '/fake/jco.js',
+    componentizeQjsPath: () => options.componentizeQjsPath,
     nodeBinaryPath: () =>
       options.nodeBinaryPath === null ? undefined : (options.nodeBinaryPath ?? '/fake/node'),
     wasmtimeBinaryPath: () =>

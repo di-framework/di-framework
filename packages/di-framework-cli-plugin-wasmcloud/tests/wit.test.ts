@@ -62,10 +62,12 @@ describe('WIT requirement registry', () => {
     );
   });
 
-  it('preserves named instances of the same interface as distinct labeled imports', () => {
+  it('keeps named hostInterfaces while the guest world stays unlabeled', () => {
     const world = renderWorldWit('demo-app', '1.0.0', namedStores);
-    expect(world).toContain('import cache: wasi:keyvalue/store@0.2.0-draft;');
-    expect(world).toContain('import durable: wasi:keyvalue/store@0.2.0-draft;');
+    expect(world).toContain('import wasi:keyvalue/store@0.2.0-draft;');
+    expect(world).not.toContain('import cache:');
+    expect(world).not.toContain('import durable:');
+    expect(world.match(/import wasi:keyvalue\/store@0\.2\.0-draft;/g)).toHaveLength(1);
     const hosts = hostInterfacesFromRequirements(namedStores);
     expect(hosts.map((entry) => entry.name)).toEqual(['cache', 'durable']);
     expect(hosts.every((entry) => entry.version === '0.2.0-draft')).toBe(true);
@@ -138,8 +140,9 @@ describe('WIT requirement registry', () => {
         source: 'kv',
       },
     ]);
-    expect(world).toContain('import cache: wasi:keyvalue/store@0.2.0-draft;');
+    expect(world).toContain('import wasi:keyvalue/store@0.2.0-draft;');
     expect(world).toContain('import wasi:keyvalue/atomics@0.2.0-draft;');
+    expect(world).not.toContain('import cache:');
   });
 
   it('merges duplicate sources and interfaces across requirement groups', () => {
@@ -183,7 +186,7 @@ describe('WIT requirement registry', () => {
     expect(lock.packages.map((entry) => entry.id)).toEqual(['wasi:http']);
   });
 
-  it('labels only the primary interface of a named multi-interface group', () => {
+  it('dedupes unlabeled imports when two named instances share a package', () => {
     const world = renderWorldWit('orders', '1.0.0', [
       {
         package: 'wasmcloud:keyvalue',
@@ -202,8 +205,10 @@ describe('WIT requirement registry', () => {
         source: 'Cache',
       },
     ]);
-    expect(world).toContain('import sessions: wasmcloud:keyvalue/store@0.2.0;');
-    expect(world).toContain('import cache: wasmcloud:keyvalue/store@0.2.0;');
+    expect(world).toContain('import wasmcloud:keyvalue/store@0.2.0;');
+    expect(world).not.toContain('import sessions:');
+    expect(world).not.toContain('import cache:');
+    expect(world.match(/import wasmcloud:keyvalue\/store@0\.2\.0;/g)).toHaveLength(1);
     expect(world.match(/import wasmcloud:keyvalue\/atomics@0\.2\.0;/g)).toHaveLength(1);
   });
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_DEPS } from '../src/deps';
 import { requireNodeBinary } from '../src/support';
 import { renderWorldWit, type WitRequirement } from '../src/wit';
+import { patchedComponentizeQjsPath } from './helpers';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'p3-canary');
 
@@ -36,11 +37,12 @@ const canaryRequirements: WitRequirement[] = [
 ];
 
 describe('P3 TypeScript toolchain canary', () => {
-  it('encodes named instances and a shared resource type in generated WIT', () => {
+  it('encodes unlabeled imports for named instances (qjs cannot emit cm-implements)', () => {
     const world = renderWorldWit('p3-canary', '0.1.0', canaryRequirements);
-    expect(world).toContain('import cache: local:p3-canary/store@0.1.0;');
-    expect(world).toContain('import durable: local:p3-canary/store@0.1.0;');
+    expect(world).toContain('import local:p3-canary/store@0.1.0;');
     expect(world).toContain('import local:p3-canary/stats@0.1.0;');
+    expect(world).not.toContain('import cache:');
+    expect(world).not.toContain('import durable:');
   });
 
   async function componentize(witDirectory: string, outputName: string) {
@@ -129,6 +131,28 @@ world application {
     );
     expect(captured.exitCode).not.toBe(0);
     expect(`${captured.stdout}\n${captured.stderr}`).toContain('type mismatch with async');
+  }, 60_000);
+
+  it('componentizes imported async funcs with a wasmtime-48 qjs CLI', async () => {
+    const qjs = patchedComponentizeQjsPath();
+    if (qjs === undefined) return;
+    const output = join(mkdtempSync(join(tmpdir(), 'p3-import-qjs-')), 'import.wasm');
+    const captured = await DEFAULT_DEPS.runCaptured(
+      qjs,
+      [
+        '--wit',
+        join(FIXTURE, 'wit-import-async'),
+        '--js',
+        join(FIXTURE, 'guest-probe.js'),
+        '-n',
+        'application',
+        '-o',
+        output,
+      ],
+      { cwd: FIXTURE },
+    );
+    expect(`${captured.stdout}\n${captured.stderr}`).not.toContain('type mismatch with async');
+    expect(captured.exitCode).toBe(0);
   }, 60_000);
 
   it('records that labeled imports still require cm-implements in the qjs backend', async () => {

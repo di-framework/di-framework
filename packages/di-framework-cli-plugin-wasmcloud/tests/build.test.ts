@@ -134,10 +134,16 @@ export class AppConfig extends Config {}
     );
     expect(summary.application).toBe('Demo App');
     const guests = readFileSync(join(root, '.di-framework', 'guests.js'), 'utf8');
-    expect(guests).toContain('user-database');
-    expect(guests).toContain('wasi:config');
+    expect(guests).toContain('import * as');
+    expect(guests).toContain('wasmcloud:postgres/query@0.2.0');
+    expect(guests).toContain('wasi:config/store@0.2.0-rc.1');
+    expect(guests).toContain('"user-database"');
+    expect(guests).toContain('Symbol.for("di-framework.wasmcloud.guests")');
     expect(readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8')).toContain(
-      'import user-database: wasmcloud:postgres/query@0.2.0;',
+      'import wasmcloud:postgres/query@0.2.0;',
+    );
+    expect(readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8')).not.toContain(
+      'import user-database:',
     );
   });
 
@@ -289,6 +295,34 @@ export class UserDatabase extends Postgres {}
     await expect(buildComponent(loadProject(root), captureIo().io, deps)).rejects.toMatchObject({
       code: 'WASMCLOUD_TOOL_FAILED',
       exitCode: 3,
+    });
+  });
+
+  it('componentizes with a patched qjs CLI when DI_FRAMEWORK_COMPONENTIZE_QJS is set', async () => {
+    const root = makeProject();
+    const invocations: RunnerInvocation[] = [];
+    await buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        invocations,
+        componentizeQjsPath: '/fake/componentize-qjs',
+      }),
+    );
+    expect(invocations[0]).toMatchObject({
+      command: '/fake/componentize-qjs',
+      cwd: root,
+      args: [
+        '--wit',
+        join(root, '.di-framework', 'wit'),
+        '--js',
+        join(root, '.di-framework', 'component.js'),
+        '-n',
+        'application',
+        '-o',
+        join(root, 'dist', 'demo-app.wasm'),
+      ],
     });
   });
 });

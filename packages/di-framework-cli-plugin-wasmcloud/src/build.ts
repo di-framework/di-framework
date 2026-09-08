@@ -2,8 +2,9 @@ import { createHash, type Hash } from 'node:crypto';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
-import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
+import { discoverBindings, requirementsFromBindings, type BindingRecord } from './bindings.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
+import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
 import { loadProject, type WasmcloudProject } from './project.js';
 import { invalidUsage, requireNodeBinary, toolFailed } from './support.js';
@@ -42,13 +43,51 @@ export function requirementsForProject(
 }
 
 function writeGuestsModule(generatedDirectory: string, bindings: readonly BindingRecord[]): void {
-  const lines = ['export const guests = {'];
-  for (const binding of bindings) {
-    const specifier = binding.requirement.instanceName ?? binding.requirement.package;
-    lines.push(`  ${JSON.stringify(binding.name)}: { specifier: ${JSON.stringify(specifier)} },`);
+  writeFileSync(join(generatedDirectory, 'guests.js'), renderGuestsModule(bindings));
+}
+
+async function runComponentize(
+  project: WasmcloudProject,
+  generatedWit: string,
+  bundledJavaScript: string,
+  deps: WasmcloudDeps,
+): Promise<{ exitCode: number; tool: string }> {
+  const qjsCli = deps.componentizeQjsPath();
+  if (qjsCli !== undefined) {
+    const result = await deps.runner(
+      qjsCli,
+      [
+        '--wit',
+        generatedWit,
+        '--js',
+        bundledJavaScript,
+        '-n',
+        'application',
+        '-o',
+        project.outputPath,
+      ],
+      { cwd: project.projectRoot },
+    );
+    return { exitCode: result.exitCode, tool: 'componentize-qjs' };
   }
-  lines.push('};', '');
-  writeFileSync(join(generatedDirectory, 'guests.js'), `${lines.join('\n')}\n`);
+  const result = await deps.runner(
+    requireNodeBinary(deps.nodeBinaryPath()),
+    [
+      deps.jcoCliPath(),
+      'componentize',
+      '--backend',
+      'qjs',
+      '-w',
+      generatedWit,
+      '-n',
+      'application',
+      '-o',
+      project.outputPath,
+      bundledJavaScript,
+    ],
+    { cwd: project.projectRoot },
+  );
+  return { exitCode: result.exitCode, tool: 'jco componentize' };
 }
 
 function isWasmMagic(path: string): boolean {
@@ -146,25 +185,9 @@ export async function buildComponent(
     );
   }
 
-  const componentize = await deps.runner(
-    requireNodeBinary(deps.nodeBinaryPath()),
-    [
-      deps.jcoCliPath(),
-      'componentize',
-      '--backend',
-      'qjs',
-      '-w',
-      generatedWit,
-      '-n',
-      'application',
-      '-o',
-      project.outputPath,
-      bundledJavaScript,
-    ],
-    { cwd: project.projectRoot },
-  );
+  const componentize = await runComponentize(project, generatedWit, bundledJavaScript, deps);
   if (componentize.exitCode !== 0) {
-    throw toolFailed('jco componentize', componentize.exitCode);
+    throw toolFailed(componentize.tool, componentize.exitCode);
   }
   await inspectComponentImports(project, requirements, deps);
 

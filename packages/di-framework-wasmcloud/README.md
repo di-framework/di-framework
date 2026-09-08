@@ -30,8 +30,13 @@ export class Cache extends KeyValue {}
 ```
 
 Put those classes in `src/bindings.ts`. The wasmCloud CLI extension discovers the file, contributes
-each class to the shared WIT requirement graph, and renders matching `hostInterfaces` entries. The
-binding name is the labeled WIT import and `hostInterfaces[].name`.
+each class to the shared WIT requirement graph, generates real WIT guest imports, and renders
+matching `hostInterfaces` entries. The binding name is `hostInterfaces[].name`. The compiled guest
+world is unlabeled (`import wasmcloud:postgres/query@0.2.0`) because the qjs componentizer cannot
+emit `cm-implements` labeled imports yet. Imported `async func`s (postgres, key-value, blobstore,
+messaging, secrets, outgoing HTTP) need a componentize-qjs CLI built against wasmtime 48+;
+point the CLI plugin at it with `DI_FRAMEWORK_COMPONENTIZE_QJS`. `wasi:config@0.2.0-rc.1` is
+sync and componentizes with stock jco.
 
 Secret material is referenced, never inlined:
 

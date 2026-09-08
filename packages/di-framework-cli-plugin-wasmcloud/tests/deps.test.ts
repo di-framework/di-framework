@@ -2,7 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_DEPS, findJcoEntry, nodeCompatibilityPlugin } from '../src/deps';
+import {
+  DEFAULT_DEPS,
+  findJcoEntry,
+  nodeCompatibilityPlugin,
+  resolveComponentizeQjsPath,
+} from '../src/deps';
 
 describe('nodeCompatibilityPlugin', () => {
   it('routes the virtual application module and stubs node built-ins', () => {
@@ -17,7 +22,9 @@ describe('nodeCompatibilityPlugin', () => {
     expect(plugin.resolveId('virtual:di-framework-wasmcloud-guests')).toBe(
       '\0virtual:di-framework-wasmcloud-guests-empty',
     );
-    expect(plugin.load('\0virtual:di-framework-wasmcloud-guests-empty')).toContain('guests');
+    expect(plugin.load('\0virtual:di-framework-wasmcloud-guests-empty')).toContain(
+      'Symbol.for("di-framework.wasmcloud.guests")',
+    );
     expect(
       nodeCompatibilityPlugin('/app.ts', '/generated/guests.js').resolveId(
         'virtual:di-framework-wasmcloud-guests',
@@ -114,5 +121,13 @@ describe('DEFAULT_DEPS', () => {
     expect(
       DEFAULT_DEPS.resolveFromProject(packageRoot, '@definitely/not-installed-xyz'),
     ).toBeUndefined();
+  });
+
+  it('resolves a patched componentize-qjs CLI only from DI_FRAMEWORK_COMPONENTIZE_QJS', () => {
+    expect(resolveComponentizeQjsPath({})).toBeUndefined();
+    expect(resolveComponentizeQjsPath({ DI_FRAMEWORK_COMPONENTIZE_QJS: '  ' })).toBeUndefined();
+    expect(
+      resolveComponentizeQjsPath({ DI_FRAMEWORK_COMPONENTIZE_QJS: '/opt/componentize-qjs' }),
+    ).toBe('/opt/componentize-qjs');
   });
 });

@@ -12,5 +12,11 @@ export default async (request: Request): Promise<Response> => {
       { headers: { 'content-type': 'application/json' } },
     );
   }
+  if (url.pathname === '/query') {
+    const rows = await new UserDatabase().query('select 1');
+    return new Response(JSON.stringify(rows), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }
   return new Response('orders\n');
 };

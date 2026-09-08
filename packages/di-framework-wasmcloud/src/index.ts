@@ -13,7 +13,13 @@ export {
   isBindingKind,
 } from './catalog.js';
 export { WasmCloudBinding, type WasmCloudBindingOptions } from './decorator.js';
-export { type GuestModules, resetGuests, setGuests, tryGetGuest } from './guests.js';
+export {
+  type GuestModules,
+  resetGuests,
+  setGuests,
+  tryGetGuest,
+  WASMCLOUD_GUESTS_GLOBAL,
+} from './guests.js';
 export {
   getBindingMetadata,
   isWitIdentifier,

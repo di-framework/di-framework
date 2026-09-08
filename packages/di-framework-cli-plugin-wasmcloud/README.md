@@ -32,20 +32,39 @@ A component project is marked by `di-framework.config.json`:
 Named wasmCloud host-interface bindings live in `src/bindings.ts` (override with `"bindings"`).
 Each exported class extending a `@di-framework/wasmcloud` base and decorated with
 `@WasmCloudBinding('name')` is discovered statically and added to the WIT requirement graph.
-The binding name becomes the labeled WIT import and `hostInterfaces[].name`. Secret values are
-never taken from source; `secretFrom` defaults to `<application>-<binding>`.
+The binding name is `hostInterfaces[].name`. The generated guest world uses unlabeled
+`import pkg/iface@version` statements because `jco --backend qjs` cannot encode
+`import name: pkg/iface` (`cm-implements`). Secret values are never taken from source;
+`secretFrom` defaults to `<application>-<binding>`.
+
+Build writes `.di-framework/guests.js` with real WIT `import * as` specifiers and installs
+those modules on `globalThis` before the application runs, which is how
+`@di-framework/wasmcloud` constructors receive the guest.
 
 The configured `name` is the only project identity. The extension owns the WebAssembly/WASI
 boundary: it records WIT requirements (the HTTP adapter exports `wasi:http/handler@0.3.0` today),
 generates one world and a `wit.lock.json` from that graph, bundles the entry behind a WASI-HTTP ↔
-Web Fetch adapter, and componentizes with `jco --backend qjs`. Build state lives in the disposable
-`.di-framework/` directory. Package versions are independent of the component-model preview: a WASI
-0.3 guest may still import `wasmcloud:*` packages at their own versions.
+Web Fetch adapter, and componentizes with `jco --backend qjs`. Set
+`DI_FRAMEWORK_COMPONENTIZE_QJS` to a `componentize-qjs` CLI built against wasmtime 48+
+with `concurrency_support` to componentize imported `async func`s such as
+`wasmcloud:postgres@0.2.0`. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
+which stubs unknown imports with sync `func_new` and fails at wizer with
+`type mismatch with async`. A wasmtime-48 host can stub those with `func_new_concurrent`.
+Sync imports such as `wasi:config@0.2.0-rc.1` componentize with stock jco and run on
+`wasmtime serve -S config`. Build state lives in the disposable `.di-framework/` directory.
+Package versions are independent of the component-model preview: a WASI 0.3 guest may
+still import `wasmcloud:*` packages at their own versions.
 
-Local `wasmcloud dev` uses `wasmtime serve -S cli -S p3` when wasmtime 46+ is on PATH, then
-`wash dev`, then `jco serve`. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to `wasmtime`, `wash`, or
-`jco` to pin one. Wasmtime hosts WASI HTTP locally; wasmCloud-only imports such as
-`wasmcloud:postgres` still need `wash` or a wasmCloud host.
+Local `wasmcloud dev` uses `wasmtime serve -S cli -S p3 -S config` when wasmtime 46+ is on
+PATH, then `wash dev`, then `jco serve`. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to
+`wasmtime`, `wash`, or `jco` to pin one. Wasmtime hosts WASI HTTP and unlabeled
+`wasi:config` locally (`-S config-var=key=value` to seed values). wasmCloud-only imports
+such as `wasmcloud:postgres` still need `wash` or a wasmCloud host.
+
+`wash` 2.5.x has no `--address` flag. The extension writes
+`.di-framework/wash-dev.yaml` (`dev.address`, `host_interfaces`,
+`wasm_proposals: [component-model-async]`) and runs `wash dev --user-config` against it.
+Set `WASMCLOUD_POSTGRES_URL` to populate `dev.postgres_url`; never put secrets in source.
 
 ## Deployment manifest
 

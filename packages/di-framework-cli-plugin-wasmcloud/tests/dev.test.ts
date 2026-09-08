@@ -39,6 +39,8 @@ describe('runWasmcloudDev', () => {
         'cli',
         '-S',
         'p3',
+        '-S',
+        'config',
         '--addr',
         '127.0.0.1:9123',
         join(root, 'dist', 'demo-app.wasm'),
@@ -62,6 +64,26 @@ describe('runWasmcloudDev', () => {
       exitCode: 3,
       details: { command: 'wasmtime serve', exitCode: 7 },
     });
+  });
+
+  it('writes a wash 2.5.2 user-config and does not pass --address', async () => {
+    const root = makeProject();
+    const invocations: RunnerInvocation[] = [];
+    await runWasmcloudDev(
+      ['--port', '8123'],
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        invocations,
+        wasmtimeBinaryPath: null,
+        washBinaryPath: '/fake/wash',
+      }),
+    );
+    expect(invocations[1]).toMatchObject({
+      command: '/fake/wash',
+      args: ['dev', '--user-config', join(root, '.di-framework', 'wash-dev.yaml')],
+    });
+    expect(invocations[1]?.args.includes('--address')).toBe(false);
   });
 
   it('falls back to jco when wasmtime is unavailable', async () => {

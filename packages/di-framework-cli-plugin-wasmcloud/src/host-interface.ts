@@ -104,6 +104,6 @@ export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): 
   return lines.join('\n');
 }
 
-function yamlQuote(value: string): string {
+export function yamlQuote(value: string): string {
   return JSON.stringify(value);
 }

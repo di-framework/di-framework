@@ -26,13 +26,17 @@ export {
 } from './deploy.js';
 export {
   COMPONENT_IMPORT_EXTERNAL,
+  COMPONENTIZE_QJS_ENV,
   DEFAULT_DEPS,
   nodeCompatibilityPlugin,
+  resolveComponentizeQjsPath,
   type WasmcloudDeps,
 } from './deps.js';
 export { runWasmcloudDestroy } from './destroy.js';
 export { parseDevArgs, runWasmcloudDev } from './dev.js';
 export { DEV_RUNNER_ENV, resolveDevRunner } from './dev-runner.js';
+export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests.js';
+export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   discoverProjects,
   findConfigFiles,
