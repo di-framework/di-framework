@@ -1,6 +1,6 @@
 {
   "name": "di-framework",
-  "version": "5.2.13",
+  "version": "5.3.0",
   "module": "build.ts",
   "type": "module",
   "author": "@di-framework Contributors",
