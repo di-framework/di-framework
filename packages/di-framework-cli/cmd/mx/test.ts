@@ -12,7 +12,20 @@ export async function test(script: string = E2E_SCRIPT): Promise<void> {
   const tmp = join(dir, 'test.sh');
   writeFileSync(tmp, script, { mode: 0o755 });
   try {
-    await $`bash ${tmp}`.env(process.env).quiet();
+    const result = await $`bash ${tmp}`.env(process.env).nothrow();
+    if (result.exitCode !== 0) {
+      const output = [String(result.stdout), String(result.stderr)]
+        .map((chunk) => chunk.trim())
+        .filter((chunk) => chunk !== '')
+        .join('\n');
+      const exitCode = result.exitCode === 2 || result.exitCode === 3 ? result.exitCode : 1;
+      throw new CommandFailure(
+        'E2E_FAILED',
+        output === '' ? `E2E tests failed (exit ${result.exitCode})` : output,
+        exitCode,
+        { scriptExitCode: result.exitCode },
+      );
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

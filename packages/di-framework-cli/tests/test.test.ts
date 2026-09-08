@@ -56,7 +56,20 @@ describe('test command', () => {
     });
 
     it('propagates bash failures', async () => {
-      await expect(test('#!/bin/bash\nexit 7\n')).rejects.toThrow();
+      await expect(test('#!/bin/bash\nexit 7\n')).rejects.toMatchObject({
+        code: 'E2E_FAILED',
+        exitCode: 1,
+        details: { scriptExitCode: 7 },
+      });
+    });
+
+    it('includes the script output in the failure', async () => {
+      await expect(
+        test('#!/bin/bash\necho boom-out\necho boom-err >&2\nexit 1\n'),
+      ).rejects.toMatchObject({
+        code: 'E2E_FAILED',
+        message: expect.stringContaining('boom-out'),
+      });
     });
   });
 
