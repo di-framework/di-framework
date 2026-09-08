@@ -9,5 +9,5 @@
     "incremental": false,
     "allowImportingTsExtensions": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "types/**/*"]
 }

@@ -6,9 +6,12 @@ import { join } from 'node:path';
 export const COMPONENT_MODEL = '0.3';
 
 export const HTTP_ADAPTER_SOURCE = 'http-adapter';
+export const NODE_COMPAT_SOURCE = 'node-compat';
 export const WASI_HTTP_PACKAGE = 'wasi:http';
 export const WASI_HTTP_VERSION = '0.3.0';
 export const WASI_HTTP_INTERFACE = 'handler';
+export const WASI_SOCKETS_PACKAGE = 'wasi:sockets';
+export const WASI_SOCKETS_VERSION = '0.3.0';
 
 export type WitDirection = 'import' | 'export';
 
@@ -56,6 +59,30 @@ export const HTTP_ADAPTER_REQUIREMENTS: WitRequirement[] = [
 /** Default guest world: the HTTP adapter only. Bindings later concat onto this list. */
 export function defaultProjectRequirements(): WitRequirement[] {
   return HTTP_ADAPTER_REQUIREMENTS.map((requirement) => ({ ...requirement }));
+}
+
+/**
+ * WASI 0.3 sockets pulled in by the node:net / node:dgram overlay.
+ * Only added to the guest world when the bundled JS actually imports them.
+ */
+export function socketRequirementsFromJavaScript(source: string): WitRequirement[] {
+  const interfaces: string[] = [];
+  if (source.includes(`${WASI_SOCKETS_PACKAGE}/types@${WASI_SOCKETS_VERSION}`)) {
+    interfaces.push('types');
+  }
+  if (source.includes(`${WASI_SOCKETS_PACKAGE}/ip-name-lookup@${WASI_SOCKETS_VERSION}`)) {
+    interfaces.push('ip-name-lookup');
+  }
+  if (interfaces.length === 0) return [];
+  return [
+    {
+      package: WASI_SOCKETS_PACKAGE,
+      version: WASI_SOCKETS_VERSION,
+      interfaces,
+      direction: 'import',
+      source: NODE_COMPAT_SOURCE,
+    },
+  ];
 }
 
 export function parsePackageId(id: string): { namespace: string; name: string } {

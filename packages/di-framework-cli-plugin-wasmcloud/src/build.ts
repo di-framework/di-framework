@@ -2,7 +2,7 @@ import { createHash, type Hash } from 'node:crypto';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
-import { discoverBindings, requirementsFromBindings, type BindingRecord } from './bindings.js';
+import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
@@ -14,6 +14,7 @@ import {
   defaultProjectRequirements,
   digestBytes,
   renderWorldWit,
+  socketRequirementsFromJavaScript,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_VERSION,
   type WitLock,
@@ -160,7 +161,7 @@ export async function buildComponent(
     join(generatedWit, 'world.wit'),
     renderWorldWit(project.witName, project.version, requirements),
   );
-  const lock = buildWitLock(requirements, join(generatedWit, 'deps'));
+  let lock = buildWitLock(requirements, join(generatedWit, 'deps'));
   writeFileSync(join(generatedDirectory, 'wit.lock.json'), `${JSON.stringify(lock, null, 2)}\n`);
   writeFileSync(
     join(generatedDirectory, 'oci-config.json'),
@@ -186,11 +187,24 @@ export async function buildComponent(
     );
   }
 
+  const runtimeRequirements = socketRequirementsFromJavaScript(
+    readFileSync(bundledJavaScript, 'utf8'),
+  );
+  const finalRequirements = [...requirements, ...runtimeRequirements];
+  if (runtimeRequirements.length > 0) {
+    writeFileSync(
+      join(generatedWit, 'world.wit'),
+      renderWorldWit(project.witName, project.version, finalRequirements),
+    );
+    lock = buildWitLock(finalRequirements, join(generatedWit, 'deps'));
+    writeFileSync(join(generatedDirectory, 'wit.lock.json'), `${JSON.stringify(lock, null, 2)}\n`);
+  }
+
   const componentize = await runComponentize(project, generatedWit, bundledJavaScript, deps);
   if (componentize.exitCode !== 0) {
     throw toolFailed(componentize.tool, componentize.exitCode);
   }
-  await inspectComponentImports(project, requirements, deps);
+  await inspectComponentImports(project, finalRequirements, deps);
 
   const deploymentDigest = canonicalBuildDigest(
     bundledJavaScript,

@@ -19,6 +19,8 @@ export function wasmcloudUnenvPreset(
   fsPath = runtimeFile('fs'),
   processPath = runtimeFile('process'),
   modulePath = runtimeFile('module'),
+  netPath = runtimeFile('net'),
+  dgramPath = runtimeFile('dgram'),
 ): Preset {
   return {
     meta: { name: 'unenv:wasmcloud' },
@@ -29,6 +31,10 @@ export function wasmcloudUnenvPreset(
       'node:process': processPath,
       module: modulePath,
       'node:module': modulePath,
+      net: netPath,
+      'node:net': netPath,
+      dgram: dgramPath,
+      'node:dgram': dgramPath,
     },
     inject: {
       process: [processPath, 'default'],

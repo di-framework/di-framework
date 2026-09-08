@@ -99,6 +99,7 @@ export function fakeDeps(options: {
   capturedStdout?: Record<string, string | undefined>;
   resolutions?: Record<string, string | undefined>;
   bundlerError?: Error;
+  bundleContents?: string;
   componentOutput?: (buildNumber: number) => string;
   /** null = no node binary available. */
   nodeBinaryPath?: string | null;
@@ -156,7 +157,7 @@ export function fakeDeps(options: {
     bundler: async ({ outFile }) => {
       if (options.bundlerError) throw options.bundlerError;
       mkdirSync(dirname(outFile), { recursive: true });
-      writeFileSync(outFile, 'export const bundled = true;\n');
+      writeFileSync(outFile, options.bundleContents ?? 'export const bundled = true;\n');
     },
     jcoCliPath: () => '/fake/jco.js',
     componentizeQjsPath: () => options.componentizeQjsPath,
