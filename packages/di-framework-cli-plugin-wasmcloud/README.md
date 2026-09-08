@@ -53,7 +53,11 @@ Guest JS keeps the framework's Node contract. The bundler runs [unenv](https://g
 `nodeCompat` plus a wasmCloud preset: `node:path`, `Buffer`, `AsyncLocalStorage`, and the rest of
 the Node builtin map come from unenv; `node:fs` is an in-memory filesystem (with `ENOENT`),
 `process.env` / `process.cwd()` are guest-shaped (not the host process), and `createRequire` throws
-`MODULE_NOT_FOUND`. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
+`MODULE_NOT_FOUND`. `node:net` and `node:dgram` overlay WASI 0.3 `wasi:sockets` (`tcp-socket` /
+`udp-socket` / `ip-name-lookup`) so `@di-framework/socket`'s Node TCP/UDP adapters run unchanged.
+Those WIT imports are added to the guest world only when the bundle actually uses them; they are
+runtime WASI, not wasmCloud `hostInterfaces`. `node:http`, `node:tls`, and `child_process` stay
+unenv mocks. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
 seeded into that filesystem at componentize time. Do not put secrets in those files. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
 which stubs unknown imports with sync `func_new` and fails at wizer with
 `type mismatch with async`. Sync imports such as `wasi:config@0.2.0-rc.1` also

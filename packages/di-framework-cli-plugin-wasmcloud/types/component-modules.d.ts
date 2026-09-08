@@ -25,3 +25,16 @@ declare module 'wasi:http/types@0.3.0' {
     new(headers: unknown, contents: unknown, trailers: Promise<unknown>): unknown;
   };
 }
+
+declare module 'wasi:sockets/types@0.3.0' {
+  export const TcpSocket: {
+    create(family: 'ipv4' | 'ipv6'): unknown;
+  };
+  export const UdpSocket: {
+    create(family: 'ipv4' | 'ipv6'): unknown;
+  };
+}
+
+declare module 'wasi:sockets/ip-name-lookup@0.3.0' {
+  export function resolveAddresses(name: string): Promise<unknown>;
+}

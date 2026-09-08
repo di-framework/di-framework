@@ -81,6 +81,41 @@ describe('buildComponent', () => {
     expect(existsSync(join(generated, 'guests.js'))).toBe(false);
   });
 
+  it('adds wasi:sockets to the guest world when the bundle imports them', async () => {
+    const root = makeProject();
+    const assets = makeAssets();
+    await buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        bundleContents:
+          'import { TcpSocket } from "wasi:sockets/types@0.3.0";\nexport const bundled = true;\n',
+        componentOutput: () => `\0asm sockets`,
+        capturedStdout: {
+          wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import wasi:sockets/types@0.3.0;
+}
+`,
+        },
+      }),
+    );
+    const world = readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8');
+    expect(world).toContain('export wasi:http/handler@0.3.0;');
+    expect(world).toContain('import wasi:sockets/types@0.3.0;');
+    expect(world).not.toContain('ip-name-lookup');
+    const lock = JSON.parse(readFileSync(join(root, '.di-framework', 'wit.lock.json'), 'utf8')) as {
+      requirements: Array<{ package: string; interfaces: string[] }>;
+    };
+    expect(lock.requirements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ package: 'wasi:sockets', interfaces: ['types'] }),
+      ]),
+    );
+  });
+
   it('writes a guests module when bindings are discovered', async () => {
     const root = makeProject();
     mkdirSync(join(root, 'src'), { recursive: true });

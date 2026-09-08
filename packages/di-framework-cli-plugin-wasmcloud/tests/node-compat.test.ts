@@ -186,6 +186,8 @@ describe('unenv preset', () => {
   it('aliases framework Node built-ins and injects process/Buffer', () => {
     const envConfig = wasmcloudNodeEnv();
     expect(envConfig.alias['node:fs']).toMatch(/node-compat\/fs\.(ts|js)$/);
+    expect(envConfig.alias['node:net']).toMatch(/node-compat\/net\.(ts|js)$/);
+    expect(envConfig.alias['node:dgram']).toMatch(/node-compat\/dgram\.(ts|js)$/);
     expect(envConfig.alias['node:path']).toContain('unenv');
     expect(envConfig.alias['node:async_hooks']).toContain('unenv');
     expect(envConfig.inject.process?.[0]).toMatch(/node-compat\/process\.(ts|js)$/);
@@ -281,6 +283,8 @@ export default {
     const plugin = nodeCompatibilityPlugin('/project/src/app.ts');
     expect(plugin.resolveId('virtual:di-framework-application')).toBe('/project/src/app.ts');
     expect(plugin.resolveId('node:fs')).toMatch(/node-compat\/fs\.(ts|js)$/);
+    expect(plugin.resolveId('node:net')).toMatch(/node-compat\/net\.(ts|js)$/);
+    expect(plugin.resolveId('node:dgram')).toMatch(/node-compat\/dgram\.(ts|js)$/);
     expect(plugin.resolveId('node:path')).toContain('unenv');
     expect(plugin.resolveId('./seed-virtual.ts')).toBe(`\0${NODE_COMPAT_SEED_ID}`);
     expect(plugin.resolveId('rolldown')).toBeNull();

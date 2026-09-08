@@ -4,6 +4,7 @@ import {
   parsePackageId,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_PACKAGE,
+  WASI_SOCKETS_PACKAGE,
   type WitRequirement,
 } from './wit.js';
 
@@ -58,18 +59,20 @@ export function hostInterfacesFromRequirements(
   overlays: readonly BindingHostOverlay[] = [],
 ): HostInterface[] {
   const byName = new Map(overlays.map((overlay) => [overlay.name, overlay]));
-  return aggregateRequirements(requirements).map((requirement) => {
-    const entry = hostInterfaceFromRequirement(requirement, options);
-    const overlay =
-      requirement.instanceName !== undefined ? byName.get(requirement.instanceName) : undefined;
-    if (overlay === undefined) return entry;
-    if (overlay.config !== undefined) {
-      entry.config = { ...entry.config, ...overlay.config };
-    }
-    if (overlay.configFrom !== undefined) entry.configFrom = [{ name: overlay.configFrom }];
-    if (overlay.secretFrom !== undefined) entry.secretFrom = [{ name: overlay.secretFrom }];
-    return entry;
-  });
+  return aggregateRequirements(requirements)
+    .filter((requirement) => requirement.package !== WASI_SOCKETS_PACKAGE)
+    .map((requirement) => {
+      const entry = hostInterfaceFromRequirement(requirement, options);
+      const overlay =
+        requirement.instanceName !== undefined ? byName.get(requirement.instanceName) : undefined;
+      if (overlay === undefined) return entry;
+      if (overlay.config !== undefined) {
+        entry.config = { ...entry.config, ...overlay.config };
+      }
+      if (overlay.configFrom !== undefined) entry.configFrom = [{ name: overlay.configFrom }];
+      if (overlay.secretFrom !== undefined) entry.secretFrom = [{ name: overlay.secretFrom }];
+      return entry;
+    });
 }
 
 export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): string {
