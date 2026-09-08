@@ -93,13 +93,14 @@ describe('socket addresses', () => {
     ).toBeUndefined();
     expect(parseIpv6(':::')).toBeUndefined();
     expect(parseIpv6('gggg::')).toBeUndefined();
+    expect(parseIpSocketAddress({ tag: 'unix', val: '/tmp.sock' })).toBeUndefined();
   });
 });
 
 describe('WASI result helpers', () => {
   it('unwraps ok/err results and maps socket errno', async () => {
-    expect(unwrapResult({ tag: 'ok', val: 7 }, 'read')).toBe(7);
-    expect(unwrapResult(7, 'read')).toBe(7);
+    expect(unwrapResult<number>({ tag: 'ok', val: 7 }, 'read')).toBe(7);
+    expect(unwrapResult<number>(7, 'read')).toBe(7);
     expect(firstOfTuple([1, 2])).toBe(1);
     expect(firstOfTuple({ res: 3 })).toBe(3);
     expect(firstOfTuple(4)).toBe(4);
@@ -114,7 +115,7 @@ describe('WASI result helpers', () => {
     expect(toBytes(new Uint8Array([67]))).toEqual(Uint8Array.of(67));
     expect(toBytes(new Uint16Array([1]))).toBeInstanceOf(Uint8Array);
     expect(toBytes({})).toEqual(new Uint8Array());
-    expect(await unwrapAsync({ tag: 'ok', val: 8 }, 'read')).toBe(8);
+    expect(await unwrapAsync<number>({ tag: 'ok', val: 8 }, 'read')).toBe(8);
     expect(await Array.fromAsync(asAsyncIterable([1, 2]))).toEqual([1, 2]);
     try {
       asAsyncIterable(1);
@@ -132,6 +133,16 @@ describe('WASI result helpers', () => {
     const v6 = await resolveSocketAddress('v6.lookup', 9, 'ipv6', 'connect');
     expect(v6.tag).toBe('ipv6');
     expect(v6.val.port).toBe(9);
+    nameRecords.set('v6-bad.lookup', [{ tag: 'ipv6', val: 'invalid' }]);
+    await expect(resolveSocketAddress('v6-bad.lookup', 9, 'ipv6', 'connect')).rejects.toMatchObject(
+      {
+        code: 'ENOTFOUND',
+      },
+    );
+    nameRecords.set('plain.lookup', ['127.0.0.1']);
+    await expect(resolveSocketAddress('plain.lookup', 9, 'ipv4', 'connect')).rejects.toMatchObject({
+      code: 'ENOTFOUND',
+    });
   });
 });
 
@@ -242,9 +253,15 @@ describe('node:net overlay', () => {
     expect(socket.ref()).toBe(socket);
     expect(socket.unref()).toBe(socket);
     expect(socket.address()).toMatchObject({ family: 'IPv4' });
+    expect(socket.writable).toBe(true);
+    expect(socket.readable).toBe(true);
+    socket.pause();
+    socket.resume();
     socket.destroy();
+    expect(socket.writable).toBe(false);
+    expect(socket.readable).toBe(false);
     const destroyed = await new Promise<Error>((resolve) => {
-      socket.write('nope', (error) => {
+      socket.write('late', (error) => {
         if (error) resolve(error);
       });
     });
@@ -275,7 +292,7 @@ describe('node:net overlay', () => {
     });
     expect((missing as { code?: string }).code).toBe('ENOTFOUND');
     const bad = await new Promise<Error>((resolve) => {
-      nameRecords.set('bad.test', [{ tag: 'ipv4', val: 'nope' }]);
+      nameRecords.set('bad.test', [{ tag: 'ipv4', val: 'invalid' }]);
       const client = createConnection({ host: 'bad.test', port: 9 });
       client.once('error', resolve);
     });
