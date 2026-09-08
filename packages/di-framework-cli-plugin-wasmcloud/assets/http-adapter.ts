@@ -1,6 +1,7 @@
 import './fetch-runtime.ts';
 import application from 'virtual:di-framework-application';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
+import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 
 export function requireGuestsObject(value: unknown): asserts value is object {
   if (typeof value !== 'object' || value === null) {
@@ -9,8 +10,6 @@ export function requireGuestsObject(value: unknown): asserts value is object {
 }
 
 requireGuestsObject(wasmcloudGuests);
-
-import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 
 type Application =
   | ((request: Request) => Response | Promise<Response>)

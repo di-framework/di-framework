@@ -54,6 +54,42 @@ export class Cache extends KeyValue {}
     expect(records[2]?.requirement.instanceName).toBe('cache');
   });
 
+  it('rejects plaintext secret values in decorator config', () => {
+    const root = makeProject();
+    expectFailure(
+      () =>
+        parseBindingsFile(
+          writeBindings(
+            root,
+            `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('users', { config: { password: 'hunter2' } })
+export class Users extends Postgres {}
+`,
+          ),
+          CATALOG,
+          'app',
+        ),
+      'WASMCLOUD_BINDING_PLAINTEXT_SECRET',
+      2,
+    );
+    expectFailure(
+      () =>
+        parseBindingsFile(
+          writeBindings(
+            root,
+            `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('users', { config: { note: 'postgres://localhost/app' } })
+export class Users extends Postgres {}
+`,
+          ),
+          CATALOG,
+          'app',
+        ),
+      'WASMCLOUD_BINDING_PLAINTEXT_SECRET',
+      2,
+    );
+  });
+
   it('resolves aliased imports, property-access decorators, and nested config', () => {
     const root = makeProject();
     const path = writeBindings(

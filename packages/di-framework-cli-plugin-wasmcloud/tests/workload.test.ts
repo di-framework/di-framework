@@ -37,7 +37,7 @@ describe('workload manifests', () => {
     expect(yaml).toContain('package: http');
     expect(yaml).toContain('version: "0.3.0"');
     expect(yaml).toContain('- handler');
-    expect(yaml).toContain('host: "greeter"');
+    expect(yaml).toContain('"host": "greeter"');
     expect(yaml).not.toContain('incoming-handler');
     expect(yaml).not.toContain('Pulumi');
   });

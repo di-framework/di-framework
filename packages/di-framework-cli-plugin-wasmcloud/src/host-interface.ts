@@ -89,7 +89,7 @@ export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): 
     if (entry.config !== undefined) {
       lines.push('          config:');
       for (const [key, value] of Object.entries(entry.config)) {
-        lines.push(`            ${key}: ${yamlQuote(value)}`);
+        lines.push(`            ${yamlQuote(key)}: ${yamlQuote(value)}`);
       }
     }
     if (entry.configFrom !== undefined) {

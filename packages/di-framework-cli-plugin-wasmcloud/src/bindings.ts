@@ -68,6 +68,31 @@ export function defaultSecretName(applicationName: string, bindingName: string):
   return `${asWitIdentifier(applicationName)}-${bindingName}`;
 }
 
+const SECRET_CONFIG_KEYS = new Set([
+  'password',
+  'secret',
+  'token',
+  'uri',
+  'url',
+  'connectionstring',
+  'connection-string',
+]);
+
+export function rejectsPlaintextSecret(
+  config: Record<string, string> | undefined,
+): string | undefined {
+  if (config === undefined) return undefined;
+  for (const [key, value] of Object.entries(config)) {
+    if (SECRET_CONFIG_KEYS.has(key.toLowerCase())) {
+      return `config key "${key}" must not carry a secret value; use secretFrom`;
+    }
+    if (/:\/\//.test(value) || /password=/i.test(value)) {
+      return `config value for "${key}" looks like a secret or connection string; use secretFrom`;
+    }
+  }
+  return undefined;
+}
+
 export function bindingsPath(project: WasmcloudProject): string | undefined {
   return project.bindingsPath;
 }
@@ -265,6 +290,14 @@ export function parseBindingsFile(
               ? (parsed.config as Record<string, string>)
               : undefined,
         };
+        const secretProblem = rejectsPlaintextSecret(options.config);
+        if (secretProblem !== undefined) {
+          bindingsFailure(
+            'WASMCLOUD_BINDING_PLAINTEXT_SECRET',
+            `${statement.name.text} @WasmCloudBinding: ${secretProblem}`,
+            { className: statement.name.text, name: bindingName },
+          );
+        }
       }
     }
     if (bindingName === undefined) {

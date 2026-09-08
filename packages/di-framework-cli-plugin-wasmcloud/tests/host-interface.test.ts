@@ -28,6 +28,6 @@ describe('host interface overlays', () => {
     const yaml = renderHostInterfacesYaml(entry === undefined ? [] : [entry]);
     expect(yaml).toContain('secretFrom:');
     expect(yaml).toContain('configFrom:');
-    expect(yaml).toContain('database: "orders"');
+    expect(yaml).toContain('"database": "orders"');
   });
 });

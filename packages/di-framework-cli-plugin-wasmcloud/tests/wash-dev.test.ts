@@ -121,7 +121,7 @@ describe('wash 2.5.2 dev config', () => {
     });
     const yaml = readFileSync(path, 'utf8');
     expect(yaml).toContain('name: "sessions"');
-    expect(yaml).toContain('bucket: "sess"');
+    expect(yaml).toContain('"bucket": "sess"');
     expect(yaml).toContain('name: "kv-config"');
     expect(yaml).toContain('name: "kv-secret"');
   });

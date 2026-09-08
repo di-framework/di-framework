@@ -41,7 +41,7 @@ describe('runWasmcloudDeploy', () => {
     const yaml = readFileSync(join(greeter, '.di-framework', 'deploy', 'workload.yaml'), 'utf8');
     expect(yaml).toContain('kind: WorkloadDeployment');
     expect(yaml).toContain('kind: Service');
-    expect(yaml).toContain('host: "greeter"');
+    expect(yaml).toContain('"host": "greeter"');
     expect(yaml).not.toContain('apps');
     const oras = invocations.find(
       (invocation) => invocation.command === 'oras' && invocation.args[0] === 'push',

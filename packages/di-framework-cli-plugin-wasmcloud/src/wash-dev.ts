@@ -1,11 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import type { BindingRecord } from './bindings.js';
-import {
-  hostInterfacesFromRequirements,
-  type HostInterface,
-  yamlQuote,
-} from './host-interface.js';
+import { type HostInterface, hostInterfacesFromRequirements, yamlQuote } from './host-interface.js';
 import type { WasmcloudProject } from './project.js';
 import type { WitRequirement } from './wit.js';
 
@@ -59,7 +55,7 @@ export function renderWashDevYaml(
       if (entry.config !== undefined) {
         lines.push('      config:');
         for (const [key, value] of Object.entries(entry.config)) {
-          lines.push(`        ${key}: ${yamlQuote(value)}`);
+          lines.push(`        ${yamlQuote(key)}: ${yamlQuote(value)}`);
         }
       }
       if (entry.configFrom !== undefined) {
