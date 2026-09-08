@@ -55,7 +55,8 @@ export type WasmcloudDeps = {
   jcoCliPath(): string;
   /**
    * Optional componentize-qjs CLI built against wasmtime 48+ with
-   * `concurrency_support`. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses
+   * `concurrency_support`. Resolved from `DI_FRAMEWORK_COMPONENTIZE_QJS`,
+   * `@di-framework/componentize-qjs`, or `PATH`. Stock jco 1.32.1 uses
    * wasmtime 47, which cannot stub imported `async func`s during wizer.
    */
   componentizeQjsPath(): string | undefined;
@@ -98,14 +99,59 @@ export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) 
 /** Points at a wasmtime-48+ componentize-qjs CLI that can stub imported `async func`s. */
 export const COMPONENTIZE_QJS_ENV = 'DI_FRAMEWORK_COMPONENTIZE_QJS';
 
+/** npm wrapper that selects the matching optional platform CLI package. */
+export const COMPONENTIZE_QJS_PACKAGE = '@di-framework/componentize-qjs';
+
 // Real path, not a store symlink, so walking up reaches this package's node_modules.
 const packageRoot = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), '..');
 
+export function componentizeQjsPlatformPackageName(
+  platform = process.platform,
+  arch = process.arch,
+): string {
+  return `${COMPONENTIZE_QJS_PACKAGE}-${platform}-${arch}`;
+}
+
+/**
+ * Locate the native CLI shipped by `@di-framework/componentize-qjs-<os>-<arch>`.
+ * Walks `node_modules` from `startDirectory` (same strategy as `findJcoEntry`)
+ * so Bun's install cache is not required.
+ */
+export function findInstalledComponentizeQjsCli(
+  startDirectory = packageRoot,
+  platform = process.platform,
+  arch = process.arch,
+): string | undefined {
+  const scopedDirectory = `componentize-qjs-${platform}-${arch}`;
+  const binName = platform === 'win32' ? 'componentize-qjs.exe' : 'componentize-qjs';
+  let previous = '';
+  let current = startDirectory;
+  while (current !== previous) {
+    const bin = join(current, 'node_modules', '@di-framework', scopedDirectory, 'bin', binName);
+    if (existsSync(bin)) return bin;
+    previous = current;
+    current = dirname(current);
+  }
+  try {
+    const require = createRequire(join(startDirectory, 'package.json'));
+    const loaded = require(COMPONENTIZE_QJS_PACKAGE) as {
+      nativeCliPath?: (os?: string, cpu?: string) => string | undefined;
+    };
+    const fromPackage = loaded.nativeCliPath?.(platform, arch);
+    return fromPackage !== undefined && existsSync(fromPackage) ? fromPackage : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveComponentizeQjsPath(
   env: Record<string, string | undefined> = process.env,
+  installedCliPath: string | undefined = findInstalledComponentizeQjsCli(),
+  pathCli: string | undefined = undefined,
 ): string | undefined {
   const explicit = env[COMPONENTIZE_QJS_ENV]?.trim();
-  return explicit === undefined || explicit === '' ? undefined : explicit;
+  if (explicit !== undefined && explicit !== '') return explicit;
+  return installedCliPath ?? pathCli;
 }
 
 /**
@@ -184,7 +230,12 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
   jcoCliPath: () =>
     findJcoEntry(packageRoot) ??
     join(dirname(fileURLToPath(import.meta.resolve('@bytecodealliance/jco'))), 'jco.js'),
-  componentizeQjsPath: () => resolveComponentizeQjsPath(process.env),
+  componentizeQjsPath: () =>
+    resolveComponentizeQjsPath(
+      process.env,
+      findInstalledComponentizeQjsCli(),
+      Bun.which('componentize-qjs') ?? undefined,
+    ),
   nodeBinaryPath: () => Bun.which('node') ?? undefined,
   wasmtimeBinaryPath: () => Bun.which('wasmtime') ?? undefined,
   washBinaryPath: () => Bun.which('wash') ?? undefined,

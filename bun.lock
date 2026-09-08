@@ -357,6 +357,7 @@
       "dependencies": {
         "@bytecodealliance/jco": "1.32.1",
         "@di-framework/cli-extension": "^5",
+        "@di-framework/componentize-qjs": "0.4.4-di.1",
         "rolldown": "1.2.7",
         "typescript": "^5",
       },
@@ -663,6 +664,8 @@
     "@di-framework/cloudfoundry": ["@di-framework/cloudfoundry@workspace:packages/di-framework-cloudfoundry"],
 
     "@di-framework/codegen": ["@di-framework/codegen@workspace:packages/di-framework-codegen"],
+
+    "@di-framework/componentize-qjs": ["@di-framework/componentize-qjs@0.4.4-di.1", "", { "optionalDependencies": { "@di-framework/componentize-qjs-darwin-arm64": "0.4.4-di.1", "@di-framework/componentize-qjs-darwin-x64": "0.4.4-di.1", "@di-framework/componentize-qjs-linux-arm64": "0.4.4-di.1", "@di-framework/componentize-qjs-linux-x64": "0.4.4-di.1", "@di-framework/componentize-qjs-win32-x64": "0.4.4-di.1" }, "bin": { "componentize-qjs": "bin/componentize-qjs.cjs" } }, "sha512-VFjQns2j1L0IF2FmxaT5lOhKywifv8htPxSLDEigl+tlbGb0KH4o2ZBnK1Clahp1wIAc0UIRH7uIUS7MYn8ykw=="],
 
     "@di-framework/config": ["@di-framework/config@workspace:packages/di-framework-config"],
 

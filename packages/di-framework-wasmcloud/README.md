@@ -34,9 +34,9 @@ each class to the shared WIT requirement graph, generates real WIT guest imports
 matching `hostInterfaces` entries. The binding name is `hostInterfaces[].name`. The compiled guest
 world is unlabeled (`import wasmcloud:postgres/query@0.2.0`) because the qjs componentizer cannot
 emit `cm-implements` labeled imports yet. Imported `async func`s (postgres, key-value, blobstore,
-messaging, secrets, outgoing HTTP) need a componentize-qjs CLI built against wasmtime 48+;
-point the CLI plugin at it with `DI_FRAMEWORK_COMPONENTIZE_QJS`. `wasi:config@0.2.0-rc.1` is
-sync and componentizes with stock jco.
+messaging, secrets, outgoing HTTP) componentize with `@di-framework/componentize-qjs`
+(wasmtime 48). Set `DI_FRAMEWORK_COMPONENTIZE_QJS` to override that CLI.
+`wasi:config@0.2.0-rc.1` is sync and also componentizes with stock jco.
 
 Secret material is referenced, never inlined:
 

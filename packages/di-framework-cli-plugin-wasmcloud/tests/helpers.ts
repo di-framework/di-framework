@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { CliIo } from '@di-framework/cli-extension';
-import type { WasmcloudDeps } from '../src/deps';
+import { resolveComponentizeQjsPath, type WasmcloudDeps } from '../src/deps';
 
 export type RunnerInvocation = {
   command: string;
@@ -63,8 +63,8 @@ export function makeAssets(): string {
 
 /** wasmtime-48+ componentize-qjs CLI that can stub imported `async func`s. */
 export function patchedComponentizeQjsPath(): string | undefined {
-  const fromEnv = process.env.DI_FRAMEWORK_COMPONENTIZE_QJS?.trim();
-  if (fromEnv !== undefined && fromEnv !== '' && existsSync(fromEnv)) return fromEnv;
+  const resolved = resolveComponentizeQjsPath(process.env);
+  if (resolved !== undefined && existsSync(resolved)) return resolved;
   const local = '/tmp/componentize-qjs/target/release/componentize-qjs';
   return existsSync(local) ? local : undefined;
 }

@@ -27,7 +27,10 @@ export {
 export {
   COMPONENT_IMPORT_EXTERNAL,
   COMPONENTIZE_QJS_ENV,
+  COMPONENTIZE_QJS_PACKAGE,
+  componentizeQjsPlatformPackageName,
   DEFAULT_DEPS,
+  findInstalledComponentizeQjsCli,
   nodeCompatibilityPlugin,
   resolveComponentizeQjsPath,
   type WasmcloudDeps,
@@ -35,14 +38,13 @@ export {
 export { runWasmcloudDestroy } from './destroy.js';
 export { parseDevArgs, runWasmcloudDev } from './dev.js';
 export { DEV_RUNNER_ENV, resolveDevRunner } from './dev-runner.js';
-export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests.js';
-export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   discoverProjects,
   findConfigFiles,
   resolveApplication,
 } from './discovery.js';
 export { runWasmcloudDoctor } from './doctor.js';
+export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests.js';
 export { hostInterfacesFromRequirements } from './host-interface.js';
 export {
   DEPLOY_MANIFEST_NAME,
@@ -85,6 +87,7 @@ export {
   registryUsesPlainHttp,
 } from './registry.js';
 export { resolveConnection, resolveTarget } from './target.js';
+export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   aggregateRequirements,
   COMPONENT_MODEL,

@@ -9,7 +9,7 @@ deploy/platform/          managed Pulumi platform (k0s-adjacent cluster, registr
 services/greeter/         a DI Framework project
 services/settings/        unlabeled wasi:config binding (works on wasmtime -S config)
 services/orders/          postgres + two named key-value bindings (imported async
-                          funcs need DI_FRAMEWORK_COMPONENTIZE_QJS → wasmtime 48+ qjs)
+                          funcs use @di-framework/componentize-qjs, wasmtime 48)
 nested/deep/echo/         another project, nested wherever it fits
 ```
 

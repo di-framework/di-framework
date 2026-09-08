@@ -298,7 +298,7 @@ export class UserDatabase extends Postgres {}
     });
   });
 
-  it('componentizes with a patched qjs CLI when DI_FRAMEWORK_COMPONENTIZE_QJS is set', async () => {
+  it('componentizes with a resolved patched qjs CLI', async () => {
     const root = makeProject();
     const invocations: RunnerInvocation[] = [];
     await buildComponent(

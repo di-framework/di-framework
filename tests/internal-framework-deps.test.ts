@@ -80,6 +80,22 @@ describe('internal framework dependency ranges', () => {
     expect(validateInternalFrameworkDeps(prepared, '5.2.0')).toEqual([]);
   });
 
+  it('allowlists the wasmtime-48 componentize-qjs fork', () => {
+    expect(
+      INTERNAL_CROSS_MAJOR_ALLOWLIST.has(
+        '@di-framework/cli-plugin-wasmcloud>@di-framework/componentize-qjs',
+      ),
+    ).toBe(true);
+    const manifest = {
+      name: '@di-framework/cli-plugin-wasmcloud',
+      dependencies: { '@di-framework/componentize-qjs': '0.4.4-di.1' },
+    };
+    expect(validateInternalFrameworkDeps(manifest, '5.2.9')).toEqual([]);
+    expect(
+      preparePublishManifest(manifest, '5.2.9').dependencies?.['@di-framework/componentize-qjs'],
+    ).toBe('0.4.4-di.1');
+  });
+
   it('honors the documented cross-major allowlist', () => {
     const key = '@di-framework/test-consumer>@di-framework/core';
     expect(INTERNAL_CROSS_MAJOR_ALLOWLIST.has(key)).toBe(false);

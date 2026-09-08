@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  componentizeQjsPlatformPackageName,
   DEFAULT_DEPS,
+  findInstalledComponentizeQjsCli,
   findJcoEntry,
   nodeCompatibilityPlugin,
   resolveComponentizeQjsPath,
@@ -112,6 +114,7 @@ describe('DEFAULT_DEPS', () => {
     );
     expect(findJcoEntry(mkdtempSync(join(tmpdir(), 'wasmcloud-nojco-')))).toBeUndefined();
     expect(['string', 'undefined']).toContain(typeof DEFAULT_DEPS.nodeBinaryPath());
+    expect(['string', 'undefined']).toContain(typeof DEFAULT_DEPS.componentizeQjsPath());
     expect(DEFAULT_DEPS.assetsDirectory()).toEndWith(join('dist', 'assets'));
     expect(DEFAULT_DEPS.env).toBe(process.env);
     expect(DEFAULT_DEPS.cwd()).toBe(process.cwd());
@@ -123,11 +126,99 @@ describe('DEFAULT_DEPS', () => {
     ).toBeUndefined();
   });
 
-  it('resolves a patched componentize-qjs CLI only from DI_FRAMEWORK_COMPONENTIZE_QJS', () => {
-    expect(resolveComponentizeQjsPath({})).toBeUndefined();
-    expect(resolveComponentizeQjsPath({ DI_FRAMEWORK_COMPONENTIZE_QJS: '  ' })).toBeUndefined();
+  it('prefers DI_FRAMEWORK_COMPONENTIZE_QJS over an installed CLI', () => {
+    expect(resolveComponentizeQjsPath({}, undefined)).toBeUndefined();
+    expect(resolveComponentizeQjsPath({}, undefined, '/usr/bin/componentize-qjs')).toBe(
+      '/usr/bin/componentize-qjs',
+    );
     expect(
-      resolveComponentizeQjsPath({ DI_FRAMEWORK_COMPONENTIZE_QJS: '/opt/componentize-qjs' }),
+      resolveComponentizeQjsPath({ DI_FRAMEWORK_COMPONENTIZE_QJS: '  ' }, '/opt/installed'),
+    ).toBe('/opt/installed');
+    expect(
+      resolveComponentizeQjsPath(
+        { DI_FRAMEWORK_COMPONENTIZE_QJS: '/opt/componentize-qjs' },
+        '/opt/installed',
+        '/usr/bin/componentize-qjs',
+      ),
     ).toBe('/opt/componentize-qjs');
+  });
+});
+
+describe('findInstalledComponentizeQjsCli', () => {
+  it('names the optional platform package from os and arch', () => {
+    expect(componentizeQjsPlatformPackageName('darwin', 'arm64')).toBe(
+      '@di-framework/componentize-qjs-darwin-arm64',
+    );
+    expect(componentizeQjsPlatformPackageName('win32', 'x64')).toBe(
+      '@di-framework/componentize-qjs-win32-x64',
+    );
+  });
+
+  it('walks node_modules for the platform CLI binary', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-walk-'));
+    writeFileSync(join(root, 'package.json'), '{}\n');
+    const binDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-linux-x64', 'bin');
+    mkdirSync(binDir, { recursive: true });
+    const bin = join(binDir, 'componentize-qjs');
+    writeFileSync(bin, '#!/bin/sh\n');
+    expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBe(bin);
+    expect(findInstalledComponentizeQjsCli(root, 'darwin', 'arm64')).toBeUndefined();
+  });
+
+  it('walks node_modules for the Windows CLI binary', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-win-'));
+    writeFileSync(join(root, 'package.json'), '{}\n');
+    const binDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-win32-x64', 'bin');
+    mkdirSync(binDir, { recursive: true });
+    const bin = join(binDir, 'componentize-qjs.exe');
+    writeFileSync(bin, 'MZ');
+    expect(findInstalledComponentizeQjsCli(root, 'win32', 'x64')).toBe(bin);
+  });
+
+  it('uses nativeCliPath from the wrapper package when the platform package is absent', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-wrapper-'));
+    const cli = join(root, 'fake-cli');
+    writeFileSync(cli, '#!/bin/sh\n');
+    writeFileSync(join(root, 'package.json'), '{}\n');
+    const wrapper = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
+    mkdirSync(wrapper, { recursive: true });
+    writeFileSync(
+      join(wrapper, 'package.json'),
+      JSON.stringify({ name: '@di-framework/componentize-qjs', main: './index.cjs' }),
+    );
+    writeFileSync(
+      join(wrapper, 'index.cjs'),
+      `module.exports = { nativeCliPath: () => ${JSON.stringify(cli)} };\n`,
+    );
+    expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBe(cli);
+  });
+
+  it('ignores a wrapper nativeCliPath that does not exist on disk', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-missing-'));
+    writeFileSync(join(root, 'package.json'), '{}\n');
+    const wrapper = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
+    mkdirSync(wrapper, { recursive: true });
+    writeFileSync(
+      join(wrapper, 'package.json'),
+      JSON.stringify({ name: '@di-framework/componentize-qjs', main: './index.cjs' }),
+    );
+    writeFileSync(
+      join(wrapper, 'index.cjs'),
+      'module.exports = { nativeCliPath: () => "/no/such/componentize-qjs" };\n',
+    );
+    expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBeUndefined();
+  });
+
+  it('returns undefined when the wrapper has no nativeCliPath export', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-empty-'));
+    writeFileSync(join(root, 'package.json'), '{}\n');
+    const wrapper = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
+    mkdirSync(wrapper, { recursive: true });
+    writeFileSync(
+      join(wrapper, 'package.json'),
+      JSON.stringify({ name: '@di-framework/componentize-qjs', main: './index.cjs' }),
+    );
+    writeFileSync(join(wrapper, 'index.cjs'), 'module.exports = {};\n');
+    expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBeUndefined();
   });
 });

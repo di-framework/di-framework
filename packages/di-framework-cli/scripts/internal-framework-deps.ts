@@ -28,7 +28,7 @@ export type ManifestDeps = Partial<Record<PublishedDepField, Record<string, stri
  * in PACKAGING.md.
  */
 export const INTERNAL_CROSS_MAJOR_ALLOWLIST = new Set<string>([
-  // Example: '@di-framework/legacy-bridge>@di-framework/core',
+  '@di-framework/cli-plugin-wasmcloud>@di-framework/componentize-qjs',
 ]);
 
 export function isInternalFrameworkPackage(name: string): boolean {

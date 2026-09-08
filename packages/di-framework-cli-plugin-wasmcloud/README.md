@@ -44,14 +44,14 @@ those modules on `globalThis` before the application runs, which is how
 The configured `name` is the only project identity. The extension owns the WebAssembly/WASI
 boundary: it records WIT requirements (the HTTP adapter exports `wasi:http/handler@0.3.0` today),
 generates one world and a `wit.lock.json` from that graph, bundles the entry behind a WASI-HTTP ↔
-Web Fetch adapter, and componentizes with `jco --backend qjs`. Set
-`DI_FRAMEWORK_COMPONENTIZE_QJS` to a `componentize-qjs` CLI built against wasmtime 48+
-with `concurrency_support` to componentize imported `async func`s such as
-`wasmcloud:postgres@0.2.0`. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
+Web Fetch adapter, and componentizes with `@di-framework/componentize-qjs` (a wasmtime-48
+fork of componentize-qjs 0.4.4 that can stub imported `async func`s such as
+`wasmcloud:postgres@0.2.0`). Set `DI_FRAMEWORK_COMPONENTIZE_QJS` to override the
+resolved CLI. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
 which stubs unknown imports with sync `func_new` and fails at wizer with
-`type mismatch with async`. A wasmtime-48 host can stub those with `func_new_concurrent`.
-Sync imports such as `wasi:config@0.2.0-rc.1` componentize with stock jco and run on
-`wasmtime serve -S config`. Build state lives in the disposable `.di-framework/` directory.
+`type mismatch with async`. Sync imports such as `wasi:config@0.2.0-rc.1` also
+componentize with stock jco and run on `wasmtime serve -S config`. Build state
+lives in the disposable `.di-framework/` directory.
 Package versions are independent of the component-model preview: a WASI 0.3 guest may
 still import `wasmcloud:*` packages at their own versions.
 
