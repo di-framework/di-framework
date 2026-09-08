@@ -56,7 +56,7 @@ describe('workload manifests', () => {
     expect(yaml).not.toContain('Pulumi');
   });
 
-  it('renders named hostInterfaces with secretFrom from binding records', () => {
+  it('renders an unlabeled PostgreSQL host interface with its binding secretFrom', () => {
     const { greeter } = makeWorkspace();
     const project = loadProject(greeter);
     const yaml = renderWorkloadManifest(
@@ -102,7 +102,7 @@ describe('workload manifests', () => {
         },
       ],
     );
-    expect(yaml).toContain('name: "user-database"');
+    expect(yaml).not.toContain('name: "user-database"');
     expect(yaml).toContain('package: postgres');
     expect(yaml).toContain('version: "0.2.0"');
     expect(yaml).toContain('secretFrom:');
