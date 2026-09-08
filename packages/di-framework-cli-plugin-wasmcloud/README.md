@@ -42,8 +42,10 @@ Web Fetch adapter, and componentizes with `jco --backend qjs`. Build state lives
 `.di-framework/` directory. Package versions are independent of the component-model preview: a WASI
 0.3 guest may still import `wasmcloud:*` packages at their own versions.
 
-Local `wasmcloud dev` uses `wasmtime serve` when wasmtime 46+ is on PATH, then `wash dev`, then
-`jco serve`. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to `wasmtime`, `wash`, or `jco` to pin one.
+Local `wasmcloud dev` uses `wasmtime serve -S cli -S p3` when wasmtime 46+ is on PATH, then
+`wash dev`, then `jco serve`. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to `wasmtime`, `wash`, or
+`jco` to pin one. Wasmtime hosts WASI HTTP locally; wasmCloud-only imports such as
+`wasmcloud:postgres` still need `wash` or a wasmCloud host.
 
 ## Deployment manifest
 

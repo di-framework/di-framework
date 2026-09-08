@@ -33,7 +33,16 @@ describe('runWasmcloudDev', () => {
     );
     expect(invocations[1]).toMatchObject({
       command: '/fake/wasmtime',
-      args: ['serve', '--addr', '127.0.0.1:9123', join(root, 'dist', 'demo-app.wasm')],
+      args: [
+        'serve',
+        '-S',
+        'cli',
+        '-S',
+        'p3',
+        '--addr',
+        '127.0.0.1:9123',
+        join(root, 'dist', 'demo-app.wasm'),
+      ],
     });
     expect(output.stdout.join('')).toContain('http://127.0.0.1:9123');
     expect(output.stdout.join('')).toContain('(wasmtime)');

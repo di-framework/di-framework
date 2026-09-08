@@ -32,7 +32,17 @@ function binaryFor(kind: DevRunnerKind, deps: WasmcloudDeps): string | undefined
 function argsFor(kind: DevRunnerKind, deps: WasmcloudDeps, target: DevServeTarget): string[] {
   switch (kind) {
     case 'wasmtime':
-      return ['serve', '--addr', `${target.host}:${target.port}`, target.componentPath];
+      // qjs guests import wasi:cli@0.2.x; WASI 0.3 HTTP is off unless -S p3 is set.
+      return [
+        'serve',
+        '-S',
+        'cli',
+        '-S',
+        'p3',
+        '--addr',
+        `${target.host}:${target.port}`,
+        target.componentPath,
+      ];
     case 'wash':
       return ['dev', '--address', `${target.host}:${target.port}`];
     case 'jco':

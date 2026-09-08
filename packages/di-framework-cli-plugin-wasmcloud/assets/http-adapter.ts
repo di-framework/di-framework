@@ -10,6 +10,37 @@ type Application =
 type WasiResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 type WasiOk = { tag: 'ok'; val: undefined };
 
+type QjsFutureFactory = ((type?: unknown) => {
+  readable: unknown;
+  writable: { write(value: unknown): unknown };
+}) &
+  Record<string, unknown>;
+
+const TRAILER_FUTURE_TYPES = ['RESULT_OPTION_OTHER_ERROR_CODE'] as const;
+const VOID_RESULT_FUTURE_TYPES = ['RESULT_VOID_ERROR_CODE'] as const;
+
+function qjsFutureFactory(): QjsFutureFactory | undefined {
+  const future = (globalThis as { wit?: { Future?: QjsFutureFactory } }).wit?.Future;
+  return typeof future === 'function' ? future : undefined;
+}
+
+function pickFutureType(factory: QjsFutureFactory, preferred: readonly string[]): unknown {
+  for (const name of preferred) {
+    if (name in factory) return factory[name];
+  }
+  const fallback = Object.keys(factory).find((key) => key !== 'types' && key !== 'from');
+  return fallback === undefined ? undefined : factory[fallback];
+}
+
+/** qjs panics if a JS Promise is passed where WIT expects a future handle. */
+function lowerFuture(payload: unknown, preferredTypes: readonly string[]): unknown {
+  const factory = qjsFutureFactory();
+  if (factory === undefined) return Promise.resolve(payload);
+  const pair = factory(pickFutureType(factory, preferredTypes));
+  pair.writable.write(payload);
+  return pair.readable;
+}
+
 function methodName(method: { tag: string; val?: string } | undefined): string {
   if (method === undefined) return 'GET';
   return method.tag === 'other' ? (method.val ?? 'GET') : method.tag.toUpperCase();
@@ -55,9 +86,12 @@ async function toWebRequest(incoming: {
   try {
     const consumed = (
       WasiRequest as unknown as {
-        consumeBody(request: unknown, res: Promise<WasiOk>): unknown;
+        consumeBody(request: unknown, res: unknown): unknown;
       }
-    ).consumeBody(incoming, Promise.resolve({ tag: 'ok', val: undefined }));
+    ).consumeBody(
+      incoming,
+      lowerFuture({ tag: 'ok', val: undefined } satisfies WasiOk, VOID_RESULT_FUTURE_TYPES),
+    );
     const body = firstOfTuple(
       consumed as AsyncIterable<Uint8Array> | [AsyncIterable<Uint8Array>, ...unknown[]],
     );
@@ -104,10 +138,14 @@ async function fromWebResponse(response: Response): Promise<unknown> {
       new: (
         headers: unknown,
         contents: AsyncIterable<Uint8Array> | null,
-        trailers: Promise<WasiResult<null>>,
+        trailers: unknown,
       ) => unknown;
     }
-  ).new(fields, await responseContents(response), Promise.resolve({ tag: 'ok', val: null }));
+  ).new(
+    fields,
+    await responseContents(response),
+    lowerFuture({ tag: 'ok', val: null } satisfies WasiResult<null>, TRAILER_FUTURE_TYPES),
+  );
   const outgoing = firstOfTuple(created as { setStatusCode?(status: number): void });
   outgoing.setStatusCode?.(response.status);
   return outgoing;

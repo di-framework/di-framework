@@ -8,7 +8,7 @@ type ApplicationHandler =
 type Outgoing = {
   headers: unknown;
   contents: unknown;
-  trailers: Promise<unknown>;
+  trailers: unknown;
   statusCode: number;
   setStatusCode(status: number): void;
 };
@@ -17,11 +17,7 @@ const applicationState: { current: ApplicationHandler } = {
   current: () => new Response('ok'),
 };
 
-function defaultOutgoing(
-  headers: unknown,
-  contents: unknown,
-  trailers: Promise<unknown>,
-): Outgoing {
+function defaultOutgoing(headers: unknown, contents: unknown, trailers: unknown): Outgoing {
   const outgoing: Outgoing = {
     headers,
     contents,
@@ -38,7 +34,7 @@ const wasiState = {
   consumeBody: (_request: unknown, _res: Promise<unknown>): unknown => {
     throw new Error('consumeBody was not stubbed');
   },
-  newResponse: (headers: unknown, contents: unknown, trailers: Promise<unknown>): unknown =>
+  newResponse: (headers: unknown, contents: unknown, trailers: unknown): unknown =>
     defaultOutgoing(headers, contents, trailers),
 };
 
@@ -65,7 +61,7 @@ mock.module('wasi:http/types@0.3.0', () => ({
     },
   },
   Response: {
-    new(headers: unknown, contents: unknown, trailers: Promise<unknown>) {
+    new(headers: unknown, contents: unknown, trailers: unknown) {
       return wasiState.newResponse(headers, contents, trailers);
     },
   },
@@ -109,6 +105,7 @@ afterEach(() => {
   };
   wasiState.newResponse = (headers, contents, trailers) =>
     defaultOutgoing(headers, contents, trailers);
+  delete (globalThis as { wit?: unknown }).wit;
 });
 
 describe('http adapter', () => {
@@ -282,5 +279,49 @@ describe('http adapter', () => {
     expect(JSON.parse(new TextDecoder().decode(new Uint8Array(collected)))).toEqual({
       error: 'Internal server error',
     });
+  });
+
+  it('lowers trailers and consume-body through wit.Future when qjs is present', async () => {
+    const written: unknown[] = [];
+    const trailersReadable = { kind: 'trailers' };
+    const consumeReadable = { kind: 'consume' };
+    const Future = Object.assign(
+      (type: unknown) => {
+        const readable = type === 'trailers-type' ? trailersReadable : consumeReadable;
+        return {
+          readable,
+          writable: {
+            write(value: unknown) {
+              written.push({ type, value });
+            },
+          },
+        };
+      },
+      {
+        RESULT_OPTION_OTHER_ERROR_CODE: 'trailers-type',
+        RESULT_VOID_ERROR_CODE: 'void-type',
+      },
+    );
+    (globalThis as { wit?: unknown }).wit = { Future };
+
+    const captured: unknown[] = [];
+    wasiState.consumeBody = (_request, res) => {
+      captured.push(res);
+      return [readable(new TextEncoder().encode('payload'))];
+    };
+
+    const getOutgoing = (await handler.handle(incoming({ method: { tag: 'get' } }))) as Outgoing;
+    expect(getOutgoing.trailers).toBe(trailersReadable);
+
+    const postOutgoing = (await handler.handle(
+      incoming({ method: { tag: 'post' }, path: '/body' }),
+    )) as Outgoing;
+    expect(captured).toEqual([consumeReadable]);
+    expect(postOutgoing.statusCode).toBe(200);
+    expect(written).toEqual([
+      { type: 'trailers-type', value: { tag: 'ok', val: null } },
+      { type: 'void-type', value: { tag: 'ok', val: undefined } },
+      { type: 'trailers-type', value: { tag: 'ok', val: null } },
+    ]);
   });
 });

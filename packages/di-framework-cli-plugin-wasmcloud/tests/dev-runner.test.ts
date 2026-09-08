@@ -36,6 +36,10 @@ describe('resolveDevRunner', () => {
     const wasmtime = resolveDevRunner(fakeDeps({ cwd, env: { [DEV_RUNNER_ENV]: 'wasmtime' } }));
     expect(wasmtime.args({ componentPath: 'app.wasm', host: '0.0.0.0', port: '9000' })).toEqual([
       'serve',
+      '-S',
+      'cli',
+      '-S',
+      'p3',
       '--addr',
       '0.0.0.0:9000',
       'app.wasm',
