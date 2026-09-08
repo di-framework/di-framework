@@ -43,7 +43,11 @@ function hostInterfaceFromRequirement(
     version: requirement.version,
     interfaces: [...requirement.interfaces],
   };
-  if (requirement.instanceName !== undefined) entry.name = requirement.instanceName;
+  // QuickJS emits an unlabeled PostgreSQL import. A named host interface selects
+  // the runtime's implements route, which cannot link that import.
+  if (requirement.instanceName !== undefined && requirement.package !== 'wasmcloud:postgres') {
+    entry.name = requirement.instanceName;
+  }
   if (
     requirement.package === WASI_HTTP_PACKAGE &&
     requirement.interfaces.includes(WASI_HTTP_INTERFACE) &&

@@ -1,3 +1,6 @@
+// Keep this side-effect import first: application services can resolve bindings at module startup.
+import 'virtual:di-framework-wasmcloud-guests';
+
 import application from 'virtual:di-framework-application';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';

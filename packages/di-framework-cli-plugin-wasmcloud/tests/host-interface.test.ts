@@ -12,7 +12,19 @@ const postgres: WitRequirement = {
 };
 
 describe('host interface overlays', () => {
-  it('attaches secretFrom and configFrom to the named entry', () => {
+  it('preserves names for other named host bindings', () => {
+    const [entry] = hostInterfacesFromRequirements([
+      {
+        ...postgres,
+        package: 'wasi:keyvalue',
+        version: '0.3.0',
+        interfaces: ['store'],
+        instanceName: 'sessions',
+      },
+    ]);
+    expect(entry?.name).toBe('sessions');
+  });
+  it('keeps PostgreSQL overlays while matching its unlabeled guest import', () => {
     const [entry] = hostInterfacesFromRequirements([postgres], {}, [
       {
         name: 'user-database',
@@ -22,10 +34,12 @@ describe('host interface overlays', () => {
         config: { database: 'orders' },
       },
     ]);
+    expect(entry?.name).toBeUndefined();
     expect(entry?.secretFrom).toEqual([{ name: 'orders-user-database' }]);
     expect(entry?.configFrom).toEqual([{ name: 'orders-user-database-config' }]);
     expect(entry?.config).toEqual({ database: 'orders' });
     const yaml = renderHostInterfacesYaml(entry === undefined ? [] : [entry]);
+    expect(yaml).not.toContain('name: "user-database"');
     expect(yaml).toContain('secretFrom:');
     expect(yaml).toContain('configFrom:');
     expect(yaml).toContain('"database": "orders"');

@@ -31,12 +31,20 @@ export class Cache extends KeyValue {}
 
 Put those classes in `src/bindings.ts`. The wasmCloud CLI extension discovers the file, contributes
 each class to the shared WIT requirement graph, generates real WIT guest imports, and renders
-matching `hostInterfaces` entries. The binding name is `hostInterfaces[].name`. The compiled guest
-world is unlabeled (`import wasmcloud:postgres/query@0.2.0`) because the qjs componentizer cannot
+matching `hostInterfaces` entries. PostgreSQL entries omit `hostInterfaces[].name` to match the
+unlabeled import; the binding name still identifies the DI guest and its configuration overlays.
+The compiled guest world is unlabeled (`import wasmcloud:postgres/query@0.2.0`) because the qjs componentizer cannot
 emit `cm-implements` labeled imports yet. Imported `async func`s (postgres, key-value, blobstore,
 messaging, secrets, outgoing HTTP) componentize with `@di-framework/componentize-qjs`
 (wasmtime 48). Set `DI_FRAMEWORK_COMPONENTIZE_QJS` to override that CLI.
 `wasi:config@0.2.0-rc.1` is sync and also componentizes with stock jco.
+
+For PostgreSQL, configure the host connection with `WASH_POSTGRES_URL` (or
+`WASMCLOUD_POSTGRES_URL` with the CLI's `wasmcloud dev` command), and set
+`config: { database: 'orders' }` on the binding. The unnamed import uses the host's
+connection and the selected database; multiple independently credentialed PostgreSQL
+bindings are not supported by this QuickJS path yet. Guests initialize before the
+application, including bindings constructed at module startup.
 
 Secret material is referenced, never inlined:
 

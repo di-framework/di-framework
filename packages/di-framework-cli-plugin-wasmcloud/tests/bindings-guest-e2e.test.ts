@@ -136,7 +136,7 @@ export class UserDatabase extends Postgres {}
     expect(wit).toContain('wasmcloud:postgres/query@0.2.0');
   }, 120_000);
 
-  it('serves unlabeled wasi:config on wasmtime and returns a host config-var', async () => {
+  it('initializes guests before a module-level binding and serves host config on wasmtime', async () => {
     const wasmtime = DEFAULT_DEPS.wasmtimeBinaryPath();
     if (wasmtime === undefined) return;
     if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
@@ -148,9 +148,10 @@ export class UserDatabase extends Postgres {}
     writeFileSync(
       join(root, 'src', 'app.ts'),
       `import { AppConfig } from './bindings.ts';
+const config = new AppConfig();
 export default async (request: Request): Promise<Response> => {
   const key = new URL(request.url).searchParams.get('key') ?? 'greeting';
-  const value = await Promise.resolve(new AppConfig().get(key));
+  const value = await Promise.resolve(config.get(key));
   return new Response(JSON.stringify(value), {
     headers: { 'content-type': 'application/json' },
   });
