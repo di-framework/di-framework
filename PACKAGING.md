@@ -55,7 +55,7 @@ added.
 Current allowlist:
 
 - `@di-framework/cli-plugin-wasmcloud>@di-framework/componentize-qjs` — the
-  wasmCloud plugin pins the wasmtime-48 `componentize-qjs` fork at `0.4.4-di.1`.
+  wasmCloud plugin pins the wasmtime-48 `componentize-qjs` fork at `0.4.4-di.2`.
   That package is versioned with upstream qjs, not the framework 5.x line.
 
 `release/v*` pull requests run the same prepublish gate without uploading:

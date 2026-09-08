@@ -88,12 +88,12 @@ describe('internal framework dependency ranges', () => {
     ).toBe(true);
     const manifest = {
       name: '@di-framework/cli-plugin-wasmcloud',
-      dependencies: { '@di-framework/componentize-qjs': '0.4.4-di.1' },
+      dependencies: { '@di-framework/componentize-qjs': '0.4.4-di.2' },
     };
     expect(validateInternalFrameworkDeps(manifest, '5.2.9')).toEqual([]);
     expect(
       preparePublishManifest(manifest, '5.2.9').dependencies?.['@di-framework/componentize-qjs'],
-    ).toBe('0.4.4-di.1');
+    ).toBe('0.4.4-di.2');
   });
 
   it('honors the documented cross-major allowlist', () => {

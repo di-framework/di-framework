@@ -40,7 +40,7 @@
   "dependencies": {
     "@bytecodealliance/jco": "1.32.1",
     "@di-framework/cli-extension": "^5",
-    "@di-framework/componentize-qjs": "0.4.4-di.1",
+    "@di-framework/componentize-qjs": "0.4.4-di.2",
     "rolldown": "1.2.7",
     "typescript": "^5"
   },
