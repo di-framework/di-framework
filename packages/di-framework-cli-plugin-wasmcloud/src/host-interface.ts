@@ -32,6 +32,16 @@ export type BindingHostOverlay = {
   secretFrom?: string;
 };
 
+// These providers link QuickJS's unlabeled imports through their default route.
+// Supplying a name selects the implements route, which cannot link those imports.
+const UNLABELED_HOST_PACKAGES = new Set([
+  'wasmcloud:postgres',
+  'wasmcloud:keyvalue',
+  'wasmcloud:blobstore',
+  'wasmcloud:messaging',
+  'wasmcloud:secrets',
+]);
+
 function hostInterfaceFromRequirement(
   requirement: AggregatedRequirement,
   options: HostInterfaceOptions,
@@ -41,11 +51,13 @@ function hostInterfaceFromRequirement(
     namespace,
     package: name,
     version: requirement.version,
-    interfaces: [...requirement.interfaces],
+    // Key-value resource types are linked internally, not advertised by the provider.
+    interfaces:
+      requirement.package === 'wasmcloud:keyvalue'
+        ? requirement.interfaces.filter((iface) => iface !== 'types')
+        : [...requirement.interfaces],
   };
-  // QuickJS emits an unlabeled PostgreSQL import. A named host interface selects
-  // the runtime's implements route, which cannot link that import.
-  if (requirement.instanceName !== undefined && requirement.package !== 'wasmcloud:postgres') {
+  if (requirement.instanceName !== undefined && !UNLABELED_HOST_PACKAGES.has(requirement.package)) {
     entry.name = requirement.instanceName;
   }
   if (
@@ -64,7 +76,7 @@ export function hostInterfacesFromRequirements(
   overlays: readonly BindingHostOverlay[] = [],
 ): HostInterface[] {
   const byName = new Map(overlays.map((overlay) => [overlay.name, overlay]));
-  return aggregateRequirements(requirements)
+  const entries = aggregateRequirements(requirements)
     .filter(
       (requirement) =>
         requirement.package !== WASI_SOCKETS_PACKAGE &&
@@ -74,7 +86,9 @@ export function hostInterfacesFromRequirements(
     .map((requirement) => {
       const entry = hostInterfaceFromRequirement(requirement, options);
       const overlay =
-        requirement.instanceName !== undefined ? byName.get(requirement.instanceName) : undefined;
+        requirement.instanceName !== undefined
+          ? byName.get(requirement.instanceName)
+          : overlays.find((candidate) => requirement.sources.includes(candidate.className));
       if (overlay === undefined) return entry;
       if (overlay.config !== undefined) {
         entry.config = { ...entry.config, ...overlay.config };
@@ -83,6 +97,46 @@ export function hostInterfacesFromRequirements(
       if (overlay.secretFrom !== undefined) entry.secretFrom = [{ name: overlay.secretFrom }];
       return entry;
     });
+  return mergeHttpHostInterfaces(entries);
+}
+
+function mergeHttpHostInterfaces(entries: HostInterface[]): HostInterface[] {
+  const merged: HostInterface[] = [];
+  for (const entry of entries) {
+    // Import/export directions belong to the WIT world, but the CRD requires one
+    // unnamed host entry per package/version. Preserve overlays from both sides.
+    const existing =
+      entry.namespace === 'wasi' && entry.package === 'http' && entry.name === undefined
+        ? merged.find(
+            (candidate) =>
+              candidate.namespace === entry.namespace &&
+              candidate.package === entry.package &&
+              candidate.version === entry.version &&
+              candidate.name === undefined,
+          )
+        : undefined;
+    if (existing === undefined) {
+      merged.push(entry);
+      continue;
+    }
+    existing.interfaces = [...new Set([...existing.interfaces, ...entry.interfaces])];
+    if (entry.config !== undefined) existing.config = { ...existing.config, ...entry.config };
+    if (entry.configFrom !== undefined) {
+      existing.configFrom = [...(existing.configFrom ?? []), ...entry.configFrom];
+    }
+    if (entry.secretFrom !== undefined) {
+      existing.secretFrom = [...(existing.secretFrom ?? []), ...entry.secretFrom];
+    }
+  }
+  // The core links wasi:http/client; only handler is advertised by the ingress
+  // provider. This changes host discovery, never the guest's WIT imports.
+  return merged
+    .map((entry) =>
+      entry.namespace === 'wasi' && entry.package === 'http'
+        ? { ...entry, interfaces: entry.interfaces.filter((iface) => iface !== 'client') }
+        : entry,
+    )
+    .filter((entry) => entry.interfaces.length > 0);
 }
 
 export function renderHostInterfacesYaml(interfaces: readonly HostInterface[]): string {

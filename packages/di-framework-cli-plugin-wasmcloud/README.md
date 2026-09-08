@@ -32,10 +32,21 @@ A component project is marked by `di-framework.config.json`:
 Named wasmCloud host-interface bindings live in `src/bindings.ts` (override with `"bindings"`).
 Each exported class extending a `@di-framework/wasmcloud` base and decorated with
 `@WasmCloudBinding('name')` is discovered statically and added to the WIT requirement graph.
-The binding name is `hostInterfaces[].name`. The generated guest world uses unlabeled
+The binding name selects its configuration overlay and normally becomes `hostInterfaces[].name`.
+For `wasmcloud:postgres`, `wasmcloud:keyvalue`, `wasmcloud:blobstore`,
+`wasmcloud:messaging`, and `wasmcloud:secrets`, host declarations omit the name to
+select the provider route that links QuickJS imports. The generated guest world uses unlabeled
 `import pkg/iface@version` statements because `jco --backend qjs` cannot encode
 `import name: pkg/iface` (`cm-implements`). Secret values are never taken from source;
-`secretFrom` defaults to `<application>-<binding>`.
+`secretFrom` defaults to `<application>-<binding>`. Unnamed bindings such as config and
+outgoing HTTP retain their overlays through the binding class that contributed the requirements.
+
+Host declarations reflect the interfaces advertised by the runtime: key-value `types`
+is linked internally, and the core links `wasi:http/client`. Both remain in the guest WIT
+imports but are omitted from host discovery. HTTP ingress and outgoing requirements
+share one unnamed host declaration per version, retaining configuration from both.
+Outgoing requests also require the workload component’s `localResources.allowedHosts`
+to allow the destination; the binding itself does not grant egress access.
 
 Build writes `.di-framework/guests.js` with real WIT `import * as` specifiers and installs
 those modules on `globalThis` before the application runs, which is how
