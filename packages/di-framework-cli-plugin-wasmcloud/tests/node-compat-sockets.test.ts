@@ -390,7 +390,7 @@ describe('bundled node:net overlay', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-net-bundle-'));
     const adapterPath = join(root, 'adapter.ts');
     const entryPath = join(root, 'entry.ts');
-    const outFile = join(root, 'out', 'component.js');
+    const outFile = join(root, 'dist', 'component.js');
     writeFileSync(
       adapterPath,
       "import application from 'virtual:di-framework-application';\nexport const handler = application;\n",
