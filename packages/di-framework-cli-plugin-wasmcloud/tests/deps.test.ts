@@ -188,7 +188,13 @@ describe('findInstalledComponentizeQjsCli', () => {
     );
     writeFileSync(
       join(wrapper, 'index.cjs'),
-      `module.exports = { nativeCliPath: () => ${JSON.stringify(cli)} };\n`,
+      [
+        'const { join } = require("node:path");',
+        'module.exports = {',
+        '  nativeCliPath: () => join(__dirname, "..", "..", "..", "fake-cli"),',
+        '};',
+        '',
+      ].join('\n'),
     );
     expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBe(cli);
   });

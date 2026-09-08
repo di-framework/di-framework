@@ -146,8 +146,8 @@ export function findInstalledComponentizeQjsCli(
 
 export function resolveComponentizeQjsPath(
   env: Record<string, string | undefined> = process.env,
-  installedCliPath: string | undefined = findInstalledComponentizeQjsCli(),
-  pathCli: string | undefined = undefined,
+  installedCliPath?: string,
+  pathCli?: string,
 ): string | undefined {
   const explicit = env[COMPONENTIZE_QJS_ENV]?.trim();
   if (explicit !== undefined && explicit !== '') return explicit;
