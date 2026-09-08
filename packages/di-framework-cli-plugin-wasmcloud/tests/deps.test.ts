@@ -19,6 +19,8 @@ describe('nodeCompatibilityPlugin', () => {
     expect(plugin.resolveId('virtual:di-framework-application')).toBe('/project/src/app.ts');
     expect(plugin.resolveId('node:fs')).toMatch(/node-compat\/fs\.(ts|js)$/);
     expect(plugin.resolveId('node:net')).toMatch(/node-compat\/net\.(ts|js)$/);
+    expect(plugin.resolveId('node:crypto')).toMatch(/node-compat\/crypto\.(ts|js)$/);
+    expect(plugin.resolveId('node:http')).toMatch(/node-compat\/http\.(ts|js)$/);
     expect(plugin.resolveId('node:path')).toContain('unenv');
     expect(plugin.resolveId('rolldown')).toBeNull();
     expect(plugin.load('/project/src/app.ts')).toBeNull();

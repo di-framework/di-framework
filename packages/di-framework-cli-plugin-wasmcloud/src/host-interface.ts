@@ -4,6 +4,7 @@ import {
   parsePackageId,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_PACKAGE,
+  WASI_RANDOM_PACKAGE,
   WASI_SOCKETS_PACKAGE,
   type WitRequirement,
 } from './wit.js';
@@ -60,7 +61,10 @@ export function hostInterfacesFromRequirements(
 ): HostInterface[] {
   const byName = new Map(overlays.map((overlay) => [overlay.name, overlay]));
   return aggregateRequirements(requirements)
-    .filter((requirement) => requirement.package !== WASI_SOCKETS_PACKAGE)
+    .filter(
+      (requirement) =>
+        requirement.package !== WASI_SOCKETS_PACKAGE && requirement.package !== WASI_RANDOM_PACKAGE,
+    )
     .map((requirement) => {
       const entry = hostInterfaceFromRequirement(requirement, options);
       const overlay =

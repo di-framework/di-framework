@@ -21,6 +21,8 @@ export function wasmcloudUnenvPreset(
   modulePath = runtimeFile('module'),
   netPath = runtimeFile('net'),
   dgramPath = runtimeFile('dgram'),
+  cryptoPath = runtimeFile('crypto'),
+  httpPath = runtimeFile('http'),
 ): Preset {
   return {
     meta: { name: 'unenv:wasmcloud' },
@@ -35,9 +37,14 @@ export function wasmcloudUnenvPreset(
       'node:net': netPath,
       dgram: dgramPath,
       'node:dgram': dgramPath,
+      crypto: cryptoPath,
+      'node:crypto': cryptoPath,
+      http: httpPath,
+      'node:http': httpPath,
     },
     inject: {
       process: [processPath, 'default'],
+      crypto: [cryptoPath, 'webcrypto'],
     },
   };
 }
@@ -74,9 +81,14 @@ export function wasmcloudNodeEnv(): ResolvedEnvironment {
     resolve: true,
     presets: [wasmcloudUnenvPreset()],
   }).env;
+  const cryptoPath = runtimeFile('crypto');
   cached = {
     alias: env.alias,
-    inject: { ...env.inject, process: [processPath, 'default'] },
+    inject: {
+      ...env.inject,
+      process: [processPath, 'default'],
+      crypto: [cryptoPath, 'webcrypto'],
+    },
     polyfill: withoutProcessPolyfill(env.polyfill),
     external: env.external,
   };

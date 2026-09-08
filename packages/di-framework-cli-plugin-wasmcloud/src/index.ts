@@ -103,6 +103,7 @@ export {
   defaultProjectRequirements,
   HTTP_ADAPTER_REQUIREMENTS,
   renderWorldWit,
+  runtimeRequirementsFromJavaScript,
   socketRequirementsFromJavaScript,
   type WitRequirement,
 } from './wit.js';

@@ -160,6 +160,32 @@ describe('node:net overlay', () => {
     server.close();
   });
 
+  it('unshifts leftover bytes before the next data listener', async () => {
+    const server = createServer((socket) => {
+      socket.pause();
+      socket.unshift(Buffer.from('head'));
+      socket.on('data', (chunk) => socket.write(chunk));
+    });
+    server.listen(0, '127.0.0.1');
+    const port = server.address()?.port ?? 0;
+    const client = await new Promise<ReturnType<typeof createConnection>>((resolve, reject) => {
+      const connection = createConnection({ host: '127.0.0.1', port }, () => resolve(connection));
+      connection.once('error', reject);
+    });
+    const echoed = new Promise<string>((resolve) => {
+      const chunks: string[] = [];
+      client.on('data', (chunk) => {
+        chunks.push(Buffer.from(chunk).toString());
+        if (chunks.join('').includes('headtail')) resolve(chunks.join(''));
+      });
+    });
+    client.write('tail');
+    expect(await echoed).toContain('head');
+    expect(await echoed).toContain('tail');
+    client.end();
+    server.close();
+  });
+
   it('emits ECONNREFUSED when nothing is listening', async () => {
     const error = await new Promise<Error>((resolve) => {
       const client = createConnection({ host: '127.0.0.1', port: 1 });

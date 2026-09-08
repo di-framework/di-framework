@@ -12,6 +12,8 @@ export const WASI_HTTP_VERSION = '0.3.0';
 export const WASI_HTTP_INTERFACE = 'handler';
 export const WASI_SOCKETS_PACKAGE = 'wasi:sockets';
 export const WASI_SOCKETS_VERSION = '0.3.0';
+export const WASI_RANDOM_PACKAGE = 'wasi:random';
+export const WASI_RANDOM_VERSION = '0.3.0';
 
 export type WitDirection = 'import' | 'export';
 
@@ -62,27 +64,43 @@ export function defaultProjectRequirements(): WitRequirement[] {
 }
 
 /**
- * WASI 0.3 sockets pulled in by the node:net / node:dgram overlay.
- * Only added to the guest world when the bundled JS actually imports them.
+ * Runtime WASI pulled in by Node overlays (`node:net`/`dgram` → sockets,
+ * `node:crypto` → random). Only added to the guest world when the bundled JS
+ * actually imports those specifiers.
  */
-export function socketRequirementsFromJavaScript(source: string): WitRequirement[] {
-  const interfaces: string[] = [];
+export function runtimeRequirementsFromJavaScript(source: string): WitRequirement[] {
+  const requirements: WitRequirement[] = [];
+  const socketInterfaces: string[] = [];
   if (source.includes(`${WASI_SOCKETS_PACKAGE}/types@${WASI_SOCKETS_VERSION}`)) {
-    interfaces.push('types');
+    socketInterfaces.push('types');
   }
   if (source.includes(`${WASI_SOCKETS_PACKAGE}/ip-name-lookup@${WASI_SOCKETS_VERSION}`)) {
-    interfaces.push('ip-name-lookup');
+    socketInterfaces.push('ip-name-lookup');
   }
-  if (interfaces.length === 0) return [];
-  return [
-    {
+  if (socketInterfaces.length > 0) {
+    requirements.push({
       package: WASI_SOCKETS_PACKAGE,
       version: WASI_SOCKETS_VERSION,
-      interfaces,
+      interfaces: socketInterfaces,
       direction: 'import',
       source: NODE_COMPAT_SOURCE,
-    },
-  ];
+    });
+  }
+  if (source.includes(`${WASI_RANDOM_PACKAGE}/random@${WASI_RANDOM_VERSION}`)) {
+    requirements.push({
+      package: WASI_RANDOM_PACKAGE,
+      version: WASI_RANDOM_VERSION,
+      interfaces: ['random'],
+      direction: 'import',
+      source: NODE_COMPAT_SOURCE,
+    });
+  }
+  return requirements;
+}
+
+/** @deprecated Use {@link runtimeRequirementsFromJavaScript}. */
+export function socketRequirementsFromJavaScript(source: string): WitRequirement[] {
+  return runtimeRequirementsFromJavaScript(source);
 }
 
 export function parsePackageId(id: string): { namespace: string; name: string } {
