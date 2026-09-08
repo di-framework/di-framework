@@ -218,7 +218,7 @@ describe('bundled Node contract', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-node-bundle-'));
     const adapterPath = join(root, 'adapter.ts');
     const entryPath = join(root, 'entry.ts');
-    const outFile = join(root, 'out', 'component.js');
+    const outFile = join(root, 'dist', 'component.js');
     const jsonFile = join(
       import.meta.dir,
       '..',

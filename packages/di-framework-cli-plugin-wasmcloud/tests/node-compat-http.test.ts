@@ -408,7 +408,7 @@ describe('bundled node:http overlay', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-http-bundle-'));
     const adapterPath = join(root, 'adapter.ts');
     const entryPath = join(root, 'entry.ts');
-    const outFile = join(root, 'out', 'component.js');
+    const outFile = join(root, 'dist', 'component.js');
     writeFileSync(
       adapterPath,
       "import application from 'virtual:di-framework-application';\nexport const handler = application;\n",
@@ -450,7 +450,7 @@ export default async function echo(): Promise<string> {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-ws-http-bundle-'));
     const adapterPath = join(root, 'adapter.ts');
     const entryPath = join(root, 'entry.ts');
-    const outFile = join(root, 'out', 'component.js');
+    const outFile = join(root, 'dist', 'component.js');
     writeFileSync(
       adapterPath,
       "import application from 'virtual:di-framework-application';\nexport const handler = application;\n",
