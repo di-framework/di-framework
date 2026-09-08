@@ -18,6 +18,7 @@ import {
   serializeHeaders,
   serializeHttpResponse,
 } from '../src/node-compat/http-parser';
+import * as clock from './memory-wasi-clocks';
 import { getRandomBytes, resetMemoryRandom } from './memory-wasi-random';
 import {
   nameRecords,
@@ -26,6 +27,8 @@ import {
   TcpSocket,
   UdpSocket,
 } from './memory-wasi-sockets';
+
+mock.module('wasi:clocks/monotonic-clock@0.3.0', () => clock);
 
 mock.module('wasi:sockets/types@0.3.0', () => ({ TcpSocket, UdpSocket }));
 mock.module('wasi:sockets/ip-name-lookup@0.3.0', () => ({ resolveAddresses }));
@@ -42,6 +45,48 @@ afterEach(() => {
 });
 
 describe('node:http overlay', () => {
+  it('frames explicitly chunked client bodies, including empty bodies, exactly once', async () => {
+    const seen: string[] = [];
+    const server = createServer((req, res) => {
+      expect(req.headers['content-length']).toBeUndefined();
+      const chunks: Uint8Array[] = [];
+      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks).toString();
+        seen.push(body);
+        res.end(body);
+      });
+    });
+    server.listen(0, '127.0.0.1');
+    try {
+      for (const body of ['hello wasm', '']) {
+        const received = await new Promise<string>((resolve, reject) => {
+          const req = request(
+            {
+              host: '127.0.0.1',
+              port: server.address()?.port,
+              method: 'POST',
+              headers: { 'transfer-encoding': 'chunked', 'content-length': '999' },
+            },
+            (res) => {
+              const chunks: Uint8Array[] = [];
+              res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+              res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+            },
+          );
+          req.on('error', reject);
+          req.write('');
+          req.write(body.slice(0, 3));
+          req.end(body.slice(3));
+          req.flush();
+        });
+        expect(received).toBe(body);
+      }
+      expect(seen).toEqual(['hello wasm', '']);
+    } finally {
+      server.close();
+    }
+  });
   it('decodes chunk extensions and trailers at every split, preserving following messages', () => {
     const wire = Buffer.from('3;foo=bar\r\nabc\r\n2\r\nde\r\n0\r\nX-Trailer: yes\r\n\r\n');
     for (let split = 0; split < wire.length; split++) {

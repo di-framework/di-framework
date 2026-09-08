@@ -95,6 +95,15 @@ export function runtimeRequirementsFromJavaScript(source: string): WitRequiremen
       source: NODE_COMPAT_SOURCE,
     });
   }
+  if (source.includes('wasi:clocks/monotonic-clock@0.3.0')) {
+    requirements.push({
+      package: 'wasi:clocks',
+      version: '0.3.0',
+      interfaces: ['monotonic-clock'],
+      direction: 'import',
+      source: NODE_COMPAT_SOURCE,
+    });
+  }
   return requirements;
 }
 

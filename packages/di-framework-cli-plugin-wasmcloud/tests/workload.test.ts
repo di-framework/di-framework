@@ -29,6 +29,20 @@ describe('workload manifests', () => {
       },
       'registry.example.com/team/greeter:sha256-abc',
     );
+    expect(yaml).not.toContain('allowedIpNameLookups');
+    const permitted = renderWorkloadManifest(
+      { ...project, allowedIpNameLookups: ['echo.example.com'] },
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/probe:local',
+    );
+    expect(permitted).toContain(
+      'localResources:\n            allowedIpNameLookups: ["echo.example.com"]',
+    );
     expect(yaml).toContain('kind: Service');
     expect(yaml).toContain('kind: WorkloadDeployment');
     expect(yaml).toContain('name: greeter');

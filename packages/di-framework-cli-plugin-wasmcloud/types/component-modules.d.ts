@@ -42,3 +42,13 @@ declare module 'wasi:sockets/ip-name-lookup@0.3.0' {
 declare module 'wasi:random/random@0.3.0' {
   export function getRandomBytes(maxLen: bigint | number): unknown;
 }
+
+declare module 'wasi:clocks/monotonic-clock@0.3.0' {
+  export function now(): bigint | number;
+  export function waitUntil(when: bigint | number): Promise<void>;
+}
+
+declare module '@babel/plugin-transform-async-to-generator' {
+  const plugin: import('@babel/core').PluginItem;
+  export default plugin;
+}

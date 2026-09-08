@@ -318,6 +318,7 @@ export class ClientRequest extends EventEmitter {
   aborted = false;
   writable = true;
   writableEnded = false;
+  headersSent = false;
   body: Uint8Array[] = [];
   options: RequestOptions;
 
@@ -417,16 +418,24 @@ export class ClientRequest extends EventEmitter {
   }
 
   flush(): void {
-    if (this.aborted || this.socket === undefined) return;
+    if (this.aborted || this.socket === undefined || this.headersSent) return;
     if (!this.writableEnded) return;
     const body = concatBytes(...this.body);
-    if (headerValue(this.headers, 'content-length') === undefined && body.length > 0) {
+    const chunked = isChunked(this.headers);
+    if (chunked) delete this.headers['content-length'];
+    else if (headerValue(this.headers, 'content-length') === undefined && body.length > 0) {
       this.headers['content-length'] = String(body.length);
     }
-    this.socket.write(serializeHttpRequest(this.method, this.path, this.headers));
-    if (body.length > 0) this.socket.write(body);
-    this.emit('finish');
+    this.headersSent = true;
     void this.readResponse(this.socket);
+    this.socket.write(serializeHttpRequest(this.method, this.path, this.headers));
+    if (chunked) {
+      for (const chunk of this.body) {
+        if (chunk.length > 0) this.socket.write(encodeChunk(chunk));
+      }
+      this.socket.write(CHUNKED_END);
+    } else if (body.length > 0) this.socket.write(body);
+    this.emit('finish');
   }
 
   async readResponse(socket: Socket): Promise<void> {

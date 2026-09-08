@@ -63,7 +63,9 @@ export function hostInterfacesFromRequirements(
   return aggregateRequirements(requirements)
     .filter(
       (requirement) =>
-        requirement.package !== WASI_SOCKETS_PACKAGE && requirement.package !== WASI_RANDOM_PACKAGE,
+        requirement.package !== WASI_SOCKETS_PACKAGE &&
+        requirement.package !== WASI_RANDOM_PACKAGE &&
+        requirement.package !== 'wasi:clocks',
     )
     .map((requirement) => {
       const entry = hostInterfaceFromRequirement(requirement, options);

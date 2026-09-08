@@ -42,6 +42,23 @@ describe('resolveInside', () => {
 });
 
 describe('loadProject', () => {
+  it('validates explicit DNS permission names', () => {
+    const root = makeProject();
+    const config = join(root, 'di-framework.config.json');
+    const allowedIpNameLookups = ['echo.wasmcloud.svc.cluster.local', '*.example.com', '::1'];
+    writeFileSync(
+      config,
+      JSON.stringify({ name: 'probe', entry: 'src/app.ts', allowedIpNameLookups }),
+    );
+    expect(loadProject(root).allowedIpNameLookups).toEqual(allowedIpNameLookups);
+    for (const names of ['*', [1], ['https://example.com'], [''], ['a..b'], ['example.com:80']]) {
+      writeFileSync(
+        config,
+        JSON.stringify({ name: 'probe', entry: 'src/app.ts', allowedIpNameLookups: names }),
+      );
+      expectFailure(() => loadProject(root), 'WASMCLOUD_CONFIG_INVALID', 2);
+    }
+  });
   it('loads a valid project with defaults and package version', () => {
     const root = makeProject({ name: 'Demo App', entry: 'src/app.ts' });
     const project = loadProject(join(root, 'src'));

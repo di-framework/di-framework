@@ -71,7 +71,13 @@ spec:
       components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${renderHostInterfacesYaml(
+${
+  project.allowedIpNameLookups === undefined
+    ? ''
+    : `          localResources:
+            allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}
+`
+}${renderHostInterfacesYaml(
   hostInterfacesFromRequirements(
     requirements,
     { httpHost: project.applicationName },
