@@ -168,6 +168,22 @@ describe('http adapter', () => {
     expect(collected).toEqual([9, 8]);
   });
 
+  it('buffers POST bodies so itty-router withContent can clone().json()', async () => {
+    const seen: unknown[] = [];
+    applicationState.current = async (request) => {
+      const cloned = request.clone();
+      seen.push(await cloned.json());
+      return new Response('ok');
+    };
+    wasiState.consumeBody = () =>
+      readable(new TextEncoder().encode('{"items":[{"sku":"mug","quantity":2}]}'));
+    const outgoing = (await handler.handle(
+      incoming({ method: { tag: 'post' }, path: '/quote' }),
+    )) as Outgoing;
+    expect(seen).toEqual([{ items: [{ sku: 'mug', quantity: 2 }] }]);
+    expect(outgoing.statusCode).toBe(200);
+  });
+
   it('unwraps consumeBody and Response.new tuples', async () => {
     applicationState.current = async (request) => new Response(await request.text());
     wasiState.consumeBody = () => [readable(new TextEncoder().encode('tuple'))];

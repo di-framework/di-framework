@@ -1,6 +1,10 @@
 /**
  * Minimal Fetch/URL/encoding globals for QuickJS-based WASI 0.3 guests.
- * StarlingMonkey already provides these; install only when missing so the
+ *
+ * WASI 0.3 async HTTP (`wasi:http/handler#handle`) is the component interface,
+ * not the WHATWG Fetch API. componentize-qjs embeds QuickJS, which has neither
+ * `Request`/`Response` nor `URLSearchParams`. StarlingMonkey does provide
+ * Fetch; install these polyfills only when those globals are missing so the
  * application contract (`new Response(...)`) stays unchanged.
  */
 
@@ -54,6 +58,10 @@ export class URLSearchParamsPolyfill {
 
   *entries(): IterableIterator<[string, string]> {
     yield* this.#pairs;
+  }
+
+  [Symbol.iterator](): IterableIterator<[string, string]> {
+    return this.entries();
   }
 
   toString(): string {
@@ -178,7 +186,7 @@ function toBodySource(body: unknown): BodySource {
   return new TextEncoderPolyfill().encode(String(body));
 }
 
-async function collectBytes(source: BodySource): Promise<Uint8Array> {
+export async function collectBytes(source: BodySource): Promise<Uint8Array> {
   if (source == null) return new Uint8Array();
   if (source instanceof Uint8Array) return source;
   const chunks: Uint8Array[] = [];
@@ -238,6 +246,11 @@ export class RequestPolyfill {
 
   get body(): AsyncIterable<Uint8Array> | null {
     return bodyAsStream(this.#body);
+  }
+
+  clone(): RequestPolyfill {
+    const body = this.#body instanceof Uint8Array ? this.#body.slice() : this.#body;
+    return new RequestPolyfill(this, { body });
   }
 
   async arrayBuffer(): Promise<ArrayBuffer> {

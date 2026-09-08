@@ -46,6 +46,13 @@ describe('fetch runtime streams', () => {
       body: chunks(65, new Uint8Array([66]), new Uint8Array([67]).buffer),
     });
     expect(await request.text()).toBe('ABC');
+    const original = new RequestPolyfill('http://example/quote', {
+      method: 'POST',
+      body: '{"items":[]}',
+    });
+    const cloned = original.clone();
+    expect(await cloned.json()).toEqual({ items: [] });
+    expect(await original.json()).toEqual({ items: [] });
     expect(bodyAsStream(null)).toBeNull();
     const empty = bodyAsStream(new Uint8Array());
     const yielded: Uint8Array[] = [];
@@ -80,6 +87,16 @@ describe('fetch runtime polyfills', () => {
       ['a', '1'],
       ['lonely', ''],
       ['b', '2'],
+    ]);
+    // itty-router iterates searchParams with for...of, not .entries().
+    expect([...fromString]).toEqual([
+      ['a', '1'],
+      ['lonely', ''],
+      ['b', '2'],
+    ]);
+    expect([...new URLPolyfill('http://example/health').searchParams]).toEqual([]);
+    expect([...new URLPolyfill('http://example/greet/Ada?lang=es').searchParams]).toEqual([
+      ['lang', 'es'],
     ]);
     expect(new URLSearchParamsPolyfill('').toString()).toBe('');
     expect(new URLSearchParamsPolyfill({ a: '1' }).get('a')).toBe('1');

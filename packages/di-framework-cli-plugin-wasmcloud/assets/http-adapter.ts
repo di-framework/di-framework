@@ -1,7 +1,7 @@
-import './fetch-runtime.ts';
 import application from 'virtual:di-framework-application';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
+import { collectBytes } from './fetch-runtime.ts';
 
 export function requireGuestsObject(value: unknown): asserts value is object {
   if (typeof value !== 'object' || value === null) {
@@ -90,7 +90,7 @@ async function toWebRequest(incoming: {
     return new Request(`${scheme}://${authority}${path}`, { method, headers });
   }
 
-  let stream: AsyncIterable<Uint8Array> | undefined;
+  let bodyBytes: Uint8Array | undefined;
   try {
     const consumed = (
       WasiRequest as unknown as {
@@ -103,15 +103,18 @@ async function toWebRequest(incoming: {
     const body = firstOfTuple(
       consumed as AsyncIterable<Uint8Array> | [AsyncIterable<Uint8Array>, ...unknown[]],
     );
-    if (isAsyncIterable(body)) stream = body;
+    if (isAsyncIterable(body)) {
+      const bytes = await collectBytes(body);
+      if (bytes.length > 0) bodyBytes = bytes;
+    }
   } catch {
-    stream = undefined;
+    bodyBytes = undefined;
   }
 
   return new Request(`${scheme}://${authority}${path}`, {
     method,
     headers,
-    body: stream as BodyInit | undefined,
+    body: bodyBytes as BodyInit | undefined,
   });
 }
 
