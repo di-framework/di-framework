@@ -47,7 +47,14 @@ generates one world and a `wit.lock.json` from that graph, bundles the entry beh
 Web Fetch adapter, and componentizes with `@di-framework/componentize-qjs` (a wasmtime-48
 fork of componentize-qjs 0.4.4 that can stub imported `async func`s such as
 `wasmcloud:postgres@0.2.0`). Set `DI_FRAMEWORK_COMPONENTIZE_QJS` to override the
-resolved CLI. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
+resolved CLI.
+
+Guest JS keeps the framework's Node contract. The bundler runs [unenv](https://github.com/unjs/unenv)
+`nodeCompat` plus a wasmCloud preset: `node:path`, `Buffer`, `AsyncLocalStorage`, and the rest of
+the Node builtin map come from unenv; `node:fs` is an in-memory filesystem (with `ENOENT`),
+`process.env` / `process.cwd()` are guest-shaped (not the host process), and `createRequire` throws
+`MODULE_NOT_FOUND`. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
+seeded into that filesystem at componentize time. Do not put secrets in those files. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
 which stubs unknown imports with sync `func_new` and fails at wizer with
 `type mismatch with async`. Sync imports such as `wasi:config@0.2.0-rc.1` also
 componentize with stock jco and run on `wasmtime serve -S config`. Build state

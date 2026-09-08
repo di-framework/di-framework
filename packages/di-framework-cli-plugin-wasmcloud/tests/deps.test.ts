@@ -14,14 +14,12 @@ import {
 } from '../src/deps';
 
 describe('nodeCompatibilityPlugin', () => {
-  it('routes the virtual application module and stubs node built-ins', () => {
+  it('routes the virtual application module and Node built-ins through unenv', () => {
     const plugin = nodeCompatibilityPlugin('/project/src/app.ts');
     expect(plugin.resolveId('virtual:di-framework-application')).toBe('/project/src/app.ts');
-    expect(plugin.resolveId('node:fs')).toBe('\0node:fs');
-    expect(plugin.resolveId('node:path')).toBe('\0node:path');
+    expect(plugin.resolveId('node:fs')).toMatch(/node-compat\/fs\.(ts|js)$/);
+    expect(plugin.resolveId('node:path')).toContain('unenv');
     expect(plugin.resolveId('rolldown')).toBeNull();
-    expect(plugin.load('\0node:fs')).toContain('unavailable in a WebAssembly component');
-    expect(plugin.load('\0node:path')).toContain('isAbsolute');
     expect(plugin.load('/project/src/app.ts')).toBeNull();
     expect(plugin.resolveId('virtual:di-framework-wasmcloud-guests')).toBe(
       '\0virtual:di-framework-wasmcloud-guests-empty',

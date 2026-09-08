@@ -360,6 +360,7 @@
         "@di-framework/componentize-qjs": "0.4.4-di.2",
         "rolldown": "1.2.7",
         "typescript": "^5",
+        "unenv": "2.0.0-rc.24",
       },
       "peerDependencies": {
         "typescript": "^5",

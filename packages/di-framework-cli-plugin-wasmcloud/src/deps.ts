@@ -5,6 +5,15 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rolldown } from 'rolldown';
 import { emptyGuestsModule } from './guests.js';
+import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env.js';
+import {
+  createNodeCompatSeed,
+  EMPTY_NODE_COMPAT_SEED,
+  isNodeCompatSeedSource,
+  NODE_COMPAT_SEED_ID,
+  type NodeCompatSeed,
+  renderNodeCompatSeedModule,
+} from './node-compat/seed.js';
 
 export type ProcessRunOptions = {
   cwd: string;
@@ -37,6 +46,10 @@ export type BundleOptions = {
   entryPath: string;
   outFile: string;
   guestsPath?: string;
+  projectRoot?: string;
+  files?: Record<string, string>;
+  env?: Record<string, string | undefined>;
+  cwd?: string;
 };
 
 export type Bundler = (options: BundleOptions) => Promise<void>;
@@ -71,8 +84,15 @@ export type WasmcloudDeps = {
   cwd(): string;
 };
 
-/** Resolves `virtual:di-framework-application` to the app entry and stubs node built-ins. */
-export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) {
+const NODE_COMPAT_SEED_RESOLVED = `\0${NODE_COMPAT_SEED_ID}`;
+
+/** Resolves the virtual application module and Node built-ins through unenv. */
+export function nodeCompatibilityPlugin(
+  entryPath: string,
+  guestsPath?: string,
+  seed: NodeCompatSeed = EMPTY_NODE_COMPAT_SEED,
+) {
+  const aliases = wasmcloudNodeEnv().alias;
   return {
     name: 'di-framework-component-runtime',
     resolveId(source: string) {
@@ -80,17 +100,12 @@ export function nodeCompatibilityPlugin(entryPath: string, guestsPath?: string) 
       if (source === 'virtual:di-framework-wasmcloud-guests') {
         return guestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
       }
-      if (source === 'node:fs' || source === 'node:path') return `\0${source}`;
-      return null;
+      if (isNodeCompatSeedSource(source)) return NODE_COMPAT_SEED_RESOLVED;
+      return aliases[source] ?? null;
     },
     load(id: string) {
       if (id === '\0virtual:di-framework-wasmcloud-guests-empty') return emptyGuestsModule();
-      if (id === '\0node:fs') {
-        return "export const writeFileSync = () => { throw new Error('node:fs is unavailable in a WebAssembly component'); };";
-      }
-      if (id === '\0node:path') {
-        return 'export const isAbsolute = () => false; export const resolve = value => value;';
-      }
+      if (id === NODE_COMPAT_SEED_RESOLVED) return renderNodeCompatSeedModule(seed);
       return null;
     },
   };
@@ -256,13 +271,31 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     return { exitCode: await child.exited, stdout, stderr };
   },
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  bundler: async ({ adapterPath, entryPath, outFile, guestsPath }) => {
+  bundler: async ({
+    adapterPath,
+    entryPath,
+    outFile,
+    guestsPath,
+    projectRoot,
+    files,
+    env,
+    cwd,
+  }) => {
+    const nodeEnv = wasmcloudNodeEnv();
     const bundle = await rolldown({
       input: adapterPath,
       external: COMPONENT_IMPORT_EXTERNAL,
-      plugins: [nodeCompatibilityPlugin(entryPath, guestsPath)],
+      resolve: { alias: { ...nodeEnv.alias } },
+      plugins: [
+        nodeCompatibilityPlugin(
+          entryPath,
+          guestsPath,
+          createNodeCompatSeed({ files, env, cwd, projectRoot }),
+        ),
+      ],
       transform: {
         decorator: { legacy: true },
+        inject: rolldownInject(nodeEnv.inject),
       },
       treeshake: {
         moduleSideEffects(id) {
