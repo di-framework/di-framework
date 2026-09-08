@@ -31,6 +31,7 @@ export {
   componentizeQjsPlatformPackageName,
   DEFAULT_DEPS,
   findInstalledComponentizeQjsCli,
+  nativeComponentizeQjsOnPath,
   nodeCompatibilityPlugin,
   resolveComponentizeQjsPath,
   type WasmcloudDeps,

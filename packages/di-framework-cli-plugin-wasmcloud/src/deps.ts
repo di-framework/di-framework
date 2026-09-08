@@ -154,6 +154,15 @@ export function resolveComponentizeQjsPath(
   return installedCliPath ?? pathCli;
 }
 
+/** PATH entries inside node_modules are the npm wrapper, not a native wasmtime-48 CLI. */
+export function nativeComponentizeQjsOnPath(
+  whichPath = Bun.which('componentize-qjs') ?? undefined,
+): string | undefined {
+  if (whichPath === undefined) return undefined;
+  if (whichPath.split(/[/\\]/).includes('node_modules')) return undefined;
+  return whichPath;
+}
+
 /**
  * jco's entry inside a real node_modules tree, walking up from this package.
  * Bun's `import.meta.resolve` can return its global install cache, where jco's
@@ -234,7 +243,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     resolveComponentizeQjsPath(
       process.env,
       findInstalledComponentizeQjsCli(),
-      Bun.which('componentize-qjs') ?? undefined,
+      nativeComponentizeQjsOnPath(),
     ),
   nodeBinaryPath: () => Bun.which('node') ?? undefined,
   wasmtimeBinaryPath: () => Bun.which('wasmtime') ?? undefined,

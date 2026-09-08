@@ -55,108 +55,99 @@ describe('config binding guest wiring', () => {
     expect(guests).toContain('"app-config": guest0');
   });
 
-  it(
-    'componentizes unlabeled wasi:config with the real qjs toolchain',
-    async () => {
-      if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
-      if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
+  it('componentizes unlabeled wasi:config with the real qjs toolchain', async () => {
+    const qjs = patchedComponentizeQjsPath();
+    if (qjs === undefined) return;
+    if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
+    if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
 
-      const root = makeProject();
-      writeConfigProject(root);
-      const deps = {
-        ...DEFAULT_DEPS,
-        cwd: () => root,
-        assetsDirectory: () => DIST_ASSETS,
-        resolveFromProject: (_projectRoot: string, specifier: string) =>
-          specifier === '@di-framework/wasmcloud/catalog.json'
-            ? join(root, 'catalog.json')
-            : undefined,
-      };
-      await buildComponent(loadProject(root), captureIo().io, deps);
-      const inspected = await DEFAULT_DEPS.runCaptured(
-        DEFAULT_DEPS.nodeBinaryPath() ?? 'node',
-        [DEFAULT_DEPS.jcoCliPath(), 'wit', join(root, 'dist', 'demo-app.wasm')],
-        { cwd: root },
-      );
-      expect(inspected.exitCode).toBe(0);
-      expect(`${inspected.stdout}\n${inspected.stderr}`).toContain(
-        'wasi:config/store@0.2.0-rc.1',
-      );
-    },
-    60_000,
-  );
+    const root = makeProject();
+    writeConfigProject(root);
+    const deps = {
+      ...DEFAULT_DEPS,
+      cwd: () => root,
+      assetsDirectory: () => DIST_ASSETS,
+      componentizeQjsPath: () => qjs,
+      resolveFromProject: (_projectRoot: string, specifier: string) =>
+        specifier === '@di-framework/wasmcloud/catalog.json'
+          ? join(root, 'catalog.json')
+          : undefined,
+    };
+    await buildComponent(loadProject(root), captureIo().io, deps);
+    const inspected = await DEFAULT_DEPS.runCaptured(
+      DEFAULT_DEPS.nodeBinaryPath() ?? 'node',
+      [DEFAULT_DEPS.jcoCliPath(), 'wit', join(root, 'dist', 'demo-app.wasm')],
+      { cwd: root },
+    );
+    expect(inspected.exitCode).toBe(0);
+    expect(`${inspected.stdout}\n${inspected.stderr}`).toContain('wasi:config/store@0.2.0-rc.1');
+  }, 60_000);
 
-  it(
-    'componentizes unlabeled async wasmcloud:postgres with a wasmtime-48 qjs CLI',
-    async () => {
-      const qjs = patchedComponentizeQjsPath();
-      if (qjs === undefined) return;
-      if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
-      if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
+  it('componentizes unlabeled async wasmcloud:postgres with a wasmtime-48 qjs CLI', async () => {
+    const qjs = patchedComponentizeQjsPath();
+    if (qjs === undefined) return;
+    if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
+    if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
 
-      const root = makeProject();
-      mkdirSync(join(root, 'src'), { recursive: true });
-      writeFileSync(
-        join(root, 'src', 'bindings.ts'),
-        `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+    const root = makeProject();
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
 @WasmCloudBinding('user-database')
 export class UserDatabase extends Postgres {}
 `,
-      );
-      writeFileSync(
-        join(root, 'catalog.json'),
-        `${JSON.stringify({
-          Postgres: {
-            kind: 'Postgres',
-            package: 'wasmcloud:postgres',
-            version: '0.2.0',
-            interfaces: ['query', 'prepared', 'types'],
-            primaryInterface: 'query',
-            namedInstance: true,
-            sharedResources: [],
-            witDep: 'wasmcloud-postgres',
-            usesSecret: true,
-            configKeys: [],
-          },
-        })}\n`,
-      );
-      const deps = {
-        ...DEFAULT_DEPS,
-        cwd: () => root,
-        assetsDirectory: () => DIST_ASSETS,
-        componentizeQjsPath: () => qjs,
-        resolveFromProject: (_projectRoot: string, specifier: string) =>
-          specifier === '@di-framework/wasmcloud/catalog.json'
-            ? join(root, 'catalog.json')
-            : undefined,
-      };
-      await buildComponent(loadProject(root), captureIo().io, deps);
-      const inspected = await DEFAULT_DEPS.runCaptured(
-        DEFAULT_DEPS.nodeBinaryPath() ?? 'node',
-        [DEFAULT_DEPS.jcoCliPath(), 'wit', join(root, 'dist', 'demo-app.wasm')],
-        { cwd: root },
-      );
-      expect(inspected.exitCode).toBe(0);
-      const wit = `${inspected.stdout}\n${inspected.stderr}`;
-      expect(wit).toContain('wasmcloud:postgres/query@0.2.0');
-    },
-    120_000,
-  );
+    );
+    writeFileSync(
+      join(root, 'catalog.json'),
+      `${JSON.stringify({
+        Postgres: {
+          kind: 'Postgres',
+          package: 'wasmcloud:postgres',
+          version: '0.2.0',
+          interfaces: ['query', 'prepared', 'types'],
+          primaryInterface: 'query',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-postgres',
+          usesSecret: true,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const deps = {
+      ...DEFAULT_DEPS,
+      cwd: () => root,
+      assetsDirectory: () => DIST_ASSETS,
+      componentizeQjsPath: () => qjs,
+      resolveFromProject: (_projectRoot: string, specifier: string) =>
+        specifier === '@di-framework/wasmcloud/catalog.json'
+          ? join(root, 'catalog.json')
+          : undefined,
+    };
+    await buildComponent(loadProject(root), captureIo().io, deps);
+    const inspected = await DEFAULT_DEPS.runCaptured(
+      DEFAULT_DEPS.nodeBinaryPath() ?? 'node',
+      [DEFAULT_DEPS.jcoCliPath(), 'wit', join(root, 'dist', 'demo-app.wasm')],
+      { cwd: root },
+    );
+    expect(inspected.exitCode).toBe(0);
+    const wit = `${inspected.stdout}\n${inspected.stderr}`;
+    expect(wit).toContain('wasmcloud:postgres/query@0.2.0');
+  }, 120_000);
 
-  it(
-    'serves unlabeled wasi:config on wasmtime and returns a host config-var',
-    async () => {
-      const wasmtime = DEFAULT_DEPS.wasmtimeBinaryPath();
-      if (wasmtime === undefined) return;
-      if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
-      if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
-      if (!existsSync(join(WASMCLOUD_PKG, 'dist', 'index.js'))) return;
+  it('serves unlabeled wasi:config on wasmtime and returns a host config-var', async () => {
+    const wasmtime = DEFAULT_DEPS.wasmtimeBinaryPath();
+    if (wasmtime === undefined) return;
+    if (!existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
+    if (DEFAULT_DEPS.nodeBinaryPath() === undefined) return;
+    if (!existsSync(join(WASMCLOUD_PKG, 'dist', 'index.js'))) return;
 
-      const root = makeProject();
-      writeConfigProject(root);
-      writeFileSync(
-        join(root, 'src', 'app.ts'),
-        `import { AppConfig } from './bindings.ts';
+    const root = makeProject();
+    writeConfigProject(root);
+    writeFileSync(
+      join(root, 'src', 'app.ts'),
+      `import { AppConfig } from './bindings.ts';
 export default async (request: Request): Promise<Response> => {
   const key = new URL(request.url).searchParams.get('key') ?? 'greeting';
   const value = await Promise.resolve(new AppConfig().get(key));
@@ -165,60 +156,58 @@ export default async (request: Request): Promise<Response> => {
   });
 };
 `,
-      );
-      mkdirSync(join(root, 'node_modules', '@di-framework'), { recursive: true });
-      symlinkSync(WASMCLOUD_PKG, join(root, 'node_modules', '@di-framework', 'wasmcloud'));
+    );
+    mkdirSync(join(root, 'node_modules', '@di-framework'), { recursive: true });
+    symlinkSync(WASMCLOUD_PKG, join(root, 'node_modules', '@di-framework', 'wasmcloud'));
 
-      const deps = {
-        ...DEFAULT_DEPS,
-        cwd: () => root,
-        assetsDirectory: () => DIST_ASSETS,
-        resolveFromProject: (_projectRoot: string, specifier: string) =>
-          specifier === '@di-framework/wasmcloud/catalog.json'
-            ? join(root, 'catalog.json')
-            : undefined,
-      };
-      await buildComponent(loadProject(root), captureIo().io, deps);
+    const deps = {
+      ...DEFAULT_DEPS,
+      cwd: () => root,
+      assetsDirectory: () => DIST_ASSETS,
+      resolveFromProject: (_projectRoot: string, specifier: string) =>
+        specifier === '@di-framework/wasmcloud/catalog.json'
+          ? join(root, 'catalog.json')
+          : undefined,
+    };
+    await buildComponent(loadProject(root), captureIo().io, deps);
 
-      const port = 18000 + Math.floor(Math.random() * 1000);
-      const child = Bun.spawn(
-        [
-          wasmtime,
-          'serve',
-          '-S',
-          'cli',
-          '-S',
-          'p3',
-          '-S',
-          'config',
-          '-S',
-          'config-var=greeting=from-host',
-          '--addr',
-          `127.0.0.1:${port}`,
-          join(root, 'dist', 'demo-app.wasm'),
-        ],
-        { cwd: root, stdout: 'pipe', stderr: 'pipe' },
-      );
-      try {
-        const deadline = Date.now() + 15_000;
-        let body = '';
-        while (Date.now() < deadline) {
-          try {
-            const response = await fetch(`http://127.0.0.1:${port}/?key=greeting`);
-            if (response.ok) {
-              body = await response.text();
-              break;
-            }
-          } catch {
-            await DEFAULT_DEPS.wait(200);
+    const port = 18000 + Math.floor(Math.random() * 1000);
+    const child = Bun.spawn(
+      [
+        wasmtime,
+        'serve',
+        '-S',
+        'cli',
+        '-S',
+        'p3',
+        '-S',
+        'config',
+        '-S',
+        'config-var=greeting=from-host',
+        '--addr',
+        `127.0.0.1:${port}`,
+        join(root, 'dist', 'demo-app.wasm'),
+      ],
+      { cwd: root, stdout: 'pipe', stderr: 'pipe' },
+    );
+    try {
+      const deadline = Date.now() + 15_000;
+      let body = '';
+      while (Date.now() < deadline) {
+        try {
+          const response = await fetch(`http://127.0.0.1:${port}/?key=greeting`);
+          if (response.ok) {
+            body = await response.text();
+            break;
           }
+        } catch {
+          await DEFAULT_DEPS.wait(200);
         }
-        expect(body).toContain('from-host');
-      } finally {
-        child.kill();
-        await child.exited;
       }
-    },
-    120_000,
-  );
+      expect(body).toContain('from-host');
+    } finally {
+      child.kill();
+      await child.exited;
+    }
+  }, 120_000);
 });

@@ -7,6 +7,7 @@ import {
   DEFAULT_DEPS,
   findInstalledComponentizeQjsCli,
   findJcoEntry,
+  nativeComponentizeQjsOnPath,
   nodeCompatibilityPlugin,
   resolveComponentizeQjsPath,
 } from '../src/deps';
@@ -141,6 +142,13 @@ describe('DEFAULT_DEPS', () => {
         '/usr/bin/componentize-qjs',
       ),
     ).toBe('/opt/componentize-qjs');
+    expect(nativeComponentizeQjsOnPath(undefined)).toBeUndefined();
+    expect(nativeComponentizeQjsOnPath('/usr/local/bin/componentize-qjs')).toBe(
+      '/usr/local/bin/componentize-qjs',
+    );
+    expect(
+      nativeComponentizeQjsOnPath('/home/runner/work/repo/node_modules/.bin/componentize-qjs'),
+    ).toBeUndefined();
   });
 });
 
