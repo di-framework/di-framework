@@ -14,7 +14,7 @@ import {
   defaultProjectRequirements,
   digestBytes,
   renderWorldWit,
-  socketRequirementsFromJavaScript,
+  runtimeRequirementsFromJavaScript,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_VERSION,
   type WitLock,
@@ -187,7 +187,7 @@ export async function buildComponent(
     );
   }
 
-  const runtimeRequirements = socketRequirementsFromJavaScript(
+  const runtimeRequirements = runtimeRequirementsFromJavaScript(
     readFileSync(bundledJavaScript, 'utf8'),
   );
   const finalRequirements = [...requirements, ...runtimeRequirements];

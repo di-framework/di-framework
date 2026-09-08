@@ -106,6 +106,7 @@ describe('buildComponent', () => {
     expect(world).toContain('export wasi:http/handler@0.3.0;');
     expect(world).toContain('import wasi:sockets/types@0.3.0;');
     expect(world).not.toContain('ip-name-lookup');
+    expect(world).not.toContain('wasi:random');
     const lock = JSON.parse(readFileSync(join(root, '.di-framework', 'wit.lock.json'), 'utf8')) as {
       requirements: Array<{ package: string; interfaces: string[] }>;
     };
@@ -114,6 +115,33 @@ describe('buildComponent', () => {
         expect.objectContaining({ package: 'wasi:sockets', interfaces: ['types'] }),
       ]),
     );
+  });
+
+  it('adds wasi:random to the guest world when the bundle imports it', async () => {
+    const root = makeProject();
+    const assets = makeAssets();
+    await buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        bundleContents:
+          'import { getRandomBytes } from "wasi:random/random@0.3.0";\nexport const bundled = true;\n',
+        componentOutput: () => `\0asm random`,
+        capturedStdout: {
+          wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import wasi:random/random@0.3.0;
+}
+`,
+        },
+      }),
+    );
+    const world = readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8');
+    expect(world).toContain('export wasi:http/handler@0.3.0;');
+    expect(world).toContain('import wasi:random/random@0.3.0;');
+    expect(world).not.toContain('wasi:sockets');
   });
 
   it('writes a guests module when bindings are discovered', async () => {

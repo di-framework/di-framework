@@ -95,11 +95,20 @@ export class Socket extends EventEmitter {
   family: IpAddressFamily = 'ipv4';
   buffered: Uint8Array[] = [];
   ioStarted = false;
+  paused = false;
+  readableEnded = false;
+  readableBuffer: Uint8Array[] = [];
 
   constructor(native?: WasiTcpSocket, family: IpAddressFamily = 'ipv4') {
     super();
     this.native = native;
     this.family = family;
+    super.on('newListener', (event) => {
+      if (event === 'data') {
+        this.paused = false;
+        queueMicrotask(() => this.flushReadable());
+      }
+    });
     if (native !== undefined) {
       this.pending = false;
       this.readyState = 'open';
@@ -179,10 +188,45 @@ export class Socket extends EventEmitter {
     this.destroyed = true;
     this.connecting = false;
     this.readyState = 'closed';
+    this.readableEnded = true;
     this.outgoing?.close();
     if (error !== undefined) emitSocketError(this, error);
     queueMicrotask(() => this.emit('close'));
     return this;
+  }
+
+  get writable(): boolean {
+    return !this.destroyed && this.readyState !== 'closed';
+  }
+
+  get readable(): boolean {
+    return !this.destroyed && !this.readableEnded;
+  }
+
+  unshift(chunk: string | Uint8Array): boolean {
+    this.readableBuffer.unshift(toBytes(chunk));
+    this.flushReadable();
+    return true;
+  }
+
+  pause(): this {
+    this.paused = true;
+    return this;
+  }
+
+  resume(): this {
+    this.paused = false;
+    this.flushReadable();
+    return this;
+  }
+
+  flushReadable(): void {
+    if (this.paused || this.destroyed) return;
+    if (typeof this.listenerCount === 'function' && this.listenerCount('data') === 0) return;
+    while (this.readableBuffer.length > 0) {
+      const next = this.readableBuffer.shift();
+      if (next !== undefined) this.emit('data', toNodeBuffer(next));
+    }
   }
 
   address(): AddressInfo | null {
@@ -259,8 +303,10 @@ export class Socket extends EventEmitter {
         const bytes = toBytes(chunk);
         if (bytes.length === 0) continue;
         this.bytesRead += bytes.length;
-        this.emit('data', toNodeBuffer(bytes));
+        this.readableBuffer.push(bytes);
+        this.flushReadable();
       }
+      this.readableEnded = true;
       if (!this.destroyed) this.emit('end');
     } catch (error) {
       if (!this.destroyed) emitSocketError(this, error);

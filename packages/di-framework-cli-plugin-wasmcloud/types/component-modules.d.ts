@@ -38,3 +38,7 @@ declare module 'wasi:sockets/types@0.3.0' {
 declare module 'wasi:sockets/ip-name-lookup@0.3.0' {
   export function resolveAddresses(name: string): Promise<unknown>;
 }
+
+declare module 'wasi:random/random@0.3.0' {
+  export function getRandomBytes(maxLen: bigint | number): unknown;
+}

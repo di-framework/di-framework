@@ -188,9 +188,13 @@ describe('unenv preset', () => {
     expect(envConfig.alias['node:fs']).toMatch(/node-compat\/fs\.(ts|js)$/);
     expect(envConfig.alias['node:net']).toMatch(/node-compat\/net\.(ts|js)$/);
     expect(envConfig.alias['node:dgram']).toMatch(/node-compat\/dgram\.(ts|js)$/);
+    expect(envConfig.alias['node:crypto']).toMatch(/node-compat\/crypto\.(ts|js)$/);
+    expect(envConfig.alias['node:http']).toMatch(/node-compat\/http\.(ts|js)$/);
     expect(envConfig.alias['node:path']).toContain('unenv');
     expect(envConfig.alias['node:async_hooks']).toContain('unenv');
     expect(envConfig.inject.process?.[0]).toMatch(/node-compat\/process\.(ts|js)$/);
+    expect(envConfig.inject.crypto?.[0]).toMatch(/node-compat\/crypto\.(ts|js)$/);
+    expect(envConfig.inject.crypto?.[1]).toBe('webcrypto');
     expect(envConfig.polyfill.some((entry) => entry.includes('polyfill/process'))).toBe(false);
     expect(wasmcloudNodeEnv()).toBe(envConfig);
     const preset = wasmcloudUnenvPreset('/fs.js', '/process.js', '/module.js');
@@ -285,6 +289,8 @@ export default {
     expect(plugin.resolveId('node:fs')).toMatch(/node-compat\/fs\.(ts|js)$/);
     expect(plugin.resolveId('node:net')).toMatch(/node-compat\/net\.(ts|js)$/);
     expect(plugin.resolveId('node:dgram')).toMatch(/node-compat\/dgram\.(ts|js)$/);
+    expect(plugin.resolveId('node:crypto')).toMatch(/node-compat\/crypto\.(ts|js)$/);
+    expect(plugin.resolveId('node:http')).toMatch(/node-compat\/http\.(ts|js)$/);
     expect(plugin.resolveId('node:path')).toContain('unenv');
     expect(plugin.resolveId('./seed-virtual.ts')).toBe(`\0${NODE_COMPAT_SEED_ID}`);
     expect(plugin.resolveId('rolldown')).toBeNull();

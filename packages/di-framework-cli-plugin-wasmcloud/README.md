@@ -55,9 +55,12 @@ the Node builtin map come from unenv; `node:fs` is an in-memory filesystem (with
 `process.env` / `process.cwd()` are guest-shaped (not the host process), and `createRequire` throws
 `MODULE_NOT_FOUND`. `node:net` and `node:dgram` overlay WASI 0.3 `wasi:sockets` (`tcp-socket` /
 `udp-socket` / `ip-name-lookup`) so `@di-framework/socket`'s Node TCP/UDP adapters run unchanged.
-Those WIT imports are added to the guest world only when the bundle actually uses them; they are
-runtime WASI, not wasmCloud `hostInterfaces`. `node:http`, `node:tls`, and `child_process` stay
-unenv mocks. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
+`node:crypto` overlays `wasi:random@0.3.0` plus guest hashes and the Web Crypto subset used by
+socket security (`createHash` / `createHmac` / `randomBytes` / `randomUUID` / `subtle` HMAC, HKDF,
+AES-GCM, ECDH P-256). `node:http` is HTTP/1.1 on that TCP overlay (`createServer`, `request` /
+`get`, `'upgrade'`) so the Node WebSocket adapter (`ws`) can handshake. Those WIT imports are added
+to the guest world only when the bundle actually uses them; they are runtime WASI, not wasmCloud
+`hostInterfaces`. `node:tls`, `https`, and `child_process` stay unenv mocks. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
 seeded into that filesystem at componentize time. Do not put secrets in those files. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
 which stubs unknown imports with sync `func_new` and fails at wizer with
 `type mismatch with async`. Sync imports such as `wasi:config@0.2.0-rc.1` also
