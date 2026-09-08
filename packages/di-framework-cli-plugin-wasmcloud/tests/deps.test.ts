@@ -154,28 +154,28 @@ describe('DEFAULT_DEPS', () => {
 });
 
 describe('findInstalledComponentizeQjsCli', () => {
-  it('names the optional platform package from os, with arch in the version', () => {
-    expect(componentizeQjsPlatformPackageName('darwin')).toBe(
-      '@di-framework/componentize-qjs-darwin',
+  it('names the native CLI as a version of the single npm package', () => {
+    expect(componentizeQjsPlatformPackageName()).toBe('@di-framework/componentize-qjs');
+    expect(componentizeQjsPlatformPackageVersion('darwin', 'arm64', '0.4.4-di.2')).toBe(
+      '0.4.4-di.2-darwin-arm64',
     );
-    expect(componentizeQjsPlatformPackageName('win32')).toBe(
-      '@di-framework/componentize-qjs-win32',
+    expect(componentizeQjsPlatformPackageVersion('linux', 'x64', '0.4.4-di.2')).toBe(
+      '0.4.4-di.2-linux-x64',
     );
-    expect(componentizeQjsPlatformPackageVersion('arm64', '0.4.4-di.2')).toBe('0.4.4-di.2-arm64');
-    expect(componentizeQjsPlatformPackageVersion('x64', '0.4.4-di.2')).toBe('0.4.4-di.2-x64');
   });
 
-  it('walks node_modules for the OS platform CLI binary', () => {
+  it('walks node_modules for a same-package native CLI version', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-walk-'));
     writeFileSync(join(root, 'package.json'), '{}\n');
-    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-linux');
+    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
     const binDir = join(pkgDir, 'bin');
     mkdirSync(binDir, { recursive: true });
     writeFileSync(
       join(pkgDir, 'package.json'),
       JSON.stringify({
-        name: '@di-framework/componentize-qjs-linux',
-        version: '0.4.4-di.2-x64',
+        name: '@di-framework/componentize-qjs',
+        version: '0.4.4-di.2-linux-x64',
+        os: ['linux'],
         cpu: ['x64'],
       }),
     );
@@ -186,16 +186,16 @@ describe('findInstalledComponentizeQjsCli', () => {
     expect(findInstalledComponentizeQjsCli(root, 'darwin', 'arm64')).toBeUndefined();
   });
 
-  it('ignores an OS package whose version is a different architecture', () => {
+  it('ignores a native version whose suffix is a different platform', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-ver-'));
     writeFileSync(join(root, 'package.json'), '{}\n');
-    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-linux');
+    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
     mkdirSync(join(pkgDir, 'bin'), { recursive: true });
     writeFileSync(
       join(pkgDir, 'package.json'),
       JSON.stringify({
-        name: '@di-framework/componentize-qjs-linux',
-        version: '0.4.4-di.2-x64',
+        name: '@di-framework/componentize-qjs',
+        version: '0.4.4-di.2-linux-x64',
       }),
     );
     writeFileSync(join(pkgDir, 'bin', 'componentize-qjs'), '#!/bin/sh\n');
@@ -205,7 +205,7 @@ describe('findInstalledComponentizeQjsCli', () => {
   it('treats an unreadable platform package.json as matching', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-badjson-'));
     writeFileSync(join(root, 'package.json'), '{}\n');
-    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-linux');
+    const pkgDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs');
     mkdirSync(join(pkgDir, 'bin'), { recursive: true });
     writeFileSync(join(pkgDir, 'package.json'), '{not json');
     const bin = join(pkgDir, 'bin', 'componentize-qjs');
@@ -216,7 +216,7 @@ describe('findInstalledComponentizeQjsCli', () => {
   it('walks node_modules for the wrapper alias folder', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-alias-'));
     writeFileSync(join(root, 'package.json'), '{}\n');
-    const binDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-linux-x64', 'bin');
+    const binDir = join(root, 'node_modules', 'componentize-qjs-linux-x64', 'bin');
     mkdirSync(binDir, { recursive: true });
     const bin = join(binDir, 'componentize-qjs');
     writeFileSync(bin, '#!/bin/sh\n');
@@ -226,7 +226,7 @@ describe('findInstalledComponentizeQjsCli', () => {
   it('walks node_modules for the Windows CLI binary', () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-qjs-win-'));
     writeFileSync(join(root, 'package.json'), '{}\n');
-    const binDir = join(root, 'node_modules', '@di-framework', 'componentize-qjs-win32', 'bin');
+    const binDir = join(root, 'node_modules', 'componentize-qjs-win32-x64', 'bin');
     mkdirSync(binDir, { recursive: true });
     const bin = join(binDir, 'componentize-qjs.exe');
     writeFileSync(bin, 'MZ');

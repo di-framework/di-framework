@@ -105,30 +105,42 @@ export const COMPONENTIZE_QJS_PACKAGE = '@di-framework/componentize-qjs';
 // Real path, not a store symlink, so walking up reaches this package's node_modules.
 const packageRoot = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), '..');
 
-export function componentizeQjsPlatformPackageName(platform = process.platform): string {
-  return `${COMPONENTIZE_QJS_PACKAGE}-${platform}`;
+export function componentizeQjsPlatformPackageName(): string {
+  return COMPONENTIZE_QJS_PACKAGE;
 }
 
 export function componentizeQjsPlatformPackageVersion(
+  platform = process.platform,
   arch = process.arch,
   wrapperVersion = '0.4.4-di.2',
 ): string {
-  return `${wrapperVersion}-${arch}`;
+  return `${wrapperVersion}-${platform}-${arch}`;
 }
 
-function platformPackageBinMatchesArch(packageDirectory: string, arch: string): boolean {
+function platformPackageBinMatches(
+  packageDirectory: string,
+  platform: string,
+  arch: string,
+): boolean {
   const packageJsonPath = join(packageDirectory, 'package.json');
   if (!existsSync(packageJsonPath)) return true;
   try {
     const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      os?: string[];
       cpu?: string[];
       version?: string;
     };
+    if (Array.isArray(pkg.os) && pkg.os.length > 0 && !pkg.os.includes(platform)) {
+      return false;
+    }
     if (Array.isArray(pkg.cpu) && pkg.cpu.length > 0 && !pkg.cpu.includes(arch)) {
       return false;
     }
-    if (typeof pkg.version === 'string' && /-(?:arm64|x64)$/.test(pkg.version)) {
-      return pkg.version.endsWith(`-${arch}`);
+    if (
+      typeof pkg.version === 'string' &&
+      /-(?:darwin|linux|win32|android)-(?:arm64|x64)$/.test(pkg.version)
+    ) {
+      return pkg.version.endsWith(`-${platform}-${arch}`);
     }
   } catch {
     return true;
@@ -137,28 +149,27 @@ function platformPackageBinMatchesArch(packageDirectory: string, arch: string): 
 }
 
 /**
- * Locate the native CLI shipped by `@di-framework/componentize-qjs-<os>@<version>-<arch>`.
+ * Locate the native CLI shipped as `@di-framework/componentize-qjs@<version>-<os>-<arch>`.
  * Walks `node_modules` from `startDirectory` (same strategy as `findJcoEntry`)
- * so Bun's install cache is not required. Also accepts the wrapper's npm alias
- * folder `componentize-qjs-<os>-<arch>`.
+ * so Bun's install cache is not required. The wrapper aliases that version into
+ * an unscoped `componentize-qjs-<os>-<arch>` folder.
  */
 export function findInstalledComponentizeQjsCli(
   startDirectory = packageRoot,
   platform = process.platform,
   arch = process.arch,
 ): string | undefined {
-  const scopedDirectories = [
-    `componentize-qjs-${platform}`,
-    `componentize-qjs-${platform}-${arch}`,
+  const packageDirectories = (nodeModules: string) => [
+    join(nodeModules, `componentize-qjs-${platform}-${arch}`),
+    join(nodeModules, '@di-framework', 'componentize-qjs'),
   ];
   const binName = platform === 'win32' ? 'componentize-qjs.exe' : 'componentize-qjs';
   let previous = '';
   let current = startDirectory;
   while (current !== previous) {
-    for (const scopedDirectory of scopedDirectories) {
-      const packageDirectory = join(current, 'node_modules', '@di-framework', scopedDirectory);
+    for (const packageDirectory of packageDirectories(join(current, 'node_modules'))) {
       const bin = join(packageDirectory, 'bin', binName);
-      if (existsSync(bin) && platformPackageBinMatchesArch(packageDirectory, arch)) {
+      if (existsSync(bin) && platformPackageBinMatches(packageDirectory, platform, arch)) {
         return bin;
       }
     }
