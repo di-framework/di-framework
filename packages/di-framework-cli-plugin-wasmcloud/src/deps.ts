@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,30 +105,63 @@ export const COMPONENTIZE_QJS_PACKAGE = '@di-framework/componentize-qjs';
 // Real path, not a store symlink, so walking up reaches this package's node_modules.
 const packageRoot = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), '..');
 
-export function componentizeQjsPlatformPackageName(
-  platform = process.platform,
+export function componentizeQjsPlatformPackageName(platform = process.platform): string {
+  return `${COMPONENTIZE_QJS_PACKAGE}-${platform}`;
+}
+
+export function componentizeQjsPlatformPackageVersion(
   arch = process.arch,
+  wrapperVersion = '0.4.4-di.2',
 ): string {
-  return `${COMPONENTIZE_QJS_PACKAGE}-${platform}-${arch}`;
+  return `${wrapperVersion}-${arch}`;
+}
+
+function platformPackageBinMatchesArch(packageDirectory: string, arch: string): boolean {
+  const packageJsonPath = join(packageDirectory, 'package.json');
+  if (!existsSync(packageJsonPath)) return true;
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      cpu?: string[];
+      version?: string;
+    };
+    if (Array.isArray(pkg.cpu) && pkg.cpu.length > 0 && !pkg.cpu.includes(arch)) {
+      return false;
+    }
+    if (typeof pkg.version === 'string' && /-(?:arm64|x64)$/.test(pkg.version)) {
+      return pkg.version.endsWith(`-${arch}`);
+    }
+  } catch {
+    return true;
+  }
+  return true;
 }
 
 /**
- * Locate the native CLI shipped by `@di-framework/componentize-qjs-<os>-<arch>`.
+ * Locate the native CLI shipped by `@di-framework/componentize-qjs-<os>@<version>-<arch>`.
  * Walks `node_modules` from `startDirectory` (same strategy as `findJcoEntry`)
- * so Bun's install cache is not required.
+ * so Bun's install cache is not required. Also accepts the wrapper's npm alias
+ * folder `componentize-qjs-<os>-<arch>`.
  */
 export function findInstalledComponentizeQjsCli(
   startDirectory = packageRoot,
   platform = process.platform,
   arch = process.arch,
 ): string | undefined {
-  const scopedDirectory = `componentize-qjs-${platform}-${arch}`;
+  const scopedDirectories = [
+    `componentize-qjs-${platform}`,
+    `componentize-qjs-${platform}-${arch}`,
+  ];
   const binName = platform === 'win32' ? 'componentize-qjs.exe' : 'componentize-qjs';
   let previous = '';
   let current = startDirectory;
   while (current !== previous) {
-    const bin = join(current, 'node_modules', '@di-framework', scopedDirectory, 'bin', binName);
-    if (existsSync(bin)) return bin;
+    for (const scopedDirectory of scopedDirectories) {
+      const packageDirectory = join(current, 'node_modules', '@di-framework', scopedDirectory);
+      const bin = join(packageDirectory, 'bin', binName);
+      if (existsSync(bin) && platformPackageBinMatchesArch(packageDirectory, arch)) {
+        return bin;
+      }
+    }
     previous = current;
     current = dirname(current);
   }
