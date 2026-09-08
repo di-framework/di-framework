@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as hostFs from 'node:fs';
 import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,12 +31,15 @@ import {
   toPosixGuestPath,
 } from '../src/node-compat/seed';
 import { nodeCompatSeed } from '../src/node-compat/seed-virtual';
+import * as clock from './memory-wasi-clocks';
 
 afterEach(() => {
   nodeCompatSeed.files = {};
   nodeCompatSeed.environ = {};
   nodeCompatSeed.cwd = '/';
 });
+
+mock.module('wasi:clocks/monotonic-clock@0.3.0', () => clock);
 
 describe('guest memfs', () => {
   it('reads and writes utf8, reports ENOENT, and resolves relative paths', () => {
@@ -224,7 +227,7 @@ describe('unenv preset', () => {
     expect(envConfig.alias['node:crypto']).toMatch(/node-compat\/crypto\.(ts|js)$/);
     expect(envConfig.alias['node:http']).toMatch(/node-compat\/http\.(ts|js)$/);
     expect(envConfig.alias['node:path']).toContain('unenv');
-    expect(envConfig.alias['node:async_hooks']).toContain('unenv');
+    expect(envConfig.alias['node:async_hooks']).toContain('node-compat/async-hooks');
     expect(envConfig.inject.process?.[0]).toMatch(/node-compat\/process\.(ts|js)$/);
     expect(envConfig.inject.crypto?.[0]).toMatch(/node-compat\/crypto\.(ts|js)$/);
     expect(envConfig.inject.crypto?.[1]).toBe('webcrypto');
@@ -293,6 +296,13 @@ export default {
   env: process.env.APP_PORT,
   requireCode,
   als: als.run(7, () => als.getStore()),
+  async concurrent() {
+    return Promise.all([15, 1].map(delay => als.run(delay, async () => {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      await Promise.resolve();
+      return als.getStore();
+    })));
+  },
 };
 `,
     );
@@ -314,6 +324,7 @@ export default {
     expect(bundled.handler.env).toBe('3000');
     expect(bundled.handler.requireCode).toBe('MODULE_NOT_FOUND');
     expect(bundled.handler.als).toBe(7);
+    expect(await bundled.handler.concurrent()).toEqual([15, 1]);
   });
 
   it('resolves node built-ins through the compatibility plugin', () => {

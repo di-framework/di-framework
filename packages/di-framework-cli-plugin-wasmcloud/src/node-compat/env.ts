@@ -27,6 +27,10 @@ export function wasmcloudUnenvPreset(
   return {
     meta: { name: 'unenv:wasmcloud' },
     alias: {
+      async_hooks: runtimeFile('async-hooks'),
+      'node:async_hooks': runtimeFile('async-hooks'),
+      timers: runtimeFile('timers'),
+      'node:timers': runtimeFile('timers'),
       fs: fsPath,
       'node:fs': fsPath,
       process: processPath,

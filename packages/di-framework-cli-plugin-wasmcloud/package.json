@@ -46,7 +46,9 @@
     "@noble/hashes": "2.4.0",
     "rolldown": "1.2.7",
     "typescript": "^5",
-    "unenv": "2.0.0-rc.24"
+    "unenv": "2.0.0-rc.24",
+    "@babel/core": "7.29.7",
+    "@babel/plugin-transform-async-to-generator": "7.29.7"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -54,5 +56,8 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "devDependencies": {
+    "@types/babel__core": "^7.20.5"
+  }
 }

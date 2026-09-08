@@ -3,7 +3,10 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { transformAsync } from '@babel/core';
+import asyncToGenerator from '@babel/plugin-transform-async-to-generator';
 import { rolldown } from 'rolldown';
+import { lowerForAwait } from './async-transform.js';
 import { emptyGuestsModule } from './guests.js';
 import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env.js';
 import {
@@ -283,10 +286,26 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
   }) => {
     const nodeEnv = wasmcloudNodeEnv();
     const bundle = await rolldown({
-      input: adapterPath,
+      input: 'virtual:di-framework-runtime-entry',
       external: COMPONENT_IMPORT_EXTERNAL,
       resolve: { alias: { ...nodeEnv.alias } },
       plugins: [
+        {
+          name: 'di-framework-runtime-bootstrap',
+          resolveId(id) {
+            if (id === 'virtual:di-framework-runtime-entry') return `\0${id}`;
+          },
+          load(id) {
+            if (id === '\0virtual:di-framework-runtime-entry') {
+              const bootstrap = join(
+                dirname(fileURLToPath(import.meta.url)),
+                'node-compat',
+                `bootstrap.${import.meta.url.endsWith('.ts') ? 'ts' : 'js'}`,
+              );
+              return `import ${JSON.stringify(bootstrap)}; export * from ${JSON.stringify(adapterPath)};`;
+            }
+          },
+        },
         nodeCompatibilityPlugin(
           entryPath,
           guestsPath,
@@ -300,6 +319,8 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
       treeshake: {
         moduleSideEffects(id) {
           return (
+            id.includes('/node-compat/bootstrap.') ||
+            id.includes('/node-compat/fetch-runtime.') ||
             id.includes('virtual:di-framework-wasmcloud-guests') ||
             id.endsWith('/guests.js') ||
             id.endsWith('\\guests.js')
@@ -308,7 +329,27 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
       },
     });
     try {
-      await bundle.write({ file: outFile, format: 'esm' });
+      await bundle.write({
+        file: outFile,
+        format: 'esm',
+        plugins: [
+          {
+            name: 'di-framework-async-context',
+            async renderChunk(code) {
+              // Transform async functions only. Broad ES2016 lowering changes the
+              // prototype of async generators used by unenv's EventEmitter.
+              const transformed = await transformAsync(code, {
+                babelrc: false,
+                configFile: false,
+                sourceType: 'module',
+                plugins: [lowerForAwait, asyncToGenerator],
+              });
+              if (!transformed?.code) throw new Error('Failed to lower guest async functions');
+              return { code: transformed.code, map: null };
+            },
+          },
+        ],
+      });
     } finally {
       await bundle.close();
     }

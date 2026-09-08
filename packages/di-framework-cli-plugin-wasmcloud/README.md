@@ -49,8 +49,34 @@ fork of componentize-qjs 0.4.4 that can stub imported `async func`s such as
 `wasmcloud:postgres@0.2.0`). Set `DI_FRAMEWORK_COMPONENTIZE_QJS` to override the
 resolved CLI.
 
+The bootstrap installs text encoding and Fetch globals before evaluating application
+imports, including Node modules with module-level constants. `node:timers` and global
+`setTimeout`, `setInterval`, and `setImmediate` use the WASI monotonic clock. Timer
+handles support cancellation, refresh, and ref/unref flags; process-lifetime ref
+semantics do not apply to an invocation-driven component.
+
+`node:async_hooks` supplies context scopes and binding. The bundler lowers async
+functions and `for await` loops into Promise continuations, whose callbacks retain
+the calling context. Timer callbacks also retain context. Native async-generator
+bodies and dynamically evaluated async code are not instrumented by this transform.
+
+A workload must explicitly permit WASI DNS lookups. Add hostnames or wildcard suffixes
+to the project configuration, for example:
+
+```json
+{
+  "name": "socket-app",
+  "entry": "src/app.ts",
+  "allowedIpNameLookups": ["echo.wasmcloud.svc.cluster.local"]
+}
+```
+
+The deployer writes these names under the component's
+`localResources.allowedIpNameLookups`. Omission keeps the host's default denial;
+it does not implicitly grant unrestricted DNS access.
+
 Guest JS keeps the framework's Node contract. The bundler runs [unenv](https://github.com/unjs/unenv)
-`nodeCompat` plus a wasmCloud preset: `node:path`, `Buffer`, `AsyncLocalStorage`, and the rest of
+`nodeCompat` plus a wasmCloud preset: `node:path`, `Buffer`, and the rest of
 the Node builtin map come from unenv; `node:fs` is an in-memory filesystem (with `ENOENT`),
 `process.env` / `process.cwd()` are guest-shaped (not the host process), and `createRequire` throws
 `MODULE_NOT_FOUND`. `node:net` and `node:dgram` overlay WASI 0.3 `wasi:sockets` (`tcp-socket` /

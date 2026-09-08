@@ -1,4 +1,5 @@
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
 
@@ -7,6 +8,8 @@ export const CONFIG_FILE_NAME = 'di-framework.config.json';
 export type WasmcloudProject = {
   /** Display name exactly as configured. */
   applicationName: string;
+  /** Explicit WASI DNS allowlist, separate from outbound HTTP permissions. */
+  allowedIpNameLookups?: string[];
   configPath: string;
   entryPath: string;
   outputPath: string;
@@ -102,6 +105,26 @@ export function loadProject(startDirectory: string): WasmcloudProject {
     configInvalid(`${CONFIG_FILE_NAME} "bindings" must be a string when present`, configPath);
   }
 
+  if (
+    config.allowedIpNameLookups !== undefined &&
+    (!Array.isArray(config.allowedIpNameLookups) ||
+      config.allowedIpNameLookups.some(
+        (name) =>
+          typeof name !== 'string' ||
+          !(
+            name === '*' ||
+            isIP(name) !== 0 ||
+            /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(
+              name,
+            )
+          ),
+      ))
+  ) {
+    configInvalid(
+      'allowedIpNameLookups must be an array of DNS names, IP addresses, or wildcard suffixes',
+      configPath,
+    );
+  }
   const witName = asWitIdentifier(config.name);
   const entryPath = resolveInside(projectRoot, config.entry, 'entry', configPath);
   const outputPath = resolveInside(
@@ -133,6 +156,9 @@ export function loadProject(startDirectory: string): WasmcloudProject {
 
   return {
     applicationName: config.name,
+    ...(config.allowedIpNameLookups === undefined
+      ? {}
+      : { allowedIpNameLookups: config.allowedIpNameLookups as string[] }),
     configPath,
     entryPath,
     outputPath,

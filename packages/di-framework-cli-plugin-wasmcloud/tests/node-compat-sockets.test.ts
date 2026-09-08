@@ -16,6 +16,7 @@ import {
   parseIpv6,
 } from '../src/node-compat/socket-address';
 import { socketRequirementsFromJavaScript } from '../src/wit';
+import * as clock from './memory-wasi-clocks';
 import {
   nameRecords,
   resetMemorySockets,
@@ -23,6 +24,8 @@ import {
   TcpSocket,
   UdpSocket,
 } from './memory-wasi-sockets';
+
+mock.module('wasi:clocks/monotonic-clock@0.3.0', () => clock);
 
 mock.module('wasi:sockets/types@0.3.0', () => ({ TcpSocket, UdpSocket }));
 mock.module('wasi:sockets/ip-name-lookup@0.3.0', () => ({ resolveAddresses }));

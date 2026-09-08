@@ -15,6 +15,7 @@ import {
 } from '../src/node-compat/bytes';
 import type { GuestCryptoKey } from '../src/node-compat/crypto-subtle';
 import { runtimeRequirementsFromJavaScript } from '../src/wit';
+import * as clock from './memory-wasi-clocks';
 import {
   getRandomBytes,
   resetMemoryRandom,
@@ -22,6 +23,7 @@ import {
   setMemoryRandomMode,
 } from './memory-wasi-random';
 
+mock.module('wasi:clocks/monotonic-clock@0.3.0', () => clock);
 mock.module('wasi:random/random@0.3.0', () => ({ getRandomBytes }));
 
 const {
