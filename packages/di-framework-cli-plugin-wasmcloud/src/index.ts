@@ -25,6 +25,7 @@ export {
   type WasmcloudDeployResult,
 } from './deploy.js';
 export {
+  type BundleOptions,
   COMPONENT_IMPORT_EXTERNAL,
   COMPONENTIZE_QJS_ENV,
   COMPONENTIZE_QJS_PACKAGE,
@@ -54,6 +55,13 @@ export {
   loadDeployManifest,
   parseDeployManifest,
 } from './manifest.js';
+export { wasmcloudNodeEnv, wasmcloudUnenvPreset } from './node-compat/env.js';
+export {
+  compactEnviron,
+  createNodeCompatSeed,
+  NODE_COMPAT_SEED_ID,
+  type NodeCompatSeed,
+} from './node-compat/seed.js';
 export { OCI_ARTIFACT_PLATFORM } from './oci.js';
 export {
   loadPlatformOutputs,

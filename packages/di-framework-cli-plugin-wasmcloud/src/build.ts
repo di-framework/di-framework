@@ -175,6 +175,7 @@ export async function buildComponent(
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
+      projectRoot: project.projectRoot,
     });
   } catch (error) {
     throw new CommandFailure(
