@@ -2,10 +2,12 @@ import { EventEmitter } from 'node:events';
 import { concatBytes, toBytes, toNodeBuffer } from './bytes.js';
 import {
   CHUNKED_END,
+  ChunkedDecoder,
   contentLengthOf,
   encodeChunk,
   type HeaderMap,
   headerValue,
+  isChunked,
   isUpgrade,
   MAX_HEADER_SIZE,
   parseHttpRequest,
@@ -456,6 +458,10 @@ export class ClientRequest extends EventEmitter {
         return;
       }
       this.emit('response', incoming);
+      if (isChunked(parsed.headers)) {
+        readChunkedBody(socket, incoming, leftover, this, () => {});
+        return;
+      }
       const length = contentLengthOf(parsed.headers) ?? 0;
       if (leftover.length > 0) incoming.pushBody(leftover.subarray(0, length));
       if (leftover.length >= length) incoming.finish();
@@ -476,6 +482,34 @@ export class ClientRequest extends EventEmitter {
     };
     socket.on('data', onData);
   }
+}
+
+function readChunkedBody(
+  socket: Socket,
+  incoming: IncomingMessage,
+  initial: Uint8Array,
+  owner: EventEmitter,
+  onComplete: (leftover: Uint8Array) => void,
+): void {
+  const decoder = new ChunkedDecoder();
+  const onData = (chunk: unknown) => {
+    let leftover: Uint8Array | undefined;
+    try {
+      leftover = decoder.write(toBytes(chunk), (data) => incoming.pushBody(data));
+    } catch (error) {
+      socket.removeListener('data', onData);
+      socket.destroy();
+      emitError(owner, error);
+      return;
+    }
+    if (leftover !== undefined) {
+      socket.removeListener('data', onData);
+      incoming.finish();
+      onComplete(leftover);
+    }
+  };
+  socket.on('data', onData);
+  onData(initial);
 }
 
 export class Server extends EventEmitter {
@@ -565,6 +599,15 @@ export class Server extends EventEmitter {
         return;
       }
       const res = new ServerResponse(req, socket);
+      if (isChunked(parsed.headers)) {
+        socket.removeListener('data', onData);
+        this.emit('request', req, res);
+        readChunkedBody(socket, req, leftover, this, (rest) => {
+          socket.on('data', onData);
+          if (rest.length > 0) onData(rest);
+        });
+        return;
+      }
       const length = contentLengthOf(parsed.headers);
       const hasBody = length !== undefined && length > 0 && req.method !== 'HEAD';
       this.emit('request', req, res);

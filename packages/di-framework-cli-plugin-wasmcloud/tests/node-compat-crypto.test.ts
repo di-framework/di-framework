@@ -15,7 +15,12 @@ import {
 } from '../src/node-compat/bytes';
 import type { GuestCryptoKey } from '../src/node-compat/crypto-subtle';
 import { runtimeRequirementsFromJavaScript } from '../src/wit';
-import { getRandomBytes, resetMemoryRandom, setMemoryRandomMode } from './memory-wasi-random';
+import {
+  getRandomBytes,
+  resetMemoryRandom,
+  seedMemoryRandom,
+  setMemoryRandomMode,
+} from './memory-wasi-random';
 
 mock.module('wasi:random/random@0.3.0', () => ({ getRandomBytes }));
 
@@ -44,6 +49,34 @@ afterEach(() => {
 });
 
 describe('node:crypto overlay', () => {
+  it('rejects the non-uniform randomInt tail and validates the 48-bit range', async () => {
+    const range = 2 ** 47 + 1;
+    seedMemoryRandom(255);
+    const draw = () => {
+      let value = 0;
+      for (const byte of getRandomBytes(6) as Uint8Array) value = value * 256 + byte;
+      return value;
+    };
+    expect(draw()).toBeGreaterThanOrEqual(range);
+    let accepted = draw();
+    while (accepted >= range) accepted = draw();
+    seedMemoryRandom(255);
+    expect(randomInt(-10, range - 10)).toBe(accepted - 10);
+    seedMemoryRandom(255);
+    const result = await new Promise<number>((resolve, reject) => {
+      randomInt(range, (error, value) => (error ? reject(error) : resolve(value)));
+    });
+    expect(result).toBe(accepted);
+    for (const [min, max] of [
+      [0, 2 ** 48],
+      [0.5, 2.5],
+      [0, Infinity],
+      [Number.MIN_SAFE_INTEGER - 1, 0],
+    ]) {
+      expect(() => randomInt(min ?? 0, max)).toThrow(RangeError);
+    }
+  });
+
   it('matches Node createHash for sha1 and sha256, including the WebSocket accept key', () => {
     expect(createHash('sha256').update('abc').digest('hex')).toBe(
       nodeCreateHash('sha256').update('abc').digest('hex'),

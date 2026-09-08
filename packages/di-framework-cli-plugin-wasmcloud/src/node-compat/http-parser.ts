@@ -156,3 +156,60 @@ export function encodeChunk(data: Uint8Array): Uint8Array {
 }
 
 export const CHUNKED_END = encodeUtf8('0\r\n\r\n');
+
+export function isChunked(headers: HeaderMap): boolean {
+  return (
+    headerValue(headers, 'transfer-encoding')?.toLowerCase().split(',').at(-1)?.trim() === 'chunked'
+  );
+}
+
+/** Incremental decoder; returns bytes after the trailers when the body is complete. */
+export class ChunkedDecoder {
+  buffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  state: 'size' | 'data' | 'delimiter' | 'trailers' = 'size';
+  remaining = 0;
+
+  write(bytes: Uint8Array, onData: (data: Uint8Array) => void): Uint8Array | undefined {
+    this.buffer = concatBytes(this.buffer, bytes);
+    while (true) {
+      if (this.state === 'data') {
+        const take = Math.min(this.remaining, this.buffer.length);
+        if (take === 0) return undefined;
+        onData(this.buffer.subarray(0, take));
+        this.buffer = this.buffer.subarray(take);
+        this.remaining -= take;
+        if (this.remaining > 0) return undefined;
+        this.state = 'delimiter';
+      }
+      if (this.state === 'delimiter') {
+        if (this.buffer.length < 2) return undefined;
+        if (this.buffer[0] !== 13 || this.buffer[1] !== 10)
+          throw new Error('Invalid chunk delimiter');
+        this.buffer = this.buffer.subarray(2);
+        this.state = 'size';
+      }
+      let end = -1;
+      for (let i = 0; i + 1 < this.buffer.length; i++) {
+        if (this.buffer[i] === 13 && this.buffer[i + 1] === 10) {
+          end = i;
+          break;
+        }
+      }
+      if (end > MAX_HEADER_SIZE || (end < 0 && this.buffer.length > MAX_HEADER_SIZE)) {
+        throw new Error('Chunk header too large');
+      }
+      if (end < 0) return undefined;
+      const line = decodeUtf8(this.buffer.subarray(0, end));
+      this.buffer = this.buffer.subarray(end + 2);
+      if (this.state === 'trailers') {
+        if (line === '') return this.buffer;
+        continue;
+      }
+      const size = line.split(';')[0] ?? '';
+      if (!/^[0-9a-fA-F]+$/.test(size)) throw new Error('Invalid chunk size');
+      this.remaining = Number.parseInt(size, 16);
+      if (!Number.isSafeInteger(this.remaining)) throw new Error('Chunk size too large');
+      this.state = this.remaining === 0 ? 'trailers' : 'data';
+    }
+  }
+}

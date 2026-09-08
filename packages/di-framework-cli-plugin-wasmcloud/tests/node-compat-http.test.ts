@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { DEFAULT_DEPS } from '../src/deps';
 import {
   CHUNKED_END,
+  ChunkedDecoder,
   concatChunks,
   encodeChunk,
   headerValue,
@@ -41,6 +42,98 @@ afterEach(() => {
 });
 
 describe('node:http overlay', () => {
+  it('decodes chunk extensions and trailers at every split, preserving following messages', () => {
+    const wire = Buffer.from('3;foo=bar\r\nabc\r\n2\r\nde\r\n0\r\nX-Trailer: yes\r\n\r\n');
+    for (let split = 0; split < wire.length; split++) {
+      const decoder = new ChunkedDecoder();
+      const chunks: Uint8Array[] = [];
+      const push = (bytes: Uint8Array) => chunks.push(bytes);
+      expect(decoder.write(wire.subarray(0, split), push)).toBeUndefined();
+      const rest = decoder.write(Buffer.concat([wire.subarray(split), Buffer.from('NEXT')]), push);
+      expect(Buffer.concat(chunks).toString()).toBe('abcde');
+      expect(Buffer.from(rest ?? []).toString()).toBe('NEXT');
+    }
+    for (const invalid of [
+      'z\r\n',
+      '1\r\naXX',
+      'ffffffffffffffff\r\n',
+      'a'.repeat(16385),
+      `${'a'.repeat(16385)}\r\n`,
+    ]) {
+      expect(() => new ChunkedDecoder().write(Buffer.from(invalid), () => {})).toThrow();
+    }
+  });
+
+  it('reads streamed responses from the HTTP overlay', async () => {
+    const server = createServer((_req, res) => {
+      res.write('hello');
+      res.end(' world');
+    });
+    server.listen(0, '127.0.0.1');
+    const body = await new Promise<string>((resolve, reject) => {
+      get({ host: '127.0.0.1', port: server.address()?.port }, (res) => {
+        const chunks: Uint8Array[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+      }).on('error', reject);
+    });
+    expect(body).toBe('hello world');
+    server.close();
+  });
+
+  it('rejects malformed chunked bodies on both sides of a connection', async () => {
+    const server = createServer();
+    server.listen(0, '127.0.0.1');
+    const serverError = new Promise<Error>((resolve) => server.once('error', resolve));
+    const socket = createConnection({ host: '127.0.0.1', port: server.address()?.port ?? 0 });
+    await new Promise<void>((resolve) => socket.once('connect', resolve));
+    socket.write('POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nz\r\n');
+    expect((await serverError).message).toBe('Invalid chunk size');
+    socket.destroy();
+    server.close();
+
+    const rawServer = createNetServer((peer) => {
+      peer.once('data', () =>
+        peer.write('HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nz\r\n'),
+      );
+    });
+    rawServer.listen(0, '127.0.0.1');
+    const error = await new Promise<Error>((resolve) => {
+      get({ host: '127.0.0.1', port: rawServer.address()?.port }).once('error', resolve);
+    });
+    expect(error.message).toBe('Invalid chunk size');
+    rawServer.close();
+  });
+
+  it('reads fragmented chunked requests and preserves a following request', async () => {
+    const received: string[] = [];
+    let done!: () => void;
+    const complete = new Promise<void>((resolve) => {
+      done = resolve;
+    });
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += Buffer.from(chunk).toString();
+      });
+      req.on('end', () => {
+        received.push(body);
+        res.end('ok');
+        if (received.length === 2) done();
+      });
+    });
+    server.listen(0, '127.0.0.1');
+    const socket = createConnection({ host: '127.0.0.1', port: server.address()?.port ?? 0 });
+    await new Promise<void>((resolve) => socket.once('connect', resolve));
+    socket.write('POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n3\r');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.write('\nabc\r\n0\r\nTrailer: value\r\n\r\nGET / HTTP/1.1\r\n\r\n');
+    await complete;
+    expect(received).toEqual(['abc', '']);
+    socket.destroy();
+    server.close();
+  });
+
   it('serves GET and POST over the TCP overlay and reports address() after listen', async () => {
     const server = createServer((req, res) => {
       if (req.method === 'GET') {

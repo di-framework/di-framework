@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
+import * as hostFs from 'node:fs';
 import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
@@ -88,6 +89,7 @@ describe('guest process and module', () => {
     delete env.APP_PORT;
     expect(env.APP_PORT).toBeUndefined();
     env.TMP = 'x';
+    expect(env.TMP).toBe('x');
     env.TMP = undefined;
     expect(env.TMP).toBeUndefined();
     expect(Reflect.get(env, Symbol('x'))).toBeUndefined();
@@ -162,6 +164,37 @@ describe('node compat seed', () => {
     chmodSync(unreadable, 0);
     collectProjectFiles(root);
     chmodSync(unreadable, 0o644);
+  });
+
+  it('keeps reading the opened file when its path is replaced and caps growth', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-seed-race-'));
+    const path = join(root, 'config.json');
+    writeFileSync(path, 'original');
+    const originalFstat = hostFs.fstatSync;
+    const stat = spyOn(hostFs, 'fstatSync').mockImplementation(((fd: number) => {
+      const result = originalFstat(fd);
+      hostFs.unlinkSync(path);
+      symlinkSync(join(root, 'outside.txt'), path);
+      return result;
+    }) as typeof hostFs.fstatSync);
+    writeFileSync(join(root, 'outside.txt'), 'replacement');
+    try {
+      expect(collectProjectFiles(root)['/config.json']).toBe('original');
+    } finally {
+      stat.mockRestore();
+    }
+    hostFs.unlinkSync(path);
+    writeFileSync(path, 'small');
+    const growth = spyOn(hostFs, 'fstatSync').mockImplementation(((fd: number) => {
+      const result = originalFstat(fd);
+      writeFileSync(path, 'x'.repeat(MAX_SEEDED_FILE_BYTES + 10));
+      return result;
+    }) as typeof hostFs.fstatSync);
+    try {
+      expect(collectProjectFiles(root)).toEqual({});
+    } finally {
+      growth.mockRestore();
+    }
   });
 
   it('compacts env, renders a seed module, and builds a seed object', () => {
