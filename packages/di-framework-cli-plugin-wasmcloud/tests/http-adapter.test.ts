@@ -67,7 +67,7 @@ mock.module('wasi:http/types@0.3.0', () => ({
   },
 }));
 
-const { handler } = await import('../assets/http-adapter.ts');
+const { handler, requireGuestsObject } = await import('../assets/http-adapter.ts');
 
 function readable(...values: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -323,5 +323,49 @@ describe('http adapter', () => {
       { type: 'void-type', value: { tag: 'ok', val: undefined } },
       { type: 'trailers-type', value: { tag: 'ok', val: null } },
     ]);
+  });
+
+  it('rejects a missing guests object', () => {
+    expect(() => requireGuestsObject(null)).toThrow(TypeError);
+    expect(() => requireGuestsObject('guests')).toThrow(
+      'wasmCloud guests module must export a guests object',
+    );
+    expect(() => requireGuestsObject({})).not.toThrow();
+  });
+
+  it('picks a non-preferred wit.Future type and falls back when none remain', async () => {
+    const written: unknown[] = [];
+    const fallbackReadable = { kind: 'fallback' };
+    const FutureWithFallback = Object.assign(
+      (type: unknown) => ({
+        readable: type === 'custom-type' ? fallbackReadable : { kind: 'other', type },
+        writable: {
+          write(value: unknown) {
+            written.push({ type, value });
+          },
+        },
+      }),
+      { types: true, from: true, CUSTOM: 'custom-type' },
+    );
+    (globalThis as { wit?: unknown }).wit = { Future: FutureWithFallback };
+
+    const outgoing = (await handler.handle(incoming({ method: { tag: 'get' } }))) as Outgoing;
+    expect(outgoing.trailers).toBe(fallbackReadable);
+    expect(written).toEqual([{ type: 'custom-type', value: { tag: 'ok', val: null } }]);
+
+    const FutureEmpty = Object.assign(
+      (type: unknown) => ({
+        readable: { kind: 'empty', type },
+        writable: {
+          write(value: unknown) {
+            written.push({ type, value });
+          },
+        },
+      }),
+      { types: true, from: true },
+    );
+    (globalThis as { wit?: unknown }).wit = { Future: FutureEmpty };
+    const emptyOutgoing = (await handler.handle(incoming({ method: { tag: 'get' } }))) as Outgoing;
+    expect(emptyOutgoing.trailers).toEqual({ kind: 'empty', type: undefined });
   });
 });
