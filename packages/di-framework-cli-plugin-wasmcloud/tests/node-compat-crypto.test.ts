@@ -6,22 +6,38 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_DEPS } from '../src/deps';
 import { hostInterfacesFromRequirements } from '../src/host-interface';
+import {
+  concatBytes,
+  decodeUtf8,
+  encodeUtf8,
+  toArrayBuffer,
+  toBytes,
+} from '../src/node-compat/bytes';
+import type { GuestCryptoKey } from '../src/node-compat/crypto-subtle';
 import { runtimeRequirementsFromJavaScript } from '../src/wit';
-import { getRandomBytes, resetMemoryRandom } from './memory-wasi-random';
+import { getRandomBytes, resetMemoryRandom, setMemoryRandomMode } from './memory-wasi-random';
 
 mock.module('wasi:random/random@0.3.0', () => ({ getRandomBytes }));
 
 const {
+  checkPrime,
   createHash,
   createHmac,
   createCipheriv,
+  default: cryptoDefault,
   getRandomValues,
+  prng,
   randomBytes,
+  randomFill,
+  randomFillSync,
+  randomInt,
   randomUUID,
+  rng,
   subtle,
   timingSafeEqual,
   webcrypto,
 } = await import('../src/node-compat/crypto');
+const { getRandomBytes: guestGetRandomBytes } = await import('../src/node-compat/wasi-random');
 
 afterEach(() => {
   resetMemoryRandom();
@@ -63,6 +79,7 @@ describe('node:crypto overlay', () => {
     expect(getRandomValues(target)).toBe(target);
     expect(target.length).toBe(8);
     const bytes = randomBytes(16);
+    if (bytes === undefined) throw new Error('expected randomBytes to return a buffer');
     expect(bytes.length).toBe(16);
     expect(timingSafeEqual(bytes, bytes)).toBe(true);
     expect(() => timingSafeEqual(bytes, bytes.subarray(0, 8))).toThrow(/same byte length/);
@@ -71,6 +88,84 @@ describe('node:crypto overlay', () => {
   it('throws for unsupported Node OpenSSL APIs and unknown digests', () => {
     expect(() => createHash('not-a-hash')).toThrow(/Digest method not supported/);
     expect(() => createCipheriv()).toThrow(/not implemented/);
+    expect(() => checkPrime()).toThrow(/not implemented/);
+  });
+
+  it('covers hash encodings, finalized errors, and Buffer-less hex', () => {
+    expect(createHash('md5').update('abc').digest('hex')).toBe(
+      nodeCreateHash('md5').update('abc').digest('hex'),
+    );
+    expect(createHash('sha384').update('abc').digest('base64url')).toBe(
+      nodeCreateHash('sha384').update('abc').digest('base64url'),
+    );
+    expect(createHash('sha512').update('abc').digest('latin1')).toBe(
+      nodeCreateHash('sha512').update('abc').digest('latin1'),
+    );
+    expect(createHash('sha256').update('616263', 'hex').digest('hex')).toBe(
+      nodeCreateHash('sha256').update('abc').digest('hex'),
+    );
+    expect(createHash('sha256').update('YWJj', 'base64').digest('hex')).toBe(
+      nodeCreateHash('sha256').update('abc').digest('hex'),
+    );
+    const hash = createHash('sha256').update('x');
+    hash.digest();
+    expect(() => hash.update('y')).toThrow(/Digest already called/);
+    expect(() => hash.digest()).toThrow(/Digest already called/);
+    const live = createHash('sha256').update('x');
+    live.digest();
+    expect(() => live.copy()).toThrow(/Digest already called/);
+    const expected = nodeCreateHash('sha256').update('abc').digest('hex');
+    const BufferRef = globalThis.Buffer;
+    Reflect.deleteProperty(globalThis, 'Buffer');
+    try {
+      expect(createHash('sha256').update('abc').digest('hex')).toBe(expected);
+    } finally {
+      globalThis.Buffer = BufferRef;
+    }
+  });
+
+  it('fills, samples, and unwraps wasi:random results', async () => {
+    expect(guestGetRandomBytes(0).length).toBe(0);
+    expect(() => guestGetRandomBytes(-1)).toThrow(/non-negative/);
+    setMemoryRandomMode('ok');
+    expect(randomBytes(4)?.length).toBe(4);
+    setMemoryRandomMode('long');
+    expect(guestGetRandomBytes(4).length).toBe(4);
+    setMemoryRandomMode('short');
+    expect(() => guestGetRandomBytes(4)).toThrow(/returned 3 bytes/);
+    setMemoryRandomMode('err');
+    expect(() => guestGetRandomBytes(4)).toThrow(/wasi:random failed/);
+    setMemoryRandomMode('bytes');
+    const syncBuf = new Uint8Array(8);
+    expect(randomFillSync(syncBuf, 2, 3)).toBe(syncBuf);
+    await new Promise<void>((resolve) => {
+      randomBytes(2, (_error, buffer) => {
+        expect(buffer?.length).toBe(2);
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve) => {
+      randomFill(syncBuf, () => resolve());
+    });
+    await new Promise<void>((resolve) => {
+      randomFill(syncBuf, 1, () => resolve());
+    });
+    await new Promise<void>((resolve) => {
+      randomFill(syncBuf, 1, 2, () => resolve());
+    });
+    expect(randomFill(syncBuf, 0, 2)).toBe(syncBuf);
+    expect(randomInt(10)).toBeGreaterThanOrEqual(0);
+    expect(randomInt(2, 5)).toBeGreaterThanOrEqual(2);
+    await new Promise<void>((resolve) => {
+      randomInt(4, () => resolve());
+    });
+    await new Promise<void>((resolve) => {
+      randomInt(1, 4, () => resolve());
+    });
+    expect(() => randomInt(1, 1)).toThrow(/out of range/);
+    expect(rng).toBe(randomBytes);
+    expect(prng).toBe(randomBytes);
+    expect(cryptoDefault.createHash).toBe(createHash);
   });
 });
 
@@ -147,10 +242,10 @@ describe('Web Crypto subset', () => {
   it('round-trips ECDH P-256 deriveBits', async () => {
     const left = (await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
       'deriveBits',
-    ])) as { publicKey: CryptoKey; privateKey: CryptoKey };
+    ])) as { publicKey: GuestCryptoKey; privateKey: GuestCryptoKey };
     const right = (await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
       'deriveBits',
-    ])) as { publicKey: CryptoKey; privateKey: CryptoKey };
+    ])) as { publicKey: GuestCryptoKey; privateKey: GuestCryptoKey };
     const exported = new Uint8Array((await subtle.exportKey('raw', left.publicKey)) as ArrayBuffer);
     expect(exported.length).toBe(65);
     expect(exported[0]).toBe(0x04);
@@ -171,6 +266,145 @@ describe('Web Crypto subset', () => {
   it('exposes the same object as the injected webcrypto global', () => {
     expect(webcrypto.subtle).toBe(subtle);
     expect(webcrypto.randomUUID).toBe(randomUUID);
+  });
+
+  it('covers Web Crypto error paths and remaining algorithms', async () => {
+    const payload = new TextEncoder().encode('cover');
+    await expect(subtle.digest('SHA-1', payload)).resolves.toBeInstanceOf(ArrayBuffer);
+    await expect(subtle.digest({ name: 'SHA-384' }, payload)).resolves.toBeInstanceOf(ArrayBuffer);
+    await expect(subtle.digest({ name: 'SHA-512' }, payload)).resolves.toBeInstanceOf(ArrayBuffer);
+    await expect(subtle.digest('SHA-3', payload)).rejects.toThrow(/does not support/);
+    await expect(subtle.digest({} as never, payload)).rejects.toThrow(/Unrecognized algorithm/);
+    await expect(subtle.importKey('jwk', {}, 'HMAC', false, ['sign'])).rejects.toThrow(/format/);
+    await expect(subtle.importKey('raw', payload, 'HMAC', false, ['sign'])).rejects.toThrow(
+      /HMAC requires a hash/,
+    );
+    await expect(
+      subtle.importKey('raw', payload, { name: 'HMAC', hash: 1 }, false, ['sign']),
+    ).rejects.toThrow(/Unrecognized hash algorithm/);
+    await expect(
+      subtle.importKey('raw', new Uint8Array(8), { name: 'AES-GCM' }, false, ['encrypt']),
+    ).rejects.toThrow(/16, 24, or 32/);
+    await expect(
+      subtle.importKey('raw', new Uint8Array(65), { name: 'ECDH', namedCurve: 'P-384' }, true, []),
+    ).rejects.toThrow(/not supported/);
+    await expect(
+      subtle.importKey('raw', new Uint8Array(65), { name: 'ECDH', namedCurve: 'P-256' }, true, []),
+    ).rejects.toThrow(/uncompressed/);
+    await expect(subtle.importKey('raw', payload, 'RSA-OAEP', false, [])).rejects.toThrow(
+      /not supported/,
+    );
+    await expect(subtle.exportKey('jwk', {} as never)).rejects.toThrow(/format/);
+    await expect(subtle.exportKey('raw', {} as never)).rejects.toThrow(/Invalid CryptoKey/);
+    const hmacKey = await subtle.importKey(
+      'raw',
+      new Uint8Array(32).fill(1),
+      { name: 'HMAC', hash: { name: 'SHA-256' } },
+      false,
+      ['sign'],
+    );
+    await expect(subtle.exportKey('raw', hmacKey)).rejects.toThrow(/not extractable/);
+    const extractable = await subtle.importKey(
+      'raw',
+      new Uint8Array(32).fill(2),
+      { name: 'HMAC', hash: 'SHA-384' },
+      true,
+      ['sign', 'verify'],
+    );
+    expect((await subtle.exportKey('raw', extractable)).byteLength).toBe(32);
+    const signature = await subtle.sign('HMAC', extractable, payload);
+    expect(await subtle.verify('HMAC', extractable, signature, payload)).toBe(true);
+    expect(await subtle.verify('HMAC', extractable, new Uint8Array(3), payload)).toBe(false);
+    expect(
+      await subtle.verify('HMAC', extractable, new Uint8Array(signature.byteLength), payload),
+    ).toBe(false);
+    await expect(subtle.sign('ECDSA', extractable, payload)).rejects.toThrow(/does not support/);
+    await expect(subtle.sign('HMAC', hmacKey, payload)).resolves.toBeInstanceOf(ArrayBuffer);
+    await expect(subtle.generateKey({ name: 'AES-GCM' }, false, [])).rejects.toThrow(
+      /not supported/,
+    );
+    await expect(
+      subtle.generateKey({ name: 'ECDH', namedCurve: 'P-384' }, false, ['deriveBits']),
+    ).rejects.toThrow(/not supported/);
+    const pair = (await subtle.generateKey({ name: 'ECDH' }, true, ['deriveBits'])) as {
+      publicKey: GuestCryptoKey;
+      privateKey: GuestCryptoKey;
+    };
+    const publicRaw = await subtle.exportKey('raw', pair.publicKey);
+    const importedPublic = await subtle.importKey(
+      'raw',
+      publicRaw,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      [],
+    );
+    await expect(
+      subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256' }, hmacKey, 256),
+    ).rejects.toThrow(/not valid/);
+    const hkdfKey = await subtle.importKey('raw', new Uint8Array(32).fill(3), 'HKDF', false, [
+      'deriveBits',
+    ]);
+    await expect(
+      subtle.deriveBits(
+        { name: 'HKDF', hash: 'MD5', salt: new Uint8Array(8), info: payload },
+        hkdfKey,
+        256,
+      ),
+    ).rejects.toThrow(/not supported/);
+    await expect(
+      subtle.deriveBits({ name: 'ECDH', public: pair.publicKey }, hkdfKey, 256),
+    ).rejects.toThrow(/not valid/);
+    await expect(
+      subtle.deriveBits({ name: 'ECDH', public: pair.privateKey }, pair.privateKey, 256),
+    ).rejects.toThrow(/public key required/);
+    await expect(
+      subtle.deriveBits({ name: 'ECDH', public: importedPublic }, pair.privateKey, 33 * 8),
+    ).rejects.toThrow(/too large/);
+    await expect(subtle.deriveBits({ name: 'PBKDF2' }, hkdfKey, 256)).rejects.toThrow(
+      /not supported/,
+    );
+    const aes16 = await subtle.importKey(
+      'raw',
+      new Uint8Array(16).fill(9),
+      { name: 'AES-GCM' },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    await expect(
+      subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, aes16, payload),
+    ).rejects.toThrow(/does not support/);
+    await expect(
+      subtle.encrypt({ name: 'AES-GCM', iv: new Uint8Array(16) }, aes16, payload),
+    ).rejects.toThrow(/12 bytes/);
+    await expect(
+      subtle.encrypt({ name: 'AES-GCM', iv: new Uint8Array(12) }, hmacKey, payload),
+    ).rejects.toThrow(/not valid/);
+    await expect(subtle.sign('HMAC', aes16, payload)).rejects.toThrow(/not valid/);
+    const iv = new Uint8Array(12).fill(2);
+    const ciphertext = new Uint8Array(
+      await subtle.encrypt({ name: 'AES-GCM', iv }, aes16, payload),
+    );
+    ciphertext[0] = (ciphertext[0] ?? 0) ^ 0xff;
+    await expect(subtle.decrypt({ name: 'AES-GCM', iv }, aes16, ciphertext)).rejects.toThrow(
+      /Decryption failed/,
+    );
+    await expect(subtle.decrypt({ name: 'AES-CBC', iv }, aes16, payload)).rejects.toThrow(
+      /does not support/,
+    );
+    await expect(subtle.decrypt({ name: 'AES-GCM', iv }, hmacKey, payload)).rejects.toThrow(
+      /not valid/,
+    );
+  });
+});
+
+describe('byte helpers', () => {
+  it('accepts typed arrays, ArrayBuffers, and number arrays', () => {
+    expect(toBytes(new Uint16Array([1]))).toBeInstanceOf(Uint8Array);
+    expect(toBytes(new Uint8Array([1, 2]).buffer)).toEqual(new Uint8Array([1, 2]));
+    expect(toBytes([3, 4])).toEqual(new Uint8Array([3, 4]));
+    expect(concatBytes(new Uint8Array([1]), new Uint8Array([2]))).toEqual(new Uint8Array([1, 2]));
+    expect(decodeUtf8(encodeUtf8('hi'))).toBe('hi');
+    expect(toArrayBuffer(new Uint8Array([9])).byteLength).toBe(1);
   });
 });
 

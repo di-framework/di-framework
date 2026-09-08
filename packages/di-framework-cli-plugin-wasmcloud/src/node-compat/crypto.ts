@@ -71,7 +71,7 @@ export function randomFill<T extends ArrayBufferView>(
 
 export function randomInt(
   min: number,
-  max?: number,
+  max?: number | ((error: Error | null, value: number) => void),
   callback?: (error: Error | null, value: number) => void,
 ): number | undefined {
   let low = 0;

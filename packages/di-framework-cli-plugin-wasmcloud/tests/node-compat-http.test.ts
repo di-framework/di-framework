@@ -5,6 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_DEPS } from '../src/deps';
+import {
+  CHUNKED_END,
+  concatChunks,
+  encodeChunk,
+  headerValue,
+  indexOfHeaderEnd,
+  parseHttpHeaders,
+  parseHttpRequest,
+  parseHttpResponse,
+  serializeHeaders,
+  serializeHttpResponse,
+} from '../src/node-compat/http-parser';
 import { getRandomBytes, resetMemoryRandom } from './memory-wasi-random';
 import {
   nameRecords,
@@ -19,7 +31,8 @@ mock.module('wasi:sockets/ip-name-lookup@0.3.0', () => ({ resolveAddresses }));
 mock.module('wasi:random/random@0.3.0', () => ({ getRandomBytes }));
 
 const { createConnection, createServer: createNetServer } = await import('../src/node-compat/net');
-const { createServer, get, request, STATUS_CODES } = await import('../src/node-compat/http');
+const { Agent, METHODS, STATUS_CODES, createServer, get, globalAgent, maxHeaderSize, request } =
+  await import('../src/node-compat/http');
 
 afterEach(() => {
   resetMemorySockets();
@@ -122,6 +135,271 @@ describe('node:http overlay', () => {
     });
     expect(upgraded).toEqual({ status: 101, head: 'leftover' });
     raw.close();
+  });
+
+  it('covers parser helpers, headers, and chunked encoding', () => {
+    expect(concatChunks(new Uint8Array([1]), new Uint8Array([2]))).toEqual(new Uint8Array([1, 2]));
+    expect(indexOfHeaderEnd(new Uint8Array([1, 2, 3]))).toBe(-1);
+    expect(parseHttpHeaders('')).toEqual({ headers: {}, rawHeaders: [] });
+    expect(
+      parseHttpHeaders('X-A: 1\r\nX-A: 2\r\nSet-Cookie: a\r\nSet-Cookie: b\r\nbadline'),
+    ).toEqual({
+      headers: { 'x-a': '1, 2', 'set-cookie': ['a', 'b'] },
+      rawHeaders: ['X-A', '1', 'X-A', '2', 'Set-Cookie', 'a', 'Set-Cookie', 'b'],
+    });
+    expect(() => parseHttpRequest(new TextEncoder().encode('NOTHTTP\r\n\r\n'))).toThrow(
+      /Invalid HTTP request line/,
+    );
+    expect(() => parseHttpResponse(new TextEncoder().encode('NOTHTTP\r\n\r\n'))).toThrow(
+      /Invalid HTTP response line/,
+    );
+    expect(headerValue({ 'set-cookie': ['a', 'b'] }, 'Set-Cookie')).toBe('a, b');
+    expect(serializeHeaders({ 'set-cookie': ['a', 'b'], accept: 'text/plain' })).toContain(
+      'set-cookie: a',
+    );
+    expect(new TextDecoder().decode(serializeHttpResponse(204, '', {}))).toContain('204 OK');
+    expect(encodeChunk(new Uint8Array([65]))[0]).toBe('1'.charCodeAt(0));
+    expect(CHUNKED_END.length).toBeGreaterThan(0);
+    expect(METHODS).toContain('GET');
+    expect(maxHeaderSize).toBeGreaterThan(0);
+    expect(globalAgent).toBeInstanceOf(Agent);
+    globalAgent.destroy();
+  });
+
+  it('uses writeHead, chunked bodies, timeouts, and URL forms', async () => {
+    const server = createServer({}, (req, res) => {
+      if (req.url === '/head') {
+        res.writeHead(204, 'No Content', { 'X-Empty': '1' });
+        res.end();
+        return;
+      }
+      if (req.url === '/headers') {
+        res.setHeader('X-A', ['1', '2']);
+        expect(res.getHeader('x-a')).toEqual(['1', '2']);
+        res.removeHeader('x-a');
+        res.setHeader('Content-Length', '7');
+        res.writeHead(201, { 'X-B': 'yes' });
+        res.end('created');
+        return;
+      }
+      if (req.url === '/chunked') {
+        res.write('chunk', 'utf8');
+        res.end('end');
+        return;
+      }
+      if (req.url === '/close') {
+        res.setHeader('Connection', 'close');
+        res.end('bye');
+        return;
+      }
+      if (req.url === '/post') {
+        const chunks: Uint8Array[] = [];
+        req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        req.on('end', () => res.end(Buffer.concat(chunks)));
+        return;
+      }
+      res.statusCode = 200;
+      res.end('ok');
+    });
+    server.listen(0, '127.0.0.1');
+    const port = server.address()?.port ?? 0;
+    const read = (url: string, method = 'GET', body?: string) =>
+      new Promise<string>((resolve, reject) => {
+        const req = request(new URL(url), { method }, (res) => {
+          const chunks: Uint8Array[] = [];
+          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+        });
+        req.once('error', reject);
+        if (body !== undefined) req.end(body);
+        else req.end();
+      });
+    expect(await read(`http://127.0.0.1:${port}/`)).toBe('ok');
+    expect(await read(`http://127.0.0.1:${port}/headers`)).toBe('created');
+    const chunked = createConnection({ host: '127.0.0.1', port });
+    const chunkedBody = await new Promise<string>((resolve, reject) => {
+      const chunks: string[] = [];
+      chunked.once('connect', () => {
+        chunked.write('GET /chunked HTTP/1.1\r\nHost: localhost\r\n\r\n');
+      });
+      chunked.on('data', (chunk) => {
+        chunks.push(Buffer.from(chunk).toString());
+        if (chunks.join('').includes('0\r\n\r\n')) resolve(chunks.join(''));
+      });
+      chunked.once('error', reject);
+    });
+    expect(chunkedBody).toContain('transfer-encoding: chunked');
+    expect(chunkedBody).toContain('chunk');
+    expect(chunkedBody).toContain('end');
+    chunked.end();
+    expect(await read(`http://127.0.0.1:${port}/close`)).toBe('bye');
+    expect(await read(`http://127.0.0.1:${port}/post`, 'POST', 'xyz')).toBe('xyz');
+    const head = await new Promise<number>((resolve, reject) => {
+      const req = get(`http://127.0.0.1:${port}/head`, (res) => resolve(res.statusCode));
+      req.once('error', reject);
+    });
+    expect(head).toBe(204);
+    const withCallback = await new Promise<string>((resolve, reject) => {
+      const req = request(
+        { host: '127.0.0.1', port, path: '/', headers: { 'X-Skip': undefined } },
+        (res) => {
+          const chunks: Uint8Array[] = [];
+          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+        },
+      );
+      req.setHeader('X-Array', ['a', 'b']);
+      expect(req.getHeader('x-array')).toEqual(['a', 'b']);
+      req.write('ignored-for-get');
+      req.once('error', reject);
+      req.end(() => undefined);
+    });
+    expect(withCallback).toBe('ok');
+    server.close();
+  });
+
+  it('handles split POST bodies, HTTP/1.0, write-after-end, and abort', async () => {
+    const server = createServer((req, res) => {
+      req.setTimeout(0, () => undefined);
+      res.setTimeout(0, () => undefined);
+      if (req.httpVersion === '1.0') {
+        res.end('v10');
+        return;
+      }
+      const chunks: Uint8Array[] = [];
+      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => {
+        res.setHeader('Content-Length', '5');
+        res.write('hello');
+        const after = res.write('x');
+        expect(typeof after).toBe('boolean');
+        res.end();
+        res.end(() => undefined);
+        res.write('late', (error) => {
+          expect(error?.message).toMatch(/write after end/);
+        });
+        res.write('late');
+      });
+    });
+    server.listen(0, '127.0.0.1');
+    const port = server.address()?.port ?? 0;
+    const client = createConnection({ host: '127.0.0.1', port });
+    await new Promise<void>((resolve, reject) => {
+      client.once('connect', resolve);
+      client.once('error', reject);
+    });
+    const body = await new Promise<string>((resolve) => {
+      const chunks: string[] = [];
+      client.on('data', (chunk) => {
+        chunks.push(Buffer.from(chunk).toString());
+        if (chunks.join('').includes('hello')) resolve(chunks.join(''));
+      });
+      client.write('POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nhe');
+      queueMicrotask(() => client.write('llo'));
+    });
+    expect(body).toContain('hello');
+    const v10 = createConnection({ host: '127.0.0.1', port });
+    const v10Body = await new Promise<string>((resolve, reject) => {
+      const chunks: string[] = [];
+      v10.once('connect', () => v10.write('GET / HTTP/1.0\r\nHost: localhost\r\n\r\n'));
+      v10.on('data', (chunk) => {
+        chunks.push(Buffer.from(chunk).toString());
+        if (chunks.join('').includes('v10')) resolve(chunks.join(''));
+      });
+      v10.once('error', reject);
+    });
+    expect(v10Body).toContain('v10');
+    const aborted = request({ host: '127.0.0.1', port, path: '/' });
+    aborted.abort();
+    aborted.destroy();
+    aborted.setTimeout(1, () => undefined);
+    const custom = request({
+      host: '127.0.0.1',
+      port,
+      path: '/',
+      createConnection: (options) => {
+        return createConnection({ host: String(options.host), port: Number(options.port) });
+      },
+    });
+    const failed = request({
+      host: '127.0.0.1',
+      port,
+      path: '/',
+      createConnection: (_options, callback) => {
+        callback?.(new Error('connect failed'), undefined as never);
+        return undefined as never;
+      },
+    });
+    failed.once('error', () => undefined);
+    custom.end();
+    await new Promise<void>((resolve) => custom.once('response', () => resolve()));
+    const oversized = createConnection({ host: '127.0.0.1', port });
+    await new Promise<void>((resolve, reject) => {
+      oversized.once('connect', resolve);
+      oversized.once('error', reject);
+    });
+    oversized.write(
+      `GET / HTTP/1.1\r\nHost: localhost\r\nX-Big: ${'a'.repeat(maxHeaderSize)}\r\n\r\n`,
+    );
+    const invalid = createConnection({ host: '127.0.0.1', port });
+    await new Promise<void>((resolve, reject) => {
+      invalid.once('connect', resolve);
+      invalid.once('error', reject);
+    });
+    server.once('error', () => undefined);
+    invalid.write('INVALID\r\n\r\n');
+    expect(server.ref()).toBe(server);
+    expect(server.unref()).toBe(server);
+    server.close();
+    v10.end();
+    client.end();
+  });
+
+  it('destroys upgrades without a listener and parses a split client response', async () => {
+    const silent = createServer();
+    silent.listen(0, '127.0.0.1');
+    const silentPort = silent.address()?.port ?? 0;
+    const upgrader = createConnection({ host: '127.0.0.1', port: silentPort });
+    await new Promise<void>((resolve, reject) => {
+      upgrader.once('connect', resolve);
+      upgrader.once('error', reject);
+    });
+    upgrader.write(
+      'GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n',
+    );
+    const raw = createNetServer((socket) => {
+      socket.once('data', () => {
+        socket.write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhe');
+        queueMicrotask(() => socket.write('llo'));
+      });
+    });
+    raw.listen(0, '127.0.0.1');
+    const port = raw.address()?.port ?? 0;
+    const body = await new Promise<string>((resolve, reject) => {
+      const req = request({ host: '127.0.0.1', port, path: '/' }, (res) => {
+        const chunks: Uint8Array[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+      });
+      req.once('error', reject);
+      req.end();
+    });
+    expect(body).toBe('hello');
+    const rawBad = createNetServer((socket) => {
+      socket.once('data', () => socket.write('NOTHTTP\r\n\r\n'));
+    });
+    rawBad.listen(0, '127.0.0.1');
+    const badPort = rawBad.address()?.port ?? 0;
+    const bad = await new Promise<Error>((resolve) => {
+      const req = request({ host: '127.0.0.1', port: badPort, path: '/' });
+      req.once('error', resolve);
+      req.end();
+    });
+    expect(bad.message).toMatch(/Invalid HTTP response line/);
+    silent.close();
+    raw.close();
+    rawBad.close();
+    upgrader.end();
   });
 });
 
