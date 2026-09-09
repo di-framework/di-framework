@@ -350,7 +350,8 @@ export class SqliteActorStorage implements ActorStorage {
       }
     }
 
-    const db = new Database(filePath);
+    const db =
+      this.inMemoryKeepAlive.get(actorId) ?? new Database(this.inMemory ? ':memory:' : filePath);
     try {
       db.run('PRAGMA journal_mode = WAL;');
       db.run('PRAGMA synchronous = NORMAL;');
@@ -388,9 +389,11 @@ export class SqliteActorStorage implements ActorStorage {
   }
 
   private async closeConnection(conn: CachedConnection): Promise<void> {
-    try {
-      conn.db.close();
-    } catch {}
+    if (this.inMemoryKeepAlive.get(conn.actorId) !== conn.db) {
+      try {
+        conn.db.close();
+      } catch {}
+    }
     if (conn.releaseLock) {
       try {
         await conn.releaseLock();
