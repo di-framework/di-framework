@@ -567,6 +567,8 @@ export class InventoryService {
 }
 ```
 
+When `operations` is omitted, class registration discovers prototype methods without constructing the service. Declare arrow-function fields explicitly, for example `@ExportService({ name: 'inventory-service', operations: ['read'] })` for `read = () => ...`. The container resolves the service instance when an operation is invoked. Registering an existing instance also discovers its own function properties.
+
 ### 2. Injecting a Service Binding into a Caller
 
 ```typescript
