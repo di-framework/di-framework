@@ -125,7 +125,7 @@ export class ActorMethodNotFoundError extends Error {
 
   constructor(actorType: string, methodName: string) {
     super(`Method '${methodName}' not found on actor '${actorType}'.`);
-    this.name = "ActorMethodNotFoundError";
+    this.name = 'ActorMethodNotFoundError';
     this.actorType = actorType;
     this.methodName = methodName;
   }
@@ -140,9 +140,9 @@ export class ActorAmbiguityError extends Error {
 
   constructor(actorName: string, candidates: string[]) {
     super(
-      `Multiple actors registered with name '${actorName}' across namespaces: ${candidates.join(", ")}. Disambiguate by actor class or qualified name ('namespace:actorName').`,
+      `Multiple actors registered with name '${actorName}' across namespaces: ${candidates.join(', ')}. Disambiguate by actor class or qualified name ('namespace:actorName').`,
     );
-    this.name = "ActorAmbiguityError";
+    this.name = 'ActorAmbiguityError';
     this.actorName = actorName;
     this.candidates = candidates;
   }
@@ -153,10 +153,10 @@ export class ActorAmbiguityError extends Error {
  */
 export class ActorAdmissionClosedError extends Error {
   constructor(
-    message = "Actor activation is closed to new admissions (reloading or deactivated).",
+    message = 'Actor activation is closed to new admissions (reloading or deactivated).',
   ) {
     super(message);
-    this.name = "ActorAdmissionClosedError";
+    this.name = 'ActorAdmissionClosedError';
   }
 }
 
@@ -164,13 +164,13 @@ export class ActorAdmissionClosedError extends Error {
  * Thrown when an invocation is aborted or rejected due to hot reload.
  */
 export class ActorReloadError extends Error {
-  constructor(message = "Activation replaced or canceled during hot reload.") {
+  constructor(message = 'Activation replaced or canceled during hot reload.') {
     super(message);
-    this.name = "ActorReloadError";
+    this.name = 'ActorReloadError';
   }
 }
 
-export type ReloadPolicy = "drain" | "fail";
+export type ReloadPolicy = 'drain' | 'fail';
 
 export interface ActorReloadOptions {
   /**
@@ -244,11 +244,13 @@ export interface ActorResetResult {
 }
 
 export interface ActorInspectionInfo {
+  /** True for legacy files whose original actor identity is unavailable. */
+  identityInferred?: boolean;
   actorId: string;
   namespace?: string;
   actorType: string;
   actorKey: string;
-  status: "active" | "inactive";
+  status: 'active' | 'inactive';
   runningCalls: number;
   pendingCalls: number;
   storagePath?: string;
@@ -270,6 +272,5 @@ export interface ActorDetailedInspection extends ActorInspectionInfo {
   state?: Record<string, any>;
 }
 
-export { ActorMigrationError } from "./migrations/types.js";
-export { ActorLockError } from "./storage/lock.js";
-
+export { ActorMigrationError } from './migrations/types.js';
+export { ActorLockError } from './storage/lock.js';

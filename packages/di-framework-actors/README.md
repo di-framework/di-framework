@@ -197,3 +197,7 @@ const registrationCode = generateActorRegistration(actors);
 ## License
 
 MIT OR Apache-2.0
+
+SQLite actor inspection records original identities separately from sanitized filenames. Legacy files without identity metadata expose a filename-derived display key with `identityInferred: true`; accessing the actor by its original identity upgrades that metadata.
+
+A reload timeout aborts reload and restores admission without closing an active transaction. With the `fail` policy, queued calls already rejected remain rejected; the running call can still finish. Retry reload after it completes.
