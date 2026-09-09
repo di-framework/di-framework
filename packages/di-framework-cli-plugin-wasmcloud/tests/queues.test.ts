@@ -133,6 +133,7 @@ export class ReceiptWorker {
       'registry.example.com/team/receipt-worker:latest',
       queueProjectRequirements(),
       [],
+      undefined,
       [],
       handlers,
     );

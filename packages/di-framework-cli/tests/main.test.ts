@@ -53,6 +53,8 @@ describe('CLI main router', () => {
       'agent',
       'http',
       'skills',
+      'actor',
+      'migrations',
       'mx',
       'queue',
       'extensions',
@@ -66,6 +68,12 @@ describe('CLI main router', () => {
     expect(Object.keys(COMMAND_TREE.children?.skills?.children ?? {})).toEqual([
       'index',
       'validate',
+    ]);
+    expect(Object.keys(COMMAND_TREE.children?.actor?.children ?? {})).toEqual([
+      'list',
+      'inspect',
+      'reset',
+      'clean',
     ]);
     expect(Object.keys(COMMAND_TREE.children?.agent?.children ?? {})).toEqual([
       'audit',
@@ -168,6 +176,30 @@ describe('CLI main router', () => {
         calls.push(['skills validate', args]);
         return {};
       },
+      actorList: async (args) => {
+        calls.push(['actor list', args]);
+        return {};
+      },
+      actorInspect: async (args) => {
+        calls.push(['actor inspect', args]);
+        return {};
+      },
+      actorReset: async (args) => {
+        calls.push(['actor reset', args]);
+        return {};
+      },
+      actorClean: async (args) => {
+        calls.push(['actor clean', args]);
+        return {};
+      },
+      migrationsStatus: async (args) => {
+        calls.push(['migrations status', args]);
+        return {};
+      },
+      migrationsExecute: async (args) => {
+        calls.push(['migrations execute', args]);
+        return {};
+      },
       mxBuild: async (options) => {
         calls.push(['mx build', options]);
         return {};
@@ -226,6 +258,12 @@ describe('CLI main router', () => {
       ['skills', 'index', 'query', '--query', 'review code'],
       ['skills', 'index', 'migrate', '--output', 'current.json'],
       ['skills', 'validate', '--skills-dir', '.agents/skills'],
+      ['actor', 'list', '--namespace', 'demo'],
+      ['actor', 'inspect', 'Counter', '--key', '1'],
+      ['actor', 'reset', '--all'],
+      ['actor', 'clean', '--all'],
+      ['migrations', 'status', '--binding', 'default'],
+      ['migrations', 'execute', '--dry-run'],
       ['mx', 'build', '--sync-versions'],
       ['mx', 'test'],
       ['mx', 'typecheck', '--pretty=0'],
@@ -252,6 +290,12 @@ describe('CLI main router', () => {
       ['skills index query', ['--query', 'review code']],
       ['skills index migrate', ['--output', 'current.json']],
       ['skills validate', ['--skills-dir', '.agents/skills']],
+      ['actor list', ['--namespace', 'demo']],
+      ['actor inspect', ['Counter', '--key', '1']],
+      ['actor reset', ['--all']],
+      ['actor clean', ['--all']],
+      ['migrations status', ['--binding', 'default']],
+      ['migrations execute', ['--dry-run']],
       ['mx build', ['--sync-versions']],
       ['mx test', undefined],
       ['mx typecheck', ['--pretty=0']],

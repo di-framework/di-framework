@@ -53,6 +53,7 @@ jobs:
           # publishes. package.json files are restored via trap.
           for pkg in packages/di-framework-core \
           packages/di-framework-repo \
+          packages/di-framework-actors \
           packages/di-framework-http \
           packages/di-framework-graphql \
           packages/di-framework-events \

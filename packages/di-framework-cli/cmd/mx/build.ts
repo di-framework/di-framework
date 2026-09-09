@@ -56,6 +56,7 @@ export function parseMxBuildArgs(args: readonly string[] = process.argv.slice(2)
 export const PACKAGES = [
   'packages/di-framework-core',
   'packages/di-framework-repo',
+  'packages/di-framework-actors',
   'packages/di-framework-http',
   'packages/di-framework-graphql',
   'packages/di-framework-events',

@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && bun build assets/queue-adapter.ts --outfile dist/assets/queue-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
+    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' --external 'virtual:di-framework-wasmcloud-actors' && bun build assets/queue-adapter.ts --outfile dist/assets/queue-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' --external 'virtual:di-framework-wasmcloud-actors' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
   },
   "exports": {
     ".": {
@@ -48,7 +48,8 @@
     "typescript": "^5",
     "unenv": "2.0.0-rc.24",
     "@babel/core": "7.29.7",
-    "@babel/plugin-transform-async-to-generator": "7.29.7"
+    "@babel/plugin-transform-async-to-generator": "7.29.7",
+    "@di-framework/actors": "^5"
   },
   "peerDependencies": {
     "typescript": "^5"

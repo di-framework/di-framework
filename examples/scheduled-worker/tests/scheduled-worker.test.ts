@@ -185,6 +185,7 @@ describe('Scheduled Worker Example (@Cron in wasmCloud)', () => {
       'oci.internal/scheduled-worker:v1',
       [],
       [],
+      undefined,
       jobs,
     );
 

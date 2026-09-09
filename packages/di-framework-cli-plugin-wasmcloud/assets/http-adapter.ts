@@ -1,7 +1,13 @@
+import {
+  handleActorInvocationRequest,
+  isActorInvocationRequest as isActorInvocation,
+} from '../src/actor-protocol.js';
 // Keep this side-effect import first: application services can resolve bindings at module startup.
 import 'virtual:di-framework-wasmcloud-guests';
+import 'virtual:di-framework-wasmcloud-actors';
 
 import application from 'virtual:di-framework-application';
+import { actorRuntime, dispatchActorInvocation } from 'virtual:di-framework-wasmcloud-actors';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 import { collectBytes } from './fetch-runtime.ts';
@@ -121,8 +127,26 @@ async function toWebRequest(incoming: {
   });
 }
 
+async function handleActorInvocation(request: Request): Promise<Response> {
+  return handleActorInvocationRequest(request, actorRuntime as any, dispatchActorInvocation as any);
+}
+
 async function dispatch(request: Request): Promise<Response> {
   const handler = application as Application;
+  if (!handler || (typeof handler !== 'function' && typeof (handler as any).fetch !== 'function')) {
+    if (actorRuntime) {
+      return new Response(
+        JSON.stringify({
+          name: 'wasmcloud-actor-component',
+          actors: (actorRuntime as any).getRegisteredActors?.()?.map((a: any) => a.name) ?? [],
+          status: 'running',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    throw new TypeError('The default application export must return a Web Response object');
+  }
+
   const response =
     typeof handler === 'function' ? await handler(request) : await handler.fetch(request);
 
@@ -168,7 +192,11 @@ async function fromWebResponse(response: Response): Promise<unknown> {
 export const handler = {
   async handle(incoming: Parameters<typeof toWebRequest>[0]): Promise<unknown> {
     try {
-      return await fromWebResponse(await dispatch(await toWebRequest(incoming)));
+      const request = await toWebRequest(incoming);
+      if (isActorInvocation(request)) {
+        return await fromWebResponse(await handleActorInvocation(request));
+      }
+      return await fromWebResponse(await dispatch(request));
     } catch (error) {
       console.error('Unhandled DI Framework request error', error);
       return await fromWebResponse(

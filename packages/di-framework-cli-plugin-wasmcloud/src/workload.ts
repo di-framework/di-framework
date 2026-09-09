@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
+import { discoverActors } from './actors.js';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import { type DiscoveredCronJob, discoverScheduledJobs } from './cron.js';
 import type { WasmcloudDeps } from './deps.js';
@@ -55,15 +56,41 @@ export function renderQueueConsumersYaml(queueHandlers: readonly DiscoveredQueue
   return lines.join('\n') + '\n';
 }
 
+export interface WorkloadManifestOptions {
+  hasActors?: boolean;
+  replicas?: number;
+  storageVolume?: {
+    claimName?: string;
+    mountPath?: string;
+    storageSize?: string;
+  };
+}
+
 export function renderWorkloadManifest(
   project: WasmcloudProject,
   connection: ClusterConnection,
   image: string,
   requirements: readonly WitRequirement[] = defaultProjectRequirements(),
   bindings: readonly BindingRecord[] = [],
+  options?: WorkloadManifestOptions | boolean,
   cronJobs: readonly DiscoveredCronJob[] = [],
   queueHandlers: readonly DiscoveredQueueHandler[] = [],
 ): string {
+  const opts: WorkloadManifestOptions =
+    typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
+  const hasActors = opts.hasActors ?? false;
+
+  if (hasActors) {
+    if (opts.replicas !== undefined && opts.replicas !== 1) {
+      throw new CommandFailure(
+        'WASMCLOUD_ACTORS_REPLICA_CONSTRAINT',
+        'Actor deployments with SQLite persistent storage require replicas: 1 to prevent competing database owners on a single host',
+        2,
+        { replicas: opts.replicas },
+      );
+    }
+  }
+
   const name = deploymentResourceName(project);
   const labels = [
     `    app.kubernetes.io/managed-by: ${MANAGED_BY_LABEL}`,
@@ -71,11 +98,56 @@ export function renderWorkloadManifest(
     `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
   ].join('\n');
 
+  const claimName = opts.storageVolume?.claimName ?? `${name}-storage`;
+  const mountPath = opts.storageVolume?.mountPath ?? '/data/actors';
+  const storageSize = opts.storageVolume?.storageSize ?? '1Gi';
+
+  const pvcSection = hasActors
+    ? `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${claimName}
+  namespace: ${connection.namespace}
+  labels:
+${labels}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: ${storageSize}
+`
+    : '';
+
+  const actorVolumes = hasActors
+    ? `        volumeMounts:
+          - name: actor-storage
+            mountPath: ${mountPath}
+        volumes:
+          - name: actor-storage
+            persistentVolumeClaim:
+              claimName: ${claimName}
+`
+    : '';
+
+  const actorEnv = hasActors
+    ? `            - name: ACTOR_STORAGE_DIR
+              value: ${yamlQuote(mountPath)}
+`
+    : '';
+
+  const strategy = hasActors
+    ? `      strategy:
+        type: Recreate
+`
+    : '';
+
   const resolvedHandlers =
     queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
   const isWorker = isQueueWorkerProject(project, resolvedHandlers);
   const hasHttp = project.ingress !== false && !isWorker;
   const sections: string[] = [];
+  if (hasActors) sections.push(pvcSection.trimEnd());
 
   if (hasHttp) {
     sections.push(`apiVersion: v1
@@ -96,10 +168,14 @@ spec:
 
   const cronEnv =
     cronJobs.length > 0
-      ? `          env:
-            - name: DI_CRON_MODE
+      ? `            - name: DI_CRON_MODE
               value: "external"
 `
+      : '';
+  const componentEnv =
+    hasActors || cronJobs.length > 0
+      ? `          env:
+${actorEnv}${cronEnv}`
       : '';
 
   const workloadDeployment = `apiVersion: runtime.wasmcloud.dev/v1alpha1
@@ -113,19 +189,23 @@ spec:
   replicas: 1
   template:
     spec:
-      hostSelector:
+${strategy}      hostSelector:
         hostgroup: default
 ${
-  hasHttp
+  hasHttp || hasActors
     ? `      kubernetes:
-        service:
+${
+  hasHttp
+    ? `        service:
           name: ${name}
 `
+    : ''
+}${actorVolumes}`
     : ''
 }      components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${cronEnv}${
+${componentEnv}${
   project.allowedIpNameLookups === undefined
     ? ''
     : `          localResources:
@@ -167,7 +247,7 @@ spec:
       template:
         metadata:
           labels:
-${labels}
+${labels.replace(/^/gm, '        ')}
             di-framework.dev/cron-job: ${yamlQuote(job.jobId)}
         spec:
           restartPolicy: OnFailure
@@ -203,6 +283,7 @@ export async function applyWorkload(
       ? defaultProjectRequirements()
       : [];
   const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
+  const hasActors = discoverActors(project).length > 0 || (project as any).actors === true;
   const cronJobs = discoverScheduledJobs(project.projectRoot);
   const manifest = renderWorkloadManifest(
     project,
@@ -210,6 +291,7 @@ export async function applyWorkload(
     image,
     requirements,
     bindings,
+    { hasActors },
     cronJobs,
     queueHandlers,
   );

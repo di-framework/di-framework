@@ -224,6 +224,7 @@ describe('Receipt Worker Example', () => {
       'registry.example.com/team/receipt-worker:1.0.0',
       queueProjectRequirements(),
       [],
+      undefined,
       [],
       handlers,
     );

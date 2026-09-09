@@ -42,6 +42,12 @@ mock.module('virtual:di-framework-wasmcloud-guests', () => ({
   guests: {},
 }));
 
+mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+  actorRuntime: undefined,
+  dispatchActorInvocation: undefined,
+  actors: [],
+}));
+
 mock.module('virtual:di-framework-application', () => ({
   default: (request: Request) => {
     const current = applicationState.current;
@@ -432,4 +438,52 @@ describe('queue adapter', () => {
       }),
     ).toEqual({ tag: 'err', val: 'Queue dispatch failed' });
   });
+});
+
+it('routes only reserved actor paths and supports actor-only health responses', async () => {
+  const noRuntime = (await handler.handle(
+    incoming({ path: '/_actors/Counter/key/read' }),
+  )) as Outgoing;
+  expect(noRuntime.statusCode).toBe(404);
+  const normal = (await handler.handle(
+    incoming({ path: '/', headers: [['x-actor-type', new TextEncoder().encode('Counter')]] }),
+  )) as Outgoing;
+  expect(normal.statusCode).toBe(200);
+  const runtime = {
+    invoke: async (type: string, key: string, method: string) => ({ type, key, method }),
+    getRegisteredActors: () => [{ name: 'Counter' }],
+  };
+  try {
+    mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+      actorRuntime: runtime,
+      dispatchActorInvocation: undefined,
+      actors: [],
+    }));
+    const invoked = (await handler.handle(
+      incoming({ path: '/_actors/Counter/key/read' }),
+    )) as Outgoing;
+    expect(invoked.statusCode).toBe(200);
+    mock.module('virtual:di-framework-application', () => ({ default: undefined }));
+    const health = (await handler.handle(incoming({ path: '/' }))) as Outgoing;
+    expect(health.statusCode).toBe(200);
+    mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+      actorRuntime: undefined,
+      dispatchActorInvocation: undefined,
+      actors: [],
+    }));
+    const missingApplication = (await handler.handle(incoming({ path: '/' }))) as Outgoing;
+    expect(missingApplication.statusCode).toBe(500);
+  } finally {
+    mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+      actorRuntime: undefined,
+      dispatchActorInvocation: undefined,
+      actors: [],
+    }));
+    mock.module('virtual:di-framework-application', () => ({
+      default: (request: Request) => {
+        const current = applicationState.current;
+        return typeof current === 'function' ? current(request) : current.fetch(request);
+      },
+    }));
+  }
 });
