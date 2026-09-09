@@ -26,6 +26,16 @@ export class ActorContextInstance {
     this.storage = options.storage;
     this.actors = options.actors;
   }
+
+  /**
+   * Underlying database instance when running on a database-backed storage adapter (e.g. SQLite).
+   */
+  get database(): any {
+    if (typeof this.storage.getDatabase === 'function') {
+      return this.storage.getDatabase();
+    }
+    return undefined;
+  }
 }
 
 function applyActorContextDecorator(

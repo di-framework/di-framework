@@ -30,6 +30,12 @@ export function Actor(targetOrOptions?: Constructor | ActorOptions | string): an
       if (targetOrOptions.name) {
         meta.name = targetOrOptions.name;
       }
+      if (targetOrOptions.namespace) {
+        meta.namespace = targetOrOptions.namespace;
+      }
+      if (targetOrOptions.migrations) {
+        meta.migrations = targetOrOptions.migrations;
+      }
     } else {
       meta.name = target.name;
     }

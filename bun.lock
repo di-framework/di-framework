@@ -236,6 +236,21 @@
         "@di-framework/tsc": "workspace:*",
       },
     },
+    "packages/di-framework-actors": {
+      "name": "@di-framework/actors",
+      "version": "5.3.0",
+      "devDependencies": {
+        "@di-framework/repo": "workspace:*",
+      },
+      "peerDependencies": {
+        "@di-framework/core": "^5",
+        "@di-framework/repo": "^5",
+        "typescript": "^5",
+      },
+      "optionalPeers": [
+        "@di-framework/repo",
+      ],
+    },
     "packages/di-framework-ai": {
       "name": "@di-framework/ai",
       "version": "5.2.6",
@@ -689,6 +704,8 @@
     "@connectrpc/connect-node": ["@connectrpc/connect-node@2.1.2", "", { "peerDependencies": { "@bufbuild/protobuf": "^2.7.0", "@connectrpc/connect": "2.1.2" } }, "sha512-+i/aAOpsI8sIx1mbYp6d99zvxaUSF6t/jP9Ux9maAmjsZPgmIQ3JuIeYi0zJIP9zlCnBlJjkpPosshCgdRuThQ=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
+
+    "@di-framework/actors": ["@di-framework/actors@workspace:packages/di-framework-actors"],
 
     "@di-framework/ai": ["@di-framework/ai@workspace:packages/di-framework-ai"],
 
