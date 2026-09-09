@@ -1,6 +1,7 @@
 /**
  * Core type definitions for @di-framework/actors.
  */
+import type { ActorMigrationDefinition } from './migrations/types.js';
 
 export type Constructor<T = any> = new (...args: any[]) => T;
 
@@ -12,9 +13,20 @@ export interface ActorOptions {
   name?: string;
 
   /**
+   * Optional namespace for partitioning actor storage and identities.
+   * Defaults to 'default'.
+   */
+  namespace?: string;
+
+  /**
    * Optional description or metadata for the actor.
    */
   description?: string;
+
+  /**
+   * Optional actor schema migrations applied before activating an actor instance.
+   */
+  migrations?: ActorMigrationDefinition[];
 }
 
 export interface ActorMethodOptions {
@@ -39,11 +51,13 @@ export interface ActorMethodMetadata {
 
 export interface ActorMetadata {
   name: string;
+  namespace?: string;
   target: Constructor;
   methods: Map<string | symbol, ActorMethodMetadata>;
   contextProperties: Set<string | symbol>;
   contextParams: Map<string | symbol, number[]>;
   constructorContextIndex?: number;
+  migrations?: ActorMigrationDefinition[];
 }
 
 /**
@@ -116,3 +130,6 @@ export class ActorMethodNotFoundError extends Error {
     this.methodName = methodName;
   }
 }
+
+export { ActorMigrationError } from './migrations/types.js';
+export { ActorLockError } from './storage/lock.js';

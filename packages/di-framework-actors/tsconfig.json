@@ -5,7 +5,9 @@
     "baseUrl": ".",
     "paths": {
       "@di-framework/core": ["../di-framework-core/dist/container.d.ts"],
-      "@di-framework/core/*": ["../di-framework-core/dist/*"]
+      "@di-framework/core/*": ["../di-framework-core/dist/*"],
+      "@di-framework/repo": ["../di-framework-repo/dist/index.d.ts"],
+      "@di-framework/repo/*": ["../di-framework-repo/dist/*"]
     }
   },
   "include": ["src/**/*"]

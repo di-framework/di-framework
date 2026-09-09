@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getOrCreateActorMetadata } from '../decorators/keys.js';
+import { runActorMigrations } from '../migrations/runner.js';
 import { InMemoryActorStorage } from '../storage/memory.js';
 import type { ActorStorage } from '../storage/types.js';
 import {
@@ -37,6 +38,7 @@ export class ActorRuntime implements InvocationTarget {
   private readonly registryByCtor = new Map<Constructor, ActorRegistration>();
   private readonly mailboxes = new Map<string, ActorMailbox>();
   private readonly instances = new Map<string, any>();
+  private readonly migratedActors = new Set<string>();
 
   constructor(options: ActorRuntimeOptions = {}) {
     this._storage = options.storage ?? new InMemoryActorStorage();
@@ -65,6 +67,12 @@ export class ActorRuntime implements InvocationTarget {
       const meta = getOrCreateActorMetadata(ctor);
       const name = options?.name ?? meta.name ?? ctor.name;
       meta.name = name;
+      if (options?.namespace) {
+        meta.namespace = options.namespace;
+      }
+      if (options?.migrations) {
+        meta.migrations = options.migrations;
+      }
 
       const registration: ActorRegistration = {
         name,
@@ -130,6 +138,29 @@ export class ActorRuntime implements InvocationTarget {
     return mb;
   }
 
+  private async ensureActorMigrated(
+    reg: ActorRegistration,
+    compositeId: string,
+    actorKey: string,
+  ): Promise<void> {
+    if (this.migratedActors.has(compositeId)) {
+      return;
+    }
+
+    const meta = getOrCreateActorMetadata(reg.ctor);
+    const migrations = reg.options?.migrations ?? meta.migrations ?? (reg.ctor as any).migrations;
+
+    await runActorMigrations({
+      actorType: reg.name,
+      actorKey,
+      compositeId,
+      storage: this._storage,
+      migrations,
+    });
+
+    this.migratedActors.add(compositeId);
+  }
+
   private async getOrCreateInstance(
     reg: ActorRegistration,
     compositeId: string,
@@ -172,6 +203,12 @@ export class ActorRuntime implements InvocationTarget {
     return instance;
   }
 
+  private getCompositeId(reg: ActorRegistration, actorKey: string): string {
+    const meta = getOrCreateActorMetadata(reg.ctor);
+    const namespace = reg.options?.namespace ?? meta.namespace;
+    return namespace ? `${namespace}:${reg.name}:${actorKey}` : `${reg.name}:${actorKey}`;
+  }
+
   /**
    * Invokes an actor method. Method execution is queued and serialized in the actor's mailbox.
    * Execution occurs within an isolated storage transaction.
@@ -188,7 +225,7 @@ export class ActorRuntime implements InvocationTarget {
       throw new ActorNotRegisteredError(name);
     }
 
-    const compositeId = `${reg.name}:${actorKey}`;
+    const compositeId = this.getCompositeId(reg, actorKey);
     const parent = this.invocationStorage.getStore();
     for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {
       if (ancestor.active && ancestor.actorId === compositeId) {
@@ -203,6 +240,7 @@ export class ActorRuntime implements InvocationTarget {
       const invocation: ActorInvocation = { actorId: compositeId, active: true, parent };
       return this.invocationStorage.run(invocation, async () => {
         try {
+          await this.ensureActorMigrated(reg, compositeId, actorKey);
           const tx = await this._storage.beginTransaction(compositeId);
           const context = new ActorContextInstance({
             actorId: compositeId,
@@ -212,59 +250,61 @@ export class ActorRuntime implements InvocationTarget {
             actors: this,
           });
 
-          const instance = await this.getOrCreateInstance(reg, compositeId, context);
-          const meta = getOrCreateActorMetadata(reg.ctor);
+          const wasActive = this.instances.has(compositeId);
+          let timedOut = false;
+          try {
+            const instance = await this.getOrCreateInstance(reg, compositeId, context);
+            const meta = getOrCreateActorMetadata(reg.ctor);
 
-          // Verify method exists and is callable
-          let targetMethodName = methodName;
-          let methodOptions: any;
+            // Verify method exists and is callable
+            let targetMethodName = methodName;
+            let methodOptions: any;
 
-          if (meta.methods.size > 0) {
-            const direct = meta.methods.get(methodName);
-            if (direct) {
-              targetMethodName = String(direct.methodName);
-              methodOptions = direct.options;
-            } else {
-              // Look up by exposed name option
-              let matched = false;
-              for (const [mName, mMeta] of meta.methods.entries()) {
-                if (mMeta.name === methodName) {
-                  targetMethodName = String(mName);
-                  methodOptions = mMeta.options;
-                  matched = true;
-                  break;
+            if (meta.methods.size > 0) {
+              const direct = meta.methods.get(methodName);
+              if (direct) {
+                targetMethodName = String(direct.methodName);
+                methodOptions = direct.options;
+              } else {
+                // Look up by exposed name option
+                let matched = false;
+                for (const [mName, mMeta] of meta.methods.entries()) {
+                  if (mMeta.name === methodName) {
+                    targetMethodName = String(mName);
+                    methodOptions = mMeta.options;
+                    matched = true;
+                    break;
+                  }
+                }
+                if (!matched) {
+                  throw new ActorMethodNotFoundError(reg.name, methodName);
                 }
               }
-              if (!matched) {
-                throw new ActorMethodNotFoundError(reg.name, methodName);
+            }
+
+            if (typeof instance[targetMethodName] !== 'function') {
+              throw new ActorMethodNotFoundError(reg.name, methodName);
+            }
+
+            // Update context reference on instance
+            instance.__actorContext = context;
+            for (const prop of meta.contextProperties) {
+              try {
+                instance[prop] = context;
+              } catch {
+                // Getter fallback
               }
             }
-          }
 
-          if (typeof instance[targetMethodName] !== 'function') {
-            throw new ActorMethodNotFoundError(reg.name, methodName);
-          }
-
-          // Update context reference on instance
-          instance.__actorContext = context;
-          for (const prop of meta.contextProperties) {
-            try {
-              instance[prop] = context;
-            } catch {
-              // Getter fallback
+            // Prepare final arguments (including parameter-injected contexts)
+            const finalArgs = [...args];
+            const paramIndices = meta.contextParams.get(targetMethodName);
+            if (paramIndices) {
+              for (const idx of paramIndices) {
+                finalArgs[idx] = context;
+              }
             }
-          }
 
-          // Prepare final arguments (including parameter-injected contexts)
-          const finalArgs = [...args];
-          const paramIndices = meta.contextParams.get(targetMethodName);
-          if (paramIndices) {
-            for (const idx of paramIndices) {
-              finalArgs[idx] = context;
-            }
-          }
-
-          try {
             const executeCall = async () => {
               return await actorContextStorage.run(context, () => {
                 return instance[targetMethodName].apply(instance, finalArgs);
@@ -276,6 +316,7 @@ export class ActorRuntime implements InvocationTarget {
               let timeoutHandle: any;
               const timeoutPromise = new Promise((_, reject) => {
                 timeoutHandle = setTimeout(() => {
+                  timedOut = true;
                   reject(
                     new Error(
                       `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
@@ -296,6 +337,7 @@ export class ActorRuntime implements InvocationTarget {
             await tx.commit();
             return result;
           } catch (error) {
+            if (!wasActive || timedOut) this.instances.delete(compositeId);
             await tx.rollback();
             throw error;
           }
@@ -313,7 +355,7 @@ export class ActorRuntime implements InvocationTarget {
     const reg = this.resolveRegistration(actorClassOrName);
     if (!reg) return false;
 
-    const compositeId = `${reg.name}:${actorKey}`;
+    const compositeId = this.getCompositeId(reg, actorKey);
     const instance = this.instances.get(compositeId);
     if (!instance) return false;
 
@@ -326,11 +368,18 @@ export class ActorRuntime implements InvocationTarget {
     }
 
     this.instances.delete(compositeId);
+    this.migratedActors.delete(compositeId);
+
     const mailbox = this.mailboxes.get(compositeId);
     if (mailbox) {
       mailbox.clear();
       this.mailboxes.delete(compositeId);
     }
+
+    if (typeof this._storage.closeActor === 'function') {
+      await this._storage.closeActor(compositeId);
+    }
+
     return true;
   }
 
@@ -338,6 +387,7 @@ export class ActorRuntime implements InvocationTarget {
    * Clears all active instances, mailboxes, and storage.
    */
   async clear(): Promise<void> {
+    this.migratedActors.clear();
     for (const instance of this.instances.values()) {
       if (typeof instance.onDeactivate === 'function') {
         try {
@@ -352,7 +402,9 @@ export class ActorRuntime implements InvocationTarget {
       mailbox.clear();
     }
     this.mailboxes.clear();
-    if (typeof (this._storage as any).clearAll === 'function') {
+    if (typeof this._storage.close === 'function') {
+      await this._storage.close();
+    } else if (typeof (this._storage as any).clearAll === 'function') {
       await (this._storage as any).clearAll();
     }
   }

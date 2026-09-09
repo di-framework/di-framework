@@ -31,10 +31,19 @@
   },
   "peerDependencies": {
     "@di-framework/core": "^5",
+    "@di-framework/repo": "^5",
     "typescript": "^5"
   },
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "devDependencies": {
+    "@di-framework/repo": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@di-framework/repo": {
+      "optional": true
+    }
+  }
 }

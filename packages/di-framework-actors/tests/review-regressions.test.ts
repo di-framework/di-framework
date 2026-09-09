@@ -176,3 +176,50 @@ it('allows descendants to invoke an ancestor after that invocation has completed
   gate.resolve();
   expect(await descendant).toBe(42);
 });
+
+it('reruns activation after the activating invocation rolls back', async () => {
+  let activations = 0;
+  class Activated {
+    @ActorContext ctx!: ActorContext;
+    async onActivate() {
+      activations++;
+      await this.ctx.storage.set('ready', true);
+    }
+    async fail() {
+      throw new Error('first invocation failed');
+    }
+    async read() {
+      return this.ctx.storage.get('ready');
+    }
+  }
+  const runtime = new ActorRuntime({ actors: [Activated] });
+  await expect(runtime.get(Activated, 'a').fail()).rejects.toThrow('first invocation failed');
+  expect(await runtime.get(Activated, 'a').read()).toBe(true);
+  expect(activations).toBe(2);
+});
+
+it('discards a timed-out instance before allowing subsequent calls', async () => {
+  const release = deferred<void>();
+  const finished = deferred<void>();
+  class Mutable {
+    value = 0;
+    @ActorMethod({ timeout: 5 })
+    async slow() {
+      await release.promise;
+      this.value = 99;
+      finished.resolve();
+    }
+    @ActorMethod()
+    async read() {
+      return this.value;
+    }
+  }
+  const runtime = new ActorRuntime({ actors: [Mutable] });
+  const ref = runtime.get(Mutable, 'key');
+  expect(await ref.read()).toBe(0);
+  await expect(ref.slow()).rejects.toThrow('timed out');
+  expect(await ref.read()).toBe(0);
+  release.resolve();
+  await finished.promise;
+  expect(await ref.read()).toBe(0);
+});

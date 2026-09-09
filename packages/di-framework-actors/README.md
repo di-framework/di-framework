@@ -1,6 +1,6 @@
 # @di-framework/actors
 
-Local virtual actor runtime for `di-framework`, featuring serialized asynchronous invocations per actor, concurrent execution across actors, and transactional in-memory storage.
+Local virtual actor runtime for `di-framework`, featuring serialized asynchronous invocations per actor, concurrent execution across actors, transactional storage (in-memory and SQLite), and schema migrations.
 
 ## Features
 
@@ -8,9 +8,11 @@ Local virtual actor runtime for `di-framework`, featuring serialized asynchronou
 - **Typed Actor References**: Obtain type-safe references to actors via `actors.get(ActorClass, actorKey)`.
 - **Per-Actor Asynchronous Serialization**: Invocations to a single actor are strictly serialized via a mailbox queue.
 - **Concurrent Multi-Actor Execution**: Different actor instances execute in parallel without cross-actor blocking.
-- **Transactional In-Memory Storage**: Built-in transactional key-value state for each actor with automatic commit on method success and rollback on exceptions.
-- **Explicit Test Harness**: Full support for standalone unit tests via explicit class registration (`actors.register(...)`) without requiring build-time discovery.
-- **Zero Heavy Dependencies**: Pure TypeScript, in-memory local runtime with no SQLite, Wasm, or external infrastructure required.
+- **SQLite Storage & Persistence**: Built-in SQLite storage adapter (`SqliteActorStorage`) with lazily opened databases per actor, bounded connection caching, idle connection cleanup, and single-writer process file locking.
+- **Transactional State**: Built-in transactional storage for each actor with automatic commit on method success and rollback on exceptions. State persists across actor deactivation and process restart.
+- **Safe Path Mapping**: Robust, sanitizing and hashing mapper from actor identity `(namespace, actorName, actorKey)` to filesystem paths, preventing directory traversal.
+- **Actor Migrations**: First-class actor schema migrations reusing the `@di-framework/repo` migration runner. Pending migrations apply automatically before allowing an actor activation to process calls; failed migrations safely prevent activation.
+- **Explicit Test Harness**: Full support for standalone unit tests via explicit class registration (`actors.register(...)`) with in-memory or temporary SQLite databases (`SqliteActorStorage.temporary()`).
 
 ## Installation
 
@@ -18,12 +20,30 @@ Local virtual actor runtime for `di-framework`, featuring serialized asynchronou
 bun add @di-framework/actors
 ```
 
-## Quick Start
+## Quick Start with SQLite Persistence
 
 ```ts
-import { Actor, ActorMethod, ActorContext, actors } from '@di-framework/actors';
+import {
+  Actor,
+  ActorMethod,
+  ActorContext,
+  ActorRuntime,
+  SqliteActorStorage,
+} from '@di-framework/actors';
 
-@Actor()
+@Actor({
+  name: 'BankAccountActor',
+  migrations: [
+    {
+      version: 1,
+      description: 'initialize account schema',
+      up: async (ctx) => {
+        // Run DDL directly in actor SQLite database or initialize storage
+        await ctx.run('CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, action TEXT);');
+      },
+    },
+  ],
+})
 class BankAccountActor {
   @ActorContext
   private ctx!: ActorContext;
@@ -53,11 +73,13 @@ class BankAccountActor {
   }
 }
 
-// Explicit registration in test or application setup
-actors.register(BankAccountActor);
+// Instantiate runtime with SQLite persistence
+const storage = new SqliteActorStorage({ baseDir: './.actors' });
+const runtime = new ActorRuntime({ storage });
+runtime.register(BankAccountActor);
 
 // Obtain typed actor reference
-const account = actors.get(BankAccountActor, 'account-123');
+const account = runtime.get(BankAccountActor, 'account-123');
 
 await account.deposit(100);
 console.log(await account.getBalance()); // 100
@@ -76,23 +98,28 @@ console.log(await account.getBalance()); // Still 100!
 
 1. **Serialized Per Actor**: All method invocations on `actors.get(AccountActor, 'A')` run one-by-one. An invocation must fully complete (including asynchronous `await`s) before the next invocation on the same actor begins.
 2. **Concurrent Across Actors**: Calls to `actors.get(AccountActor, 'A')` and `actors.get(AccountActor, 'B')` execute concurrently.
+3. **Single Writer Safety**: Explicit file locking prevents multiple processes or runtimes from concurrently mutating the same actor database.
 
 Calling the same actor through its reference from an active invocation rejects with a reentrancy error. Call `this.otherMethod()` to share the current invocation and transaction. Indirect cycles such as A→B→A also reject while the earlier invocation remains active.
 
-Clearing a mailbox rejects queued calls. A method timeout rolls back its storage transaction but cannot cancel JavaScript already running in the method; late storage access rejects, and the runtime observes the abandoned call's rejection.
+Clearing a mailbox rejects queued calls. A failed activating invocation evicts its instance so activation can initialize storage again. Timed-out instances are discarded before subsequent calls. A method timeout rolls back its storage transaction but cannot cancel JavaScript already running in the method; late storage access rejects, and the runtime observes the abandoned call's rejection.
 
-## Unit Testing with Isolated Runtimes
+## Unit Testing with Isolated Temporary SQLite Storage
 
-For test isolation, instantiate a fresh `ActorRuntime`:
+For tests, use `SqliteActorStorage.temporary()` or `{ inMemory: true }`:
 
 ```ts
-import { ActorRuntime, InMemoryActorStorage } from '@di-framework/actors';
+import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';
 
-const storage = new InMemoryActorStorage();
+const storage = SqliteActorStorage.temporary();
 const runtime = new ActorRuntime({ storage });
 
 runtime.register(MyActor);
 const ref = runtime.get(MyActor, 'test-key');
+
+// Cleanup temporary directory and connection locks after test run
+await runtime.clear();
+await storage.close();
 ```
 
 ## License

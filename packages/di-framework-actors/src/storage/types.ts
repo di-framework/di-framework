@@ -53,6 +53,11 @@ export interface ActorStorageTransaction {
    * Discards all staged operations without mutating persistent storage.
    */
   rollback(): Promise<void>;
+
+  /**
+   * Optional reference to the underlying database instance.
+   */
+  getDatabase?(): any;
 }
 
 /**
@@ -99,4 +104,19 @@ export interface ActorStorage {
    * Begins an isolated storage transaction for the given actor.
    */
   beginTransaction(actorId: string): Promise<ActorStorageTransaction>;
+
+  /**
+   * Optional hook to close and release resources for an individual actor.
+   */
+  closeActor?(actorId: string): Promise<void> | void;
+
+  /**
+   * Optional hook to close all storage resources and background tasks.
+   */
+  close?(): Promise<void> | void;
+
+  /**
+   * Optional hook to retrieve the underlying raw database for an actor.
+   */
+  getDatabase?(actorId: string): Promise<any>;
 }
