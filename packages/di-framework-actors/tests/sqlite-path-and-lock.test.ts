@@ -248,12 +248,14 @@ it('never steals a live or incomplete lock and serializes stale recovery', async
     fs.writeFileSync(lock + '.recovery', '');
     await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
     expect(JSON.parse(fs.readFileSync(lock, 'utf8')).pid).toBe(9999999);
-    fs.unlinkSync(lock + '.recovery');
+    fs.writeFileSync(lock + '.recovery', JSON.stringify({ pid: 9999999 }));
     const release = await acquireActorLock(target, 'actor');
     await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
     await release();
     await release();
     expect(fs.existsSync(lock)).toBe(false);
+    expect(fs.existsSync(lock + '.recovery')).toBe(false);
+    expect(fs.existsSync(lock + '.recovery.recovery')).toBe(false);
     const releaseMemory = await acquireActorLock('file:review-lock', 'actor');
     await expect(acquireActorLock('file:review-lock', 'actor')).rejects.toThrow(ActorLockError);
     await releaseMemory();
@@ -286,5 +288,42 @@ it('validates mapped containment and supports a filesystem-root base directory',
     );
   } finally {
     resolver.mockRestore();
+  }
+});
+
+it('handles ownership changes while acquiring the recovery guard', async () => {
+  const { acquireActorLock } = await import('../src/storage/lock');
+  const { spyOn } = await import('bun:test');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-recovery-change-'));
+  const target = path.join(dir, 'actor.db');
+  const lock = target + '.lock';
+  const read = fs.readFileSync;
+  try {
+    for (const replacement of [undefined, '', JSON.stringify({ pid: process.pid })]) {
+      fs.writeFileSync(lock, JSON.stringify({ pid: 9999999 }));
+      let observed = false;
+      const spy = spyOn(fs, 'readFileSync').mockImplementation(((file: any, ...args: any[]) => {
+        const result = (read as any)(file, ...args);
+        if (file === lock && !observed) {
+          observed = true;
+          if (replacement === undefined) fs.unlinkSync(lock);
+          else fs.writeFileSync(lock, replacement);
+        }
+        return result;
+      }) as typeof fs.readFileSync);
+      try {
+        if (replacement === undefined) {
+          const release = await acquireActorLock(target, 'actor');
+          await release();
+        } else {
+          await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
+        }
+        expect(fs.existsSync(lock + '.recovery')).toBe(false);
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

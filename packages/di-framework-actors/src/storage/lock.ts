@@ -65,8 +65,10 @@ export async function acquireActorLock(
     };
   }
 
-  const lockPath = `${targetPath}.lock`;
+  return acquireFileLock(`${targetPath}.lock`, actorId);
+}
 
+async function acquireFileLock(lockPath: string, actorId: string): Promise<() => Promise<void>> {
   // Check in-process ownership first
   if (activeInProcessLocks.has(lockPath)) {
     throw new ActorLockError(actorId, lockPath, process.pid);
@@ -115,24 +117,26 @@ export async function acquireActorLock(
 
     // Serialize recovery separately from ownership. Re-read under this guard so
     // another recovering process cannot unlink a newly acquired ownership lock.
-    const recoveryPath = `${lockPath}.recovery`;
-    let recoveryFd: number;
+    // Recovery locks carry ownership metadata and use the same recovery protocol.
+    // If a recoverer dies, its guard can itself be reclaimed under a nested guard.
+    const releaseRecovery = await acquireFileLock(`${lockPath}.recovery`, actorId);
     try {
-      recoveryFd = fs.openSync(recoveryPath, 'wx', 0o600);
-    } catch (error: any) {
-      if (error.code === 'EEXIST') throw new ActorLockError(actorId, lockPath, lockInfo.pid);
-      throw error;
-    }
-    try {
-      const current = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
-      if (typeof current.pid !== 'number' || isPidAlive(current.pid)) {
-        throw new ActorLockError(actorId, lockPath, current.pid);
+      // The old owner may have released the lock since our first observation.
+      if (!tryCreateLock()) {
+        let current: { pid?: number } | null;
+        try {
+          current = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+        } catch {
+          current = null;
+        }
+        if (!current || typeof current.pid !== 'number' || isPidAlive(current.pid)) {
+          throw new ActorLockError(actorId, lockPath, current?.pid);
+        }
+        fs.unlinkSync(lockPath);
+        if (!tryCreateLock()) throw new ActorLockError(actorId, lockPath);
       }
-      fs.unlinkSync(lockPath);
-      if (!tryCreateLock()) throw new ActorLockError(actorId, lockPath);
     } finally {
-      fs.closeSync(recoveryFd);
-      fs.unlinkSync(recoveryPath);
+      await releaseRecovery();
     }
   }
 
