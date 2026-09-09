@@ -333,7 +333,7 @@ describe('HTTPS over host TLS', () => {
     try {
       const adapterPath = join(root, 'adapter.ts');
       const entryPath = join(root, 'entry.ts');
-      const outFile = join(root, 'bundle.js');
+      const outFile = join(root, 'dist', 'bundle.js');
       writeFileSync(
         adapterPath,
         "export { default as handler } from 'virtual:di-framework-application';",

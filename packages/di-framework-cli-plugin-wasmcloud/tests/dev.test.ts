@@ -22,6 +22,22 @@ describe('parseDevArgs', () => {
 });
 
 describe('runWasmcloudDev', () => {
+  it('enables host TLS and network access when the built component imports TLS', async () => {
+    const root = makeProject();
+    const invocations: RunnerInvocation[] = [];
+    await runWasmcloudDev(
+      [],
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        invocations,
+        bundleContents:
+          "import { Connector } from 'wasi:tls/client@0.3.0-draft'; export const connector = Connector;",
+      }),
+    );
+    expect(invocations[1]?.args).toContain('tls=y,inherit-network=y,allow-ip-name-lookup=y');
+  });
+
   it('builds and then serves the component with wasmtime', async () => {
     const root = makeProject();
     const invocations: RunnerInvocation[] = [];

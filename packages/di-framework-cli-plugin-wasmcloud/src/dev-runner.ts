@@ -9,6 +9,7 @@ export type DevServeTarget = {
   host: string;
   port: string;
   washConfigPath?: string;
+  tls?: boolean;
 };
 
 export type ResolvedDevRunner = {
@@ -43,6 +44,7 @@ function argsFor(kind: DevRunnerKind, deps: WasmcloudDeps, target: DevServeTarge
         'p3',
         '-S',
         'config',
+        ...(target.tls ? ['-S', 'tls=y,inherit-network=y,allow-ip-name-lookup=y'] : []),
         '--addr',
         `${target.host}:${target.port}`,
         target.componentPath,
