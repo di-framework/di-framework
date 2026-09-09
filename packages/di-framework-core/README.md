@@ -539,3 +539,70 @@ expect(userService.getUser('1')).toEqual({ mock: true });
 ## License
 
 Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.
+
+
+## Private Service-to-Service Bindings
+
+Declare private service-to-service bindings so services can export callable contracts and authorized callers can invoke them through named dependencies via DI, without exposing public HTTP endpoints or network addresses.
+
+### 1. Declaring an Exported Service
+
+```typescript
+import { Container } from '@di-framework/core/decorators';
+import { ExportService } from '@di-framework/core/service-bindings';
+
+@Container()
+@ExportService({
+  name: 'inventory-service',
+  operations: ['reserve', 'release'],
+})
+export class InventoryService {
+  async reserve(items: any[]) {
+    return { reservationId: 'res-123' };
+  }
+
+  async release(reservationId: string) {
+    return { released: true };
+  }
+}
+```
+
+### 2. Injecting a Service Binding into a Caller
+
+```typescript
+import { Container } from '@di-framework/core/decorators';
+import { ServiceBinding } from '@di-framework/core/service-bindings';
+
+@Container()
+export class CheckoutService {
+  constructor(
+    @ServiceBinding('inventory', {
+      caller: 'checkout-service',
+      target: 'inventory-service',
+    })
+    private readonly inventory: InventoryContract,
+  ) {}
+
+  async checkout(items: any[]) {
+    return await this.inventory.reserve(items);
+  }
+}
+```
+
+### 3. Rejection of Unbound Callers
+
+Callers without an explicit authorization grant cannot invoke target services and are rejected with `UnboundCallerError`.
+
+### 4. Local Multi-Service Development and Mock Substitution
+
+Run multiple local services, monitor binding statuses, and substitute mocks for isolated testing:
+
+```typescript
+import { LocalServiceDevManager } from '@di-framework/core/service-bindings';
+
+const dev = new LocalServiceDevManager();
+dev.registerService('inventory-service', new InventoryService());
+dev.bind('checkout-service', 'inventory', 'inventory-service');
+
+console.log(dev.formatStatusTable());
+```

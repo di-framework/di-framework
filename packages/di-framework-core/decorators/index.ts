@@ -26,5 +26,10 @@ export {
 export { Cron } from './Cron.js';
 export { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys.js';
 export { Publisher, type PublisherOptions } from './Publisher.js';
+export {
+  ExportOperation,
+  ExportService,
+  ServiceBinding,
+} from './ServiceBinding.js';
 export { Subscriber } from './Subscriber.js';
 export { Telemetry, TelemetryListener, type TelemetryOptions } from './Telemetry.js';

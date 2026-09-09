@@ -1,3 +1,5 @@
+import { createServiceBindingClient } from './service-bindings/proxy.js';
+
 /**
  * Dependency Injection Container
  *
@@ -259,7 +261,32 @@ export class Container {
       );
     }
 
-    const definition = this.services.get(key);
+    let definition = this.services.get(key);
+    if (!definition) {
+      if (typeof key === 'string' && key.startsWith('service-binding:')) {
+        const parts = key.split(':');
+        let caller: string | undefined;
+        let bindingName: string;
+        if (parts.length >= 3) {
+          caller = parts[1];
+          bindingName = parts.slice(2).join(':');
+        } else {
+          bindingName = parts[1] ?? '';
+        }
+
+        const globalToken = `service-binding:${bindingName}`;
+        if (this.services.has(globalToken) && key !== globalToken) {
+          return this.resolve(globalToken);
+        }
+
+        this.registerFactory(
+          key,
+          () => createServiceBindingClient(bindingName, caller ? { caller } : {}),
+          { singleton: true },
+        );
+        definition = this.services.get(key);
+      }
+    }
     if (!definition) {
       throw new Error(`Service '${keyStr}' is not registered in the DI container`);
     }
@@ -790,6 +817,12 @@ export function useContainer(): Container {
   return container;
 }
 
+export {
+  ExportOperation,
+  ExportService,
+  ServiceBinding,
+  serviceBindingToken,
+} from './service-bindings/index.js';
 /**
  * Export metadata functions for use in decorators
  * These provide a simple, reflect-metadata-free way to store and access metadata

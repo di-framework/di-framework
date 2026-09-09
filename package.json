@@ -10,7 +10,8 @@
   "workspaces": [
     "packages/*",
     "examples",
-    "examples/packages/*"
+    "examples/packages/*",
+    "examples/checkout-inventory"
   ],
   "scripts": {
     "build": "bun run packages/di-framework-cli/main.ts mx build",
