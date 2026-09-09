@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { useContainer } from '../container.js';
 import { Container as InjectableContainer } from '../decorators/Container.js';
 import {
-  ExportOperation,
   ExportService,
   ServiceBinding,
   serviceBindingToken,
@@ -276,4 +275,148 @@ describe('Private Service-to-Service Bindings', () => {
     const diagnostics = dev.diagnose();
     expect(diagnostics.some((d) => d.code === 'UNBOUND_CALLER')).toBe(true);
   });
+});
+
+describe('Service binding review regressions', () => {
+  beforeEach(() => {
+    ServiceBindingRuntime.reset();
+    useContainer().clear();
+  });
+
+  it('defers construction and invokes the container-managed instance with its dependencies', async () => {
+    let constructions = 0;
+    const dependency = { value: 42 };
+    @ExportService({ name: 'lazy', requiresAuthorization: false })
+    class LazyService {
+      constructor(public dep: typeof dependency) {
+        constructions++;
+        if (!dep) throw new Error('Dependency required');
+      }
+      read() {
+        return this.dep.value;
+      }
+    }
+    expect(constructions).toBe(0);
+    useContainer().registerFactory(LazyService, () => new LazyService(dependency));
+    const runtime = ServiceBindingRuntime.current;
+    expect(runtime.getStatus()).toEqual([]);
+    expect(constructions).toBe(0);
+    await expect(runtime.invoke('caller', 'lazy', 'read')).resolves.toBe(42);
+    expect(runtime.registry.getService('lazy')!.instance).toBe(useContainer().resolve(LazyService));
+    expect(constructions).toBe(1);
+  });
+
+  it('removes mocks only from the requested caller scope', () => {
+    const registry = ServiceBindingRuntime.current.registry;
+    const global = { read: () => 'global' };
+    const local = { read: () => 'local' };
+    registry.registerMock('store', global);
+    registry.registerMock('store', local, 'alice');
+    registry.removeMock('store', 'unknown');
+    expect(registry.getMock('store', 'bob')).toBe(global);
+    registry.removeMock('store', 'alice');
+    expect(registry.getMock('store', 'alice')).toBe(global);
+    registry.registerMock('store', local, 'alice');
+    registry.removeMock('store');
+    expect(registry.getMock('store', 'bob')).toBeUndefined();
+    expect(registry.getMock('store', 'alice')).toBe(local);
+  });
+
+  it('filters environment-loaded grants just like explicit configuration', () => {
+    const previous = { env: process.env.DI_SERVICE_ENV, grants: process.env.DI_SERVICE_GRANTS };
+    try {
+      process.env.DI_SERVICE_ENV = 'test';
+      const grants = [
+        { caller: 'prod', target: 'store', environment: 'production' },
+        { caller: 'test', target: 'store', environment: 'test' },
+        { caller: 'shared', target: 'store' },
+      ];
+      process.env.DI_SERVICE_GRANTS = JSON.stringify(grants);
+      const runtime = new ServiceBindingRuntime();
+      expect(runtime.registry.getAllGrants()).toEqual(grants.slice(1));
+      expect(runtime.registry.isCallerAuthorized('prod', 'store')).toBe(false);
+    } finally {
+      if (previous.env === undefined) delete process.env.DI_SERVICE_ENV;
+      else process.env.DI_SERVICE_ENV = previous.env;
+      if (previous.grants === undefined) delete process.env.DI_SERVICE_GRANTS;
+      else process.env.DI_SERVICE_GRANTS = previous.grants;
+    }
+  });
+});
+
+it('supports binding proxy introspection, development mocks, and service removal', async () => {
+  const { createServiceBindingClient, useServiceBindingRuntime } = await import(
+    '../service-bindings/index.js'
+  );
+  const runtime = useServiceBindingRuntime();
+  runtime.registry.clear();
+  runtime.setCurrentServiceId('caller');
+  runtime.setEnvironment('test');
+  expect(runtime.getEnvironment()).toBe('test');
+  runtime.setEnforceAuthorization(false);
+  runtime.setEnforceAuthorizationOnMocks(true);
+  const dev = new LocalServiceDevManager(runtime);
+  expect(dev.formatStatusTable()).toBe('No active service bindings registered.');
+  dev.bind('caller', 'store', 'store', { grantAccess: false });
+  dev.substituteMock('store', { read: () => 42 });
+  const client = createServiceBindingClient<any>('store');
+  expect(client.$bindingMeta.caller).toBe('caller');
+  expect(client[Symbol.iterator]).toBeUndefined();
+  expect(client.toString()).toContain('caller->store');
+  expect(client.then).toBeUndefined();
+  expect('$bindingMeta' in client).toBe(true);
+  expect('read' in client).toBe(true);
+  await expect(client.read()).resolves.toBe(42);
+  expect(dev.getStatus()[0]?.status).toBe('MOCKED');
+  dev.clearMocks();
+  dev.registerService('store', { read: () => 1 }, { operations: ['read'] });
+  expect(runtime.registry.getAllServices()).toHaveLength(1);
+  expect(runtime.registry.unregisterService('store')).toBe(true);
+  expect(dev.diagnose()[0]?.code).toBe('TARGET_UNAVAILABLE');
+  dev.reset();
+  expect(dev.getStatus()).toEqual([]);
+});
+
+it('supports operation metadata and property binding fallback without container registration', async () => {
+  const { ExportOperation } = await import('../decorators/ServiceBinding.js');
+  const { getOwnMetadata } = await import('../container.js');
+  class Target {
+    read() {
+      return 1;
+    }
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(Target.prototype, 'read')!;
+  expect(ExportOperation()(Target.prototype, 'read', descriptor)).toBe(descriptor);
+  expect(getOwnMetadata('di:export-operation', Target.prototype)).toEqual(['read']);
+  class Caller {}
+  ServiceBinding('fallback', { caller: 'fallback-caller' })(Caller.prototype, 'store');
+  const originalResolve = useContainer().resolve;
+  try {
+    useContainer().resolve = () => {
+      throw new Error('unavailable');
+    };
+    const caller = new Caller() as any;
+    expect(caller.store.$bindingMeta.bindingName).toBe('fallback');
+    expect(caller.store).toBe(caller.store);
+    caller.store = { read: () => 9 };
+    expect(caller.store.read()).toBe(9);
+  } finally {
+    useContainer().resolve = originalResolve;
+  }
+});
+
+it('infers the caller and caches property clients resolved through the container', () => {
+  class InferredCaller {}
+  ServiceBinding('inferred')(InferredCaller.prototype, 'store');
+  const caller = new InferredCaller() as any;
+  expect(caller.store.$bindingMeta.caller).toBe('InferredCaller');
+  expect(caller.store).toBe(caller.store);
+  ServiceBinding('constructor-inferred')(InferredCaller, undefined, 0);
+});
+
+it('falls back when the property binding token resolves to an empty value', () => {
+  class EmptyCaller {}
+  ServiceBinding('empty')(EmptyCaller.prototype, 'store');
+  useContainer().registerValue(serviceBindingToken('empty', 'EmptyCaller'), undefined);
+  expect((new EmptyCaller() as any).store.$bindingMeta.bindingName).toBe('empty');
 });

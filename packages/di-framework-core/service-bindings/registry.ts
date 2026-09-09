@@ -146,10 +146,11 @@ export class ServiceBindingRegistry {
    * Remove mock substitution.
    */
   public removeMock(bindingName: string, caller?: string): void {
-    if (caller && this.callerMocks.has(caller)) {
-      this.callerMocks.get(caller)!.delete(bindingName);
+    if (caller) {
+      this.callerMocks.get(caller)?.delete(bindingName);
+    } else {
+      this.mocks.delete(bindingName);
     }
-    this.mocks.delete(bindingName);
   }
 
   /**
