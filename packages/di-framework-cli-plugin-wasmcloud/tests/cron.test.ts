@@ -148,6 +148,7 @@ export class NotificationService {
       'registry.wasmcloud.local/batch-worker:v1',
       [],
       [],
+      undefined,
       mockJobs,
     );
 
@@ -213,6 +214,7 @@ export class NotificationService {
       'registry.local/hybrid-app:latest',
       [],
       [],
+      undefined,
       mockJobs,
     );
 
@@ -222,6 +224,30 @@ export class NotificationService {
     expect(manifest).toContain('kind: CronJob');
     expect(manifest).toContain('name: hybrid-app-sync-cache');
     expect(manifest).toContain('concurrencyPolicy: Allow');
+
+    for (const ingress of [true, false]) {
+      const combined = renderWorkloadManifest(
+        { ...project, ingress },
+        connection,
+        'registry.local/hybrid-app:latest',
+        [],
+        [],
+        { hasActors: true },
+        mockJobs,
+      );
+      const documents = combined
+        .split('\n---\n')
+        .map((document) => Bun.YAML.parse(document) as any);
+      const workload = documents.find((document) => document.kind === 'WorkloadDeployment');
+      const spec = workload.spec.template.spec;
+      expect(spec.strategy.type).toBe('Recreate');
+      expect(spec.kubernetes.volumes[0].persistentVolumeClaim.claimName).toBe('hybrid-app-storage');
+      expect(spec.components[0].env).toEqual([
+        { name: 'ACTOR_STORAGE_DIR', value: '/data/actors' },
+        { name: 'DI_CRON_MODE', value: 'external' },
+      ]);
+      expect(documents.some((document) => document.kind === 'Service')).toBe(ingress);
+    }
   });
 });
 

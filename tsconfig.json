@@ -68,7 +68,9 @@
       ],
       "@di-framework/cli-plugin-wasmcloud/*": ["packages/di-framework-cli-plugin-wasmcloud/src/*"],
       "@di-framework/codegen": ["packages/di-framework-codegen/index.ts"],
-      "@di-framework/codegen/*": ["packages/di-framework-codegen/*"]
+      "@di-framework/codegen/*": ["packages/di-framework-codegen/*"],
+      "@di-framework/actors": ["packages/di-framework-actors/src/index.ts"],
+      "@di-framework/actors/*": ["packages/di-framework-actors/src/*"]
     }
   },
   "include": ["packages/**/*.ts", "packages/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts"],
