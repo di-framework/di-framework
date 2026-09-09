@@ -304,6 +304,7 @@ describe('Service binding review regressions', () => {
     await expect(runtime.invoke('caller', 'lazy', 'read')).resolves.toBe(42);
     expect(runtime.registry.getService('lazy')!.instance).toBe(useContainer().resolve(LazyService));
     expect(constructions).toBe(1);
+    expect(runtime.registry.getService('lazy')!.operations.has('constructor')).toBe(false);
   });
 
   it('removes mocks only from the requested caller scope', () => {
