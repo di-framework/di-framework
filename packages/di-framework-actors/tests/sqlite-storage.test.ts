@@ -329,3 +329,22 @@ it('deletes direct SQLite state and preserves timer cleanup behavior', async () 
     await storage.close();
   }
 });
+
+it('preserves private in-memory databases across cache eviction and actor deactivation', async () => {
+  const storage = new SqliteActorStorage({ inMemory: true, maxConnections: 1, idleTimeoutMs: 1 });
+  const isolated = new SqliteActorStorage({ inMemory: true });
+  try {
+    await storage.set('Counter:first', 'count', 7);
+    await storage.set('Counter:second', 'count', 9);
+    expect(await storage.get<number>('Counter:first', 'count')).toBe(7);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(await storage.cleanupIdleConnections()).toBe(1);
+    expect(await storage.get<number>('Counter:first', 'count')).toBe(7);
+    await storage.closeActor('Counter:first');
+    expect(await storage.get<number>('Counter:first', 'count')).toBe(7);
+    expect(await isolated.get('Counter:first', 'count')).toBeUndefined();
+  } finally {
+    await storage.close();
+    await isolated.close();
+  }
+});
