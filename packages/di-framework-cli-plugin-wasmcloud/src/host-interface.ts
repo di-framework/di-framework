@@ -81,6 +81,7 @@ export function hostInterfacesFromRequirements(
       (requirement) =>
         requirement.package !== WASI_SOCKETS_PACKAGE &&
         requirement.package !== WASI_RANDOM_PACKAGE &&
+        requirement.package !== 'wasi:tls' &&
         requirement.package !== 'wasi:clocks',
     )
     .map((requirement) => {

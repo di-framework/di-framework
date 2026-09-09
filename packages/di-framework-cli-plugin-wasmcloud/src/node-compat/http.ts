@@ -291,7 +291,7 @@ export class Agent extends EventEmitter {
 
 export const globalAgent = new Agent();
 
-type RequestOptions = {
+export type RequestOptions = {
   protocol?: string;
   host?: string;
   hostname?: string;
@@ -332,7 +332,10 @@ export class ClientRequest extends EventEmitter {
     this.headers = lowerHeaders(options.headers);
     if (typeof callback === 'function') this.once('response', callback);
     if (headerValue(this.headers, 'host') === undefined) {
-      const hostHeader = this.port === 80 ? this.host : `${this.host}:${this.port}`;
+      const hostname =
+        this.host.includes(':') && !this.host.startsWith('[') ? `[${this.host}]` : this.host;
+      const hostHeader =
+        this.port === (options.defaultPort ?? 80) ? hostname : `${hostname}:${this.port}`;
       this.headers.host = hostHeader;
     }
     queueMicrotask(() => this.open());
@@ -400,18 +403,28 @@ export class ClientRequest extends EventEmitter {
   open(): void {
     if (this.aborted) return;
     const onSocket = (socket: Socket) => {
+      if (this.socket === socket) return;
+      if (this.aborted) {
+        socket.destroy();
+        return;
+      }
       this.socket = socket;
       this.emit('socket', socket);
       socket.on('error', (error) => emitError(this, error));
-      if (socket.connecting) socket.once('connect', () => this.flush());
+      if (socket.connecting)
+        socket.once('encrypted' in socket ? 'secureConnect' : 'connect', () => this.flush());
       else this.flush();
     };
     if (this.options.createConnection !== undefined) {
-      const created = this.options.createConnection(this.options, (error, socket) => {
-        if (error !== null) emitError(this, error);
-        else onSocket(socket);
-      });
-      if (created !== undefined) onSocket(created);
+      try {
+        const created = this.options.createConnection(this.options, (error, socket) => {
+          if (error !== null) emitError(this, error);
+          else onSocket(socket);
+        });
+        if (created !== undefined) onSocket(created);
+      } catch (error) {
+        emitError(this, error);
+      }
       return;
     }
     onSocket(createConnection({ port: this.port, host: this.host }));
@@ -419,6 +432,7 @@ export class ClientRequest extends EventEmitter {
 
   flush(): void {
     if (this.aborted || this.socket === undefined || this.headersSent) return;
+    if (this.socket.connecting) return;
     if (!this.writableEnded) return;
     const body = concatBytes(...this.body);
     const chunked = isChunked(this.headers);
@@ -440,12 +454,30 @@ export class ClientRequest extends EventEmitter {
 
   async readResponse(socket: Socket): Promise<void> {
     let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
+    let complete = false;
+    let failed = false;
+    let closeDelimited: IncomingMessage | undefined;
+    socket.on('error', () => {
+      failed = true;
+    });
+    socket.once('end', () => {
+      if (complete || failed || this.aborted) return;
+      if (closeDelimited !== undefined) closeDelimited.finish();
+      else
+        emitError(
+          this,
+          Object.assign(new Error('Socket ended before the HTTP response completed'), {
+            code: 'ECONNRESET',
+          }),
+        );
+    });
     const onData = (chunk: unknown) => {
       buffer = concatBytes(buffer, toBytes(chunk));
       let parsed: ReturnType<typeof parseHttpResponse>;
       try {
         parsed = parseHttpResponse(buffer);
       } catch (error) {
+        failed = true;
         emitError(this, error);
         return;
       }
@@ -456,22 +488,39 @@ export class ClientRequest extends EventEmitter {
       socket.removeListener('data', onData);
       const leftover = buffer.subarray(parsed.headerLength);
       const incoming = new IncomingMessage(socket);
+      incoming.once('end', () => {
+        complete = true;
+      });
       incoming.httpVersion = parsed.httpVersion;
       incoming.statusCode = parsed.statusCode;
       incoming.statusMessage = parsed.statusMessage;
       incoming.headers = parsed.headers;
       incoming.rawHeaders = parsed.rawHeaders;
       if (isUpgrade(parsed.headers) && parsed.statusCode === 101) {
+        complete = true;
         socket.pause();
         this.emit('upgrade', incoming, socket, toNodeBuffer(leftover));
         return;
       }
       this.emit('response', incoming);
+      const noBody =
+        this.method === 'HEAD' || parsed.statusCode === 204 || parsed.statusCode === 304;
+      if (noBody) {
+        complete = true;
+        incoming.finish();
+        return;
+      }
       if (isChunked(parsed.headers)) {
         readChunkedBody(socket, incoming, leftover, this, () => {});
         return;
       }
-      const length = contentLengthOf(parsed.headers) ?? 0;
+      const length = contentLengthOf(parsed.headers);
+      if (length === undefined) {
+        closeDelimited = incoming;
+        if (leftover.length > 0) incoming.pushBody(leftover);
+        socket.on('data', (chunk) => incoming.pushBody(toBytes(chunk)));
+        return;
+      }
       if (leftover.length > 0) incoming.pushBody(leftover.subarray(0, length));
       if (leftover.length >= length) incoming.finish();
       else {
@@ -685,6 +734,12 @@ export function request(
   } else {
     options = urlOrOptions;
     if (typeof optionsOrCallback === 'function') callback = optionsOrCallback;
+  }
+  if (options.protocol !== undefined && options.protocol !== 'http:') {
+    throw Object.assign(
+      new TypeError(`Protocol "${options.protocol}" not supported. Expected "http:"`),
+      { code: 'ERR_INVALID_PROTOCOL' },
+    );
   }
   return new ClientRequest(options, callback);
 }

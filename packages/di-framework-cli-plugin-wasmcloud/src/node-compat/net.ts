@@ -39,7 +39,7 @@ type PushStream = {
   close(): void;
 };
 
-function createPushStream(): PushStream {
+export function createPushStream(): PushStream {
   const chunks: Uint8Array[] = [];
   let closed = false;
   let notify: (() => void) | undefined;

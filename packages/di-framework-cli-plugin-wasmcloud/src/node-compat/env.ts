@@ -23,6 +23,8 @@ export function wasmcloudUnenvPreset(
   dgramPath = runtimeFile('dgram'),
   cryptoPath = runtimeFile('crypto'),
   httpPath = runtimeFile('http'),
+  tlsPath = runtimeFile('tls'),
+  httpsPath = runtimeFile('https'),
 ): Preset {
   return {
     meta: { name: 'unenv:wasmcloud' },
@@ -45,6 +47,10 @@ export function wasmcloudUnenvPreset(
       'node:crypto': cryptoPath,
       http: httpPath,
       'node:http': httpPath,
+      tls: tlsPath,
+      'node:tls': tlsPath,
+      https: httpsPath,
+      'node:https': httpsPath,
     },
     inject: {
       process: [processPath, 'default'],
