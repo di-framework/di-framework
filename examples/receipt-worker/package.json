@@ -1,0 +1,19 @@
+{
+  "name": "@examples/receipt-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun src/dev.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/queues": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli-plugin-wasmcloud": "workspace:*",
+    "@types/bun": "latest"
+  }
+}

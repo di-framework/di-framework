@@ -14,6 +14,7 @@ const CANONICAL_GROUPS = [
   'skills',
   'skills index',
   'mx',
+  'queue',
   'extensions',
 ];
 const CANONICAL_LEAVES = [
@@ -36,6 +37,9 @@ const CANONICAL_LEAVES = [
   'mx test',
   'mx typecheck',
   'mx publish',
+  'queue list',
+  'queue inspect',
+  'queue retry',
   'extensions install',
   'extensions uninstall',
   'extensions list',
@@ -71,6 +75,9 @@ const FEATURE_ADAPTER_OPERATIONS: Readonly<Record<string, readonly string[]>> = 
   'cmd/extensions/install.ts': ['installExtension'],
   'cmd/extensions/uninstall.ts': ['uninstallExtension'],
   'cmd/extensions/list.ts': ['listInstalledExtensions'],
+  'cmd/queue/list.ts': ['listQueueStats'],
+  'cmd/queue/inspect.ts': ['inspectQueue'],
+  'cmd/queue/retry.ts': ['retryQueueJobs'],
 };
 
 const REMOVED_ENTRYPOINTS = [

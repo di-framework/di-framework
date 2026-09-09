@@ -8,10 +8,12 @@ import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
 import { loadProject, type WasmcloudProject } from './project.js';
 import { invalidUsage, requireNodeBinary, toolFailed } from './support.js';
+import { discoverQueueHandlers, isQueueWorkerProject } from "./queues.js";
 import {
   buildWitLock,
   COMPONENT_MODEL,
   defaultProjectRequirements,
+  queueProjectRequirements,
   digestBytes,
   renderWorldWit,
   runtimeRequirementsFromJavaScript,
@@ -40,7 +42,12 @@ export function requirementsForProject(
   deps: WasmcloudDeps = DEFAULT_DEPS,
 ): WitRequirement[] {
   const bindings = discoverBindings(project, deps);
-  return [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
+  const baseRequirements = isWorker
+    ? queueProjectRequirements()
+    : defaultProjectRequirements();
+  return [...baseRequirements, ...requirementsFromBindings(bindings)];
 }
 
 function writeGuestsModule(generatedDirectory: string, bindings: readonly BindingRecord[]): void {
@@ -148,6 +155,8 @@ export async function buildComponent(
   const generatedWit = join(generatedDirectory, 'wit');
   const bundledJavaScript = join(generatedDirectory, 'component.js');
   const bindings = discoverBindings(project, deps);
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
   const requirements = requirementsForProject(project, deps);
 
   rmSync(generatedDirectory, { recursive: true, force: true });
@@ -171,8 +180,11 @@ export async function buildComponent(
 
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
+    const adapterPath = isWorker
+      ? join(deps.assetsDirectory(), 'queue-adapter.js')
+      : join(deps.assetsDirectory(), 'http-adapter.js');
     await deps.bundler({
-      adapterPath: join(deps.assetsDirectory(), 'http-adapter.js'),
+      adapterPath,
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
@@ -220,7 +232,7 @@ export async function buildComponent(
     componentModel: COMPONENT_MODEL,
     deploymentDigest,
     entry: relative(project.projectRoot, project.entryPath),
-    profile: BUILD_PROFILE_NAME,
+    profile: isWorker ? 'wasmcloud-worker' : BUILD_PROFILE_NAME,
   };
   writeFileSync(
     join(generatedDirectory, 'build.json'),

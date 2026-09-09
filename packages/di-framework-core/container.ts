@@ -64,6 +64,7 @@ export const TELEMETRY_LISTENER_METADATA_KEY = 'di:telemetry-listener';
 export const PUBLISHER_METADATA_KEY = 'di:publisher';
 export const SUBSCRIBER_METADATA_KEY = 'di:subscriber';
 export const CRON_METADATA_KEY = 'di:cron';
+export const QUEUE_HANDLER_METADATA_KEY = 'di:queue_handler';
 
 /**
  * Simple metadata storage that doesn't require reflect-metadata
@@ -827,4 +828,5 @@ export {
  * Export metadata functions for use in decorators
  * These provide a simple, reflect-metadata-free way to store and access metadata
  */
+export { QueueHandler, type QueueHandlerOptions, type QueueHandlerMetadata } from './decorators/QueueHandler.js';
 export { defineMetadata, getMetadata, getOwnMetadata, hasMetadata };

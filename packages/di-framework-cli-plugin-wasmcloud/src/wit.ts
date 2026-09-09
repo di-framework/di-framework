@@ -14,6 +14,10 @@ export const WASI_SOCKETS_PACKAGE = 'wasi:sockets';
 export const WASI_SOCKETS_VERSION = '0.3.0';
 export const WASI_RANDOM_PACKAGE = 'wasi:random';
 export const WASI_RANDOM_VERSION = '0.3.0';
+export const QUEUE_ADAPTER_SOURCE = 'queue-adapter';
+export const DI_QUEUES_PACKAGE = 'di-framework:queues';
+export const DI_QUEUES_VERSION = '0.1.0';
+export const DI_QUEUES_INTERFACE = 'dispatch';
 
 export type WitDirection = 'import' | 'export';
 
@@ -61,6 +65,20 @@ export const HTTP_ADAPTER_REQUIREMENTS: WitRequirement[] = [
 /** Default guest world: the HTTP adapter only. Bindings later concat onto this list. */
 export function defaultProjectRequirements(): WitRequirement[] {
   return HTTP_ADAPTER_REQUIREMENTS.map((requirement) => ({ ...requirement }));
+}
+
+export const QUEUE_ADAPTER_REQUIREMENTS: WitRequirement[] = [
+  {
+    package: DI_QUEUES_PACKAGE,
+    version: DI_QUEUES_VERSION,
+    interfaces: [DI_QUEUES_INTERFACE],
+    direction: 'export',
+    source: QUEUE_ADAPTER_SOURCE,
+  },
+];
+
+export function queueProjectRequirements(): WitRequirement[] {
+  return QUEUE_ADAPTER_REQUIREMENTS.map((requirement) => ({ ...requirement }));
 }
 
 /**

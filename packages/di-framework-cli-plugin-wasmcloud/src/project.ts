@@ -10,6 +10,7 @@ export type WasmcloudProject = {
   applicationName: string;
   /** Explicit WASI DNS allowlist, separate from outbound HTTP permissions. */
   allowedIpNameLookups?: string[];
+  applicationType?: string;
   configPath: string;
   entryPath: string;
   outputPath: string;

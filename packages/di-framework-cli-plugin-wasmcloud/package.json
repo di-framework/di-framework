@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
+    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && bun build assets/queue-adapter.ts --outfile dist/assets/queue-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
   },
   "exports": {
     ".": {

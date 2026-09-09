@@ -108,9 +108,24 @@ export {
   type WitRequirement,
 } from './wit.js';
 export {
+  type DiscoveredQueueHandler,
+  discoverQueueHandlers,
+  isQueueWorkerProject,
+  parseQueueHandlersInFile,
+} from './queues.js';
+export {
+  DI_QUEUES_INTERFACE,
+  DI_QUEUES_PACKAGE,
+  DI_QUEUES_VERSION,
+  QUEUE_ADAPTER_REQUIREMENTS,
+  QUEUE_ADAPTER_SOURCE,
+  queueProjectRequirements,
+} from './wit.js';
+export {
   applyWorkload,
   deleteWorkload,
   isReady,
+  renderQueueConsumersYaml,
   renderWorkloadManifest,
 } from './workload.js';
 

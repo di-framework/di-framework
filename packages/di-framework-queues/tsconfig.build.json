@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "incremental": false,
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "@di-framework/core": [
+        "../di-framework-core/dist/container.d.ts"
+      ],
+      "@di-framework/core/*": [
+        "../di-framework-core/dist/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ]
+}

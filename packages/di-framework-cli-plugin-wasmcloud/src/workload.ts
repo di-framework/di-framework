@@ -6,8 +6,9 @@ import type { WasmcloudDeps } from './deps.js';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
 import { captureKubectl, runKubectl } from './kubernetes.js';
 import type { WasmcloudProject } from './project.js';
+import { discoverQueueHandlers, isQueueWorkerProject, type DiscoveredQueueHandler } from './queues.js';
 import type { ClusterConnection } from './target.js';
-import { defaultProjectRequirements, type WitRequirement } from './wit.js';
+import { defaultProjectRequirements, queueProjectRequirements, type WitRequirement } from './wit.js';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;
@@ -23,12 +24,34 @@ export function generatedManifestPath(project: WasmcloudProject): string {
   return join(project.projectRoot, '.di-framework', 'deploy', 'workload.yaml');
 }
 
+export function renderQueueConsumersYaml(queueHandlers: readonly DiscoveredQueueHandler[]): string {
+  if (queueHandlers.length === 0) return '';
+  const lines = ['          queueConsumers:'];
+  for (const h of queueHandlers) {
+    lines.push(`            - queue: ${yamlQuote(h.queueName)}`);
+    if (h.options.concurrency !== undefined) {
+      lines.push(`              concurrency: ${h.options.concurrency}`);
+    }
+    if (h.options.maxRetries !== undefined) {
+      lines.push(`              maxRetries: ${h.options.maxRetries}`);
+    }
+    if (h.options.backoffMs !== undefined) {
+      lines.push(`              backoffMs: ${h.options.backoffMs}`);
+    }
+    if (h.options.timeoutMs !== undefined) {
+      lines.push(`              timeoutMs: ${h.options.timeoutMs}`);
+    }
+  }
+  return lines.join('\n') + '\n';
+}
+
 export function renderWorkloadManifest(
   project: WasmcloudProject,
   connection: ClusterConnection,
   image: string,
   requirements: readonly WitRequirement[] = defaultProjectRequirements(),
   bindings: readonly BindingRecord[] = [],
+  queueHandlers: readonly DiscoveredQueueHandler[] = [],
 ): string {
   const name = deploymentResourceName(project);
   const labels = [
@@ -37,7 +60,13 @@ export function renderWorkloadManifest(
     `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
   ].join('\n');
 
-  return `apiVersion: v1
+  const resolvedHandlers =
+    queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, resolvedHandlers);
+
+  const serviceBlock = isWorker
+    ? ''
+    : `apiVersion: v1
 kind: Service
 metadata:
   name: ${name}
@@ -52,7 +81,18 @@ spec:
       targetPort: 80
       protocol: TCP
 ---
-apiVersion: runtime.wasmcloud.dev/v1alpha1
+`;
+
+  const kubernetesServiceBlock = isWorker
+    ? ''
+    : `      kubernetes:
+        service:
+          name: ${name}
+`;
+
+  const queueConsumersBlock = isWorker ? renderQueueConsumersYaml(resolvedHandlers) : '';
+
+  return `${serviceBlock}apiVersion: runtime.wasmcloud.dev/v1alpha1
 kind: WorkloadDeployment
 metadata:
   name: ${name}
@@ -65,10 +105,7 @@ spec:
     spec:
       hostSelector:
         hostgroup: default
-      kubernetes:
-        service:
-          name: ${name}
-      components:
+${kubernetesServiceBlock}      components:
         - name: ${name}
           image: ${yamlQuote(image)}
 ${
@@ -77,10 +114,10 @@ ${
     : `          localResources:
             allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}
 `
-}${renderHostInterfacesYaml(
+}${queueConsumersBlock}${renderHostInterfacesYaml(
   hostInterfacesFromRequirements(
     requirements,
-    { httpHost: project.applicationName },
+    isWorker ? {} : { httpHost: project.applicationName },
     bindings.map((binding) => ({
       name: binding.name,
       className: binding.className,
@@ -101,8 +138,12 @@ export async function applyWorkload(
   deps: WasmcloudDeps,
 ): Promise<string> {
   const bindings = discoverBindings(project, deps);
-  const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
-  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings);
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
+  const requirements = isWorker
+    ? [...queueProjectRequirements(), ...requirementsFromBindings(bindings)]
+    : [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings, queueHandlers);
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);
@@ -121,10 +162,15 @@ export async function deleteWorkload(
 ): Promise<void> {
   const name = deploymentResourceName(project);
   io.stdout.write(`Removing WorkloadDeployment ${name} from ${connection.namespace}...\n`);
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
+  const targets = isWorker
+    ? [`${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, '--ignore-not-found']
+    : [`${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, `service/${name}`, '--ignore-not-found'];
   await runKubectl(
     deps,
     connection,
-    ['delete', `${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, `service/${name}`, '--ignore-not-found'],
+    ['delete', ...targets],
     project.projectRoot,
   );
 }

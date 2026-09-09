@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { runQueueInspect } from './cmd/queue/inspect';
+import { runQueueList } from './cmd/queue/list';
+import { runQueueRetry } from './cmd/queue/retry';
 import { runAgentAudit } from './cmd/agent/audit';
 import { runAgentInit } from './cmd/agent/init';
 import { runAgentInspect } from './cmd/agent/inspect';
@@ -56,6 +59,9 @@ export type CliHandlers = {
   extensionsInstall(args: string[]): Promise<CommandResult>;
   extensionsUninstall(args: string[]): Promise<CommandResult>;
   extensionsList(args: string[]): Promise<CommandResult>;
+  queueList(args: string[], io?: CliIo): Promise<CommandResult>;
+  queueInspect(args: string[], io?: CliIo): Promise<CommandResult>;
+  queueRetry(args: string[], io?: CliIo): Promise<CommandResult>;
 };
 
 const DEFAULT_HANDLERS: CliHandlers = {
@@ -84,6 +90,9 @@ const DEFAULT_HANDLERS: CliHandlers = {
   extensionsInstall: runExtensionsInstall,
   extensionsUninstall: runExtensionsUninstall,
   extensionsList: runExtensionsList,
+  queueList: runQueueList,
+  queueInspect: runQueueInspect,
+  queueRetry: runQueueRetry,
 };
 
 export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): CommandNode {
@@ -291,6 +300,43 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
           publish: {
             description: 'Test, build, and publish all packages to npm',
             run: ({ args, io }) => handlers.mxPublish(args, io),
+          },
+        },
+      },
+      queue: {
+        description: 'Manage durable job queues',
+        children: {
+          list: {
+            description: 'List all durable queues and job statistics',
+            usage: 'di-framework queue list [--db <path>] [--json]',
+            options: [
+              '--db <path>  Path to SQLite queue database',
+              '--json  Output JSON format',
+            ],
+            run: ({ args, io }) => handlers.queueList(args, io),
+          },
+          inspect: {
+            description: 'Inspect jobs within a durable queue',
+            usage: 'di-framework queue inspect <name> [--db <path>] [--status <status>] [--limit <n>] [--json]',
+            options: [
+              '<name>  Queue name to inspect',
+              '--db <path>  Path to SQLite queue database',
+              '--status <status>  Filter by status (pending|processing|completed|dead-letter)',
+              '--limit <count>  Maximum jobs to inspect (default: 50)',
+              '--json  Output JSON format',
+            ],
+            run: ({ args, io }) => handlers.queueInspect(args, io),
+          },
+          retry: {
+            description: 'Retry dead-letter jobs in a queue',
+            usage: 'di-framework queue retry <name> [jobId] [--db <path>] [--json]',
+            options: [
+              '<name>  Queue name',
+              '[jobId]  Specific job ID to retry (retries all dead-letter jobs if omitted)',
+              '--db <path>  Path to SQLite queue database',
+              '--json  Output JSON format',
+            ],
+            run: ({ args, io }) => handlers.queueRetry(args, io),
           },
         },
       },
