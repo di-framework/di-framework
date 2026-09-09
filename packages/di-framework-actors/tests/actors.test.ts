@@ -5,7 +5,6 @@ import {
   ActorMethod,
   ActorMethodNotFoundError,
   ActorNotRegisteredError,
-  ActorRuntime,
   actors,
 } from '../src/index.js';
 

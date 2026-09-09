@@ -28,7 +28,7 @@ export interface RunActorMigrationsOptions {
   migrations?: ActorMigrationDefinition[];
 }
 
-const inMemoryHistory = new Map<string, Set<string>>();
+let inMemoryHistory = new WeakMap<ActorStorage, Map<string, Set<string>>>();
 
 export async function runActorMigrations(options: RunActorMigrationsOptions): Promise<void> {
   const { actorType, actorKey, compositeId, storage } = options;
@@ -154,10 +154,15 @@ export async function runActorMigrations(options: RunActorMigrationsOptions): Pr
     }
   } else {
     // 3. Fallback for non-SQL storage (e.g. pure InMemoryActorStorage)
-    let applied = inMemoryHistory.get(compositeId);
+    let storageHistory = inMemoryHistory.get(storage);
+    if (!storageHistory) {
+      storageHistory = new Map();
+      inMemoryHistory.set(storage, storageHistory);
+    }
+    let applied = storageHistory.get(compositeId);
     if (!applied) {
       applied = new Set<string>();
-      inMemoryHistory.set(compositeId, applied);
+      storageHistory.set(compositeId, applied);
     }
 
     const sorted = [...allMigrations].sort((a, b) =>
@@ -197,5 +202,5 @@ export async function runActorMigrations(options: RunActorMigrationsOptions): Pr
 }
 
 export function clearInMemoryActorMigrationHistory(): void {
-  inMemoryHistory.clear();
+  inMemoryHistory = new WeakMap();
 }

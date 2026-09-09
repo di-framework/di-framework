@@ -21,6 +21,7 @@ export class ActorLockError extends Error {
 }
 
 export interface LockOptions {
+  /** Retained for compatibility; live process locks never expire by age. */
   lockTimeoutMs?: number;
   inMemory?: boolean;
 }
@@ -52,7 +53,6 @@ export async function acquireActorLock(
   actorId: string,
   options: LockOptions = {},
 ): Promise<() => Promise<void>> {
-  const lockTimeoutMs = options.lockTimeoutMs ?? 30000;
   const inMemory = options.inMemory === true || targetPath.startsWith('file:');
 
   if (inMemory) {
@@ -65,8 +65,10 @@ export async function acquireActorLock(
     };
   }
 
-  const lockPath = `${targetPath}.lock`;
+  return acquireFileLock(`${targetPath}.lock`, actorId);
+}
 
+async function acquireFileLock(lockPath: string, actorId: string): Promise<() => Promise<void>> {
   // Check in-process ownership first
   if (activeInProcessLocks.has(lockPath)) {
     throw new ActorLockError(actorId, lockPath, process.pid);
@@ -80,7 +82,7 @@ export async function acquireActorLock(
 
   const tryCreateLock = (): boolean => {
     try {
-      const fd = fs.openSync(lockPath, 'wx');
+      const fd = fs.openSync(lockPath, 'wx', 0o600);
       const payload = JSON.stringify({
         pid: process.pid,
         actorId,
@@ -108,24 +110,33 @@ export async function acquireActorLock(
       lockInfo = null;
     }
 
-    const isStale =
-      !lockInfo ||
-      typeof lockInfo.pid !== 'number' ||
-      !isPidAlive(lockInfo.pid) ||
-      (typeof lockInfo.acquiredAt === 'number' && Date.now() - lockInfo.acquiredAt > lockTimeoutMs);
-
-    if (isStale) {
-      // Stale lock detected; remove and retry acquisition
-      try {
-        fs.unlinkSync(lockPath);
-      } catch {}
-
-      if (!tryCreateLock()) {
-        throw new ActorLockError(actorId, lockPath, lockInfo?.pid);
-      }
-    } else {
-      // Active process owns the lock
+    // Invalid or partially written payloads are not evidence that the owner died.
+    if (!lockInfo || typeof lockInfo.pid !== 'number' || isPidAlive(lockInfo.pid)) {
       throw new ActorLockError(actorId, lockPath, lockInfo?.pid);
+    }
+
+    // Serialize recovery separately from ownership. Re-read under this guard so
+    // another recovering process cannot unlink a newly acquired ownership lock.
+    // Recovery locks carry ownership metadata and use the same recovery protocol.
+    // If a recoverer dies, its guard can itself be reclaimed under a nested guard.
+    const releaseRecovery = await acquireFileLock(`${lockPath}.recovery`, actorId);
+    try {
+      // The old owner may have released the lock since our first observation.
+      if (!tryCreateLock()) {
+        let current: { pid?: number } | null;
+        try {
+          current = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+        } catch {
+          current = null;
+        }
+        if (!current || typeof current.pid !== 'number' || isPidAlive(current.pid)) {
+          throw new ActorLockError(actorId, lockPath, current?.pid);
+        }
+        fs.unlinkSync(lockPath);
+        if (!tryCreateLock()) throw new ActorLockError(actorId, lockPath);
+      }
+    } finally {
+      await releaseRecovery();
     }
   }
 

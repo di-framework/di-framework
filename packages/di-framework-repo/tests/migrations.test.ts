@@ -476,3 +476,178 @@ DROP TABLE posts;
     });
   });
 });
+
+describe('Migration review regressions and discovery edge cases', () => {
+  afterEach(() => clearMigrationRegistry());
+
+  test('compares segmented versions without treating them as decimal fractions', () => {
+    expect(compareVersions('1.2', '1.10')).toBeLessThan(0);
+    expect(compareVersions('1_2', '1_10')).toBeLessThan(0);
+    expect(compareVersions('1-2', '1-10')).toBeLessThan(0);
+    expect(compareVersions('1.2', '1.2.0')).toBeLessThan(0);
+    expect(compareVersions('1.2.0', '1.2')).toBeGreaterThan(0);
+    expect(compareVersions('1.alpha', '1.beta')).toBeLessThan(0);
+    expect(compareVersions('1.alpha', '1.alpha')).toBe(0);
+  });
+
+  test('does not release a lock owned by another runner after takeover', async () => {
+    const db = new Database(':memory:');
+    try {
+      const a = new MigrationRunner({ db });
+      const b = new MigrationRunner({ db });
+      await a.initTables();
+      await a.acquireLock();
+      db.run('UPDATE "_migrations_lock" SET acquired_at = ?', ['2000-01-01T00:00:00.000Z']);
+      await b.acquireLock();
+      await a.releaseLock();
+      await expect(a.acquireLock()).rejects.toThrow(MigrationLockError);
+      await b.releaseLock();
+      await a.acquireLock();
+      await a.releaseLock();
+    } finally {
+      db.close();
+    }
+  });
+
+  test('requires explicit auto-apply opt-in outside development and test', async () => {
+    const previous = process.env.NODE_ENV;
+    const db = new Database(':memory:');
+    try {
+      const runner = new MigrationRunner({
+        db,
+        migrations: [
+          {
+            version: '1',
+            description: 'init',
+            binding: 'default',
+            checksum: '1',
+            up: async () => {},
+          },
+        ],
+      });
+      for (const env of [undefined, '', 'production']) {
+        if (env === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = env;
+        expect((await runner.autoApply()).applied).toEqual([]);
+        await expect(runner.autoApply({ throwIfPending: true })).rejects.toThrow(
+          'autoApply is disabled',
+        );
+      }
+      expect((await runner.autoApply({ enabled: true })).applied).toHaveLength(1);
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  test('parses reversed and up-only SQL sections and long header whitespace', () => {
+    expect(
+      parseSqlContent('-- migrate:down\nDROP TABLE t;\n-- migrate:up\nCREATE TABLE t (id INT);'),
+    ).toMatchObject({ upSql: 'CREATE TABLE t (id INT);', downSql: 'DROP TABLE t;' });
+    expect(parseSqlContent('-- migrate:up\nSELECT 1;')).toMatchObject({ upSql: 'SELECT 1;' });
+    expect(parseSqlContent('--version:' + ' '.repeat(100000))).toMatchObject({
+      headerVersion: undefined,
+    });
+    expect(
+      parseSqlContent('-- description: example\n-- binding=main\n-- version 2\nSELECT 1;'),
+    ).toMatchObject({ headerDescription: 'example', headerBinding: 'main', headerVersion: '2' });
+    expect(parseFilename('123.sql')).toEqual({ version: '123', description: 'migration 123' });
+    expect(parseFilename('custom.sql')).toEqual({ description: 'custom' });
+    expect(parseFilename('0-' + '0-'.repeat(10000) + 'init.sql').description).toBe('init');
+  });
+
+  test('discovers separate down scripts and reports missing manifests and files', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'migration-discovery-'));
+    const db = await createMigrationDatabase(':memory:');
+    try {
+      mkdirSync(join(dir, 'directory.sql'));
+      writeFileSync(join(dir, '1_init.up.sql'), 'CREATE TABLE t (id INT);');
+      writeFileSync(join(dir, '1_init.down.sql'), 'DROP TABLE t;');
+      expect(await discoverSqlMigrations(join(dir, 'absent'))).toEqual([]);
+      const migrations = await discoverSqlMigrations(dir);
+      expect(migrations).toHaveLength(1);
+      const ctx = { db, binding: 'default', sql: async () => {} } as any;
+      await migrations[0]!.up(ctx);
+      await migrations[0]!.down!(ctx);
+      expect(await db.first("SELECT name FROM sqlite_master WHERE name = 't'")).toBeNull();
+      await expect(
+        discoverManifestMigrations({ manifestPath: join(dir, 'missing.json') }),
+      ).rejects.toThrow('manifest not found');
+      await expect(
+        discoverManifestMigrations({
+          cwd: dir,
+          manifest: { migrations: [{ version: '2', description: 'missing', file: 'missing.sql' }] },
+        }),
+      ).rejects.toThrow('SQL file not found');
+      const merged = await discoverManifestMigrations({
+        cwd: dir,
+        directory: '.',
+        manifest: { migrations: [{ version: '1', description: 'override', up: '' }] },
+      });
+      expect(merged).toHaveLength(1);
+      await merged[0]!.up(ctx);
+    } finally {
+      await db.close?.();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('supports execute/run migration classes, down hooks, and execution failures', async () => {
+    const { createMigrationFromClass, MigrationExecutionError } = await import(
+      '../src/migrations/index'
+    );
+    expect(getMigrationMetadata(null)).toBeUndefined();
+    expect(getMigrationMetadata(1)).toBeUndefined();
+    expect(() => createMigrationFromClass(class Plain {})).toThrow('not decorated');
+    const calls: string[] = [];
+    @Migration({ version: 1, description: 'execute' })
+    class Execute {
+      async execute() {
+        calls.push('execute');
+      }
+      async down() {
+        calls.push('down');
+      }
+    }
+    @Migration({ version: 2, description: 'run' })
+    class Run {
+      async run() {
+        calls.push('run');
+      }
+    }
+    @Migration({ version: 3, description: 'invalid' })
+    class Invalid {}
+    const ctx = {} as any;
+    const execute = createMigrationFromClass(Execute);
+    await execute.up(ctx);
+    await execute.down!(ctx);
+    const run = createMigrationFromClass(Run);
+    await run.up(ctx);
+    await run.down!(ctx);
+    await expect(createMigrationFromClass(Invalid).up(ctx)).rejects.toThrow('must implement');
+    expect(calls).toEqual(['execute', 'down', 'run']);
+    clearMigrationRegistry();
+    const db = new Database(':memory:');
+    try {
+      const runner = new MigrationRunner({
+        db,
+        migrations: [
+          {
+            version: '1',
+            description: 'failure',
+            binding: 'default',
+            checksum: 'c',
+            up: async () => {
+              throw new Error('failure');
+            },
+          },
+        ],
+      });
+      await expect(runner.execute()).rejects.toBeInstanceOf(MigrationExecutionError);
+      expect(await runner.getHistory()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+});

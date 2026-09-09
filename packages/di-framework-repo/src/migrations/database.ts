@@ -14,14 +14,17 @@ export function isMigrationDatabase(val: unknown): val is MigrationDatabase {
   );
 }
 
-export async function createMigrationDatabase(input: unknown): Promise<MigrationDatabase> {
+export async function createMigrationDatabase(
+  input: unknown,
+  runtime: 'bun' | 'node' = typeof (globalThis as any).Bun !== 'undefined' ? 'bun' : 'node',
+): Promise<MigrationDatabase> {
   if (isMigrationDatabase(input)) {
     return input;
   }
 
   // If string (file path or ':memory:')
   if (typeof input === 'string') {
-    if (typeof (globalThis as any).Bun !== 'undefined') {
+    if (runtime === 'bun') {
       const { Database } = await import('bun:sqlite');
       const db = new Database(input);
       return wrapBunSqliteDatabase(db);
@@ -39,6 +42,11 @@ export async function createMigrationDatabase(input: unknown): Promise<Migration
   // If bun:sqlite Database or BunSqliteDatabase
   if (typeof input === 'object' && input !== null && typeof (input as any).query === 'function') {
     return wrapBunSqliteDatabase(input as any);
+  }
+
+  // Accept an already-open node:sqlite DatabaseSync as well as connection strings.
+  if (typeof input === 'object' && input !== null && typeof (input as any).prepare === 'function') {
+    return wrapNodeSqliteDatabase(input);
   }
 
   // If SqlStorageAdapter (has protected/public run and allRows)

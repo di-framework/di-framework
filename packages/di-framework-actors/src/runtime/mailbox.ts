@@ -3,7 +3,7 @@
  * Ensures complete asynchronous serialization of invocations for a single actor.
  */
 export class ActorMailbox {
-  private readonly queue: Array<() => Promise<void>> = [];
+  private readonly queue: Array<{ run: () => Promise<void>; reject: (error: Error) => void }> = [];
   private processing = false;
 
   /**
@@ -12,13 +12,16 @@ export class ActorMailbox {
    */
   enqueue<T>(task: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.queue.push(async () => {
-        try {
-          const result = await task();
-          resolve(result);
-        } catch (err) {
-          reject(err);
-        }
+      this.queue.push({
+        reject,
+        run: async () => {
+          try {
+            const result = await task();
+            resolve(result);
+          } catch (err) {
+            reject(err);
+          }
+        },
       });
       this.drain();
     });
@@ -33,7 +36,7 @@ export class ActorMailbox {
         const nextTask = this.queue.shift();
         if (nextTask) {
           try {
-            await nextTask();
+            await nextTask.run();
           } catch {
             // Rejections are forwarded directly to the caller via enqueue Promise
           }
@@ -53,6 +56,8 @@ export class ActorMailbox {
   }
 
   clear(): void {
-    this.queue.length = 0;
+    const pending = this.queue.splice(0);
+    for (const task of pending)
+      task.reject(new Error('Actor mailbox cleared before invocation could run'));
   }
 }

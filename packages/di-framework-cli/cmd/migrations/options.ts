@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url';
 import type {
   createMigrationDatabase,
   discoverManifestMigrations,
-  MigrationDefinition,
   MigrationRunner as MigrationRunnerType,
 } from '@di-framework/repo';
 import { CommandFailure } from '../../command';
@@ -87,17 +86,21 @@ function readNextValue(args: readonly string[], index: number, option: string): 
   return val;
 }
 
-export async function loadMigrationRepoOperations(cwd: string): Promise<MigrationRepoOperations> {
+export async function loadMigrationRepoOperations(
+  cwd: string,
+  importModule: (specifier: string) => Promise<MigrationRepoOperations> = (specifier) =>
+    import(specifier),
+): Promise<MigrationRepoOperations> {
   // 1. Direct package import
   try {
-    return await import('@di-framework/repo');
+    return await importModule('@di-framework/repo');
   } catch {}
 
   // 2. Project require resolve
   try {
     const projectRequire = createRequire(resolve(cwd, 'package.json'));
     const modulePath = projectRequire.resolve('@di-framework/repo');
-    return await import(pathToFileURL(modulePath).href);
+    return await importModule(pathToFileURL(modulePath).href);
   } catch {}
 
   // 3. Monorepo relative fallback
@@ -107,7 +110,7 @@ export async function loadMigrationRepoOperations(cwd: string): Promise<Migratio
       '../../../../packages/di-framework-repo/src/index.ts',
     );
     if (existsSync(monorepoSource)) {
-      return await import(pathToFileURL(monorepoSource).href);
+      return await importModule(pathToFileURL(monorepoSource).href);
     }
   } catch {}
 
@@ -153,12 +156,19 @@ export async function createCliMigrationRunner(
     }
   }
 
-  const discovered = await repo.discoverManifestMigrations({
-    manifestPath,
-    directory: dirPath,
-    binding,
-    cwd,
-  });
+  const discoveryOptions = { manifestPath, directory: dirPath, cwd };
+  const discovered = await repo.discoverManifestMigrations({ ...discoveryOptions, binding });
+  if (discovered.length === 0) {
+    const unfiltered = await repo.discoverManifestMigrations(discoveryOptions);
+    const availableBindings = [...new Set(unfiltered.map((m) => m.binding))];
+    if (availableBindings.length > 0) {
+      throw new CommandFailure(
+        'MIGRATION_BINDING_MISMATCH',
+        `No migrations found for binding '${binding}'. Available bindings: ${availableBindings.join(', ')}. Select one with --binding.`,
+        2,
+      );
+    }
+  }
 
   // 3. Resolve database connection
   const dbPath =

@@ -22,6 +22,8 @@ function cloneValue<T>(value: T): T {
 }
 
 function serializeValue(value: unknown): string {
+  if (value === undefined)
+    throw new TypeError('Actor storage does not support undefined values; use delete() instead');
   return JSON.stringify({ v: value });
 }
 
@@ -66,8 +68,7 @@ export interface SqliteActorStorageOptions {
   fileLocking?: boolean;
 
   /**
-   * Stale lock timeout in milliseconds.
-   * Defaults to 30000 (30 seconds).
+   * Retained for compatibility. A live process lock is never stolen based on age.
    */
   lockTimeoutMs?: number;
 }
@@ -122,6 +123,8 @@ export class SqliteActorStorageTransaction implements ActorStorageTransaction {
 
   async set<T = unknown>(key: string, value: T): Promise<void> {
     this.assertOpen();
+    if (value === undefined)
+      throw new TypeError('Actor storage does not support undefined values; use delete() instead');
     this.stagedDeletes.delete(key);
     this.stagedSets.set(key, cloneValue(value));
   }
