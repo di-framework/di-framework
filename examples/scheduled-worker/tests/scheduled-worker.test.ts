@@ -42,11 +42,15 @@ describe('Scheduled Worker Example (@Cron in wasmCloud)', () => {
     expect(maintenance.db.queryCount).toBe(1);
     expect(maintenance.audit.getLogCount()).toBe(1);
     expect(maintenance.audit.logs[0]?.action).toBe('prune_expired_sessions');
+    maintenance.audit.clear();
+    expect(maintenance.audit.getLogCount()).toBe(0);
+    expect(maintenance.audit.logs).toEqual([]);
   });
 
   it('runs without exposed endpoint and suppresses in-component timers in external mode', async () => {
     container.setCronMode('external');
     expect(container.isExternalCron()).toBe(true);
+    expect(container.getCronMode()).toBe('external');
 
     container.register(AuditLogger);
     container.register(DatabaseRepository);
