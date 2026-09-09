@@ -1,3 +1,12 @@
+export {
+  type DiscoveredCronJob,
+  discoverScheduledJobs,
+  discoverScheduledJobsInFile,
+  normalizeCronExpression,
+  renderCronAdapterModule,
+  renderCronInvokerModule,
+} from './cron.js';
+
 import { defineExtension } from '@di-framework/cli-extension';
 import { createWasmcloudCommand } from './command.js';
 

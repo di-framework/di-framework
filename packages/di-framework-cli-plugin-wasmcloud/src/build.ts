@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
+import { discoverScheduledJobs, renderCronAdapterModule, renderCronInvokerModule } from './cron.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
@@ -23,6 +24,7 @@ import {
 
 export { COMPONENT_MODEL, WASI_HTTP_INTERFACE, WASI_HTTP_VERSION };
 export const BUILD_PROFILE_NAME = 'wasmcloud-http';
+export const CRON_BUILD_PROFILE_NAME = 'wasmcloud-cron';
 export { BUILD_PROFILE_NAME as BUILD_PROFILE };
 
 export type BuildSummary = {
@@ -40,7 +42,8 @@ export function requirementsForProject(
   deps: WasmcloudDeps = DEFAULT_DEPS,
 ): WitRequirement[] {
   const bindings = discoverBindings(project, deps);
-  return [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+  const baseRequirements = project.ingress !== false ? defaultProjectRequirements() : [];
+  return [...baseRequirements, ...requirementsFromBindings(bindings)];
 }
 
 function writeGuestsModule(generatedDirectory: string, bindings: readonly BindingRecord[]): void {
@@ -148,6 +151,9 @@ export async function buildComponent(
   const generatedWit = join(generatedDirectory, 'wit');
   const bundledJavaScript = join(generatedDirectory, 'component.js');
   const bindings = discoverBindings(project, deps);
+  const cronJobs = discoverScheduledJobs(project.projectRoot);
+  const hasHttp = project.ingress !== false;
+  const profile = hasHttp ? BUILD_PROFILE_NAME : CRON_BUILD_PROFILE_NAME;
   const requirements = requirementsForProject(project, deps);
 
   rmSync(generatedDirectory, { recursive: true, force: true });
@@ -168,11 +174,20 @@ export async function buildComponent(
     `${JSON.stringify(OCI_ARTIFACT_PLATFORM, null, 2)}\n`,
   );
   if (bindings.length > 0) writeGuestsModule(generatedDirectory, bindings);
+  if (cronJobs.length > 0) {
+    writeFileSync(join(generatedDirectory, 'cron.json'), `${JSON.stringify(cronJobs, null, 2)}\n`);
+    writeFileSync(join(generatedDirectory, 'cron-invoker.js'), renderCronInvokerModule(cronJobs));
+  }
+  if (!hasHttp) {
+    writeFileSync(join(generatedDirectory, 'cron-adapter.js'), renderCronAdapterModule(cronJobs));
+  }
 
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
     await deps.bundler({
-      adapterPath: join(deps.assetsDirectory(), 'http-adapter.js'),
+      adapterPath: hasHttp
+        ? join(deps.assetsDirectory(), 'http-adapter.js')
+        : join(generatedDirectory, 'cron-adapter.js'),
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
@@ -211,6 +226,7 @@ export async function buildComponent(
     generatedWit,
     join(generatedDirectory, 'oci-config.json'),
     lock,
+    profile,
   );
   const artifactDigest = digestBytes(readFileSync(project.outputPath));
   const summary: BuildSummary = {
@@ -220,7 +236,7 @@ export async function buildComponent(
     componentModel: COMPONENT_MODEL,
     deploymentDigest,
     entry: relative(project.projectRoot, project.entryPath),
-    profile: BUILD_PROFILE_NAME,
+    profile,
   };
   writeFileSync(
     join(generatedDirectory, 'build.json'),
@@ -241,9 +257,10 @@ export function canonicalBuildDigest(
   witDirectory: string,
   ociConfig: string,
   lock: WitLock,
+  profile: string = BUILD_PROFILE_NAME,
 ): string {
   const hash = createHash('sha256');
-  addDigestEntry(hash, 'profile', `${BUILD_PROFILE_NAME}\n${COMPONENT_MODEL}`);
+  addDigestEntry(hash, 'profile', `${profile}\n${COMPONENT_MODEL}`);
   addDigestEntry(hash, 'wit-lock', JSON.stringify(lock));
   addDigestEntry(hash, 'bundle', readFileSync(bundledJavaScript));
   addDigestEntry(hash, 'oci-config', readFileSync(ociConfig));
