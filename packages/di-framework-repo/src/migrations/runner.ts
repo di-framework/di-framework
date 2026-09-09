@@ -117,8 +117,8 @@ export class MigrationRunner {
     const db = await this.getDb();
     const lockId = `migration_lock_${binding}`;
     await db.run(
-      `UPDATE "${this.lockTable}" SET locked = 0, acquired_at = NULL, locked_by = NULL WHERE id = ?`,
-      [lockId],
+      `UPDATE "${this.lockTable}" SET locked = 0, acquired_at = NULL, locked_by = NULL WHERE id = ? AND locked_by = ?`,
+      [lockId, this.runnerId],
     );
   }
 
@@ -331,11 +331,7 @@ export class MigrationRunner {
 
   async autoApply(options: AutoApplyOptions = {}): Promise<MigrationExecutionResult> {
     const binding = options.binding ?? this.defaultBinding;
-    const isDev =
-      process.env.NODE_ENV === 'development' ||
-      process.env.NODE_ENV === 'test' ||
-      process.env.NODE_ENV === undefined ||
-      process.env.NODE_ENV === '';
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const enabled = options.enabled ?? isDev;
 
     if (!enabled) {

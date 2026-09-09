@@ -4,6 +4,14 @@
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
+function trimUnderscores(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '_') start++;
+  while (end > start && value[end - 1] === '_') end--;
+  return value.slice(start, end);
+}
+
 export interface ActorIdentity {
   namespace?: string;
   actorName: string;
@@ -64,11 +72,10 @@ export function actorIdentityToPath(
 
   // Sanitize namespace and actor name: allow only alphanumeric, underscores, dashes
   const safeNamespace =
-    (identity.namespace || 'default').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '') ||
-    'default';
+    trimUnderscores((identity.namespace || 'default').replace(/[^a-zA-Z0-9_-]/g, '_')) || 'default';
 
   const safeActorName =
-    identity.actorName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '') || 'actor';
+    trimUnderscores(identity.actorName.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'actor';
 
   // Hash the actor key using SHA-256 to ensure bounded length and total collision/traversal safety
   const keyHash = createHash('sha256').update(identity.actorKey).digest('hex');
@@ -90,7 +97,12 @@ export function actorIdentityToPath(
   const targetPath = path.resolve(resolvedBase, safeNamespace, safeActorName, fileName);
 
   // Path traversal guard: verify that target path is strictly inside baseDir
-  if (!targetPath.startsWith(resolvedBase + path.sep) && targetPath !== resolvedBase) {
+  const relativePath = path.relative(resolvedBase, targetPath);
+  if (
+    relativePath === '..' ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
     throw new Error(
       `Security violation: Path traversal attempt detected for actor '${identity.actorName}:${identity.actorKey}'.`,
     );

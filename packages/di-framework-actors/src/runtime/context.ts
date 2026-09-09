@@ -71,10 +71,6 @@ function applyActorContextDecorator(
 }
 
 function actorContextHandler(this: any, ...args: any[]): any {
-  if (new.target) {
-    return new ActorContextInstance(args[0]);
-  }
-
   if (args.length > 0 && (typeof args[0] === 'object' || typeof args[0] === 'function')) {
     const [target, propertyKey, parameterIndex] = args;
     applyActorContextDecorator(target, propertyKey, parameterIndex);
@@ -100,4 +96,8 @@ export interface ActorContextStatic {
 }
 
 export type ActorContext = ActorContextInstance;
-export const ActorContext: ActorContextStatic = actorContextHandler as any;
+export const ActorContext: ActorContextStatic = new Proxy(actorContextHandler, {
+  construct(_target, args) {
+    return new ActorContextInstance(args[0]);
+  },
+}) as any;
