@@ -8,6 +8,8 @@ export const CONFIG_FILE_NAME = 'di-framework.config.json';
 export type WasmcloudProject = {
   /** Display name exactly as configured. */
   applicationName: string;
+  /** Explicit actor deployment override for programmatically constructed projects. */
+  actors?: boolean;
   /** Explicit WASI DNS allowlist, separate from outbound HTTP permissions. */
   allowedIpNameLookups?: string[];
   configPath: string;

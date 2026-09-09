@@ -242,7 +242,7 @@ export async function applyWorkload(
 ): Promise<string> {
   const bindings = discoverBindings(project, deps);
   const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
-  const hasActors = discoverActors(project).length > 0 || (project as any).actors === true;
+  const hasActors = discoverActors(project).length > 0 || project.actors === true;
   const cronJobs = discoverScheduledJobs(project.projectRoot);
   const manifest = renderWorkloadManifest(
     project,
