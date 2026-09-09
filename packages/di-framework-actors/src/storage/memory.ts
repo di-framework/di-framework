@@ -1,7 +1,9 @@
 /**
  * In-memory transactional storage implementation for @di-framework/actors.
  */
-import type { ActorStorage, ActorStorageTransaction } from './types.js';
+import { StaleOwnerWriteError, ActorOwnershipConflictError } from '../distributed/errors.js';
+import type { ActorOwnershipRecord } from '../distributed/types.js';
+import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
 
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;
@@ -19,14 +21,38 @@ function cloneValue<T>(value: T): T {
 export class InMemoryActorStorageTransaction implements ActorStorageTransaction {
   private readonly actorId: string;
   private readonly storage: InMemoryActorStorage;
+  private readonly ownerId?: string;
+  private readonly generation?: number;
   private readonly stagedSets = new Map<string, any>();
   private readonly stagedDeletes = new Set<string>();
+  private stagedIdempotency?: { requestId: string; response: unknown };
   private clearAllStaged = false;
   private closed = false;
 
-  constructor(actorId: string, storage: InMemoryActorStorage) {
+  constructor(
+    actorId: string,
+    storage: InMemoryActorStorage,
+    options?: TransactionOptions,
+  ) {
     this.actorId = actorId;
     this.storage = storage;
+    this.ownerId = options?.ownerId;
+    this.generation = options?.generation;
+  }
+
+  async setIdempotencyRecord(requestId: string, response: unknown): Promise<void> {
+    this.assertOpen();
+    this.stagedIdempotency = { requestId, response };
+  }
+
+  async getIdempotencyRecord(
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined> {
+    this.assertOpen();
+    if (this.stagedIdempotency && this.stagedIdempotency.requestId === requestId) {
+      return { response: this.stagedIdempotency.response, createdAt: Date.now() };
+    }
+    return await this.storage.getIdempotencyRecord(this.actorId, requestId);
   }
 
   private assertOpen(): void {
@@ -120,11 +146,33 @@ export class InMemoryActorStorageTransaction implements ActorStorageTransaction 
 
   async commit(): Promise<void> {
     this.assertOpen();
+    if (this.generation !== undefined) {
+      const current = await this.storage.getOwnership(this.actorId);
+      if (
+        current &&
+        (current.generation > this.generation ||
+          (this.ownerId && current.ownerId !== this.ownerId))
+      ) {
+        throw new StaleOwnerWriteError(
+          this.actorId,
+          this.generation,
+          current.generation,
+          current.ownerId,
+        );
+      }
+    }
     this.storage._applyTransactionCommit(this.actorId, {
       clearAll: this.clearAllStaged,
       sets: this.stagedSets,
       deletes: this.stagedDeletes,
     });
+    if (this.stagedIdempotency) {
+      await this.storage.setIdempotencyRecord(
+        this.actorId,
+        this.stagedIdempotency.requestId,
+        this.stagedIdempotency.response,
+      );
+    }
     this.closed = true;
   }
 
@@ -142,6 +190,11 @@ export class InMemoryActorStorageTransaction implements ActorStorageTransaction 
  */
 export class InMemoryActorStorage implements ActorStorage {
   private readonly state = new Map<string, Map<string, any>>();
+  private readonly ownership = new Map<string, ActorOwnershipRecord>();
+  private readonly idempotency = new Map<
+    string,
+    Map<string, { response: unknown; createdAt: number }>
+  >();
 
   private getActorMap(actorId: string): Map<string, any> {
     let map = this.state.get(actorId);
@@ -197,8 +250,96 @@ export class InMemoryActorStorage implements ActorStorage {
     this.state.clear();
   }
 
-  async beginTransaction(actorId: string): Promise<ActorStorageTransaction> {
-    return new InMemoryActorStorageTransaction(actorId, this);
+  async beginTransaction(
+    actorId: string,
+    options?: TransactionOptions,
+  ): Promise<ActorStorageTransaction> {
+    return new InMemoryActorStorageTransaction(actorId, this, options);
+  }
+
+  async getOwnership(actorId: string): Promise<ActorOwnershipRecord | null> {
+    const rec = this.ownership.get(actorId);
+    if (!rec) return null;
+    return { ...rec };
+  }
+
+  async acquireOwnership(
+    actorId: string,
+    ownerId: string,
+    options?: { leaseTtlMs?: number; force?: boolean },
+  ): Promise<ActorOwnershipRecord> {
+    const existing = this.ownership.get(actorId);
+    const now = Date.now();
+    const leaseExpiresAt = options?.leaseTtlMs ? now + options.leaseTtlMs : null;
+
+    if (!existing) {
+      const record: ActorOwnershipRecord = {
+        actorId,
+        ownerId,
+        generation: 1,
+        acquiredAt: now,
+        leaseExpiresAt,
+      };
+      this.ownership.set(actorId, record);
+      return { ...record };
+    }
+
+    if (existing.ownerId === ownerId) {
+      existing.acquiredAt = now;
+      existing.leaseExpiresAt = leaseExpiresAt;
+      return { ...existing };
+    }
+
+    const isExpired = existing.leaseExpiresAt != null && existing.leaseExpiresAt < now;
+    if (isExpired || options?.force) {
+      const record: ActorOwnershipRecord = {
+        actorId,
+        ownerId,
+        generation: existing.generation + 1,
+        acquiredAt: now,
+        leaseExpiresAt,
+      };
+      this.ownership.set(actorId, record);
+      return { ...record };
+    }
+
+    throw new ActorOwnershipConflictError(
+      actorId,
+      existing.ownerId,
+      existing.generation,
+      existing.leaseExpiresAt,
+    );
+  }
+
+  async releaseOwnership(actorId: string, ownerId: string): Promise<boolean> {
+    const existing = this.ownership.get(actorId);
+    if (existing && existing.ownerId === ownerId) {
+      return this.ownership.delete(actorId);
+    }
+    return false;
+  }
+
+  async getIdempotencyRecord(
+    actorId: string,
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined> {
+    const actorMap = this.idempotency.get(actorId);
+    const record = actorMap?.get(requestId);
+    if (!record) return undefined;
+    return { response: cloneValue(record.response), createdAt: record.createdAt };
+  }
+
+  async setIdempotencyRecord(
+    actorId: string,
+    requestId: string,
+    response: unknown,
+  ): Promise<void> {
+    let actorMap = this.idempotency.get(actorId);
+    if (!actorMap) {
+      actorMap = new Map();
+      this.idempotency.set(actorId, actorMap);
+    }
+    actorMap.set(requestId, { response: cloneValue(response), createdAt: Date.now() });
   }
 
   /**

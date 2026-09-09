@@ -2,8 +2,8 @@
  * ActorDevManager provides local development management, inspection,
  * discovery, hot reload, and reset capabilities for virtual actors.
  */
-import { ActorRuntime } from "../runtime/runtime.js";
-import { SqliteActorStorage } from "../storage/sqlite.js";
+import { ActorRuntime } from '../runtime/runtime.js';
+import { SqliteActorStorage } from '../storage/sqlite.js';
 import type {
   ActorDetailedInspection,
   ActorInspectionInfo,
@@ -12,12 +12,12 @@ import type {
   ActorResetOptions,
   ActorResetResult,
   Constructor,
-} from "../types.js";
+} from '../types.js';
 import {
   type ActorDiscoveryOptions,
-  discoverActorClasses,
   type DiscoveredActor,
-} from "./discovery.js";
+  discoverActorClasses,
+} from './discovery.js';
 
 export interface ActorDevManagerOptions {
   runtime?: ActorRuntime;
@@ -34,7 +34,7 @@ export class ActorDevManager {
 
   constructor(options: ActorDevManagerOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
-    this.baseDir = options.baseDir ?? ".actors";
+    this.baseDir = options.baseDir ?? '.actors';
     this.namespace = options.namespace;
 
     if (options.runtime) {
@@ -53,9 +53,7 @@ export class ActorDevManager {
   /**
    * Discovers decorated actor classes in the project and registers them with the runtime.
    */
-  async discoverAndRegister(
-    options: ActorDiscoveryOptions = {},
-  ): Promise<DiscoveredActor[]> {
+  async discoverAndRegister(options: ActorDiscoveryOptions = {}): Promise<DiscoveredActor[]> {
     const discovered = await discoverActorClasses({
       cwd: this.cwd,
       ...options,
@@ -74,11 +72,9 @@ export class ActorDevManager {
   /**
    * Lists known actor identities, activation status, and call counts.
    */
-  async list(options: {
-    namespace?: string;
-    activeOnly?: boolean;
-    baseDir?: string;
-  } = {}): Promise<ActorInspectionInfo[]> {
+  async list(
+    options: { namespace?: string; activeOnly?: boolean; baseDir?: string } = {},
+  ): Promise<ActorInspectionInfo[]> {
     return this.runtime.listActors({
       namespace: options.namespace ?? this.namespace,
       activeOnly: options.activeOnly,
@@ -94,7 +90,7 @@ export class ActorDevManager {
     key?: string,
     options: { showState?: boolean } = {},
   ): Promise<ActorDetailedInspection | null> {
-    return this.runtime.inspect(identityOrName, key ?? "", options);
+    return this.runtime.inspect(identityOrName, key ?? '', options);
   }
 
   /**

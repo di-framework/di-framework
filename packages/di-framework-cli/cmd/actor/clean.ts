@@ -1,5 +1,5 @@
-import type { CommandResult } from "../../command";
-import { runActorReset } from "./reset";
+import type { CommandResult } from '../../command';
+import { runActorReset } from './reset';
 
 export async function runActorClean(
   args: readonly string[],

@@ -6,6 +6,17 @@ import {
   type DiscoveredActor,
   discoverActorClasses,
 } from '../dev/discovery.js';
+import {
+  ActorAuthorizationError,
+  ActorDeadlineExceededError,
+  ActorNotOwnerError,
+} from '../distributed/errors.js';
+import type {
+  ActorAuthorizationPolicy,
+  ActorOwnershipRecord,
+  ActorRpcRequest,
+  InvokeOptions,
+} from '../distributed/types.js';
 import { runActorMigrations } from '../migrations/runner.js';
 import { InMemoryActorStorage } from '../storage/memory.js';
 import { actorIdentityToPath, parseActorIdentity } from '../storage/path.js';
@@ -40,6 +51,26 @@ export interface ActorRegistration {
 export interface ActorRuntimeOptions {
   storage?: ActorStorage;
   actors?: Constructor[];
+  /**
+   * Unique identity for this host/runtime node.
+   */
+  ownerId?: string;
+  /**
+   * Maximum queue length for actor mailboxes before rejecting with backpressure.
+   */
+  maxMailboxSize?: number;
+  /**
+   * Authorization policy governing callers, namespaces, and methods.
+   */
+  authorizationPolicy?: ActorAuthorizationPolicy;
+  /**
+   * Automatically acquire ownership on invocation if ownerId is configured.
+   */
+  autoAcquireOwnership?: boolean;
+  /**
+   * Lease duration in ms for actor ownership.
+   */
+  leaseTtlMs?: number;
   namespace?: string;
 }
 
@@ -65,8 +96,21 @@ export class ActorRuntime implements InvocationTarget {
     { version?: string; error: string; timestamp: number }
   >();
 
+  private readonly inFlightRequests = new Map<string, Promise<any>>();
+  readonly ownerId?: string;
+  readonly maxMailboxSize?: number;
+  readonly authorizationPolicy?: ActorAuthorizationPolicy;
+  readonly autoAcquireOwnership: boolean;
+  readonly leaseTtlMs?: number;
+
   constructor(options: ActorRuntimeOptions = {}) {
     this._storage = options.storage ?? new InMemoryActorStorage();
+    this.ownerId = options.ownerId;
+    this.maxMailboxSize = options.maxMailboxSize;
+    this.authorizationPolicy = options.authorizationPolicy;
+    this.autoAcquireOwnership = options.autoAcquireOwnership ?? options.ownerId !== undefined;
+    this.leaseTtlMs = options.leaseTtlMs;
+
     this.defaultNamespace = options.namespace;
     if (options.actors) {
       for (const actor of options.actors) {
@@ -182,10 +226,18 @@ export class ActorRuntime implements InvocationTarget {
   /**
    * Returns a typed actor reference proxy for the given actor class and key.
    */
-  get<T extends object>(actorClass: Constructor<T>, actorKey: string): ActorRef<T>;
-  get<T = any>(actorName: string, actorKey: string): ActorRef<T>;
-  get<T extends object>(actorClassOrName: Constructor<T> | string, actorKey: string): ActorRef<T> {
-    const reg = this.resolveRegistration(actorClassOrName);
+  get<T extends object>(
+    actorClass: Constructor<T>,
+    actorKey: string,
+    options?: InvokeOptions,
+  ): ActorRef<T>;
+  get<T = any>(actorName: string, actorKey: string, options?: InvokeOptions): ActorRef<T>;
+  get<T extends object>(
+    actorClassOrName: Constructor<T> | string,
+    actorKey: string,
+    options?: InvokeOptions,
+  ): ActorRef<T> {
+    const reg = this.resolveRegistration(actorClassOrName, options?.namespace);
     if (!reg) {
       const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
       throw new ActorNotRegisteredError(name);
@@ -196,12 +248,20 @@ export class ActorRuntime implements InvocationTarget {
         : reg.namespace
           ? `${reg.namespace}:${reg.name}`
           : reg.name;
-    return createActorReference<T>(targetLookup, actorKey, this, reg.name);
+    return createActorReference<T>(targetLookup, actorKey, this, options, reg.name);
   }
 
-  resolveRegistration(actorClassOrName: Constructor | string): ActorRegistration | undefined {
+  resolveRegistration(
+    actorClassOrName: Constructor | string,
+    namespace?: string,
+  ): ActorRegistration | undefined {
     if (typeof actorClassOrName === 'function') {
       return this.registryByCtor.get(actorClassOrName);
+    }
+
+    if (namespace && !actorClassOrName.includes(':')) {
+      const qualified = this.registryByQualifiedName.get(`${namespace}:${actorClassOrName}`);
+      if (qualified) return qualified;
     }
 
     if (actorClassOrName.includes(':')) {
@@ -228,10 +288,65 @@ export class ActorRuntime implements InvocationTarget {
   private getOrCreateMailbox(compositeId: string): ActorMailbox {
     let mb = this.mailboxes.get(compositeId);
     if (!mb) {
-      mb = new ActorMailbox();
+      mb = new ActorMailbox({
+        maxQueueLength: this.maxMailboxSize,
+        actorId: compositeId,
+      });
       this.mailboxes.set(compositeId, mb);
     }
     return mb;
+  }
+
+  async acquireActorOwnership(
+    actorClassOrName: Constructor | string,
+    actorKey: string,
+    options?: { leaseTtlMs?: number; force?: boolean; namespace?: string },
+  ): Promise<ActorOwnershipRecord> {
+    const reg = this.resolveRegistration(actorClassOrName, options?.namespace);
+    if (!reg) {
+      const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+      throw new ActorNotRegisteredError(name);
+    }
+    const compositeId = this.getCompositeId(reg, actorKey, options?.namespace);
+    if (typeof this._storage.acquireOwnership !== 'function') {
+      throw new Error('Storage adapter does not support acquireOwnership.');
+    }
+    const owner = this.ownerId ?? 'default-owner';
+    return await this._storage.acquireOwnership(compositeId, owner, {
+      leaseTtlMs: options?.leaseTtlMs,
+      force: options?.force,
+    });
+  }
+
+  async getActorOwnership(
+    actorClassOrName: Constructor | string,
+    actorKey: string,
+    options?: { namespace?: string },
+  ): Promise<ActorOwnershipRecord | null> {
+    const reg = this.resolveRegistration(actorClassOrName, options?.namespace);
+    if (!reg) {
+      const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+      throw new ActorNotRegisteredError(name);
+    }
+    const compositeId = this.getCompositeId(reg, actorKey, options?.namespace);
+    if (typeof this._storage.getOwnership !== 'function') {
+      return null;
+    }
+    return await this._storage.getOwnership(compositeId);
+  }
+
+  async releaseActorOwnership(
+    actorClassOrName: Constructor | string,
+    actorKey: string,
+  ): Promise<boolean> {
+    const reg = this.resolveRegistration(actorClassOrName);
+    if (!reg) return false;
+    const compositeId = this.getCompositeId(reg, actorKey);
+    if (typeof this._storage.releaseOwnership !== 'function') {
+      return false;
+    }
+    const owner = this.ownerId ?? 'default-owner';
+    return await this._storage.releaseOwnership(compositeId, owner);
   }
 
   private async ensureActorMigrated(
@@ -309,8 +424,9 @@ export class ActorRuntime implements InvocationTarget {
     return instance;
   }
 
-  getCompositeId(reg: ActorRegistration, actorKey: string): string {
-    const namespace = reg.options?.namespace ?? reg.namespace ?? this.defaultNamespace;
+  getCompositeId(reg: ActorRegistration, actorKey: string, customNamespace?: string): string {
+    const namespace =
+      customNamespace ?? reg.options?.namespace ?? reg.namespace ?? this.defaultNamespace;
     return namespace ? `${namespace}:${reg.name}:${actorKey}` : `${reg.name}:${actorKey}`;
   }
 
@@ -323,14 +439,16 @@ export class ActorRuntime implements InvocationTarget {
     actorKey: string,
     methodName: string,
     args: any[],
+    options?: InvokeOptions,
   ): Promise<any> {
-    const reg = this.resolveRegistration(actorClassOrName);
+    const reg = this.resolveRegistration(actorClassOrName, options?.namespace);
     if (!reg) {
       const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
       throw new ActorNotRegisteredError(name);
     }
 
-    const compositeId = this.getCompositeId(reg, actorKey);
+    const compositeId = this.getCompositeId(reg, actorKey, options?.namespace);
+
     const parent = this.invocationStorage.getStore();
     for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {
       if (ancestor.active && ancestor.actorId === compositeId) {
@@ -339,118 +457,241 @@ export class ActorRuntime implements InvocationTarget {
         );
       }
     }
+
+    // 1. Check deadline
+    if (options?.deadline !== undefined && Date.now() > options.deadline) {
+      throw new ActorDeadlineExceededError(compositeId, options.deadline, options.requestId);
+    }
+
+    // 2. Check authorization boundaries
+    if (this.authorizationPolicy) {
+      const meta = getOrCreateActorMetadata(reg.ctor);
+      const req: ActorRpcRequest = {
+        requestId: options?.requestId ?? 'local',
+        callerId: options?.callerId,
+        namespace:
+          options?.namespace ??
+          reg.options?.namespace ??
+          reg.namespace ??
+          this.defaultNamespace ??
+          meta.namespace,
+        actorType: reg.name,
+        actorKey,
+        method: methodName,
+        args,
+        deadline: options?.deadline,
+        expectedGeneration: options?.generation,
+      };
+      const allowed = await this.authorizationPolicy.authorize(req);
+      if (allowed === false) {
+        throw new ActorAuthorizationError(
+          req.actorType,
+          req.method,
+          'Authorization policy rejected invocation.',
+          { callerId: req.callerId, namespace: req.namespace },
+        );
+      }
+    }
+
+    // 3. Check deduplication / idempotency
+    if (options?.requestId) {
+      const inFlightKey = `${compositeId}::${options.requestId}`;
+      const inFlight = this.inFlightRequests.get(inFlightKey);
+      if (inFlight) {
+        return await inFlight;
+      }
+
+      const committed = await this._storage.getIdempotencyRecord?.(compositeId, options.requestId);
+      if (committed) {
+        const resp = committed.response as any;
+        return resp && typeof resp === 'object' && ('result' in resp || resp.hasResult === true)
+          ? resp.result
+          : resp;
+      }
+    }
+
     const mailbox = this.getOrCreateMailbox(compositeId);
 
-    return mailbox.enqueue(() => {
-      const invocation: ActorInvocation = { actorId: compositeId, active: true, parent };
-      return this.invocationStorage.run(invocation, async () => {
-        try {
-          await this.ensureActorMigrated(reg, compositeId, actorKey);
-          const tx = await this._storage.beginTransaction(compositeId);
-          const context = new ActorContextInstance({
-            actorId: compositeId,
-            actorKey,
-            actorType: reg.name,
-            storage: tx,
-            actors: this,
-          });
-
-          const wasActive = this.instances.has(compositeId);
-          let timedOut = false;
+    const executeInvocation = async () => {
+      return mailbox.enqueue(() => {
+        const invocation: ActorInvocation = { actorId: compositeId, active: true, parent };
+        return this.invocationStorage.run(invocation, async () => {
           try {
-            const instance = await this.getOrCreateInstance(reg, compositeId, context);
-            const meta = getOrCreateActorMetadata(reg.ctor);
+            // Re-check deadline after potentially waiting in queue
+            if (options?.deadline !== undefined && Date.now() > options.deadline) {
+              throw new ActorDeadlineExceededError(
+                compositeId,
+                options.deadline,
+                options.requestId,
+              );
+            }
 
-            // Verify method exists and is callable
-            let targetMethodName = methodName;
-            let methodOptions: any;
+            // Re-check idempotency cache after queue wait
+            if (options?.requestId) {
+              const committed = await this._storage.getIdempotencyRecord?.(
+                compositeId,
+                options.requestId,
+              );
+              if (committed) {
+                const resp = committed.response as any;
+                return resp &&
+                  typeof resp === 'object' &&
+                  ('result' in resp || resp.hasResult === true)
+                  ? resp.result
+                  : resp;
+              }
+            }
 
-            if (meta.methods.size > 0) {
-              const direct = meta.methods.get(methodName);
-              if (direct) {
-                targetMethodName = String(direct.methodName);
-                methodOptions = direct.options;
+            // Ensure migrations are applied before allowing activation or calls
+            await this.ensureActorMigrated(reg, compositeId, actorKey);
+
+            // Resolve ownership and fencing generation
+            let generation = options?.generation;
+            if (this.ownerId && typeof this._storage.acquireOwnership === 'function') {
+              if (this.autoAcquireOwnership) {
+                const rec = await this._storage.acquireOwnership(compositeId, this.ownerId, {
+                  leaseTtlMs: this.leaseTtlMs,
+                });
+                generation = rec.generation;
               } else {
-                // Look up by exposed name option
-                let matched = false;
-                for (const [mName, mMeta] of meta.methods.entries()) {
-                  if (mMeta.name === methodName) {
-                    targetMethodName = String(mName);
-                    methodOptions = mMeta.options;
-                    matched = true;
-                    break;
+                const current = await this._storage.getOwnership?.(compositeId);
+                if (current) {
+                  if (current.ownerId !== this.ownerId) {
+                    const isExpired =
+                      current.leaseExpiresAt != null && current.leaseExpiresAt < Date.now();
+                    if (!isExpired) {
+                      throw new ActorNotOwnerError(compositeId, current.ownerId);
+                    }
+                  }
+                  generation = current.generation;
+                }
+              }
+            }
+
+            // Open transaction with fencing token
+            const tx = await this._storage.beginTransaction(compositeId, {
+              ownerId: this.ownerId,
+              generation,
+            });
+            const context = new ActorContextInstance({
+              actorId: compositeId,
+              actorKey,
+              actorType: reg.name,
+              storage: tx,
+              actors: this,
+            });
+
+            const wasActive = this.instances.has(compositeId);
+            let timedOut = false;
+            try {
+              const instance = await this.getOrCreateInstance(reg, compositeId, context);
+              const meta = getOrCreateActorMetadata(reg.ctor);
+
+              // Verify method exists and is callable
+              let targetMethodName = methodName;
+              let methodOptions: any;
+
+              if (meta.methods.size > 0) {
+                const direct = meta.methods.get(methodName);
+                if (direct) {
+                  targetMethodName = String(direct.methodName);
+                  methodOptions = direct.options;
+                } else {
+                  // Look up by exposed name option
+                  let matched = false;
+                  for (const [mName, mMeta] of meta.methods.entries()) {
+                    if (mMeta.name === methodName) {
+                      targetMethodName = String(mName);
+                      methodOptions = mMeta.options;
+                      matched = true;
+                      break;
+                    }
+                  }
+                  if (!matched) {
+                    throw new ActorMethodNotFoundError(reg.name, methodName);
                   }
                 }
-                if (!matched) {
-                  throw new ActorMethodNotFoundError(reg.name, methodName);
+              }
+
+              if (typeof instance[targetMethodName] !== 'function') {
+                throw new ActorMethodNotFoundError(reg.name, methodName);
+              }
+
+              // Update context reference on instance
+              instance.__actorContext = context;
+              for (const prop of meta.contextProperties) {
+                try {
+                  instance[prop] = context;
+                } catch {
+                  // Getter fallback
                 }
               }
-            }
 
-            if (typeof instance[targetMethodName] !== 'function') {
-              throw new ActorMethodNotFoundError(reg.name, methodName);
-            }
-
-            // Update context reference on instance
-            instance.__actorContext = context;
-            for (const prop of meta.contextProperties) {
-              try {
-                instance[prop] = context;
-              } catch {
-                // Getter fallback
+              // Prepare final arguments (including parameter-injected contexts)
+              const finalArgs = [...args];
+              const paramIndices = meta.contextParams.get(targetMethodName);
+              if (paramIndices) {
+                for (const idx of paramIndices) {
+                  finalArgs[idx] = context;
+                }
               }
-            }
 
-            // Prepare final arguments (including parameter-injected contexts)
-            const finalArgs = [...args];
-            const paramIndices = meta.contextParams.get(targetMethodName);
-            if (paramIndices) {
-              for (const idx of paramIndices) {
-                finalArgs[idx] = context;
+              const executeCall = async () => {
+                return await actorContextStorage.run(context, () => {
+                  return instance[targetMethodName].apply(instance, finalArgs);
+                });
+              };
+
+              let result: any;
+              if (methodOptions?.timeout && methodOptions.timeout > 0) {
+                let timeoutHandle: any;
+                const timeoutPromise = new Promise((_, reject) => {
+                  timeoutHandle = setTimeout(() => {
+                    timedOut = true;
+                    reject(
+                      new Error(
+                        `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
+                      ),
+                    );
+                  }, methodOptions.timeout);
+                });
+
+                try {
+                  result = await Promise.race([executeCall(), timeoutPromise]);
+                } finally {
+                  clearTimeout(timeoutHandle);
+                }
+              } else {
+                result = await executeCall();
               }
-            }
 
-            const executeCall = async () => {
-              return await actorContextStorage.run(context, () => {
-                return instance[targetMethodName].apply(instance, finalArgs);
-              });
-            };
-
-            let result: any;
-            if (methodOptions?.timeout && methodOptions.timeout > 0) {
-              let timeoutHandle: any;
-              const timeoutPromise = new Promise((_, reject) => {
-                timeoutHandle = setTimeout(() => {
-                  timedOut = true;
-                  reject(
-                    new Error(
-                      `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
-                    ),
-                  );
-                }, methodOptions.timeout);
-              });
-
-              try {
-                result = await Promise.race([executeCall(), timeoutPromise]);
-              } finally {
-                clearTimeout(timeoutHandle);
+              if (options?.requestId && typeof tx.setIdempotencyRecord === 'function') {
+                await tx.setIdempotencyRecord(options.requestId, { result, hasResult: true });
               }
-            } else {
-              result = await executeCall();
+              await tx.commit();
+              return result;
+            } catch (error) {
+              if (!wasActive || timedOut) this.instances.delete(compositeId);
+              await tx.rollback().catch(() => {});
+              throw error;
             }
-
-            await tx.commit();
-            return result;
-          } catch (error) {
-            if (!wasActive || timedOut) this.instances.delete(compositeId);
-            await tx.rollback();
-            throw error;
+          } finally {
+            invocation.active = false;
           }
-        } finally {
-          invocation.active = false;
-        }
+        });
       });
-    });
+    };
+
+    if (options?.requestId) {
+      const inFlightKey = `${compositeId}::${options.requestId}`;
+      const promise = executeInvocation().finally(() => {
+        this.inFlightRequests.delete(inFlightKey);
+      });
+      this.inFlightRequests.set(inFlightKey, promise);
+      return await promise;
+    }
+
+    return await executeInvocation();
   }
 
   /**

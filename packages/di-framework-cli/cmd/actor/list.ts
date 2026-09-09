@@ -1,5 +1,5 @@
-import { CommandFailure, type CommandResult } from "../../command";
-import { loadActorOperations, parseActorCliArgs } from "./options";
+import { CommandFailure, type CommandResult } from '../../command';
+import { loadActorOperations, parseActorCliArgs } from './options';
 
 export async function runActorList(
   args: readonly string[],
@@ -8,7 +8,7 @@ export async function runActorList(
   const options = parseActorCliArgs(args);
   const actors = await loadActorOperations(cwd);
 
-  const baseDir = options.dir ?? ".actors";
+  const baseDir = options.dir ?? '.actors';
   const manager = new actors.ActorDevManager({
     cwd,
     baseDir,
@@ -21,19 +21,15 @@ export async function runActorList(
       activeOnly: options.active,
     });
 
-    const lines: string[] = [
-      `Known Actors (${list.length}):`,
-    ];
+    const lines: string[] = [`Known Actors (${list.length}):`];
 
     if (list.length === 0) {
-      lines.push("  No actors found matching criteria.");
+      lines.push('  No actors found matching criteria.');
     } else {
       for (const item of list) {
-        const nsStr = item.namespace ? `[${item.namespace}] ` : "";
+        const nsStr = item.namespace ? `[${item.namespace}] ` : '';
         const callStats = `running: ${item.runningCalls}, pending: ${item.pendingCalls}`;
-        lines.push(
-          `  - ${nsStr}${item.actorType}:${item.actorKey} (${item.status}, ${callStats})`,
-        );
+        lines.push(`  - ${nsStr}${item.actorType}:${item.actorKey} (${item.status}, ${callStats})`);
       }
     }
 
@@ -54,12 +50,12 @@ export async function runActorList(
           failedMigration: a.migrationStatus?.failedMigration,
         })),
       },
-      text: lines.join("\n"),
+      text: lines.join('\n'),
     };
   } catch (err) {
     if (err instanceof CommandFailure) throw err;
     throw new CommandFailure(
-      "ACTOR_LIST_ERROR",
+      'ACTOR_LIST_ERROR',
       `Failed to list actors: ${err instanceof Error ? err.message : String(err)}`,
       1,
       { cause: err instanceof Error ? err.message : String(err) },

@@ -1,5 +1,5 @@
-import { CommandFailure, type CommandResult } from "../../command";
-import { loadActorOperations, parseActorCliArgs } from "./options";
+import { CommandFailure, type CommandResult } from '../../command';
+import { loadActorOperations, parseActorCliArgs } from './options';
 
 export async function runActorReset(
   args: readonly string[],
@@ -9,14 +9,14 @@ export async function runActorReset(
 
   if (!options.all && !options.namespace && !options.actor) {
     throw new CommandFailure(
-      "INVALID_USAGE",
-      "Actor reset requires explicit scope: specify --actor <name>, --namespace <name>, or --all to prevent accidental deletion.",
+      'INVALID_USAGE',
+      'Actor reset requires explicit scope: specify --actor <name>, --namespace <name>, or --all to prevent accidental deletion.',
       2,
     );
   }
 
   const actors = await loadActorOperations(cwd);
-  const baseDir = options.dir ?? ".actors";
+  const baseDir = options.dir ?? '.actors';
   const manager = new actors.ActorDevManager({
     cwd,
     baseDir,
@@ -33,8 +33,8 @@ export async function runActorReset(
     });
 
     const lines: string[] = [
-      "Actor storage reset successfully.",
-      `  Scope:         ${options.all ? "all" : (options.namespace ? `namespace: ${options.namespace}` : "") + (options.actor ? ` actor: ${options.actor}` : "")}`,
+      'Actor storage reset successfully.',
+      `  Scope:         ${options.all ? 'all' : (options.namespace ? `namespace: ${options.namespace}` : '') + (options.actor ? ` actor: ${options.actor}` : '')}`,
       `  Deactivated:   ${result.deactivatedCount} instance(s)`,
       `  Deleted Files: ${result.deletedFiles.length} file(s) / directory(ies)`,
     ];
@@ -50,12 +50,12 @@ export async function runActorReset(
         deletedFiles: result.deletedFiles,
         success: result.success,
       },
-      text: lines.join("\n"),
+      text: lines.join('\n'),
     };
   } catch (err) {
     if (err instanceof CommandFailure) throw err;
     throw new CommandFailure(
-      "ACTOR_RESET_ERROR",
+      'ACTOR_RESET_ERROR',
       `Failed to reset actors: ${err instanceof Error ? err.message : String(err)}`,
       1,
       { cause: err instanceof Error ? err.message : String(err) },

@@ -272,5 +272,7 @@ export interface ActorDetailedInspection extends ActorInspectionInfo {
   state?: Record<string, any>;
 }
 
+export * from './distributed/errors.js';
+export * from './distributed/types.js';
 export { ActorMigrationError } from './migrations/types.js';
 export { ActorLockError } from './storage/lock.js';

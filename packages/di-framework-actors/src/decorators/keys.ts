@@ -41,7 +41,7 @@ const decoratedActorClasses = new Set<Constructor>();
 
 export function registerDecoratedActorClass(target: any): void {
   const ctor = getTargetConstructor(target);
-  if (typeof ctor === "function") {
+  if (typeof ctor === 'function') {
     decoratedActorClasses.add(ctor);
   }
 }

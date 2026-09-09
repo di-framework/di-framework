@@ -7,9 +7,11 @@ import { Database } from 'bun:sqlite';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors.js';
+import type { ActorOwnershipRecord } from '../distributed/types.js';
 import { acquireActorLock } from './lock.js';
 import { actorIdentityToPath, trimUnderscores } from './path.js';
-import type { ActorStorage, ActorStorageTransaction } from './types.js';
+import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
 
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;
@@ -89,15 +91,40 @@ export class SqliteActorStorageTransaction implements ActorStorageTransaction {
   private readonly actorId: string;
   private readonly storage: SqliteActorStorage;
   private readonly db: Database;
+  private readonly ownerId?: string;
+  private readonly generation?: number;
   private readonly stagedSets = new Map<string, any>();
   private readonly stagedDeletes = new Set<string>();
+  private stagedIdempotency?: { requestId: string; response: unknown };
   private clearAllStaged = false;
   private closed = false;
 
-  constructor(actorId: string, storage: SqliteActorStorage, db: Database) {
+  constructor(
+    actorId: string,
+    storage: SqliteActorStorage,
+    db: Database,
+    options?: TransactionOptions,
+  ) {
     this.actorId = actorId;
     this.storage = storage;
     this.db = db;
+    this.ownerId = options?.ownerId;
+    this.generation = options?.generation;
+  }
+
+  async setIdempotencyRecord(requestId: string, response: unknown): Promise<void> {
+    this.assertOpen();
+    this.stagedIdempotency = { requestId, response };
+  }
+
+  async getIdempotencyRecord(
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined> {
+    this.assertOpen();
+    if (this.stagedIdempotency && this.stagedIdempotency.requestId === requestId) {
+      return { response: this.stagedIdempotency.response, createdAt: Date.now() };
+    }
+    return await this.storage.getIdempotencyRecord(this.actorId, requestId);
   }
 
   private assertOpen(): void {
@@ -197,6 +224,24 @@ export class SqliteActorStorageTransaction implements ActorStorageTransaction {
 
     db.run('BEGIN IMMEDIATE;');
     try {
+      // Storage fencing check: Authoritative storage checks ownership generation on EVERY commit.
+      if (this.generation !== undefined) {
+        const row = db
+          .prepare('SELECT owner_id, generation FROM "_actor_ownership" WHERE id = 1;')
+          .get() as { owner_id: string; generation: number } | undefined;
+        if (
+          row &&
+          (row.generation > this.generation || (this.ownerId && row.owner_id !== this.ownerId))
+        ) {
+          throw new StaleOwnerWriteError(
+            this.actorId,
+            this.generation,
+            row.generation,
+            row.owner_id,
+          );
+        }
+      }
+
       if (this.clearAllStaged) {
         db.run('DELETE FROM "_actor_state";');
       }
@@ -215,6 +260,17 @@ export class SqliteActorStorageTransaction implements ActorStorageTransaction {
         for (const [key, value] of this.stagedSets.entries()) {
           upsertStmt.run(key, serializeValue(value), now);
         }
+      }
+      if (this.stagedIdempotency) {
+        const idempStmt = db.prepare(
+          'INSERT INTO "_actor_idempotency" ("request_id", "response", "created_at") VALUES (?, ?, ?) ' +
+            'ON CONFLICT("request_id") DO UPDATE SET "response" = excluded."response", "created_at" = excluded."created_at";',
+        );
+        idempStmt.run(
+          this.stagedIdempotency.requestId,
+          serializeValue(this.stagedIdempotency.response),
+          Date.now(),
+        );
       }
       db.run('COMMIT;');
     } catch (err) {
@@ -350,30 +406,60 @@ export class SqliteActorStorage implements ActorStorage {
       }
     }
 
-    const db =
-      this.inMemoryKeepAlive.get(actorId) ?? new Database(this.inMemory ? ':memory:' : filePath);
-    try {
-      db.run('PRAGMA journal_mode = WAL;');
-      db.run('PRAGMA synchronous = NORMAL;');
-      db.run(`
-        CREATE TABLE IF NOT EXISTS "_actor_state" (
-          "key" TEXT PRIMARY KEY,
-          "value" TEXT NOT NULL,
-          "updated_at" INTEGER NOT NULL
+    let db: Database | undefined;
+    let initAttempts = 0;
+    while (true) {
+      try {
+        db =
+          this.inMemoryKeepAlive.get(actorId) ??
+          new Database(this.inMemory ? ':memory:' : filePath);
+        db.run('PRAGMA busy_timeout = 5000;');
+        db.run('PRAGMA journal_mode = WAL;');
+        db.run('PRAGMA synchronous = NORMAL;');
+        db.run(`
+          CREATE TABLE IF NOT EXISTS "_actor_state" (
+            "key" TEXT PRIMARY KEY,
+            "value" TEXT NOT NULL,
+            "updated_at" INTEGER NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS "_actor_ownership" (
+            "id" INTEGER PRIMARY KEY CHECK (id = 1),
+            "owner_id" TEXT NOT NULL,
+            "generation" INTEGER NOT NULL,
+            "acquired_at" INTEGER NOT NULL,
+            "lease_expires_at" INTEGER
+          );
+          CREATE TABLE IF NOT EXISTS "_actor_idempotency" (
+            "request_id" TEXT PRIMARY KEY,
+            "response" TEXT NOT NULL,
+            "created_at" INTEGER NOT NULL
+          );
+        `);
+        db.run(
+          'CREATE TABLE IF NOT EXISTS "_actor_identity" ("id" INTEGER PRIMARY KEY CHECK (id = 1), "actor_id" TEXT NOT NULL);',
         );
-      `);
-      db.run(
-        'CREATE TABLE IF NOT EXISTS "_actor_identity" ("id" INTEGER PRIMARY KEY CHECK (id = 1), "actor_id" TEXT NOT NULL);',
-      );
-      db.query('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);').run(
-        actorId,
-      );
-    } catch (err) {
-      if (releaseLock) {
-        await releaseLock();
+        db.query('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);').run(
+          actorId,
+        );
+        break;
+      } catch (err: any) {
+        initAttempts++;
+        const isBusy = err?.message?.includes('busy') || err?.message?.includes('locked');
+        if (isBusy && initAttempts <= 10) {
+          try {
+            db?.close();
+          } catch {}
+          await new Promise((res) => setTimeout(res, 25 * initAttempts + Math.random() * 25));
+          continue;
+        }
+        if (releaseLock) {
+          await releaseLock();
+        }
+        try {
+          db?.close();
+        } catch {}
+        throw err;
       }
-      db.close();
-      throw err;
     }
 
     // Keep memory DB alive so LRU cache eviction doesn't erase in-memory data for tests
@@ -519,10 +605,197 @@ export class SqliteActorStorage implements ActorStorage {
     }
   }
 
-  async beginTransaction(actorId: string): Promise<ActorStorageTransaction> {
+  async beginTransaction(
+    actorId: string,
+    options?: TransactionOptions,
+  ): Promise<ActorStorageTransaction> {
     const conn = await this.getConnection(actorId);
     conn.activeTransactions++;
-    return new SqliteActorStorageTransaction(actorId, this, conn.db);
+    return new SqliteActorStorageTransaction(actorId, this, conn.db, options);
+  }
+
+  async getOwnership(actorId: string): Promise<ActorOwnershipRecord | null> {
+    const conn = await this.getConnection(actorId);
+    const row = conn.db
+      .prepare(
+        'SELECT owner_id, generation, acquired_at, lease_expires_at FROM "_actor_ownership" WHERE id = 1;',
+      )
+      .get() as
+      | {
+          owner_id: string;
+          generation: number;
+          acquired_at: number;
+          lease_expires_at: number | null;
+        }
+      | undefined;
+    if (!row) return null;
+    return {
+      actorId,
+      ownerId: row.owner_id,
+      generation: row.generation,
+      acquiredAt: row.acquired_at,
+      leaseExpiresAt: row.lease_expires_at,
+    };
+  }
+
+  async acquireOwnership(
+    actorId: string,
+    ownerId: string,
+    options?: { leaseTtlMs?: number; force?: boolean },
+  ): Promise<ActorOwnershipRecord> {
+    const conn = await this.getConnection(actorId);
+    const db = conn.db;
+
+    const runAcquisition = (): ActorOwnershipRecord => {
+      db.run('BEGIN IMMEDIATE;');
+      try {
+        const row = db
+          .prepare(
+            'SELECT owner_id, generation, acquired_at, lease_expires_at FROM "_actor_ownership" WHERE id = 1;',
+          )
+          .get() as
+          | {
+              owner_id: string;
+              generation: number;
+              acquired_at: number;
+              lease_expires_at: number | null;
+            }
+          | undefined;
+        const now = Date.now();
+        const leaseExpiresAt = options?.leaseTtlMs ? now + options.leaseTtlMs : null;
+
+        let result: ActorOwnershipRecord;
+        if (!row) {
+          try {
+            db.prepare(
+              'INSERT INTO "_actor_ownership" ("id", "owner_id", "generation", "acquired_at", "lease_expires_at") VALUES (1, ?, 1, ?, ?);',
+            ).run(ownerId, now, leaseExpiresAt);
+            result = {
+              actorId,
+              ownerId,
+              generation: 1,
+              acquiredAt: now,
+              leaseExpiresAt,
+            };
+          } catch (insertErr: any) {
+            // Check if concurrent transaction won the insert
+            const existingRow = db
+              .prepare(
+                'SELECT owner_id, generation, acquired_at, lease_expires_at FROM "_actor_ownership" WHERE id = 1;',
+              )
+              .get() as any;
+            if (existingRow) {
+              if (existingRow.owner_id === ownerId) {
+                result = {
+                  actorId,
+                  ownerId,
+                  generation: existingRow.generation,
+                  acquiredAt: existingRow.acquired_at,
+                  leaseExpiresAt,
+                };
+              } else {
+                throw new ActorOwnershipConflictError(
+                  actorId,
+                  existingRow.owner_id,
+                  existingRow.generation,
+                  existingRow.lease_expires_at,
+                );
+              }
+            } else {
+              throw insertErr;
+            }
+          }
+        } else if (row.owner_id === ownerId) {
+          db.prepare(
+            'UPDATE "_actor_ownership" SET "acquired_at" = ?, "lease_expires_at" = ? WHERE id = 1;',
+          ).run(now, leaseExpiresAt);
+          result = {
+            actorId,
+            ownerId,
+            generation: row.generation,
+            acquiredAt: now,
+            leaseExpiresAt,
+          };
+        } else {
+          const isExpired = row.lease_expires_at != null && row.lease_expires_at < now;
+          if (isExpired || options?.force) {
+            const nextGen = row.generation + 1;
+            db.prepare(
+              'UPDATE "_actor_ownership" SET "owner_id" = ?, "generation" = ?, "acquired_at" = ?, "lease_expires_at" = ? WHERE id = 1;',
+            ).run(ownerId, nextGen, now, leaseExpiresAt);
+            result = {
+              actorId,
+              ownerId,
+              generation: nextGen,
+              acquiredAt: now,
+              leaseExpiresAt,
+            };
+          } else {
+            throw new ActorOwnershipConflictError(
+              actorId,
+              row.owner_id,
+              row.generation,
+              row.lease_expires_at,
+            );
+          }
+        }
+        db.run('COMMIT;');
+        return result;
+      } catch (err) {
+        try {
+          db.run('ROLLBACK;');
+        } catch {}
+        throw err;
+      }
+    };
+
+    let attempts = 0;
+    while (true) {
+      try {
+        return runAcquisition();
+      } catch (err: any) {
+        attempts++;
+        const isBusy = err?.message?.includes('busy') || err?.message?.includes('locked');
+        if (isBusy && attempts <= 8) {
+          await new Promise((res) => setTimeout(res, 25 * attempts + Math.random() * 25));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  async releaseOwnership(actorId: string, ownerId: string): Promise<boolean> {
+    const conn = await this.getConnection(actorId);
+    const res = conn.db
+      .prepare('DELETE FROM "_actor_ownership" WHERE id = 1 AND owner_id = ?;')
+      .run(ownerId);
+    return (res?.changes ?? 0) > 0;
+  }
+
+  async getIdempotencyRecord(
+    actorId: string,
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined> {
+    const conn = await this.getConnection(actorId);
+    const row = conn.db
+      .prepare('SELECT "response", "created_at" FROM "_actor_idempotency" WHERE "request_id" = ?;')
+      .get(requestId) as { response: string; created_at: number } | undefined;
+    if (!row) return undefined;
+    return {
+      response: deserializeValue(row.response),
+      createdAt: row.created_at,
+    };
+  }
+
+  async setIdempotencyRecord(actorId: string, requestId: string, response: unknown): Promise<void> {
+    const conn = await this.getConnection(actorId);
+    conn.db
+      .prepare(
+        'INSERT INTO "_actor_idempotency" ("request_id", "response", "created_at") VALUES (?, ?, ?) ' +
+          'ON CONFLICT("request_id") DO UPDATE SET "response" = excluded."response", "created_at" = excluded."created_at";',
+      )
+      .run(requestId, serializeValue(response), Date.now());
   }
 
   /**
