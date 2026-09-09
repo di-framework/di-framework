@@ -2,6 +2,12 @@ import { useContainer } from '@di-framework/core/container';
 import { Container as ContainerDecorator } from '@di-framework/core/decorators';
 import type { IRequest, RequestHandler } from 'itty-router';
 import registry from './registry.ts';
+import {
+  createStaticAssetHandler,
+  normalizeRoutePrefix,
+  type StaticAssetOptions,
+  type StaticMountOptions,
+} from './static-assets.ts';
 import { TypedRouter, type TypedRouterType } from './typed-router.ts';
 
 export type ExtensionFunction<Args extends any[] = any[]> = (
@@ -15,12 +21,14 @@ export interface HttpRouterOptions<Args extends any[] = any[]> {
   use?: Array<RequestHandler<IRequest, Args>>;
   auth?: boolean | Record<string, unknown>;
   singleton?: boolean;
+  static?: StaticMountOptions | StaticMountOptions[];
 }
 
 export interface BuiltHttpRouter<Args extends any[] = any[]> extends TypedRouterType<Args> {
   readonly router: TypedRouterType<Args>;
   readonly prefixPath?: string;
   secure?: any;
+  static(prefix: string, options: StaticAssetOptions): this;
 }
 
 let globalAuthExtension: ExtensionFunction | undefined;
@@ -31,6 +39,7 @@ export class HttpRouterBuilder<Args extends any[] = any[]> {
   private _middleware: Array<RequestHandler<IRequest, Args>> = [];
   private _extensions: Array<ExtensionFunction<Args>> = [];
   private _authOptions?: boolean | Record<string, unknown>;
+  private _staticMounts: Array<{ prefix: string; options: StaticAssetOptions }> = [];
 
   static builder<Args extends any[] = any[]>(): HttpRouterBuilder<Args> {
     return new HttpRouterBuilder<Args>();
@@ -56,6 +65,11 @@ export class HttpRouterBuilder<Args extends any[] = any[]> {
     return this;
   }
 
+  static(prefix: string, options: StaticAssetOptions): this {
+    this._staticMounts.push({ prefix, options });
+    return this;
+  }
+
   extend(extension: ExtensionFunction<Args>): this {
     this._extensions.push(extension);
     return this;
@@ -70,12 +84,34 @@ export class HttpRouterBuilder<Args extends any[] = any[]> {
     const baseRouter = TypedRouter<Args>(routerOpts);
     const prefix = this._prefix;
 
+    const mountStatic = (mountPrefix: string, mountOpts: StaticAssetOptions) => {
+      const fullPrefix = prefix
+        ? `${prefix}${mountPrefix.startsWith('/') ? mountPrefix : `/${mountPrefix}`}`
+        : mountPrefix;
+      const handler = createStaticAssetHandler(fullPrefix, mountOpts);
+      const normalized = normalizeRoutePrefix(fullPrefix);
+      const wildcardPattern = normalized === '' ? '/*' : `${normalized}/*`;
+      const exactPattern = normalized === '' ? '/' : normalized;
+
+      baseRouter.all(wildcardPattern, handler as any);
+      if (exactPattern !== wildcardPattern) {
+        baseRouter.all(exactPattern, handler as any);
+      }
+    };
+
     const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
 
     const builtProxy: any = new Proxy(baseRouter, {
       get(target, prop, receiver) {
         if (prop === 'router') return baseRouter;
         if (prop === 'prefixPath') return prefix;
+
+        if (prop === 'static') {
+          return (mountPrefix: string, mountOpts: StaticAssetOptions) => {
+            mountStatic(mountPrefix, mountOpts);
+            return builtProxy;
+          };
+        }
 
         if (typeof prop === 'string' && methods.includes(prop)) {
           return (path: string, controller: any, options?: any) => {
@@ -95,6 +131,10 @@ export class HttpRouterBuilder<Args extends any[] = any[]> {
 
     for (const mw of this._middleware) {
       baseRouter.all('*', mw as any);
+    }
+
+    for (const mount of this._staticMounts) {
+      mountStatic(mount.prefix, mount.options);
     }
 
     if (this._authOptions && globalAuthExtension) {
@@ -122,6 +162,12 @@ export function HttpRouterFunction(options: HttpRouterOptions = {}) {
     if (options.catch) builder.catch(options.catch);
     if (options.use) builder.use(...options.use);
     if (options.auth) builder.withAuth(options.auth);
+    if (options.static) {
+      const mounts = Array.isArray(options.static) ? options.static : [options.static];
+      for (const mount of mounts) {
+        builder.static(mount.prefix ?? '/', mount);
+      }
+    }
 
     const built = builder.build();
     target.httpRouter = built;

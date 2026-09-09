@@ -1,17 +1,29 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { useContainer } from '@di-framework/core';
 import { Component } from '@di-framework/core/decorators';
 import {
   Controller,
   Endpoint,
+  HttpRouter,
   type Json,
   json,
   type RequestSpec,
   type ResponseSpec,
-  TypedRouter,
 } from '@di-framework/http';
 import { LoggerService } from '@di-framework/services-example/LoggerService';
 
-const router = TypedRouter();
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(currentDir, 'public');
+
+// Compose HTTP router with static asset serving and API routes
+const router = HttpRouter.builder()
+  .static('/static', {
+    directory: publicDir,
+    cacheControl: 'public, max-age=3600',
+    fallthrough: true,
+  })
+  .build();
 
 type EchoPayload = { message: string };
 type EchoResponse = { echoed: string; timestamp: string };
