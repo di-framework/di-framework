@@ -1,0 +1,17 @@
+{
+  "name": "@examples/scheduled-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/cli-plugin-wasmcloud": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

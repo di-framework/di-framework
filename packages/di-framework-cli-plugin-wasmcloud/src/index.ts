@@ -1,3 +1,12 @@
+export {
+  type DiscoveredCronJob,
+  discoverScheduledJobs,
+  discoverScheduledJobsInFile,
+  normalizeCronExpression,
+  renderCronAdapterModule,
+  renderCronInvokerModule,
+} from './cron.js';
+
 import { defineExtension } from '@di-framework/cli-extension';
 import { createWasmcloudCommand } from './command.js';
 
@@ -89,6 +98,12 @@ export {
 export { contentDigest, ociReference, projectRelativePath, publishComponent } from './publish.js';
 export { pulumiEnvironment, runPulumi } from './pulumi.js';
 export {
+  type DiscoveredQueueHandler,
+  discoverQueueHandlers,
+  isQueueWorkerProject,
+  parseQueueHandlersInFile,
+} from './queues.js';
+export {
   materializeRegistry,
   type RegistryInput,
   type RegistryLocation,
@@ -100,26 +115,18 @@ export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   aggregateRequirements,
   COMPONENT_MODEL,
+  DI_QUEUES_INTERFACE,
+  DI_QUEUES_PACKAGE,
+  DI_QUEUES_VERSION,
   defaultProjectRequirements,
   HTTP_ADAPTER_REQUIREMENTS,
+  QUEUE_ADAPTER_REQUIREMENTS,
+  QUEUE_ADAPTER_SOURCE,
+  queueProjectRequirements,
   renderWorldWit,
   runtimeRequirementsFromJavaScript,
   socketRequirementsFromJavaScript,
   type WitRequirement,
-} from './wit.js';
-export {
-  type DiscoveredQueueHandler,
-  discoverQueueHandlers,
-  isQueueWorkerProject,
-  parseQueueHandlersInFile,
-} from './queues.js';
-export {
-  DI_QUEUES_INTERFACE,
-  DI_QUEUES_PACKAGE,
-  DI_QUEUES_VERSION,
-  QUEUE_ADAPTER_REQUIREMENTS,
-  QUEUE_ADAPTER_SOURCE,
-  queueProjectRequirements,
 } from './wit.js';
 export {
   applyWorkload,

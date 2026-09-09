@@ -2,13 +2,23 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
+import { type DiscoveredCronJob, discoverScheduledJobs } from './cron.js';
 import type { WasmcloudDeps } from './deps.js';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
 import { captureKubectl, runKubectl } from './kubernetes.js';
 import type { WasmcloudProject } from './project.js';
-import { discoverQueueHandlers, isQueueWorkerProject, type DiscoveredQueueHandler } from './queues.js';
+import { asWitIdentifier } from './project.js';
+import {
+  type DiscoveredQueueHandler,
+  discoverQueueHandlers,
+  isQueueWorkerProject,
+} from './queues.js';
 import type { ClusterConnection } from './target.js';
-import { defaultProjectRequirements, queueProjectRequirements, type WitRequirement } from './wit.js';
+import {
+  defaultProjectRequirements,
+  queueProjectRequirements,
+  type WitRequirement,
+} from './wit.js';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;
@@ -51,6 +61,7 @@ export function renderWorkloadManifest(
   image: string,
   requirements: readonly WitRequirement[] = defaultProjectRequirements(),
   bindings: readonly BindingRecord[] = [],
+  cronJobs: readonly DiscoveredCronJob[] = [],
   queueHandlers: readonly DiscoveredQueueHandler[] = [],
 ): string {
   const name = deploymentResourceName(project);
@@ -63,10 +74,11 @@ export function renderWorkloadManifest(
   const resolvedHandlers =
     queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
   const isWorker = isQueueWorkerProject(project, resolvedHandlers);
+  const hasHttp = project.ingress !== false && !isWorker;
+  const sections: string[] = [];
 
-  const serviceBlock = isWorker
-    ? ''
-    : `apiVersion: v1
+  if (hasHttp) {
+    sections.push(`apiVersion: v1
 kind: Service
 metadata:
   name: ${name}
@@ -79,20 +91,18 @@ spec:
     - name: http
       port: 80
       targetPort: 80
-      protocol: TCP
----
-`;
+      protocol: TCP`);
+  }
 
-  const kubernetesServiceBlock = isWorker
-    ? ''
-    : `      kubernetes:
-        service:
-          name: ${name}
-`;
+  const cronEnv =
+    cronJobs.length > 0
+      ? `          env:
+            - name: DI_CRON_MODE
+              value: "external"
+`
+      : '';
 
-  const queueConsumersBlock = isWorker ? renderQueueConsumersYaml(resolvedHandlers) : '';
-
-  return `${serviceBlock}apiVersion: runtime.wasmcloud.dev/v1alpha1
+  const workloadDeployment = `apiVersion: runtime.wasmcloud.dev/v1alpha1
 kind: WorkloadDeployment
 metadata:
   name: ${name}
@@ -105,19 +115,26 @@ spec:
     spec:
       hostSelector:
         hostgroup: default
-${kubernetesServiceBlock}      components:
+${
+  hasHttp
+    ? `      kubernetes:
+        service:
+          name: ${name}
+`
+    : ''
+}      components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${
+${cronEnv}${
   project.allowedIpNameLookups === undefined
     ? ''
     : `          localResources:
             allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}
 `
-}${queueConsumersBlock}${renderHostInterfacesYaml(
+}${isWorker ? renderQueueConsumersYaml(resolvedHandlers) : ''}${renderHostInterfacesYaml(
   hostInterfacesFromRequirements(
     requirements,
-    isWorker ? {} : { httpHost: project.applicationName },
+    hasHttp ? { httpHost: project.applicationName } : {},
     bindings.map((binding) => ({
       name: binding.name,
       className: binding.className,
@@ -126,8 +143,48 @@ ${
       secretFrom: binding.secretFrom,
     })),
   ),
-)}
-`;
+)}`;
+
+  sections.push(workloadDeployment);
+
+  for (const job of cronJobs) {
+    const jobKebab =
+      job.kebabId || asWitIdentifier(job.name || `${job.className}-${job.methodName}`);
+    const jobResourceName = `${name}-${jobKebab}`;
+    sections.push(`apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${jobResourceName}
+  namespace: ${connection.namespace}
+  labels:
+${labels}
+    di-framework.dev/cron-job: ${yamlQuote(job.jobId)}
+spec:
+  schedule: ${yamlQuote(job.cronExpression)}
+  concurrencyPolicy: ${job.allowConcurrent ? 'Allow' : 'Forbid'}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+${labels}
+            di-framework.dev/cron-job: ${yamlQuote(job.jobId)}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: scheduler-dispatch
+              image: ${yamlQuote(image)}
+              env:
+                - name: DI_CRON_MODE
+                  value: "external"
+                - name: DI_CRON_INVOKE_JOB
+                  value: ${yamlQuote(job.jobId)}
+              args:
+                - "cron:invoke"
+                - ${yamlQuote(job.jobId)}`);
+  }
+
+  return sections.join('\n---\n') + '\n';
 }
 
 export async function applyWorkload(
@@ -140,10 +197,22 @@ export async function applyWorkload(
   const bindings = discoverBindings(project, deps);
   const queueHandlers = discoverQueueHandlers(project);
   const isWorker = isQueueWorkerProject(project, queueHandlers);
-  const requirements = isWorker
-    ? [...queueProjectRequirements(), ...requirementsFromBindings(bindings)]
-    : [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
-  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings, queueHandlers);
+  const baseRequirements = isWorker
+    ? queueProjectRequirements()
+    : project.ingress !== false
+      ? defaultProjectRequirements()
+      : [];
+  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
+  const cronJobs = discoverScheduledJobs(project.projectRoot);
+  const manifest = renderWorkloadManifest(
+    project,
+    connection,
+    image,
+    requirements,
+    bindings,
+    cronJobs,
+    queueHandlers,
+  );
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);
@@ -162,15 +231,16 @@ export async function deleteWorkload(
 ): Promise<void> {
   const name = deploymentResourceName(project);
   io.stdout.write(`Removing WorkloadDeployment ${name} from ${connection.namespace}...\n`);
-  const queueHandlers = discoverQueueHandlers(project);
-  const isWorker = isQueueWorkerProject(project, queueHandlers);
-  const targets = isWorker
-    ? [`${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, '--ignore-not-found']
-    : [`${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, `service/${name}`, '--ignore-not-found'];
   await runKubectl(
     deps,
     connection,
-    ['delete', ...targets],
+    [
+      'delete',
+      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
+      '-l',
+      `app.kubernetes.io/name=${name}`,
+      '--ignore-not-found',
+    ],
     project.projectRoot,
   );
 }

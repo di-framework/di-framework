@@ -15,7 +15,8 @@
     "container.ts",
     "decorators/**/*.ts",
     "types.ts",
-    "service-bindings/**/*.ts"
+    "service-bindings/**/*.ts",
+    "cron/**/*.ts"
   ],
   "exclude": ["tests/**"]
 }

@@ -1,23 +1,21 @@
-import { describe, expect, it, afterEach } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Container } from '@di-framework/core';
 import {
-  InMemoryQueueBackend,
-  SqliteQueueBackend,
-  QueueWorker,
   ContainerQueueDispatcher,
+  InMemoryQueueBackend,
+  QueueWorker,
   queue,
+  SqliteQueueBackend,
 } from '@di-framework/queues';
 import {
   discoverQueueHandlers,
   isQueueWorkerProject,
 } from '../../../packages/di-framework-cli-plugin-wasmcloud/src/queues';
-import {
-  renderWorkloadManifest,
-} from '../../../packages/di-framework-cli-plugin-wasmcloud/src/workload';
 import { queueProjectRequirements } from '../../../packages/di-framework-cli-plugin-wasmcloud/src/wit';
+import { renderWorkloadManifest } from '../../../packages/di-framework-cli-plugin-wasmcloud/src/workload';
 import { AuditLogService } from '../src/AuditLogService';
 import { ReceiptProcessor } from '../src/ReceiptProcessor';
 import { ReceiptProducer } from '../src/ReceiptProducer';
@@ -225,6 +223,7 @@ describe('Receipt Worker Example', () => {
       },
       'registry.example.com/team/receipt-worker:1.0.0',
       queueProjectRequirements(),
+      [],
       [],
       handlers,
     );

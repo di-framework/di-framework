@@ -269,3 +269,34 @@ insecure = true
     );
   });
 });
+
+it('builds and reports scheduled-only deployments without an HTTP service', async () => {
+  const { greeter, kubeconfig } = makeWorkspace();
+  const configPath = join(greeter, 'di-framework.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  writeFileSync(configPath, JSON.stringify({ ...config, ingress: false }));
+  writeFileSync(
+    join(greeter, 'src', 'jobs.ts'),
+    "class Worker { @Cron(60000, { name: 'heartbeat' }) run() {} }",
+  );
+  const result = await runWasmcloudDeploy(
+    [],
+    captureIo().io,
+    fakeDeps({
+      cwd: greeter,
+      capturedStdout: { 'pulumi stack output': platformOutputJson(kubeconfig) },
+    }),
+  );
+  expect(result.data.http).toBeUndefined();
+  expect(result.data.cronJobs).toEqual([
+    { jobId: 'heartbeat', schedule: 60000, cronExpression: '* * * * *' },
+  ]);
+  expect(result.text).toContain('Scheduled jobs (1): heartbeat');
+  const generated = join(greeter, '.di-framework');
+  expect(readFileSync(join(generated, 'cron-adapter.js'), 'utf8')).toContain('cron-invoker.js');
+  expect(readFileSync(join(generated, 'cron-invoker.js'), 'utf8')).toContain('heartbeat');
+  expect(JSON.parse(readFileSync(join(generated, 'cron.json'), 'utf8'))).toHaveLength(1);
+  const yaml = readFileSync(join(generated, 'deploy', 'workload.yaml'), 'utf8');
+  expect(yaml).toContain('kind: CronJob');
+  expect(yaml).not.toContain('kind: Service');
+});

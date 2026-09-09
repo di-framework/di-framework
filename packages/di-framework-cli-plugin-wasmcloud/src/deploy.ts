@@ -1,6 +1,7 @@
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
 import { parseAppCommandArgs } from './args.js';
 import { buildComponent } from './build.js';
+import { discoverScheduledJobs } from './cron.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { resolveApplication } from './discovery.js';
 import { loadDeployManifest } from './manifest.js';
@@ -10,6 +11,7 @@ import { resolveConnection, resolveTarget } from './target.js';
 import { applyWorkload, deploymentResourceName } from './workload.js';
 
 export type WasmcloudDeployData = {
+  cronJobs?: Array<{ jobId: string; schedule: string | number; cronExpression: string }>;
   application: string;
   target: string;
   namespace: string;
@@ -50,6 +52,9 @@ export async function runWasmcloudDeploy(
   await applyWorkload(project, connection, image.pullReference, io, deps);
   const service = deploymentResourceName(project);
 
+  const hasHttp = project.ingress !== false;
+  const cronJobs = discoverScheduledJobs(project.projectRoot);
+
   return {
     data: {
       application: project.applicationName,
@@ -61,15 +66,24 @@ export async function runWasmcloudDeploy(
       digest: image.artifactDigest,
       deploymentDigest: image.digest,
       service,
-      ...(connection.endpoints?.http === undefined
-        ? {}
-        : { http: { url: connection.endpoints.http, host: project.applicationName } }),
+      ...(hasHttp && connection.endpoints?.http !== undefined
+        ? { http: { url: connection.endpoints.http, host: project.applicationName } }
+        : {}),
       ...(connection.endpoints === undefined ? {} : { endpoints: connection.endpoints }),
+      ...(cronJobs.length > 0
+        ? {
+            cronJobs: cronJobs.map((j) => ({
+              jobId: j.jobId,
+              schedule: j.schedule,
+              cronExpression: j.cronExpression,
+            })),
+          }
+        : {}),
     },
     text: `Deployed ${project.applicationName} to ${connection.target} (namespace ${connection.namespace}, ${image.pullReference}).${
-      connection.endpoints?.http === undefined
-        ? ''
-        : ` HTTP: ${connection.endpoints.http} with Host: ${project.applicationName}`
-    }`,
+      hasHttp && connection.endpoints?.http !== undefined
+        ? ` HTTP: ${connection.endpoints.http} with Host: ${project.applicationName}`
+        : ''
+    }${cronJobs.length > 0 ? ` Scheduled jobs (${cronJobs.length}): ${cronJobs.map((j) => j.jobId).join(', ')}` : ''}`,
   };
 }

@@ -1,3 +1,15 @@
+import {
+  CRON_JOB_DEFINITIONS_KEY,
+  type CronExecutionResult,
+  type CronInvocationContext,
+  type CronJobDefinition,
+  type CronMode,
+  type CronOptions,
+  CronRuntime,
+  formatJobId,
+  type MethodCronMetadata,
+  normalizeCronExpression,
+} from './cron/index.js';
 import { createServiceBindingClient } from './service-bindings/proxy.js';
 
 /**
@@ -168,6 +180,25 @@ export class Container {
   private resolutionStack = new Set<string | Constructor>();
   private listeners = new Map<ContainerEventName, Set<Listener<any>>>();
   private cronJobs: Array<{ stop: () => void }> = [];
+  private cronMode: CronMode = process.env.DI_CRON_MODE === 'external' ? 'external' : 'in-process';
+
+  /**
+   * Set cron execution mode ('in-process' or 'external').
+   * In 'external' mode, automatic in-component timers are suppressed.
+   */
+  public setCronMode(mode: CronMode): this {
+    this.cronMode = mode;
+    CronRuntime.current.setMode(mode);
+    return this;
+  }
+
+  public getCronMode(): CronMode {
+    return this.cronMode;
+  }
+
+  public isExternalCron(): boolean {
+    return this.cronMode === 'external';
+  }
 
   /**
    * Register a service class as injectable
@@ -365,6 +396,7 @@ export class Container {
   public clear(): void {
     const count = this.services.size;
     this.stopCronJobs();
+    CronRuntime.current.clear();
     this.services.clear();
     this.emit('cleared', { count });
     this.listeners.clear();
@@ -378,6 +410,24 @@ export class Container {
       job.stop();
     }
     this.cronJobs = [];
+  }
+
+  /**
+   * Manually invoke a scheduled job by its stable identifier or method name.
+   * Resolves the owning service through DI, awaits the method, and reports completion or failure.
+   */
+  public invokeCronJob<T = any>(
+    jobId: string,
+    context?: Partial<CronInvocationContext> & { throwOnError?: boolean },
+  ): Promise<CronExecutionResult<T>> {
+    return CronRuntime.current.invoke<T>(jobId, { ...context, container: this });
+  }
+
+  /**
+   * Get all discovered/registered cron job definitions.
+   */
+  public getCronJobs(): CronJobDefinition[] {
+    return CronRuntime.current.getJobs();
   }
 
   /**
@@ -559,10 +609,36 @@ export class Container {
   private applyCron<T>(instance: T, ctor: Constructor<T>): void {
     const cronMethods: Record<string, string | number> =
       getMetadata(CRON_METADATA_KEY, ctor.prototype) || {};
+    const cronDefinitions: Record<string, MethodCronMetadata> =
+      getMetadata(CRON_JOB_DEFINITIONS_KEY, ctor.prototype) || {};
 
     Object.entries(cronMethods).forEach(([methodName, schedule]) => {
       const method = (instance as any)[methodName];
       if (typeof method !== 'function') return;
+
+      const methodDef = cronDefinitions[methodName];
+      const options: CronOptions = methodDef?.options || {};
+      const jobId = formatJobId(ctor.name, methodName, options.name);
+      const cronExpr = normalizeCronExpression(schedule);
+
+      const jobDef: CronJobDefinition = {
+        jobId,
+        name: options.name,
+        targetClass: ctor,
+        targetClassName: ctor.name,
+        methodName,
+        schedule,
+        cronExpression: cronExpr,
+        options,
+        instance,
+      };
+
+      CronRuntime.current.registerJob(jobDef);
+
+      // In external mode, suppress in-component timers
+      if (this.cronMode === 'external') {
+        return;
+      }
 
       if (typeof schedule === 'number') {
         // Simple interval in ms
@@ -818,15 +894,31 @@ export function useContainer(): Container {
   return container;
 }
 
+export * from './cron/index.js';
+export {
+  Bean,
+  Bootstrap,
+  Builder,
+  Component,
+  Configuration,
+  Publisher,
+  Subscriber,
+  Telemetry,
+  TelemetryListener,
+} from './decorators/index.js';
+/**
+ * Export metadata functions for use in decorators
+ * These provide a simple, reflect-metadata-free way to store and access metadata
+ */
+export {
+  QueueHandler,
+  type QueueHandlerMetadata,
+  type QueueHandlerOptions,
+} from './decorators/QueueHandler.js';
 export {
   ExportOperation,
   ExportService,
   ServiceBinding,
   serviceBindingToken,
 } from './service-bindings/index.js';
-/**
- * Export metadata functions for use in decorators
- * These provide a simple, reflect-metadata-free way to store and access metadata
- */
-export { QueueHandler, type QueueHandlerOptions, type QueueHandlerMetadata } from './decorators/QueueHandler.js';
 export { defineMetadata, getMetadata, getOwnMetadata, hasMetadata };

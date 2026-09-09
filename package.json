@@ -12,7 +12,8 @@
     "examples",
     "examples/packages/*",
     "examples/checkout-inventory",
-    "examples/receipt-worker"
+    "examples/receipt-worker",
+    "examples/scheduled-worker"
   ],
   "scripts": {
     "build": "bun run packages/di-framework-cli/main.ts mx build",
