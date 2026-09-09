@@ -121,3 +121,99 @@ await storage.close();
 ## License
 
 MIT OR Apache-2.0
+
+## Distributed Ownership & Remote Actor Invocations
+
+`@di-framework/actors` provides full support for distributed actor activation, remote RPC invocation, monotonically increasing ownership generations (fencing tokens), storage fencing, request deduplication, and authorization boundaries.
+
+### Remote RPC Dispatch & Identity
+
+Remote actor invocations package explicit identity into every request:
+- **`requestId`**: Unique client-assigned UUID for deduplication and idempotency caching.
+- **`namespace`**: Application tenant or partition namespace (e.g. `billing`, `inventory`).
+- **`actorType`**: Target actor class or registered name.
+- **`actorKey`**: Unique instance key.
+- **`method`**: Method name to execute.
+- **`args`**: Serialized arguments array.
+- **`callerId`**: Identity of the calling service or client.
+- **`deadline`**: Epoch timestamp in milliseconds after which the request is dropped.
+
+```ts
+import {
+  ActorRpcDispatcher,
+  RemoteActorClient,
+  MemoryActorTransport,
+  ActorRuntime,
+} from '@di-framework/actors';
+
+const runtime = new ActorRuntime({ actors: [OrderActor] });
+const dispatcher = new ActorRpcDispatcher({ runtime });
+const transport = new MemoryActorTransport(dispatcher);
+
+// Remote client reference
+const client = new RemoteActorClient({ transport, callerId: 'gateway-service' });
+const order = client.get<OrderActor>(OrderActor, 'order-42');
+
+const result = await order.placeOrder('ord-1', 100);
+```
+
+### Authorization Boundaries & Binding Policies
+
+Callers can be restricted from invoking unauthorized actor types, methods, or namespaces via `createActorBindingPolicy`:
+
+```ts
+import { createActorBindingPolicy, ActorRuntime } from '@di-framework/actors';
+
+const policy = createActorBindingPolicy({
+  allowedCallers: ['web-gateway', 'internal-cron'],
+  allowedNamespaces: ['production', 'default'],
+  allowedActorTypes: ['OrderActor'],
+  allowedMethods: {
+    OrderActor: ['getOrder', 'placeOrder'], // other methods rejected
+  },
+});
+
+const runtime = new ActorRuntime({
+  actors: [OrderActor],
+  authorizationPolicy: policy,
+});
+```
+
+Unauthorized requests are rejected before mailbox admission or state access with `ActorAuthorizationError`.
+
+### Distributed Ownership Protocol & Fencing Tokens
+
+To guarantee single-writer safety across distributed nodes:
+1. **Monotonically Increasing Generations**: When an actor host acquires ownership of an actor (e.g. `node-A`), authoritative storage records an ownership record with a fencing token generation `G = 1`.
+2. **Failover & Transfer**: If the owner crashes or ownership is transferred to `node-B`, the generation is atomically bumped (`G = 2`).
+3. **Storage Fencing**: Authoritative storage checks ownership generation on **EVERY commit**. If a stale owner attempts to commit a transaction with an older generation, the commit is rejected with `StaleOwnerWriteError` and all staged state is rolled back.
+
+```ts
+// If node-A (gen 1) attempts commit after node-B took over (gen 2):
+try {
+  await tx.commit();
+} catch (err) {
+  if (err instanceof StaleOwnerWriteError) {
+    console.error(`Rejected stale commit: owner generation ${err.ownerGeneration} superseded by storage generation ${err.storageGeneration}`);
+  }
+}
+```
+
+### Reliability, Deduplication & Idempotency Cache
+
+In distributed systems, a successful commit can precede a lost response (network partition, timeout, dropped packet):
+- When a client retransmits a request with the same `requestId`, the actor runtime checks the authoritative idempotency cache (`_actor_idempotency`).
+- If an entry is found, the committed response is returned immediately **without re-executing non-idempotent side effects**.
+- In-flight requests with identical `requestId`s are joined into the same execution promise.
+- Deadlines (`deadline` timestamp) are verified before and after queue admission; expired requests throw `ActorDeadlineExceededError`.
+- Mailboxes enforce bounded queue limits (`maxMailboxSize`), rejecting excess requests with `ActorBackpressureError`.
+
+### Durability, Failure Model & Consistency Guarantees
+
+| Property | Guarantee |
+| :--- | :--- |
+| **Durability** | SQLite WAL mode with atomic transactions (`BEGIN IMMEDIATE`). State and idempotency records commit atomically. |
+| **Ordering** | Serialized per-actor mailbox queue. Complete asynchronous invocations execute sequentially per actor instance. |
+| **Consistency** | Strong single-writer consistency backed by storage fencing tokens. Stale owner commits fail with `StaleOwnerWriteError`. |
+| **Retry & Deduplication** | At-least-once transport delivery combined with storage idempotency cache guarantees exactly-once execution semantics. |
+| **Storage Failure Model** | Uncommitted transactions automatically roll back on error, crash, or fencing violation. Surviving nodes recover state directly from authoritative SQLite files upon failover. |

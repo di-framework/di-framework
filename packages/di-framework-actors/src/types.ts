@@ -133,3 +133,5 @@ export class ActorMethodNotFoundError extends Error {
 
 export { ActorMigrationError } from './migrations/types.js';
 export { ActorLockError } from './storage/lock.js';
+export * from "./distributed/types.js";
+export * from "./distributed/errors.js";
