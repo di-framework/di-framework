@@ -196,14 +196,28 @@ export function clearRegisteredStaticAssets(): void {
   packageRegistry.clear();
 }
 
+/**
+ * Transfers ownership of an open descriptor to a stream. Consumers must read the
+ * body or cancel it when discarding a response so the descriptor can be closed.
+ */
 export function createFileStream(
   filePath: string | number,
   chunkSize = 64 * 1024,
 ): ReadableStream<Uint8Array> {
   const fd = typeof filePath === 'number' ? filePath : openSync(filePath, 'r');
-  return Readable.toWeb(
-    createReadStream('', { fd, autoClose: true, highWaterMark: chunkSize }),
-  ) as unknown as ReadableStream<Uint8Array>;
+  let source: ReturnType<typeof createReadStream>;
+  try {
+    source = createReadStream('', { fd, autoClose: true, highWaterMark: chunkSize });
+  } catch (error) {
+    closeSync(fd);
+    throw error;
+  }
+  try {
+    return Readable.toWeb(source) as unknown as ReadableStream<Uint8Array>;
+  } catch (error) {
+    source.destroy();
+    throw error;
+  }
 }
 
 function openAssetFile(root: string, filePath: string): { fd: number; stat: Stats } {
@@ -557,7 +571,8 @@ export function createStaticAssetHandler(
 
       const headers = new Headers();
       headers.set('Content-Type', contentType);
-      headers.set('Content-Length', String(size));
+      // Live files can change while streaming; only HEAD reports a size snapshot.
+      if (method === 'HEAD') headers.set('Content-Length', String(size));
       headers.set('ETag', etag);
       if (options.cacheControl) {
         headers.set('Cache-Control', options.cacheControl);

@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import {
   clearRegisteredStaticAssets,
   createStaticAssetHandler,
@@ -21,6 +22,7 @@ import {
   packageStaticAssets,
   registerStaticAssets,
 } from '../index.ts';
+import { createFileStream } from './static-assets.ts';
 
 let TEST_DIR: string;
 let outsideDir: string;
@@ -79,9 +81,7 @@ describe('Static Assets Serving', () => {
     expect(htmlRes.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(htmlRes.headers.get('cache-control')).toBe('public, max-age=3600');
     expect(htmlRes.headers.get('etag')).toBeDefined();
-    expect(htmlRes.headers.get('content-length')).toBe(
-      String(Buffer.byteLength('<!doctype html><html>Hello</html>')),
-    );
+    expect(htmlRes.headers.get('content-length')).toBeNull();
     expect(await htmlRes.text()).toBe('<!doctype html><html>Hello</html>');
 
     // GET CSS
@@ -580,6 +580,31 @@ describe('Static Assets Serving', () => {
     }
     expect(getMimeType('unknown.xyz')).toBe('application/octet-stream');
     expect(matchesIfNoneMatch('"other", W/"value"', '"value"')).toBe(true);
+  });
+
+  it('closes owned descriptors on stream setup failure and cancellation', async () => {
+    const file = join(TEST_DIR, 'style.css');
+    const invalidFd = fs.openSync(file, 'r');
+    expect(() => createFileStream(invalidFd, -1)).toThrow();
+    expect(() => fs.fstatSync(invalidFd)).toThrow();
+
+    const conversionFd = fs.openSync(file, 'r');
+    const conversion = spyOn(Readable, 'toWeb').mockImplementation(() => {
+      throw new Error('conversion failed');
+    });
+    try {
+      expect(() => createFileStream(conversionFd)).toThrow('conversion failed');
+    } finally {
+      conversion.mockRestore();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(() => fs.fstatSync(conversionFd)).toThrow();
+
+    const cancelledFd = fs.openSync(file, 'r');
+    const body = createFileStream(cancelledFd, 1);
+    await body.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(() => fs.fstatSync(cancelledFd)).toThrow();
   });
 
   it('streams files under Node ESM without Bun globals or require', async () => {
