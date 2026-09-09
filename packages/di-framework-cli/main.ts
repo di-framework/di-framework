@@ -12,6 +12,8 @@ import { runExtensionsUninstall } from './cmd/extensions/uninstall';
 import { generateCommand } from './cmd/generate';
 import { runHttpOpenAPIGenerate } from './cmd/http/openapi-generate';
 import { init } from './cmd/init';
+import { runMigrationsExecute } from './cmd/migrations/execute';
+import { runMigrationsStatus } from './cmd/migrations/status';
 import { runMxBuild } from './cmd/mx/build';
 import { runMxTest } from './cmd/mx/test';
 import { runMxTypecheck } from './cmd/mx/typecheck';
@@ -42,6 +44,8 @@ export type CliHandlers = {
   agentInit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
   agentMigrate(args: string[]): Promise<CommandResult>;
+  migrationsStatus(args: string[]): Promise<CommandResult>;
+  migrationsExecute(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
   skillsIndexBuild(args: string[]): Promise<CommandResult>;
   skillsIndexInspect(args: string[]): Promise<CommandResult>;
@@ -67,6 +71,8 @@ const DEFAULT_HANDLERS: CliHandlers = {
   agentInit: runAgentInit,
   agentInspect: runAgentInspect,
   agentMigrate: runAgentMigrate,
+  migrationsStatus: runMigrationsStatus,
+  migrationsExecute: runMigrationsExecute,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
   skillsIndexBuild: runSkillsIndexBuild,
   skillsIndexInspect: runSkillsIndexInspect,
@@ -270,6 +276,37 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
               '--source-mode <merge|replace>  Merge with or replace neutral defaults',
             ],
             run: ({ args }) => handlers.skillsValidate(args),
+          },
+        },
+      },
+      migrations: {
+        description: 'Manage database migrations',
+        children: {
+          status: {
+            description: 'Show migration status and pending migrations',
+            usage: 'di-framework migrations status [options]',
+            options: [
+              '--db <path>  Database path or connection string (default: ./dev.db)',
+              '--dir <path>  Migrations directory (default: ./migrations)',
+              '--manifest <path>  Path to migration manifest JSON',
+              '--binding <name>  Database binding name (default: default)',
+              '--module <path>  Module containing @Migration decorated classes (repeatable)',
+            ],
+            run: ({ args }) => handlers.migrationsStatus(args),
+          },
+          execute: {
+            description: 'Execute pending database migrations',
+            usage: 'di-framework migrations execute [options]',
+            options: [
+              '--db <path>  Database path or connection string (default: ./dev.db)',
+              '--dir <path>  Migrations directory (default: ./migrations)',
+              '--manifest <path>  Path to migration manifest JSON',
+              '--binding <name>  Database binding name (default: default)',
+              '--module <path>  Module containing @Migration decorated classes (repeatable)',
+              '--step <count>  Maximum number of migrations to apply',
+              '--dry-run  Plan without applying changes',
+            ],
+            run: ({ args }) => handlers.migrationsExecute(args),
           },
         },
       },

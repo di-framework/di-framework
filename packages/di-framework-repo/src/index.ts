@@ -5,6 +5,7 @@ export * from './adapters/sql.js';
 export * from './blob/index.js';
 export * from './decorators.js';
 export * from './in-memory.js';
+export * from './migrations/index.js';
 export * from './query-derivation.js';
 export * from './repository.js';
 export * from './types.js';
