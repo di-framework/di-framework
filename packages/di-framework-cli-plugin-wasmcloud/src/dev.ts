@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
 import { discoverBindings } from './bindings.js';
 import { buildComponent, requirementsForProject } from './build.js';
@@ -6,6 +8,7 @@ import { resolveDevRunner } from './dev-runner.js';
 import { loadProject } from './project.js';
 import { invalidUsage, readOptionValue, toolFailed } from './support.js';
 import { writeWashDevConfig } from './wash-dev.js';
+import type { WitLock } from './wit.js';
 
 export type DevOptions = { host: string; port: string };
 
@@ -38,6 +41,9 @@ export async function runWasmcloudDev(
   const options = parseDevArgs(args);
   const project = loadProject(deps.cwd());
   await buildComponent(project, io, deps);
+  const lock = JSON.parse(
+    readFileSync(join(project.projectRoot, '.di-framework', 'wit.lock.json'), 'utf8'),
+  ) as WitLock;
   const runner = resolveDevRunner(deps);
   const washConfigPath =
     runner.kind === 'wash'
@@ -60,6 +66,7 @@ export async function runWasmcloudDev(
       host: options.host,
       port: options.port,
       washConfigPath,
+      tls: lock.requirements.some((requirement) => requirement.package === 'wasi:tls'),
     }),
     { cwd: project.projectRoot },
   );

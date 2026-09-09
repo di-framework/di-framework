@@ -111,7 +111,9 @@ lives in the disposable `.di-framework/` directory.
 TLS requires a host with the opt-in `wasi-tls` feature, such as a TLS-enabled
 `wash-runtime` build, or Wasmtime 48 with `-S p3=y,tls=y,inherit-network=y,allow-ip-name-lookup=y`.
 The draft WIT is pinned to the wasmCloud interface; importing TLS or HTTPS adds it to the
-component world automatically. A host without it cannot instantiate that component.
+component world automatically. `wasmcloud dev` enables TLS and outbound network access
+automatically when using Wasmtime for a component that imports TLS. Other runners need
+their own TLS-enabled host configuration. A host without TLS cannot instantiate that component.
 See [wasmCloud host TLS configuration](https://wasmcloud.com/docs/runtime/building-custom-hosts/#tls-for-wasitls-components).
 
 Certificate chain and server-name verification are mandatory and use the host's trust store.
