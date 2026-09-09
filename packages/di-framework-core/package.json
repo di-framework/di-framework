@@ -60,6 +60,18 @@
       "bun": "./dist/types.js",
       "import": "./dist/types.js",
       "default": "./dist/types.js"
+    },
+    "./service-bindings": {
+      "types": "./dist/service-bindings/index.d.ts",
+      "bun": "./dist/service-bindings/index.js",
+      "import": "./dist/service-bindings/index.js",
+      "default": "./dist/service-bindings/index.js"
+    },
+    "./service-bindings/*": {
+      "types": "./dist/service-bindings/*.d.ts",
+      "bun": "./dist/service-bindings/*.js",
+      "import": "./dist/service-bindings/*.js",
+      "default": "./dist/service-bindings/*.js"
     }
   },
   "bugs": {

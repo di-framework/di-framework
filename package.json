@@ -11,6 +11,7 @@
     "packages/*",
     "examples",
     "examples/packages/*",
+    "examples/checkout-inventory",
     "examples/wasmcloud-actor-counter"
   ],
   "scripts": {
