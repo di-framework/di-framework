@@ -1,9 +1,8 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { computeSha256 } from './decorator.js';
 import type {
   ManifestDiscoveryOptions,
-  ManifestMigrationEntry,
   MigrationDefinition,
   MigrationExecutionContext,
   MigrationManifest,
@@ -16,7 +15,12 @@ export function compareVersions(a: string | number, b: string | number): number 
   // Try pure numeric comparison
   const numA = Number(strA);
   const numB = Number(strB);
-  if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+  if (
+    !/[._-]/.test(strA) &&
+    !/[._-]/.test(strB) &&
+    Number.isFinite(numA) &&
+    Number.isFinite(numB)
+  ) {
     return numA - numB;
   }
 
@@ -69,20 +73,28 @@ export function parseSqlContent(content: string): ParsedSqlFile {
       if (trimmed.length > 0) break;
       continue;
     }
-    const matchVer = trimmed.match(
-      /^--\s*(?:migration(?:[:_ -]|\s+))?version(?:[:=]|\s+)\s*(.+)$/i,
-    );
-    if (matchVer) headerVersion = matchVer[1]!.trim();
-
-    const matchDesc = trimmed.match(
-      /^--\s*(?:migration(?:[:_ -]|\s+))?description(?:[:=]|\s+)\s*(.+)$/i,
-    );
-    if (matchDesc) headerDescription = matchDesc[1]!.trim();
-
-    const matchBinding = trimmed.match(
-      /^--\s*(?:migration(?:[:_ -]|\s+))?binding(?:[:=]|\s+)\s*(.+)$/i,
-    );
-    if (matchBinding) headerBinding = matchBinding[1]!.trim();
+    // Parse the comment prefix separately so whitespace cannot backtrack into the value.
+    const header = trimmed
+      .slice(2)
+      .trimStart()
+      .replace(/^migration[:_ -]\s*/i, '');
+    const match = /^(version|description|binding)(?:[:=]|\s)(.*)$/i.exec(header);
+    if (match) {
+      const value = match[2]!.trim();
+      if (value) {
+        switch (match[1]!.toLowerCase()) {
+          case 'version':
+            headerVersion = value;
+            break;
+          case 'description':
+            headerDescription = value;
+            break;
+          case 'binding':
+            headerBinding = value;
+            break;
+        }
+      }
+    }
   }
 
   // Check for -- migrate:up and -- migrate:down delimiters
@@ -124,30 +136,32 @@ export function parseSqlContent(content: string): ParsedSqlFile {
 
 export function parseFilename(filename: string): { version?: string; description?: string } {
   const base = filename.replace(/\.(up|down)?\.sql$/i, '').replace(/\.sql$/i, '');
-  // Match V1__description or 001_description or 001-description or 20240101_description
-  const matchFlyway = base.match(/^v?([0-9]+(?:[._-][0-9]+)*)_{1,2}(.+)$/i);
-  if (matchFlyway) {
-    return {
-      version: matchFlyway[1]!,
-      description: matchFlyway[2]!.replaceAll(/[_-]/g, ' ').trim(),
-    };
+  // Scan once and remember the last valid separator, avoiding ambiguous regex repetitions.
+  const start = /^v/i.test(base) ? 1 : 0;
+  let end = start;
+  let separator = -1;
+  while (end < base.length) {
+    const char = base[end]!;
+    if (char >= '0' && char <= '9') {
+      end++;
+      continue;
+    }
+    if (end === start || !/[0-9]/.test(base[end - 1]!)) break;
+    if (char === '_' || char === '-') separator = end;
+    if (!'._-'.includes(char) || !/[0-9]/.test(base[end + 1] ?? '')) break;
+    end++;
   }
-
-  const matchDash = base.match(/^([0-9]+(?:[._-][0-9]+)*)[-_](.+)$/i);
-  if (matchDash) {
-    return {
-      version: matchDash[1]!,
-      description: matchDash[2]!.replaceAll(/[_-]/g, ' ').trim(),
-    };
+  if (separator !== -1) {
+    const description = base.slice(separator + 1).replace(/^_/, '');
+    if (description)
+      return {
+        version: base.slice(start, separator),
+        description: description.replaceAll(/[_-]/g, ' ').trim(),
+      };
   }
-
-  // Pure version number
-  const matchNum = base.match(/^v?([0-9]+)$/i);
-  if (matchNum) {
-    return {
-      version: matchNum[1]!,
-      description: `migration ${matchNum[1]}`,
-    };
+  if (end === base.length && end > start && /^\d+$/.test(base.slice(start))) {
+    const version = base.slice(start);
+    return { version, description: `migration ${version}` };
   }
 
   return { description: base };
@@ -196,14 +210,16 @@ export async function discoverSqlMigrations(
   defaultBinding = 'default',
 ): Promise<MigrationDefinition[]> {
   if (!existsSync(dirPath)) return [];
-  const entries = readdirSync(dirPath);
-  const sqlFiles = entries.filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'));
+  const entries = readdirSync(dirPath, { withFileTypes: true });
+  const sqlFiles = entries.filter(
+    (entry) => entry.isFile() && entry.name.endsWith('.sql') && !entry.name.endsWith('.down.sql'),
+  );
 
   const results: MigrationDefinition[] = [];
 
-  for (const file of sqlFiles) {
+  for (const entry of sqlFiles) {
+    const file = entry.name;
     const fullPath = join(dirPath, file);
-    if (!statSync(fullPath).isFile()) continue;
 
     const content = readFileSync(fullPath, 'utf8');
     const parsed = parseSqlContent(content);
