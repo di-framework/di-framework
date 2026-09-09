@@ -53,6 +53,7 @@ describe('CLI main router', () => {
       'agent',
       'http',
       'skills',
+      'migrations',
       'mx',
       'extensions',
     ]);
@@ -167,6 +168,14 @@ describe('CLI main router', () => {
         calls.push(['skills validate', args]);
         return {};
       },
+      migrationsStatus: async (args) => {
+        calls.push(['migrations status', args]);
+        return {};
+      },
+      migrationsExecute: async (args) => {
+        calls.push(['migrations execute', args]);
+        return {};
+      },
       mxBuild: async (options) => {
         calls.push(['mx build', options]);
         return {};
@@ -213,6 +222,8 @@ describe('CLI main router', () => {
       ['skills', 'index', 'query', '--query', 'review code'],
       ['skills', 'index', 'migrate', '--output', 'current.json'],
       ['skills', 'validate', '--skills-dir', '.agents/skills'],
+      ['migrations', 'status', '--binding', 'default'],
+      ['migrations', 'execute', '--dry-run'],
       ['mx', 'build', '--sync-versions'],
       ['mx', 'test'],
       ['mx', 'typecheck', '--pretty=0'],
@@ -239,6 +250,8 @@ describe('CLI main router', () => {
       ['skills index query', ['--query', 'review code']],
       ['skills index migrate', ['--output', 'current.json']],
       ['skills validate', ['--skills-dir', '.agents/skills']],
+      ['migrations status', ['--binding', 'default']],
+      ['migrations execute', ['--dry-run']],
       ['mx build', ['--sync-versions']],
       ['mx test', undefined],
       ['mx typecheck', ['--pretty=0']],

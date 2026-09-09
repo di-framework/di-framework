@@ -13,6 +13,7 @@ const CANONICAL_GROUPS = [
   'http openapi',
   'skills',
   'skills index',
+  'migrations',
   'mx',
   'extensions',
 ];
@@ -32,6 +33,8 @@ const CANONICAL_LEAVES = [
   'skills index query',
   'skills index migrate',
   'skills validate',
+  'migrations status',
+  'migrations execute',
   'mx build',
   'mx test',
   'mx typecheck',
