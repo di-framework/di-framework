@@ -106,7 +106,7 @@ Clearing a mailbox rejects queued calls. A failed activating invocation evicts i
 
 ## Unit Testing with Isolated Temporary SQLite Storage
 
-For tests, use `SqliteActorStorage.temporary()` or `{ inMemory: true }`:
+For tests, use `SqliteActorStorage.temporary()` or `{ inMemory: true }`. In-memory storage retains one SQLite database per actor until `storage.close()`, including actors evicted from the connection cache. `maxConnections` and idle cleanup limit cached connections, not retained actor data. This preserves state on reactivation, but memory and database handles grow with the number of distinct actor IDs. Close test storage after use; use file-backed storage for long-lived deployments with many actor IDs.
 
 ```ts
 import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';
