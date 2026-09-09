@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { transformAsync } from '@babel/core';
 import asyncToGenerator from '@babel/plugin-transform-async-to-generator';
 import { rolldown } from 'rolldown';
-import { lowerForAwait } from './async-transform.js';
 import { emptyActorsModule } from './actors.js';
+import { lowerForAwait } from './async-transform.js';
 import { emptyGuestsModule } from './guests.js';
 import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env.js';
 import {
@@ -114,6 +114,13 @@ export function nodeCompatibilityPlugin(
     name: 'di-framework-component-runtime',
     resolveId(source: string) {
       if (source === 'virtual:di-framework-application') return entryPath;
+      if (source === 'virtual:di-framework-wasmcloud-runtime') {
+        return join(
+          dirname(fileURLToPath(import.meta.url)),
+          'node-compat',
+          `runtime-application.${import.meta.url.endsWith('.ts') ? 'ts' : 'js'}`,
+        );
+      }
       if (source === 'virtual:di-framework-wasmcloud-guests') {
         return guestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
       }
@@ -307,7 +314,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     const bundle = await rolldown({
       input: 'virtual:di-framework-runtime-entry',
       external: COMPONENT_IMPORT_EXTERNAL,
-      resolve: { alias: { ...nodeEnv.alias } },
+      resolve: { alias: { ...nodeEnv.alias }, conditionNames: ['wasmcloud', 'import', 'default'] },
       plugins: [
         {
           name: 'di-framework-runtime-bootstrap',
@@ -336,25 +343,14 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
         decorator: { legacy: true },
         inject: rolldownInject(nodeEnv.inject),
       },
-      treeshake: {
-        moduleSideEffects(id) {
-          return (
-            id.includes('/node-compat/bootstrap.') ||
-            id.includes('/node-compat/fetch-runtime.') ||
-            id.includes('virtual:di-framework-wasmcloud-guests') ||
-            id.includes('virtual:di-framework-wasmcloud-actors') ||
-            id.endsWith('/guests.js') ||
-            id.endsWith('\\guests.js') ||
-            id.endsWith('/actors.js') ||
-            id.endsWith('\\actors.js')
-          );
-        },
-      },
+      // Registration modules and application initialization are observable side effects.
+      treeshake: { moduleSideEffects: true },
     });
     try {
       await bundle.write({
         file: outFile,
         format: 'esm',
+        codeSplitting: false,
         plugins: [
           {
             name: 'di-framework-async-context',

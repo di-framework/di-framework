@@ -287,3 +287,28 @@ describe('findInstalledComponentizeQjsCli', () => {
     expect(findInstalledComponentizeQjsCli(root, 'linux', 'x64')).toBeUndefined();
   });
 });
+
+it('retains registration side effects and emits one bundle for dynamic imports', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'wasmcloud-registration-'));
+  const adapterPath = join(root, 'adapter.ts');
+  const entryPath = join(root, 'entry.ts');
+  const outFile = join(root, 'component.js');
+  writeFileSync(
+    join(root, 'registration.ts'),
+    'globalThis.__diRegistration = "registered-service";',
+  );
+  writeFileSync(join(root, 'lazy.ts'), 'export default "dynamic-service";');
+  writeFileSync(
+    entryPath,
+    'import "./registration.ts"; export default async () => (await import("./lazy.ts")).default;',
+  );
+  writeFileSync(
+    adapterPath,
+    'import application from "virtual:di-framework-application"; export const run = application;',
+  );
+  await DEFAULT_DEPS.bundler({ adapterPath, entryPath, outFile });
+  const code = readFileSync(outFile, 'utf8');
+  expect(code).toContain('registered-service');
+  expect(code).toContain('dynamic-service');
+  expect(code).not.toMatch(/import\(["']\.\//);
+});

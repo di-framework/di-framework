@@ -24,9 +24,14 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "wasmcloud": "./dist/portable.js",
       "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./portable": {
+      "types": "./dist/portable.d.ts",
+      "default": "./dist/portable.js"
     }
   },
   "dependencies": {

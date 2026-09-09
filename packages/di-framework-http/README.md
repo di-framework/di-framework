@@ -204,6 +204,19 @@ Method or property decorator that attaches OpenAPI metadata.
 - `requestBody`: OpenAPI Request Body object.
 - `responses`: OpenAPI Responses object.
 
+## Portable runtime imports
+
+The `wasmcloud` export condition selects a runtime entry without filesystem packaging,
+file streaming, or OpenAPI file generation. Other portable bundlers can import
+`@di-framework/http/portable` explicitly. Package static assets with the native
+`packageStaticAssets` API at build time, then pass the resulting package to
+`router.static()` or register it with `registerStaticAssets`.
+
+Native imports from `@di-framework/http` retain disk serving, packaging, and
+OpenAPI file generation. The portable entry retains routing, in-memory OpenAPI
+schema generation, packaged text and binary assets, conditional requests, HEAD,
+and the same path validation.
+
 ## License
 
 Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE), at your option.

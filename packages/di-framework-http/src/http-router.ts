@@ -7,7 +7,7 @@ import {
   normalizeRoutePrefix,
   type StaticAssetOptions,
   type StaticMountOptions,
-} from './static-assets.ts';
+} from './static-assets-runtime.ts';
 import { TypedRouter, type TypedRouterType } from './typed-router.ts';
 
 export type ExtensionFunction<Args extends any[] = any[]> = (
