@@ -1,11 +1,15 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { getOrCreateActorMetadata } from "../decorators/keys.js";
-import { type ActorDiscoveryOptions, discoverActorClasses, type DiscoveredActor } from "../dev/discovery.js";
-import { runActorMigrations } from "../migrations/runner.js";
-import { InMemoryActorStorage } from "../storage/memory.js";
-import { actorIdentityToPath, parseActorIdentity } from "../storage/path.js";
-import { SqliteActorStorage } from "../storage/sqlite.js";
-import type { ActorStorage } from "../storage/types.js";
+import { getOrCreateActorMetadata } from '../decorators/keys.js';
+import {
+  type ActorDiscoveryOptions,
+  type DiscoveredActor,
+  discoverActorClasses,
+} from '../dev/discovery.js';
+import { runActorMigrations } from '../migrations/runner.js';
+import { InMemoryActorStorage } from '../storage/memory.js';
+import { actorIdentityToPath, parseActorIdentity } from '../storage/path.js';
+import { SqliteActorStorage } from '../storage/sqlite.js';
+import type { ActorStorage } from '../storage/types.js';
 import {
   ActorAmbiguityError,
   type ActorDetailedInspection,
@@ -48,7 +52,7 @@ export class ActorRuntime implements InvocationTarget {
   private readonly invocationStorage = new AsyncLocalStorage<ActorInvocation>();
   private readonly _storage: ActorStorage;
   private readonly defaultNamespace?: string;
-  private readonly registryByName = new Map<string, ActorRegistration | "ambiguous">();
+  private readonly registryByName = new Map<string, ActorRegistration | 'ambiguous'>();
   private readonly registryByQualifiedName = new Map<string, ActorRegistration>();
   private readonly registryByCtor = new Map<Constructor, ActorRegistration>();
   private readonly actorsByNameGroup = new Map<string, ActorRegistration[]>();
@@ -126,7 +130,7 @@ export class ActorRuntime implements InvocationTarget {
       }
 
       if (group.length > 1) {
-        this.registryByName.set(name, "ambiguous");
+        this.registryByName.set(name, 'ambiguous');
       } else {
         this.registryByName.set(name, registration);
       }
@@ -153,8 +157,8 @@ export class ActorRuntime implements InvocationTarget {
    * Checks whether an actor class or name is registered.
    */
   isRegistered(actorClassOrName: Constructor | string): boolean {
-    if (typeof actorClassOrName === "string") {
-      if (actorClassOrName.includes(":")) {
+    if (typeof actorClassOrName === 'string') {
+      if (actorClassOrName.includes(':')) {
         return this.registryByQualifiedName.has(actorClassOrName);
       }
       if (this.defaultNamespace) {
@@ -181,21 +185,24 @@ export class ActorRuntime implements InvocationTarget {
   get<T extends object>(actorClassOrName: Constructor<T> | string, actorKey: string): ActorRef<T> {
     const reg = this.resolveRegistration(actorClassOrName);
     if (!reg) {
-      const name = typeof actorClassOrName === "string" ? actorClassOrName : actorClassOrName.name;
+      const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
       throw new ActorNotRegisteredError(name);
     }
-    const targetLookup = typeof actorClassOrName === 'function' ? actorClassOrName : (reg.namespace ? `${reg.namespace}:${reg.name}` : reg.name);
+    const targetLookup =
+      typeof actorClassOrName === 'function'
+        ? actorClassOrName
+        : reg.namespace
+          ? `${reg.namespace}:${reg.name}`
+          : reg.name;
     return createActorReference<T>(targetLookup, actorKey, this, reg.name);
   }
 
-  resolveRegistration(
-    actorClassOrName: Constructor | string,
-  ): ActorRegistration | undefined {
-    if (typeof actorClassOrName === "function") {
+  resolveRegistration(actorClassOrName: Constructor | string): ActorRegistration | undefined {
+    if (typeof actorClassOrName === 'function') {
       return this.registryByCtor.get(actorClassOrName);
     }
 
-    if (actorClassOrName.includes(":")) {
+    if (actorClassOrName.includes(':')) {
       return this.registryByQualifiedName.get(actorClassOrName);
     }
 
@@ -206,9 +213,9 @@ export class ActorRuntime implements InvocationTarget {
     }
 
     const regOrAmbiguous = this.registryByName.get(actorClassOrName);
-    if (regOrAmbiguous === "ambiguous") {
+    if (regOrAmbiguous === 'ambiguous') {
       const candidates = (this.actorsByNameGroup.get(actorClassOrName) ?? []).map(
-        (r) => r.namespace || "default",
+        (r) => r.namespace || 'default',
       );
       throw new ActorAmbiguityError(actorClassOrName, candidates);
     }
@@ -291,7 +298,7 @@ export class ActorRuntime implements InvocationTarget {
         }
       }
 
-      if (typeof instance.onActivate === "function") {
+      if (typeof instance.onActivate === 'function') {
         await instance.onActivate();
       }
 
@@ -317,7 +324,7 @@ export class ActorRuntime implements InvocationTarget {
   ): Promise<any> {
     const reg = this.resolveRegistration(actorClassOrName);
     if (!reg) {
-      const name = typeof actorClassOrName === "string" ? actorClassOrName : actorClassOrName.name;
+      const name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
       throw new ActorNotRegisteredError(name);
     }
 
@@ -455,7 +462,7 @@ export class ActorRuntime implements InvocationTarget {
     const instance = this.instances.get(compositeId);
     if (!instance) return false;
 
-    if (typeof instance.onDeactivate === "function") {
+    if (typeof instance.onDeactivate === 'function') {
       try {
         await instance.onDeactivate();
       } catch {
@@ -472,7 +479,7 @@ export class ActorRuntime implements InvocationTarget {
       this.mailboxes.delete(compositeId);
     }
 
-    if (typeof this._storage.closeActor === "function") {
+    if (typeof this._storage.closeActor === 'function') {
       await this._storage.closeActor(compositeId);
     }
 
@@ -489,7 +496,7 @@ export class ActorRuntime implements InvocationTarget {
    */
   async reload(options: ActorReloadOptions = {}): Promise<ActorReloadResult> {
     const startTime = Date.now();
-    const policy = options.policy ?? "drain";
+    const policy = options.policy ?? 'drain';
     const timeoutMs = options.timeoutMs ?? 5000;
     const targetNs = options.namespace;
 
@@ -520,8 +527,8 @@ export class ActorRuntime implements InvocationTarget {
     for (const id of affectedIds) {
       const mb = this.mailboxes.get(id);
       if (mb) {
-        if (policy === "fail") {
-          mb.failPending(new ActorReloadError("Activation replaced during hot reload."));
+        if (policy === 'fail') {
+          mb.failPending(new ActorReloadError('Activation replaced during hot reload.'));
           if (mb.runningCalls > 0) {
             try {
               await mb.drain(timeoutMs);
@@ -538,7 +545,7 @@ export class ActorRuntime implements InvocationTarget {
     for (const id of affectedIds) {
       const instance = this.instances.get(id);
       if (instance) {
-        if (typeof instance.onDeactivate === "function") {
+        if (typeof instance.onDeactivate === 'function') {
           try {
             await instance.onDeactivate();
           } catch {}
@@ -547,7 +554,7 @@ export class ActorRuntime implements InvocationTarget {
         deactivatedCount++;
       }
 
-      if (typeof this._storage.closeActor === "function") {
+      if (typeof this._storage.closeActor === 'function') {
         await this._storage.closeActor(id);
       }
 
@@ -567,7 +574,7 @@ export class ActorRuntime implements InvocationTarget {
       }
     } else {
       for (const reg of this.getRegisteredActors()) {
-        if (!targetNs || reg.options?.namespace === targetNs) {
+        if (!targetNs || (reg.namespace ?? this.defaultNamespace) === targetNs) {
           reloadedNames.push(reg.name);
         }
       }
@@ -637,14 +644,14 @@ export class ActorRuntime implements InvocationTarget {
       const mb = this.mailboxes.get(id);
       if (mb) {
         mb.stopAdmission();
-        mb.failPending(new Error("Actor instance reset."));
+        mb.failPending(new Error('Actor instance reset.'));
         mb.clear();
         this.mailboxes.delete(id);
       }
 
       const instance = this.instances.get(id);
       if (instance) {
-        if (typeof instance.onDeactivate === "function") {
+        if (typeof instance.onDeactivate === 'function') {
           try {
             await instance.onDeactivate();
           } catch {}
@@ -653,7 +660,7 @@ export class ActorRuntime implements InvocationTarget {
         deactivatedCount++;
       }
 
-      if (typeof this._storage.closeActor === "function") {
+      if (typeof this._storage.closeActor === 'function') {
         await this._storage.closeActor(id);
       }
 
@@ -663,7 +670,7 @@ export class ActorRuntime implements InvocationTarget {
 
     // Remove persisted files if storage supports it
     const deletedFiles: string[] = [];
-    if (typeof (this._storage as any).resetStorage === "function") {
+    if (typeof (this._storage as any).resetStorage === 'function') {
       const deleted = await (this._storage as any).resetStorage({
         namespace,
         actorName,
@@ -691,11 +698,11 @@ export class ActorRuntime implements InvocationTarget {
     options: { showState?: boolean; baseDir?: string } = {},
   ): Promise<ActorDetailedInspection | null> {
     let reg = this.resolveRegistration(actorClassOrName);
-    let name = typeof actorClassOrName === "string" ? actorClassOrName : actorClassOrName.name;
+    let name = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
     let namespace = this.defaultNamespace;
 
-    if (typeof actorClassOrName === "string" && actorClassOrName.includes(":")) {
-      const parsed = parseActorIdentity(actorClassOrName + (actorKey ? `:${actorKey}` : ""));
+    if (typeof actorClassOrName === 'string' && actorClassOrName.includes(':')) {
+      const parsed = parseActorIdentity(actorClassOrName + (actorKey ? `:${actorKey}` : ''));
       namespace = parsed.namespace ?? namespace;
       name = parsed.actorName;
       if (!actorKey && parsed.actorKey) {
@@ -728,7 +735,7 @@ export class ActorRuntime implements InvocationTarget {
     const methods = meta ? Array.from(meta.methods.keys()).map(String) : [];
 
     let state: Record<string, any> | undefined;
-    if (options.showState && typeof (this._storage as any).dump === "function") {
+    if (options.showState && typeof (this._storage as any).dump === 'function') {
       try {
         state = await (this._storage as any).dump(compositeId);
       } catch {}
@@ -739,7 +746,7 @@ export class ActorRuntime implements InvocationTarget {
       namespace,
       actorType: name,
       actorKey,
-      status: isActive ? "active" : "inactive",
+      status: isActive ? 'active' : 'inactive',
       runningCalls,
       pendingCalls,
       storagePath,
@@ -755,11 +762,9 @@ export class ActorRuntime implements InvocationTarget {
   /**
    * Lists known actor identities, activation status, and pending/running calls.
    */
-  async listActors(options: {
-    namespace?: string;
-    activeOnly?: boolean;
-    baseDir?: string;
-  } = {}): Promise<ActorInspectionInfo[]> {
+  async listActors(
+    options: { namespace?: string; activeOnly?: boolean; baseDir?: string } = {},
+  ): Promise<ActorInspectionInfo[]> {
     const list: ActorInspectionInfo[] = [];
     const seenIds = new Set<string>();
 
@@ -788,7 +793,7 @@ export class ActorRuntime implements InvocationTarget {
         namespace: parsed.namespace,
         actorType: parsed.actorName,
         actorKey: parsed.actorKey,
-        status: isActive ? "active" : "inactive",
+        status: isActive ? 'active' : 'inactive',
         runningCalls: mb?.runningCalls ?? 0,
         pendingCalls: mb?.pendingCalls ?? 0,
         storagePath,
@@ -799,14 +804,14 @@ export class ActorRuntime implements InvocationTarget {
     }
 
     // 2. Discover persisted actors on disk if using SQLite and !activeOnly
-    if (!options.activeOnly && typeof (this._storage as any).listPersistedActors === "function") {
+    if (!options.activeOnly && typeof (this._storage as any).listPersistedActors === 'function') {
       try {
         const persisted = await (this._storage as any).listPersistedActors();
         for (const p of persisted) {
           if (options.namespace && p.namespace !== options.namespace) continue;
           // Extract actorKey from filename prefix if possible
-          const fileName = p.filePath.split("/").pop() ?? "";
-          const keyPrefix = fileName.replace(/_[0-9a-f]{16}\.db$/, "");
+          const fileName = p.filePath.split('/').pop() ?? '';
+          const keyPrefix = fileName.replace(/_[0-9a-f]{16}\.db$/, '');
           const actorId = `${p.namespace}:${p.actorName}:${keyPrefix}`;
 
           if (!seenIds.has(actorId)) {
@@ -816,7 +821,7 @@ export class ActorRuntime implements InvocationTarget {
               namespace: p.namespace,
               actorType: p.actorName,
               actorKey: keyPrefix,
-              status: "inactive",
+              status: 'inactive',
               runningCalls: 0,
               pendingCalls: 0,
               storagePath: p.filePath,
@@ -849,9 +854,9 @@ export class ActorRuntime implements InvocationTarget {
       mailbox.clear();
     }
     this.mailboxes.clear();
-    if (typeof this._storage.close === "function") {
+    if (typeof this._storage.close === 'function') {
       await this._storage.close();
-    } else if (typeof (this._storage as any).clearAll === "function") {
+    } else if (typeof (this._storage as any).clearAll === 'function') {
       await (this._storage as any).clearAll();
     }
   }

@@ -1,4 +1,4 @@
-import { ActorAdmissionClosedError } from "../types.js";
+import { ActorAdmissionClosedError } from '../types.js';
 
 interface QueueItem {
   task: () => Promise<void>;
@@ -24,7 +24,7 @@ export class ActorMailbox {
     if (this._admissionClosed) {
       return Promise.reject(
         new ActorAdmissionClosedError(
-          "Actor activation is closed to new admissions (reloading or deactivated).",
+          'Actor activation is closed to new admissions (reloading or deactivated).',
         ),
       );
     }

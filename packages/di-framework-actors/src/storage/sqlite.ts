@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { acquireActorLock } from './lock.js';
-import { actorIdentityToPath } from './path.js';
+import { actorIdentityToPath, trimUnderscores } from './path.js';
 import type { ActorStorage, ActorStorageTransaction } from './types.js';
 
 function cloneValue<T>(value: T): T {
@@ -350,7 +350,8 @@ export class SqliteActorStorage implements ActorStorage {
       }
     }
 
-    const db = new Database(filePath);
+    const db =
+      this.inMemoryKeepAlive.get(actorId) ?? new Database(this.inMemory ? ':memory:' : filePath);
     try {
       db.run('PRAGMA journal_mode = WAL;');
       db.run('PRAGMA synchronous = NORMAL;');
@@ -388,9 +389,11 @@ export class SqliteActorStorage implements ActorStorage {
   }
 
   private async closeConnection(conn: CachedConnection): Promise<void> {
-    try {
-      conn.db.close();
-    } catch {}
+    if (this.inMemoryKeepAlive.get(conn.actorId) !== conn.db) {
+      try {
+        conn.db.close();
+      } catch {}
+    }
     if (conn.releaseLock) {
       try {
         await conn.releaseLock();
@@ -547,15 +550,16 @@ export class SqliteActorStorage implements ActorStorage {
     const { namespace, actorName, actorKey, all } = scope;
 
     if (!all && !namespace && !actorName) {
-      throw new Error("resetStorage requires explicit scope: namespace, actorName, or all: true.");
+      throw new Error('resetStorage requires explicit scope: namespace, actorName, or all: true.');
     }
 
     // 1. Close active connections matching the scope
-    for (const [actorId, conn] of Array.from(this.connections.entries())) {
-      const parts = actorId.split(":");
+    for (const actorId of new Set([...this.connections.keys(), ...this.inMemoryKeepAlive.keys()])) {
+      const conn = this.connections.get(actorId);
+      const parts = actorId.split(':');
       const connNs = parts.length >= 3 ? parts[0] : undefined;
       const connType = parts.length >= 3 ? parts[1] : parts[0];
-      const connKey = parts.length >= 3 ? parts.slice(2).join(":") : parts.slice(1).join(":");
+      const connKey = parts.length >= 3 ? parts.slice(2).join(':') : parts.slice(1).join(':');
 
       let match = false;
       if (all) match = true;
@@ -567,10 +571,12 @@ export class SqliteActorStorage implements ActorStorage {
       }
 
       if (match) {
-        await this.closeConnection(conn);
+        if (conn) await this.closeConnection(conn);
         this.connections.delete(actorId);
         if (this.inMemoryKeepAlive.has(actorId)) {
-          try { this.inMemoryKeepAlive.get(actorId)?.close(); } catch {}
+          try {
+            this.inMemoryKeepAlive.get(actorId)?.close();
+          } catch {}
           this.inMemoryKeepAlive.delete(actorId);
         }
       }
@@ -597,7 +603,7 @@ export class SqliteActorStorage implements ActorStorage {
     }
 
     if (namespace && !actorName) {
-      const safeNs = (namespace || "default").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "default";
+      const safeNs = trimUnderscores(namespace.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'default';
       const targetDir = path.join(resolvedBase, safeNs);
       if (fs.existsSync(targetDir)) {
         deletedFiles.push(targetDir);
@@ -607,11 +613,12 @@ export class SqliteActorStorage implements ActorStorage {
     }
 
     if (actorName && !actorKey) {
-      const safeName = actorName.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "actor";
+      const safeName = trimUnderscores(actorName.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'actor';
       // Find matching directories across namespaces
       const namespaces = namespace ? [namespace] : fs.readdirSync(resolvedBase);
       for (const ns of namespaces) {
-        const safeNs = (ns || "default").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "default";
+        const safeNs =
+          trimUnderscores((ns || 'default').replace(/[^a-zA-Z0-9_-]/g, '_')) || 'default';
         const targetDir = path.join(resolvedBase, safeNs, safeName);
         if (fs.existsSync(targetDir)) {
           deletedFiles.push(targetDir);
@@ -624,13 +631,15 @@ export class SqliteActorStorage implements ActorStorage {
     if (actorName && actorKey) {
       const dbPath = actorIdentityToPath(
         { namespace, actorName, actorKey },
-        { baseDir: this.baseDir }
+        { baseDir: this.baseDir },
       );
-      for (const ext of ["", "-wal", "-shm", ".lock"]) {
+      for (const ext of ['', '-wal', '-shm', '.lock']) {
         const target = dbPath + ext;
         if (fs.existsSync(target)) {
           deletedFiles.push(target);
-          try { fs.unlinkSync(target); } catch {}
+          try {
+            fs.unlinkSync(target);
+          } catch {}
         }
       }
       return deletedFiles;
@@ -642,7 +651,9 @@ export class SqliteActorStorage implements ActorStorage {
   /**
    * Helper to discover actor database files persisted on disk.
    */
-  async listPersistedActors(): Promise<Array<{ namespace: string; actorName: string; filePath: string }>> {
+  async listPersistedActors(): Promise<
+    Array<{ namespace: string; actorName: string; filePath: string }>
+  > {
     if (this.inMemory) return [];
     const resolvedBase = path.resolve(this.baseDir);
     if (!fs.existsSync(resolvedBase)) return [];
@@ -659,7 +670,7 @@ export class SqliteActorStorage implements ActorStorage {
           const actPath = path.join(nsPath, actEntry.name);
           const files = fs.readdirSync(actPath, { withFileTypes: true });
           for (const file of files) {
-            if (file.isFile() && file.name.endsWith(".db")) {
+            if (file.isFile() && file.name.endsWith('.db')) {
               results.push({
                 namespace: nsEntry.name,
                 actorName: actEntry.name,

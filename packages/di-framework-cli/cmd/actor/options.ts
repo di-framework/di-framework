@@ -1,9 +1,9 @@
-import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import type * as ActorsModule from "@di-framework/actors";
-import { CommandFailure } from "../../command";
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type * as ActorsModule from '@di-framework/actors';
+import { CommandFailure } from '../../command';
 
 export type ActorsOperations = typeof ActorsModule;
 
@@ -25,70 +25,70 @@ export function parseActorCliArgs(args: readonly string[]): ActorCliParsedOption
   };
 
   for (let i = 0; i < args.length; i++) {
-    const token = args[i] ?? "";
+    const token = args[i] ?? '';
 
-    if (token === "--dir" || token === "--base-dir") {
+    if (token === '--dir' || token === '--base-dir') {
       options.dir = readNextValue(args, ++i, token);
       continue;
     }
-    if (token.startsWith("--dir=")) {
+    if (token.startsWith('--dir=')) {
       options.dir = token.slice(6);
       continue;
     }
-    if (token.startsWith("--base-dir=")) {
+    if (token.startsWith('--base-dir=')) {
       options.dir = token.slice(11);
       continue;
     }
 
-    if (token === "--namespace") {
+    if (token === '--namespace') {
       options.namespace = readNextValue(args, ++i, token);
       continue;
     }
-    if (token.startsWith("--namespace=")) {
+    if (token.startsWith('--namespace=')) {
       options.namespace = token.slice(12);
       continue;
     }
 
-    if (token === "--key") {
+    if (token === '--key') {
       options.key = readNextValue(args, ++i, token);
       continue;
     }
-    if (token.startsWith("--key=")) {
+    if (token.startsWith('--key=')) {
       options.key = token.slice(6);
       continue;
     }
 
-    if (token === "--actor") {
+    if (token === '--actor') {
       options.actor = readNextValue(args, ++i, token);
       continue;
     }
-    if (token.startsWith("--actor=")) {
+    if (token.startsWith('--actor=')) {
       options.actor = token.slice(8);
       continue;
     }
 
-    if (token === "--active") {
+    if (token === '--active') {
       options.active = true;
       continue;
     }
 
-    if (token === "--show-state") {
+    if (token === '--show-state') {
       options.showState = true;
       continue;
     }
 
-    if (token === "--all") {
+    if (token === '--all') {
       options.all = true;
       continue;
     }
 
-    if (token === "--json") {
+    if (token === '--json') {
       options.json = true;
       continue;
     }
 
-    if (token.startsWith("-")) {
-      throw new CommandFailure("INVALID_USAGE", `Unknown option: ${token}`, 2, { token });
+    if (token.startsWith('-')) {
+      throw new CommandFailure('INVALID_USAGE', `Unknown option: ${token}`, 2, { token });
     }
 
     options.positional.push(token);
@@ -99,39 +99,42 @@ export function parseActorCliArgs(args: readonly string[]): ActorCliParsedOption
 
 function readNextValue(args: readonly string[], index: number, flag: string): string {
   const val = args[index];
-  if (!val || val.startsWith("-")) {
-    throw new CommandFailure("INVALID_USAGE", `Option ${flag} requires a value`, 2, { flag });
+  if (!val || val.startsWith('-')) {
+    throw new CommandFailure('INVALID_USAGE', `Option ${flag} requires a value`, 2, { flag });
   }
   return val;
 }
 
-export async function loadActorOperations(cwd: string = process.cwd()): Promise<ActorsOperations> {
+export async function loadActorOperations(
+  cwd: string = process.cwd(),
+  importModule: (specifier: string) => Promise<ActorsOperations> = (specifier) => import(specifier),
+): Promise<ActorsOperations> {
   // 1. Try standard package import
   try {
-    return (await import("@di-framework/actors")) as ActorsOperations;
+    return await importModule('@di-framework/actors');
   } catch {}
 
   // 2. Project local resolution
   try {
-    const req = createRequire(resolve(cwd, "package.json"));
-    const modulePath = req.resolve("@di-framework/actors");
-    return (await import(pathToFileURL(modulePath).href)) as ActorsOperations;
+    const req = createRequire(resolve(cwd, 'package.json'));
+    const modulePath = req.resolve('@di-framework/actors');
+    return await importModule(pathToFileURL(modulePath).href);
   } catch {}
 
   // 3. Monorepo relative fallback
   try {
     const monorepoSource = resolve(
       import.meta.dir,
-      "../../../../packages/di-framework-actors/src/index.ts",
+      '../../../../packages/di-framework-actors/src/index.ts',
     );
     if (existsSync(monorepoSource)) {
-      return (await import(pathToFileURL(monorepoSource).href)) as ActorsOperations;
+      return await importModule(pathToFileURL(monorepoSource).href);
     }
   } catch {}
 
   throw new CommandFailure(
-    "ACTORS_PACKAGE_UNAVAILABLE",
-    "Unable to load @di-framework/actors from the current project",
+    'ACTORS_PACKAGE_UNAVAILABLE',
+    'Unable to load @di-framework/actors from the current project',
     3,
   );
 }
