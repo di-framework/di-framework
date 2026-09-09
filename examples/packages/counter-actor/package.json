@@ -1,0 +1,19 @@
+{
+  "name": "@di-framework/counter-actor-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "start": "bun run index.ts",
+    "build": "bun -e \"console.log('counter-actor: build ready')\"",
+    "check": "bun x tsc --noEmit"
+  },
+  "dependencies": {
+    "@di-framework/actors": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@types/bun": "latest"
+  }
+}

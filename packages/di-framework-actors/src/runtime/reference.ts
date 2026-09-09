@@ -18,8 +18,11 @@ export function createActorReference<T extends object>(
   actorKey: string,
   targetInvoker: InvocationTarget,
   defaultOptions?: any,
+  explicitActorType?: string,
 ): ActorRef<T> {
-  const actorType = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+  const rawName = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+  const actorType =
+    explicitActorType ?? (rawName.includes(':') ? rawName.split(':').pop()! : rawName);
   const compositeId = `${actorType}:${actorKey}`;
 
   const target = {
