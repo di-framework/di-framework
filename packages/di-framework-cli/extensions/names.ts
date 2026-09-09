@@ -16,6 +16,7 @@ export const RESERVED_COMMAND_NAMES: readonly string[] = [
   'actor',
   'migrations',
   'mx',
+  'queue',
   'extensions',
 ];
 

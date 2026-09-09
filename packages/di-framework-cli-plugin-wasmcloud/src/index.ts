@@ -112,6 +112,12 @@ export {
 export { contentDigest, ociReference, projectRelativePath, publishComponent } from './publish.js';
 export { pulumiEnvironment, runPulumi } from './pulumi.js';
 export {
+  type DiscoveredQueueHandler,
+  discoverQueueHandlers,
+  isQueueWorkerProject,
+  parseQueueHandlersInFile,
+} from './queues.js';
+export {
   materializeRegistry,
   type RegistryInput,
   type RegistryLocation,
@@ -123,8 +129,14 @@ export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   aggregateRequirements,
   COMPONENT_MODEL,
+  DI_QUEUES_INTERFACE,
+  DI_QUEUES_PACKAGE,
+  DI_QUEUES_VERSION,
   defaultProjectRequirements,
   HTTP_ADAPTER_REQUIREMENTS,
+  QUEUE_ADAPTER_REQUIREMENTS,
+  QUEUE_ADAPTER_SOURCE,
+  queueProjectRequirements,
   renderWorldWit,
   runtimeRequirementsFromJavaScript,
   socketRequirementsFromJavaScript,
@@ -134,6 +146,7 @@ export {
   applyWorkload,
   deleteWorkload,
   isReady,
+  renderQueueConsumersYaml,
   renderWorkloadManifest,
   type WorkloadManifestOptions,
 } from './workload.js';

@@ -26,6 +26,7 @@ export {
 export { Cron } from './Cron.js';
 export { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys.js';
 export { Publisher, type PublisherOptions } from './Publisher.js';
+export { QueueHandler, type QueueHandlerOptions, type QueueHandlerMetadata } from './QueueHandler.js';
 export {
   ExportOperation,
   ExportService,

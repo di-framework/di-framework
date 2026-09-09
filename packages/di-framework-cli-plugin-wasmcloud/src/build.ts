@@ -9,12 +9,14 @@ import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
 import { loadProject, type WasmcloudProject } from './project.js';
+import { discoverQueueHandlers, isQueueWorkerProject } from './queues.js';
 import { invalidUsage, requireNodeBinary, toolFailed } from './support.js';
 import {
   buildWitLock,
   COMPONENT_MODEL,
   defaultProjectRequirements,
   digestBytes,
+  queueProjectRequirements,
   renderWorldWit,
   runtimeRequirementsFromJavaScript,
   WASI_HTTP_INTERFACE,
@@ -44,7 +46,12 @@ export function requirementsForProject(
   deps: WasmcloudDeps = DEFAULT_DEPS,
 ): WitRequirement[] {
   const bindings = discoverBindings(project, deps);
-  const baseRequirements = project.ingress !== false ? defaultProjectRequirements() : [];
+  const isWorker = isQueueWorkerProject(project, discoverQueueHandlers(project));
+  const baseRequirements = isWorker
+    ? queueProjectRequirements()
+    : project.ingress !== false
+      ? defaultProjectRequirements()
+      : [];
   return [...baseRequirements, ...requirementsFromBindings(bindings)];
 }
 
@@ -154,8 +161,13 @@ export async function buildComponent(
   const bundledJavaScript = join(generatedDirectory, 'component.js');
   const bindings = discoverBindings(project, deps);
   const cronJobs = discoverScheduledJobs(project.projectRoot);
-  const hasHttp = project.ingress !== false;
-  const profile = hasHttp ? BUILD_PROFILE_NAME : CRON_BUILD_PROFILE_NAME;
+  const isWorker = isQueueWorkerProject(project, discoverQueueHandlers(project));
+  const hasHttp = project.ingress !== false && !isWorker;
+  const profile = isWorker
+    ? 'wasmcloud-worker'
+    : hasHttp
+      ? BUILD_PROFILE_NAME
+      : CRON_BUILD_PROFILE_NAME;
   const actors = discoverActors(project);
   const requirements = requirementsForProject(project, deps);
 
@@ -183,7 +195,7 @@ export async function buildComponent(
   if (cronJobs.length > 0 || !hasHttp) {
     writeFileSync(join(generatedDirectory, 'cron-invoker.js'), renderCronInvokerModule(cronJobs));
   }
-  if (!hasHttp) {
+  if (!hasHttp && !isWorker) {
     writeFileSync(join(generatedDirectory, 'cron-adapter.js'), renderCronAdapterModule(cronJobs));
   }
   if (actors.length > 0)
@@ -192,9 +204,11 @@ export async function buildComponent(
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
     await deps.bundler({
-      adapterPath: hasHttp
-        ? join(deps.assetsDirectory(), 'http-adapter.js')
-        : join(generatedDirectory, 'cron-adapter.js'),
+      adapterPath: isWorker
+        ? join(deps.assetsDirectory(), 'queue-adapter.js')
+        : hasHttp
+          ? join(deps.assetsDirectory(), 'http-adapter.js')
+          : join(generatedDirectory, 'cron-adapter.js'),
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,

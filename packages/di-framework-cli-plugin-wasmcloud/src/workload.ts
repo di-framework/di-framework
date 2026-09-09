@@ -9,8 +9,17 @@ import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host
 import { captureKubectl, runKubectl } from './kubernetes.js';
 import type { WasmcloudProject } from './project.js';
 import { asWitIdentifier } from './project.js';
+import {
+  type DiscoveredQueueHandler,
+  discoverQueueHandlers,
+  isQueueWorkerProject,
+} from './queues.js';
 import type { ClusterConnection } from './target.js';
-import { defaultProjectRequirements, type WitRequirement } from './wit.js';
+import {
+  defaultProjectRequirements,
+  queueProjectRequirements,
+  type WitRequirement,
+} from './wit.js';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;
@@ -24,6 +33,27 @@ export function deploymentResourceName(project: WasmcloudProject): string {
 
 export function generatedManifestPath(project: WasmcloudProject): string {
   return join(project.projectRoot, '.di-framework', 'deploy', 'workload.yaml');
+}
+
+export function renderQueueConsumersYaml(queueHandlers: readonly DiscoveredQueueHandler[]): string {
+  if (queueHandlers.length === 0) return '';
+  const lines = ['          queueConsumers:'];
+  for (const h of queueHandlers) {
+    lines.push(`            - queue: ${yamlQuote(h.queueName)}`);
+    if (h.options.concurrency !== undefined) {
+      lines.push(`              concurrency: ${h.options.concurrency}`);
+    }
+    if (h.options.maxRetries !== undefined) {
+      lines.push(`              maxRetries: ${h.options.maxRetries}`);
+    }
+    if (h.options.backoffMs !== undefined) {
+      lines.push(`              backoffMs: ${h.options.backoffMs}`);
+    }
+    if (h.options.timeoutMs !== undefined) {
+      lines.push(`              timeoutMs: ${h.options.timeoutMs}`);
+    }
+  }
+  return lines.join('\n') + '\n';
 }
 
 export interface WorkloadManifestOptions {
@@ -44,6 +74,7 @@ export function renderWorkloadManifest(
   bindings: readonly BindingRecord[] = [],
   options?: WorkloadManifestOptions | boolean,
   cronJobs: readonly DiscoveredCronJob[] = [],
+  queueHandlers: readonly DiscoveredQueueHandler[] = [],
 ): string {
   const opts: WorkloadManifestOptions =
     typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
@@ -111,7 +142,10 @@ spec:
 `
     : '';
 
-  const hasHttp = project.ingress !== false;
+  const resolvedHandlers =
+    queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, resolvedHandlers);
+  const hasHttp = project.ingress !== false && !isWorker;
   const sections: string[] = [];
   if (hasActors) sections.push(pvcSection.trimEnd());
 
@@ -177,7 +211,7 @@ ${componentEnv}${
     : `          localResources:
             allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}
 `
-}${renderHostInterfacesYaml(
+}${isWorker ? renderQueueConsumersYaml(resolvedHandlers) : ''}${renderHostInterfacesYaml(
   hostInterfacesFromRequirements(
     requirements,
     hasHttp ? { httpHost: project.applicationName } : {},
@@ -241,7 +275,14 @@ export async function applyWorkload(
   deps: WasmcloudDeps,
 ): Promise<string> {
   const bindings = discoverBindings(project, deps);
-  const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
+  const baseRequirements = isWorker
+    ? queueProjectRequirements()
+    : project.ingress !== false
+      ? defaultProjectRequirements()
+      : [];
+  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
   const hasActors = discoverActors(project).length > 0 || project.actors === true;
   const cronJobs = discoverScheduledJobs(project.projectRoot);
   const manifest = renderWorkloadManifest(
@@ -252,6 +293,7 @@ export async function applyWorkload(
     bindings,
     { hasActors },
     cronJobs,
+    queueHandlers,
   );
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });

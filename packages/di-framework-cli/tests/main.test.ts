@@ -56,6 +56,7 @@ describe('CLI main router', () => {
       'actor',
       'migrations',
       'mx',
+      'queue',
       'extensions',
     ]);
     expect(Object.keys(COMMAND_TREE.children?.mx?.children ?? {})).toEqual([
@@ -225,6 +226,18 @@ describe('CLI main router', () => {
       },
       extensionsList: async (args) => {
         calls.push(['extensions list', args]);
+        return {};
+      },
+      queueList: async (args) => {
+        calls.push(['queue list', args]);
+        return {};
+      },
+      queueInspect: async (args) => {
+        calls.push(['queue inspect', args]);
+        return {};
+      },
+      queueRetry: async (args) => {
+        calls.push(['queue retry', args]);
         return {};
       },
     };
