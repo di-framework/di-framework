@@ -194,9 +194,7 @@ export async function deleteWorkload(
     connection,
     [
       'delete',
-      `${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`,
-      `service/${name}`,
-      'cronjob',
+      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
       '-l',
       `app.kubernetes.io/name=${name}`,
       '--ignore-not-found',

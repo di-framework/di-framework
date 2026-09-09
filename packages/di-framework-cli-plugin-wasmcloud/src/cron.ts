@@ -1,8 +1,7 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { ALWAYS_SKIP_DIRECTORIES } from './manifest.js';
-import { asWitIdentifier } from './project.js';
 
 export type DiscoveredCronJob = {
   jobId: string;

@@ -278,3 +278,66 @@ describe('Deployment-aware @Cron execution in core', () => {
     freshContainer.clear();
   });
 });
+
+it('reports runtime status, aliases, concurrency errors, timeouts and missing methods', async () => {
+  const runtime = new CronRuntime('external');
+  const container = new Container();
+  let release!: () => void;
+  class Worker {
+    run() {
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    }
+    fail() {
+      throw 'unavailable';
+    }
+  }
+  container.register(Worker);
+  const def = {
+    jobId: 'stable',
+    name: 'alias',
+    targetClass: Worker,
+    targetClassName: 'Worker',
+    methodName: 'run',
+    schedule: 60000,
+    cronExpression: '* * * * *',
+    options: {},
+  };
+  runtime.registerJob(def);
+  expect(runtime.getMode()).toBe('external');
+  expect(runtime.isExternal()).toBe(true);
+  expect(runtime.getJob('alias')).toBe(runtime.getJob('Worker.run'));
+  expect(runtime.isJobRunning('missing')).toBe(false);
+  expect(runtime.getLastRun('missing')).toBeUndefined();
+  expect(runtime.getLastRun('alias')).toBeUndefined();
+  const pending = runtime.invoke('alias', { container });
+  expect(runtime.isJobRunning('alias')).toBe(true);
+  expect(runtime.getStatusReports()).toEqual([
+    expect.objectContaining({ jobId: 'stable', isRunning: true, allowConcurrent: false }),
+  ]);
+  await expect(runtime.invoke('stable', { container, throwOnError: true })).rejects.toBeInstanceOf(
+    CronConcurrencyError,
+  );
+  release();
+  const completed = await pending;
+  expect(runtime.getLastRun('Worker.run')).toBe(completed);
+  expect(runtime.getStatusReports()[0]?.lastRun).toBe(completed);
+  expect(runtime.isJobRunning('stable')).toBe(false);
+  runtime.registerJob({ ...def, jobId: 'missing-method', methodName: 'missing' });
+  await expect(runtime.invoke('missing-method', { container })).rejects.toThrow(
+    'not found on resolved service',
+  );
+  runtime.registerJob({ ...def, jobId: 'failure', methodName: 'fail' });
+  expect((await runtime.invoke('failure', { container })).error).toBe('unavailable');
+  await expect(runtime.invoke('failure', { container, throwOnError: true })).rejects.toThrow(
+    'unavailable',
+  );
+  runtime.registerJob({ ...def, jobId: 'timeout', options: { timeoutMs: 5 } });
+  const timedOut = await runtime.invoke('timeout', { container });
+  expect(timedOut.status).toBe('failure');
+  expect(String(timedOut.error)).toContain('timed out');
+  release();
+  runtime.clear();
+  container.clear();
+});

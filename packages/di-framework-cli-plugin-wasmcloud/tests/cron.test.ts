@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -223,4 +223,40 @@ export class NotificationService {
     expect(manifest).toContain('name: hybrid-app-sync-cache');
     expect(manifest).toContain('concurrencyPolicy: Allow');
   });
+});
+
+it('discovers nested source and ignores unsupported decorators, options, and unreadable files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cron-edge-'));
+  try {
+    expect(discoverScheduledJobs(join(root, 'missing'))).toEqual([]);
+    expect(discoverScheduledJobsInFile(join(root, 'missing.ts'))).toEqual([]);
+    mkdirSync(join(root, 'nested'));
+    mkdirSync(join(root, 'node_modules'));
+    writeFileSync(join(root, 'plain.ts'), 'export const value = 1;');
+    writeFileSync(join(root, 'ignored.d.ts'), 'declare class Cron {}');
+    writeFileSync(join(root, 'node_modules', 'skip.ts'), 'class X { @Cron(60000) run() {} }');
+    writeFileSync(
+      join(root, 'nested', 'jobs.ts'),
+      `
+      class Worker {
+        @Cron run() {}
+        @Other() other() {}
+        @factory['Cron'](60000) unsupported() {}
+        @Cron() absent() {}
+        @Cron(dynamic) dynamic() {}
+        @Cron(60000, { allowConcurrent: dynamic, ...extra, ['name']: 'ignored' }) fallback() {}
+        @framework.Cron(60000, { name: 'shared' }) nested() {}
+      }
+    `,
+    );
+    writeFileSync(
+      join(root, 'duplicate.js'),
+      "class Duplicate { @Cron(60000, { name: 'shared' }) run() {} }",
+    );
+    const jobs = discoverScheduledJobs(root);
+    expect(jobs.map((job) => job.jobId).sort()).toEqual(['Worker.fallback', 'shared']);
+    expect(jobs.find((job) => job.jobId === 'Worker.fallback')?.allowConcurrent).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
