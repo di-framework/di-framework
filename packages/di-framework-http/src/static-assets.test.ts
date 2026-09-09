@@ -588,7 +588,7 @@ describe('Static Assets Serving', () => {
     expect(() => createFileStream(invalidFd, -1)).toThrow();
     expect(() => fs.fstatSync(invalidFd)).toThrow();
 
-    const conversionFd = fs.openSync(file, 'r');
+    const conversionFd = fs.openSync(join(TEST_DIR, 'app.js'), 'r');
     const conversion = spyOn(Readable, 'toWeb').mockImplementation(() => {
       throw new Error('conversion failed');
     });
@@ -600,7 +600,7 @@ describe('Static Assets Serving', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(() => fs.fstatSync(conversionFd)).toThrow();
 
-    const cancelledFd = fs.openSync(file, 'r');
+    const cancelledFd = fs.openSync(join(TEST_DIR, 'data.json'), 'r');
     const body = createFileStream(cancelledFd, 1);
     await body.cancel();
     await new Promise((resolve) => setTimeout(resolve, 20));
