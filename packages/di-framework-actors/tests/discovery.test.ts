@@ -22,7 +22,7 @@ describe('Actor Discovery and Registration Tooling', () => {
   it('discovers decorated actor classes and generates registration code', async () => {
     // Write sample actor file
     const actorCode = `
-import { Actor, ActorMethod } from "${path.resolve('packages/di-framework-actors/src/index.ts')}";
+import { Actor, ActorMethod } from "${path.resolve(import.meta.dir, '../src/index.ts')}";
 
 @Actor({ name: "DiscoveredCounter", namespace: "disc-app" })
 export class DiscoveredCounter {

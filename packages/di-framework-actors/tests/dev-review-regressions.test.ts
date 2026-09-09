@@ -60,7 +60,7 @@ it('discovers and registers actors through runtime and development manager', asy
     const file = join(dir, 'nested', 'worker.ts');
     fs.writeFileSync(
       file,
-      `import { Actor } from ${JSON.stringify(resolve('packages/di-framework-actors/src/index.ts'))};\n@Actor() export class Worker { ping() { return 'pong'; } }`,
+      `import { Actor } from ${JSON.stringify(resolve(import.meta.dir, '../src/index.ts'))};\n@Actor() export class Worker { ping() { return 'pong'; } }`,
     );
     expect(await discoverActorClasses({ rootDir: join(dir, 'missing') })).toEqual([]);
     expect(generateActorRegistration([])).toContain('No decorated actors');
@@ -116,7 +116,7 @@ it('resumes mailbox admission and preserves reference identity', async () => {
 
 it('generates valid registration code for default exports, aliases and duplicate export names', async () => {
   const dir = fs.mkdtempSync(join(tmpdir(), 'actor-codegen-review-'));
-  const actorImport = resolve('packages/di-framework-actors/src/index.ts');
+  const actorImport = resolve(import.meta.dir, '../src/index.ts');
   try {
     const file = join(dir, 'first.js');
     const second = join(dir, 'second.js');
