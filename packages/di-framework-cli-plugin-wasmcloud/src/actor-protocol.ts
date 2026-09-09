@@ -44,7 +44,9 @@ export async function handleActorInvocationRequest(
     const pathParts = subPath ? subPath.split('/').filter(Boolean) : [];
 
     if (request.method === 'POST') {
-      const body = await request.json().catch(() => ({}));
+      const parsed = await request.json().catch(() => ({}));
+      const body =
+        parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
       actorType = body.actorType ?? request.headers.get('x-actor-type') ?? pathParts[0];
       actorKey = body.actorKey ?? request.headers.get('x-actor-key') ?? pathParts[1];
       method = body.method ?? request.headers.get('x-actor-method') ?? pathParts[2];
@@ -64,7 +66,14 @@ export async function handleActorInvocationRequest(
       }
     }
 
-    if (!actorType || !actorKey || !method) {
+    if (
+      typeof actorType !== 'string' ||
+      !actorType ||
+      typeof actorKey !== 'string' ||
+      !actorKey ||
+      typeof method !== 'string' ||
+      !method
+    ) {
       return new Response(
         JSON.stringify({
           success: false,

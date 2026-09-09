@@ -199,3 +199,35 @@ it('parses actor paths, headers and query arguments and limits error details', a
   expect((await response.json()).result).toBe('ok');
   await runtime.clear();
 });
+
+it('treats non-object JSON and invalid identity fields as bad requests', async () => {
+  const { handleActorInvocationRequest } = await import('../src/actor-protocol');
+  let calls = 0;
+  const dispatch = async () => {
+    calls++;
+    return 1;
+  };
+  for (const body of [
+    null,
+    true,
+    7,
+    'text',
+    [],
+    { actorType: 7, actorKey: 'key', method: 'read' },
+  ]) {
+    const response = await handleActorInvocationRequest(
+      new Request('http://localhost/_actors/', { method: 'POST', body: JSON.stringify(body) }),
+      undefined,
+      dispatch,
+    );
+    expect(response.status).toBe(400);
+  }
+  expect(calls).toBe(0);
+  const response = await handleActorInvocationRequest(
+    new Request('http://localhost/_actors/Counter/key/read', { method: 'POST', body: 'null' }),
+    undefined,
+    dispatch,
+  );
+  expect(response.status).toBe(200);
+  expect(calls).toBe(1);
+});

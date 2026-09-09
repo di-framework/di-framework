@@ -1,11 +1,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { basename, resolve } from 'node:path';
 import { getOrCreateActorMetadata } from '../decorators/keys.js';
 import {
   type ActorDiscoveryOptions,
   type DiscoveredActor,
   discoverActorClasses,
 } from '../dev/discovery.js';
-import { ActorDeadlineExceededError, ActorNotOwnerError } from '../distributed/errors.js';
+import {
+  ActorAuthorizationError,
+  ActorDeadlineExceededError,
+  ActorNotOwnerError,
+} from '../distributed/errors.js';
 import type {
   ActorAuthorizationPolicy,
   ActorOwnershipRecord,
@@ -152,7 +157,6 @@ export class ActorRuntime implements InvocationTarget {
 
       const qualifiedName = namespace ? `${namespace}:${name}` : name;
       this.registryByQualifiedName.set(qualifiedName, registration);
-      this.registryByCtor.set(ctor, registration);
 
       let group = this.actorsByNameGroup.get(name);
       if (!group) {
@@ -164,11 +168,13 @@ export class ActorRuntime implements InvocationTarget {
         (r) => r.ctor === ctor || (r.namespace === namespace && r.name === name),
       );
       if (existingIdx >= 0) {
+        this.registryByCtor.delete(group[existingIdx]!.ctor);
         group[existingIdx] = registration;
       } else {
         group.push(registration);
       }
 
+      this.registryByCtor.set(ctor, registration);
       if (group.length > 1) {
         this.registryByName.set(name, 'ambiguous');
       } else {
@@ -476,7 +482,15 @@ export class ActorRuntime implements InvocationTarget {
         deadline: options?.deadline,
         expectedGeneration: options?.generation,
       };
-      this.authorizationPolicy.authorize(req);
+      const allowed = await this.authorizationPolicy.authorize(req);
+      if (allowed === false) {
+        throw new ActorAuthorizationError(
+          req.actorType,
+          req.method,
+          'Authorization policy rejected invocation.',
+          { callerId: req.callerId, namespace: req.namespace },
+        );
+      }
     }
 
     // 3. Check deduplication / idempotency
@@ -752,21 +766,20 @@ export class ActorRuntime implements InvocationTarget {
       }
     }
 
-    // 3. Drain or explicitly fail outstanding work according to policy
-    for (const id of affectedIds) {
-      const mb = this.mailboxes.get(id);
-      if (mb) {
-        if (policy === 'fail') {
-          mb.failPending(new ActorReloadError('Activation replaced during hot reload.'));
-          if (mb.runningCalls > 0) {
-            try {
-              await mb.drain(timeoutMs);
-            } catch {}
+    // 3. Drain before releasing any activation resources. A timeout aborts reload.
+    try {
+      for (const id of affectedIds) {
+        const mb = this.mailboxes.get(id);
+        if (mb) {
+          if (policy === 'fail') {
+            mb.failPending(new ActorReloadError('Activation replaced during hot reload.'));
           }
-        } else {
           await mb.drain(timeoutMs);
         }
       }
+    } catch (error) {
+      for (const id of affectedIds) this.mailboxes.get(id)?.resumeAdmission();
+      throw error;
     }
 
     // 4. Release resources and deactivate without creating overlapping owners
@@ -1037,19 +1050,26 @@ export class ActorRuntime implements InvocationTarget {
       try {
         const persisted = await (this._storage as any).listPersistedActors();
         for (const p of persisted) {
-          if (options.namespace && p.namespace !== options.namespace) continue;
-          // Extract actorKey from filename prefix if possible
-          const fileName = p.filePath.split('/').pop() ?? '';
-          const keyPrefix = fileName.replace(/_[0-9a-f]{16}\.db$/, '');
-          const actorId = `${p.namespace}:${p.actorName}:${keyPrefix}`;
+          // Old databases have no identity metadata; label their filename-derived key as inferred.
+          const inferredKey = basename(p.filePath).replace(/_[0-9a-f]{16}\.db$/, '');
+          const actorId = p.actorId ?? `${p.namespace}:${p.actorName}:${inferredKey}`;
+          const identity = parseActorIdentity(actorId);
+          if (options.namespace && identity.namespace !== options.namespace) continue;
+          if (
+            list.some(
+              (entry) => entry.storagePath && resolve(entry.storagePath) === resolve(p.filePath),
+            )
+          )
+            continue;
 
           if (!seenIds.has(actorId)) {
             seenIds.add(actorId);
             list.push({
               actorId,
-              namespace: p.namespace,
-              actorType: p.actorName,
-              actorKey: keyPrefix,
+              namespace: identity.namespace,
+              actorType: identity.actorName,
+              actorKey: identity.actorKey,
+              identityInferred: p.actorId === undefined,
               status: 'inactive',
               runningCalls: 0,
               pendingCalls: 0,

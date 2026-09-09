@@ -435,6 +435,12 @@ export class SqliteActorStorage implements ActorStorage {
             "created_at" INTEGER NOT NULL
           );
         `);
+        db.run(
+          'CREATE TABLE IF NOT EXISTS "_actor_identity" ("id" INTEGER PRIMARY KEY CHECK (id = 1), "actor_id" TEXT NOT NULL);',
+        );
+        db.query('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);').run(
+          actorId,
+        );
         break;
       } catch (err: any) {
         initAttempts++;
@@ -925,13 +931,18 @@ export class SqliteActorStorage implements ActorStorage {
    * Helper to discover actor database files persisted on disk.
    */
   async listPersistedActors(): Promise<
-    Array<{ namespace: string; actorName: string; filePath: string }>
+    Array<{ namespace: string; actorName: string; filePath: string; actorId?: string }>
   > {
     if (this.inMemory) return [];
     const resolvedBase = path.resolve(this.baseDir);
     if (!fs.existsSync(resolvedBase)) return [];
 
-    const results: Array<{ namespace: string; actorName: string; filePath: string }> = [];
+    const results: Array<{
+      namespace: string;
+      actorName: string;
+      filePath: string;
+      actorId?: string;
+    }> = [];
     try {
       const namespaces = fs.readdirSync(resolvedBase, { withFileTypes: true });
       for (const nsEntry of namespaces) {
@@ -944,10 +955,25 @@ export class SqliteActorStorage implements ActorStorage {
           const files = fs.readdirSync(actPath, { withFileTypes: true });
           for (const file of files) {
             if (file.isFile() && file.name.endsWith('.db')) {
+              const filePath = path.join(actPath, file.name);
+              let actorId: string | undefined;
+              let database: Database | undefined;
+              try {
+                database = new Database(filePath, { readonly: true });
+                const row = database
+                  .query('SELECT actor_id FROM "_actor_identity" WHERE id = 1;')
+                  .get() as { actor_id: string } | null;
+                actorId = row?.actor_id;
+              } catch {
+                // Legacy databases may not yet have identity metadata.
+              } finally {
+                database?.close();
+              }
               results.push({
+                actorId,
                 namespace: nsEntry.name,
                 actorName: actEntry.name,
-                filePath: path.join(actPath, file.name),
+                filePath,
               });
             }
           }

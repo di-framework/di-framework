@@ -308,3 +308,7 @@ In distributed systems, a successful commit can precede a lost response (network
 | **Storage Failure Model** | Uncommitted transactions automatically roll back on error, crash, or fencing violation. Surviving nodes recover state directly from authoritative SQLite files upon failover. |
 
 Bun contract-test helpers are available from `@di-framework/actors/testing`. Import production runtime APIs from `@di-framework/actors`; that entry point does not load the test runner.
+
+SQLite actor inspection records original identities separately from sanitized filenames. Legacy files without identity metadata expose a filename-derived display key with `identityInferred: true`; accessing the actor by its original identity upgrades that metadata.
+
+A reload timeout aborts reload and restores admission without closing an active transaction. With the `fail` policy, queued calls already rejected remain rejected; the running call can still finish. Retry reload after it completes.

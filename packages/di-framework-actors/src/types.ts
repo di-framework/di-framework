@@ -244,6 +244,8 @@ export interface ActorResetResult {
 }
 
 export interface ActorInspectionInfo {
+  /** True for legacy files whose original actor identity is unavailable. */
+  identityInferred?: boolean;
   actorId: string;
   namespace?: string;
   actorType: string;
