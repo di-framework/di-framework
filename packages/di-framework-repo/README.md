@@ -294,3 +294,53 @@ const signedUrl = await mediaRepo.getSignedUrl('uploads/doc.pdf', {
 const results = await mediaRepo.list({ prefix: 'uploads/', delimiter: '/' });
 ```
 
+
+## Database Migrations
+
+`@di-framework/repo` provides database schema migrations supporting both decorator-based definitions and SQL/manifest-based discovery:
+
+- **`@Migration({ version, description, binding })`**: Class decorator defining migrations with dependency-injected execution context.
+- **Manifest and SQL Discovery**: Discovers `.sql` migration files with standard version headers (`-- migration:version`, `-- migration:description`, etc.) or manifest files (`migrations.json`).
+- **Shared Runner (`MigrationRunner`)**:
+  - **DB-backed locking**: Serializes concurrent migration attempts using a lock table (`_migrations_lock`).
+  - **History tracking**: Records applied versions, checksums, timestamps, and execution times in `_migrations`.
+  - **Version ordering**: Applies pending migrations sequentially in ascending version order.
+  - **Integrity validation**: Validates applied migration checksums against current definitions and rejects out-of-order pending migrations.
+  - **Dev auto-apply**: Automatically applies pending migrations in development/test environments.
+
+### Example: Decorator Migration
+
+```ts
+import { Migration, type MigrationExecutionContext } from '@di-framework/repo';
+
+@Migration({
+  version: 1,
+  description: 'create users table',
+  binding: 'default',
+})
+export class CreateUsersTable {
+  async up(ctx: MigrationExecutionContext): Promise<void> {
+    await ctx.sql('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
+  }
+
+  async down(ctx: MigrationExecutionContext): Promise<void> {
+    await ctx.sql('DROP TABLE users');
+  }
+}
+```
+
+### CLI Commands
+
+```bash
+# Check status of applied and pending migrations
+di-framework migrations status --db ./dev.db --dir ./migrations
+
+# Execute pending migrations
+di-framework migrations execute --db ./dev.db --dir ./migrations
+
+# Dry run / preview plan
+di-framework migrations execute --db ./dev.db --dir ./migrations --dry-run
+
+# Output stable JSON envelope
+di-framework migrations status --db ./dev.db --json
+```

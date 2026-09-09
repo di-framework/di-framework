@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
+import { discoverActors } from './actors.js';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import type { WasmcloudDeps } from './deps.js';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
@@ -23,13 +24,38 @@ export function generatedManifestPath(project: WasmcloudProject): string {
   return join(project.projectRoot, '.di-framework', 'deploy', 'workload.yaml');
 }
 
+export interface WorkloadManifestOptions {
+  hasActors?: boolean;
+  replicas?: number;
+  storageVolume?: {
+    claimName?: string;
+    mountPath?: string;
+    storageSize?: string;
+  };
+}
+
 export function renderWorkloadManifest(
   project: WasmcloudProject,
   connection: ClusterConnection,
   image: string,
   requirements: readonly WitRequirement[] = defaultProjectRequirements(),
   bindings: readonly BindingRecord[] = [],
+  options?: WorkloadManifestOptions | boolean,
 ): string {
+  const opts: WorkloadManifestOptions = typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
+  const hasActors = opts.hasActors ?? false;
+
+  if (hasActors) {
+    if (opts.replicas !== undefined && opts.replicas !== 1) {
+      throw new CommandFailure(
+        'WASMCLOUD_ACTORS_REPLICA_CONSTRAINT',
+        'Actor deployments with SQLite persistent storage require replicas: 1 to prevent competing database owners on a single host',
+        2,
+        { replicas: opts.replicas },
+      );
+    }
+  }
+
   const name = deploymentResourceName(project);
   const labels = [
     `    app.kubernetes.io/managed-by: ${MANAGED_BY_LABEL}`,
@@ -37,7 +63,53 @@ export function renderWorkloadManifest(
     `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
   ].join('\n');
 
-  return `apiVersion: v1
+  const claimName = opts.storageVolume?.claimName ?? `${name}-storage`;
+  const mountPath = opts.storageVolume?.mountPath ?? '/data/actors';
+  const storageSize = opts.storageVolume?.storageSize ?? '1Gi';
+
+  const pvcSection = hasActors
+    ? `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${claimName}
+  namespace: ${connection.namespace}
+  labels:
+${labels}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: ${storageSize}
+---
+`
+    : '';
+
+  const actorVolumes = hasActors
+    ? `        volumeMounts:
+          - name: actor-storage
+            mountPath: ${mountPath}
+        volumes:
+          - name: actor-storage
+            persistentVolumeClaim:
+              claimName: ${claimName}
+`
+    : '';
+
+  const actorEnv = hasActors
+    ? `          env:
+            - name: ACTOR_STORAGE_DIR
+              value: ${yamlQuote(mountPath)}
+`
+    : '';
+
+  const strategy = hasActors
+    ? `        strategy:
+          type: Recreate
+`
+    : '';
+
+  return `${pvcSection}apiVersion: v1
 kind: Service
 metadata:
   name: ${name}
@@ -63,15 +135,15 @@ spec:
   replicas: 1
   template:
     spec:
-      hostSelector:
+${strategy}      hostSelector:
         hostgroup: default
       kubernetes:
         service:
           name: ${name}
-      components:
+${actorVolumes}      components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${
+${actorEnv}${
   project.allowedIpNameLookups === undefined
     ? ''
     : `          localResources:
@@ -101,8 +173,9 @@ export async function applyWorkload(
   deps: WasmcloudDeps,
 ): Promise<string> {
   const bindings = discoverBindings(project, deps);
+  const hasActors = discoverActors(project).length > 0 || (project as any).actors === true;
   const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
-  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings);
+  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings, { hasActors });
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);

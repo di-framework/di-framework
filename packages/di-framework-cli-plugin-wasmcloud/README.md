@@ -292,3 +292,25 @@ DI_FRAMEWORK_WASMCLOUD_LIVE=1 bun test packages/di-framework-cli-plugin-wasmclou
 
 It requires Docker, Pulumi, kubectl, ORAS, npm, Bun, and curl. The test selects unused loopback
 ports and removes its scoped platform resources in a `finally` cleanup.
+
+## Actor Integration with wasmCloud
+
+The wasmCloud plugin natively integrates virtual actors from `@di-framework/actors` into WebAssembly components and Kubernetes deployments.
+
+### 1. Build-Time Actor Scanning & Dispatch Generation
+- **Static Discovery**: During `di-framework wasmcloud build`, source files are scanned for `@Actor` and `@ActorMethod` decorators using TypeScript AST analysis.
+- **Dispatch Module Generation**: The build generates `.di-framework/actors.js` which explicitly imports actor classes, registers them with `ActorRuntime`, sets up `SqliteActorStorage`, and exports `dispatchActorInvocation`. This prevents registered actors and their methods from being eliminated by Rolldown tree-shaking.
+- **Private Invocations**: Invocations are delivered privately via `/_actors/invoke` or private service bindings without exposing public HTTP routes.
+
+### 2. Runtime Execution Model
+- **Activation & Scheduling**: Actor activations live in-memory within the host component instance. Per-actor mailbox queues asynchronously serialize calls to the same actor identity (`namespace:actorName:actorKey`) while allowing distinct actors to execute concurrently.
+- **Host Storage Capabilities**: Persistent storage is bound via host capabilities (filesystem volume mount at `/data/actors`, configured via `ACTOR_STORAGE_DIR`). Each actor has an isolated SQLite database file with single-writer process file locking.
+- **Transactions & Migrations**: Method invocations execute within actor-scoped transactions that commit on success and roll back on errors. Schema migrations run automatically before an actor's first activation; migration failures reject activation before calls can proceed.
+
+### 3. Deployment & Operating Safety Constraints
+- **Single-Host Constraint**: To ensure data consistency and prevent database split-brain with SQLite file locking, actor workloads enforce `replicas: 1`. Accidental configurations with `replicas > 1` are rejected with `WASMCLOUD_ACTORS_REPLICA_CONSTRAINT`.
+- **Persistent Volumes**: Generated manifests provision a Kubernetes `PersistentVolumeClaim` mounted at `/data/actors`.
+- **Upgrade & Drain Behavior**: The workload uses Kubernetes rollout `strategy: { type: "Recreate" }`, guaranteeing that the terminating pod drains active calls and releases SQLite locks before the new version activates and executes pending migrations.
+- **Single-Host vs. Distributed**: Single-host wasmCloud actor deployment is designed for standalone, resilient edge or single-node deployments. Distributed actor clustering, key partitioning, and remote consensus across wasmCloud nodes are part of distributed actor capabilities.
+
+Actor HTTP dispatch is restricted to the reserved `/_actors/` path. Actor headers on other paths do not intercept application requests. Error responses expose stable error names and generic messages; they omit internal exception details and migration objects.
