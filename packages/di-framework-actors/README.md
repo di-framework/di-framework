@@ -122,6 +122,82 @@ await runtime.clear();
 await storage.close();
 ```
 
+
+## Local Development Tooling & Inspection
+
+Virtual actors integrate directly into the `di-framework` CLI and local development runtime:
+
+```bash
+# List known actors, active activations, and pending/running mailbox calls
+di-framework actor list [--namespace <name>] [--dir <path>] [--active] [--json]
+
+# Inspect a specific actor identity without dumping private state
+di-framework actor inspect <actorType|identity> [--key <key>] [--namespace <name>]
+
+# Inspect actor including private committed state
+di-framework actor inspect <actorType|identity> --show-state
+
+# Reset persistent actor state scoped to an actor or namespace
+di-framework actor reset --actor <name> [--key <key>] [--namespace <name>]
+di-framework actor reset --all
+```
+
+### Hot Reload Behavior
+
+During local development, application runtimes can be reloaded without losing persistent state:
+
+```ts
+await runtime.reload({
+  policy: "drain", // or "fail" to explicitly reject unstarted pending tasks
+  timeoutMs: 5000,
+  actors: [UpdatedActorClass],
+});
+```
+
+1. **Stops Admission**: New invocations to replaced activations are paused or closed.
+2. **Drains or Fails Work**: Under `policy: "drain"` (default), pending invocations complete; under `policy: "fail"`, unstarted queued tasks are rejected with `ActorReloadError`.
+3. **Releases Resources & Locks**: Calls `onDeactivate()` and releases SQLite connections and file locks, preventing overlapping owners.
+4. **Applies Pending Migrations**: Clears migration cache so newly added migrations are safely applied before new calls resume.
+5. **Preserves Committed State**: SQLite database files are strictly preserved across reloads.
+
+### Scoped Reset vs Startup/Reload
+
+- **Startup and reload never delete persistent state**.
+- Persistent database state is only removed through explicit, scoped developer commands:
+  - `runtime.reset({ actorName: "MyActor", actorKey: "key-1" })`
+  - `runtime.reset({ namespace: "tenant-a" })`
+  - `di-framework actor reset --actor MyActor --key key-1`
+  - `di-framework actor clean --all`
+
+### Multi-Application Workspaces & Namespace Isolation
+
+Actors can be partitioned across applications and namespaces:
+
+```ts
+const runtimeA = new ActorRuntime({ storage, namespace: "app-a" });
+const runtimeB = new ActorRuntime({ storage, namespace: "app-b" });
+
+runtimeA.register(CounterActor);
+runtimeB.register(CounterActor);
+```
+
+If duplicate actor names are registered within the same runtime, lookups by typed class reference or qualified name (`app-a:CounterActor`) resolve unambiguously, while ambiguous short name lookups throw `ActorAmbiguityError`.
+
+### Discovery & Code Generation
+
+Decorated actor classes can be discovered across source trees:
+
+```ts
+import { discoverActorClasses, generateActorRegistration } from "@di-framework/actors";
+
+const actors = await discoverActorClasses({ rootDir: "src" });
+const registrationCode = generateActorRegistration(actors);
+```
+
 ## License
 
 MIT OR Apache-2.0
+
+SQLite actor inspection records original identities separately from sanitized filenames. Legacy files without identity metadata expose a filename-derived display key with `identityInferred: true`; accessing the actor by its original identity upgrades that metadata.
+
+A reload timeout aborts reload and restores admission without closing an active transaction. With the `fail` policy, queued calls already rejected remain rejected; the running call can still finish. Retry reload after it completes.

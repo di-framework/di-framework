@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
-function trimUnderscores(value: string): string {
+export function trimUnderscores(value: string): string {
   let start = 0;
   let end = value.length;
   while (start < end && value[start] === '_') start++;

@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
-import { runAgentAudit } from './cmd/agent/audit';
+import { runActorClean } from "./cmd/actor/clean";
+import { runActorInspect } from "./cmd/actor/inspect";
+import { runActorList } from "./cmd/actor/list";
+import { runActorReset } from "./cmd/actor/reset";
+import { runAgentAudit } from "./cmd/agent/audit";
 import { runAgentInit } from './cmd/agent/init';
 import { runAgentInspect } from './cmd/agent/inspect';
 import { runAgentMigrate } from './cmd/agent/migrate';
@@ -44,6 +48,10 @@ export type CliHandlers = {
   agentInit(args: string[]): Promise<CommandResult>;
   agentInspect(args: string[]): Promise<CommandResult>;
   agentMigrate(args: string[]): Promise<CommandResult>;
+  actorList(args: string[]): Promise<CommandResult>;
+  actorInspect(args: string[]): Promise<CommandResult>;
+  actorReset(args: string[]): Promise<CommandResult>;
+  actorClean(args: string[]): Promise<CommandResult>;
   migrationsStatus(args: string[]): Promise<CommandResult>;
   migrationsExecute(args: string[]): Promise<CommandResult>;
   httpOpenAPIGenerate(args: string[]): Promise<CommandResult>;
@@ -71,6 +79,10 @@ const DEFAULT_HANDLERS: CliHandlers = {
   agentInit: runAgentInit,
   agentInspect: runAgentInspect,
   agentMigrate: runAgentMigrate,
+  actorList: runActorList,
+  actorInspect: runActorInspect,
+  actorReset: runActorReset,
+  actorClean: runActorClean,
   migrationsStatus: runMigrationsStatus,
   migrationsExecute: runMigrationsExecute,
   httpOpenAPIGenerate: runHttpOpenAPIGenerate,
@@ -276,6 +288,56 @@ export function createCommandTree(handlers: CliHandlers = DEFAULT_HANDLERS): Com
               '--source-mode <merge|replace>  Merge with or replace neutral defaults',
             ],
             run: ({ args }) => handlers.skillsValidate(args),
+          },
+        },
+      },
+      actor: {
+        description: "Manage and inspect local virtual actors",
+        children: {
+          list: {
+            description: "List known actor types and active instances",
+            usage: "di-framework actor list [options]",
+            options: [
+              "--namespace <name>  Application namespace",
+              "--dir <path>  Actor storage directory (default: .actors)",
+              "--active  Only list currently active actors",
+            ],
+            run: ({ args }) => handlers.actorList(args),
+          },
+          inspect: {
+            description: "Inspect an actor identity, activation status, and mailbox calls",
+            usage: "di-framework actor inspect <actorType|identity> [options]",
+            options: [
+              "--key <key>  Actor key",
+              "--namespace <name>  Application namespace",
+              "--dir <path>  Actor storage directory (default: .actors)",
+              "--show-state  Include private committed state in output",
+            ],
+            run: ({ args }) => handlers.actorInspect(args),
+          },
+          reset: {
+            description: "Reset persisted actor state and deactivate instances for development",
+            usage: "di-framework actor reset [options]",
+            options: [
+              "--actor <name>  Reset only this actor type",
+              "--key <key>  Reset only this actor key (requires --actor)",
+              "--namespace <name>  Reset only this namespace",
+              "--dir <path>  Actor storage directory (default: .actors)",
+              "--all  Reset all actors across all namespaces",
+            ],
+            run: ({ args }) => handlers.actorReset(args),
+          },
+          clean: {
+            description: "Clean persisted actor state (alias for reset)",
+            usage: "di-framework actor clean [options]",
+            options: [
+              "--actor <name>  Clean only this actor type",
+              "--key <key>  Clean only this actor key (requires --actor)",
+              "--namespace <name>  Clean only this namespace",
+              "--dir <path>  Actor storage directory (default: .actors)",
+              "--all  Clean all actors across all namespaces",
+            ],
+            run: ({ args }) => handlers.actorClean(args),
           },
         },
       },

@@ -8,4 +8,5 @@ export * from './decorators/index.js';
 export * from './migrations/index.js';
 export * from './runtime/index.js';
 export * from './storage/index.js';
+export * from './dev/index.js';
 export * from './types.js';

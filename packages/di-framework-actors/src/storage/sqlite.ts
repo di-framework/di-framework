@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { acquireActorLock } from './lock.js';
-import { actorIdentityToPath } from './path.js';
+import { actorIdentityToPath, trimUnderscores } from './path.js';
 import type { ActorStorage, ActorStorageTransaction } from './types.js';
 
 function cloneValue<T>(value: T): T {
@@ -362,6 +362,12 @@ export class SqliteActorStorage implements ActorStorage {
           "updated_at" INTEGER NOT NULL
         );
       `);
+      db.run(
+        'CREATE TABLE IF NOT EXISTS "_actor_identity" ("id" INTEGER PRIMARY KEY CHECK (id = 1), "actor_id" TEXT NOT NULL);',
+      );
+      db.query('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);').run(
+        actorId,
+      );
     } catch (err) {
       if (releaseLock) {
         await releaseLock();
@@ -535,6 +541,175 @@ export class SqliteActorStorage implements ActorStorage {
    * Closes all active connections, releases all locks, and clears background timers.
    * If this storage adapter was created with temp: true, removes the temporary directory.
    */
+
+  /**
+   * Scoped reset / clean of persisted SQLite database files.
+   * Closes active connections matching scope and removes files from disk.
+   */
+  async resetStorage(scope: {
+    namespace?: string;
+    actorName?: string;
+    actorKey?: string;
+    all?: boolean;
+  }): Promise<string[]> {
+    const deletedFiles: string[] = [];
+    const { namespace, actorName, actorKey, all } = scope;
+
+    if (!all && !namespace && !actorName) {
+      throw new Error('resetStorage requires explicit scope: namespace, actorName, or all: true.');
+    }
+
+    // 1. Close active connections matching the scope
+    for (const actorId of new Set([...this.connections.keys(), ...this.inMemoryKeepAlive.keys()])) {
+      const conn = this.connections.get(actorId);
+      const parts = actorId.split(':');
+      const connNs = parts.length >= 3 ? parts[0] : undefined;
+      const connType = parts.length >= 3 ? parts[1] : parts[0];
+      const connKey = parts.length >= 3 ? parts.slice(2).join(':') : parts.slice(1).join(':');
+
+      let match = false;
+      if (all) match = true;
+      else if (namespace && !actorName && connNs === namespace) match = true;
+      else if (actorName && !namespace && connType === actorName) {
+        if (!actorKey || connKey === actorKey) match = true;
+      } else if (namespace && actorName && connNs === namespace && connType === actorName) {
+        if (!actorKey || connKey === actorKey) match = true;
+      }
+
+      if (match) {
+        if (conn) await this.closeConnection(conn);
+        this.connections.delete(actorId);
+        if (this.inMemoryKeepAlive.has(actorId)) {
+          try {
+            this.inMemoryKeepAlive.get(actorId)?.close();
+          } catch {}
+          this.inMemoryKeepAlive.delete(actorId);
+        }
+      }
+    }
+
+    // 2. In-memory mode does not have disk files to delete
+    if (this.inMemory) {
+      return deletedFiles;
+    }
+
+    const resolvedBase = path.resolve(this.baseDir);
+    if (!fs.existsSync(resolvedBase)) {
+      return deletedFiles;
+    }
+
+    if (all) {
+      const entries = fs.readdirSync(resolvedBase);
+      for (const entry of entries) {
+        const full = path.join(resolvedBase, entry);
+        deletedFiles.push(full);
+        fs.rmSync(full, { recursive: true, force: true });
+      }
+      return deletedFiles;
+    }
+
+    if (namespace && !actorName) {
+      const safeNs = trimUnderscores(namespace.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'default';
+      const targetDir = path.join(resolvedBase, safeNs);
+      if (fs.existsSync(targetDir)) {
+        deletedFiles.push(targetDir);
+        fs.rmSync(targetDir, { recursive: true, force: true });
+      }
+      return deletedFiles;
+    }
+
+    if (actorName && !actorKey) {
+      const safeName = trimUnderscores(actorName.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'actor';
+      // Find matching directories across namespaces
+      const namespaces = namespace ? [namespace] : fs.readdirSync(resolvedBase);
+      for (const ns of namespaces) {
+        const safeNs =
+          trimUnderscores((ns || 'default').replace(/[^a-zA-Z0-9_-]/g, '_')) || 'default';
+        const targetDir = path.join(resolvedBase, safeNs, safeName);
+        if (fs.existsSync(targetDir)) {
+          deletedFiles.push(targetDir);
+          fs.rmSync(targetDir, { recursive: true, force: true });
+        }
+      }
+      return deletedFiles;
+    }
+
+    if (actorName && actorKey) {
+      const dbPath = actorIdentityToPath(
+        { namespace, actorName, actorKey },
+        { baseDir: this.baseDir },
+      );
+      for (const ext of ['', '-wal', '-shm', '.lock']) {
+        const target = dbPath + ext;
+        if (fs.existsSync(target)) {
+          deletedFiles.push(target);
+          try {
+            fs.unlinkSync(target);
+          } catch {}
+        }
+      }
+      return deletedFiles;
+    }
+
+    return deletedFiles;
+  }
+
+  /**
+   * Helper to discover actor database files persisted on disk.
+   */
+  async listPersistedActors(): Promise<
+    Array<{ namespace: string; actorName: string; filePath: string; actorId?: string }>
+  > {
+    if (this.inMemory) return [];
+    const resolvedBase = path.resolve(this.baseDir);
+    if (!fs.existsSync(resolvedBase)) return [];
+
+    const results: Array<{
+      namespace: string;
+      actorName: string;
+      filePath: string;
+      actorId?: string;
+    }> = [];
+    try {
+      const namespaces = fs.readdirSync(resolvedBase, { withFileTypes: true });
+      for (const nsEntry of namespaces) {
+        if (!nsEntry.isDirectory()) continue;
+        const nsPath = path.join(resolvedBase, nsEntry.name);
+        const actors = fs.readdirSync(nsPath, { withFileTypes: true });
+        for (const actEntry of actors) {
+          if (!actEntry.isDirectory()) continue;
+          const actPath = path.join(nsPath, actEntry.name);
+          const files = fs.readdirSync(actPath, { withFileTypes: true });
+          for (const file of files) {
+            if (file.isFile() && file.name.endsWith('.db')) {
+              const filePath = path.join(actPath, file.name);
+              let actorId: string | undefined;
+              let database: Database | undefined;
+              try {
+                database = new Database(filePath, { readonly: true });
+                const row = database
+                  .query('SELECT actor_id FROM "_actor_identity" WHERE id = 1;')
+                  .get() as { actor_id: string } | null;
+                actorId = row?.actor_id;
+              } catch {
+                // Legacy databases may not yet have identity metadata.
+              } finally {
+                database?.close();
+              }
+              results.push({
+                actorId,
+                namespace: nsEntry.name,
+                actorName: actEntry.name,
+                filePath,
+              });
+            }
+          }
+        }
+      }
+    } catch {}
+    return results;
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
