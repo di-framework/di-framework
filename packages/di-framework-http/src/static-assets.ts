@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 import {
   closeSync,
+  constants,
+  createReadStream,
   existsSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
-  readSync,
   realpathSync,
+  type Stats,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -194,50 +197,32 @@ export function clearRegisteredStaticAssets(): void {
 }
 
 export function createFileStream(
-  filePath: string,
+  filePath: string | number,
   chunkSize = 64 * 1024,
 ): ReadableStream<Uint8Array> {
-  // Bun file streaming
-  if (typeof Bun !== 'undefined' && typeof Bun.file === 'function') {
-    return Bun.file(filePath).stream();
-  }
+  const fd = typeof filePath === 'number' ? filePath : openSync(filePath, 'r');
+  return Readable.toWeb(
+    createReadStream('', { fd, autoClose: true, highWaterMark: chunkSize }),
+  ) as unknown as ReadableStream<Uint8Array>;
+}
 
-  // Node Readable.toWeb
-  if (
-    typeof Readable !== 'undefined' &&
-    typeof (Readable as unknown as { toWeb?: unknown }).toWeb === 'function'
-  ) {
-    const { createReadStream } = require('node:fs');
-    return (
-      Readable as unknown as {
-        toWeb: (stream: unknown) => ReadableStream<Uint8Array>;
-      }
-    ).toWeb(createReadStream(filePath, { highWaterMark: chunkSize }));
+function openAssetFile(root: string, filePath: string): { fd: number; stat: Stats } {
+  const canonical = realpathSync(filePath);
+  if (!canonical.startsWith(root + sep)) throw new Error('Asset escapes its root directory');
+  const fd = openSync(canonical, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = fstatSync(fd);
+    const checkedPath = realpathSync(filePath);
+    if (!checkedPath.startsWith(root + sep)) throw new Error('Asset escapes its root directory');
+    const checkedStat = statSync(checkedPath);
+    if (!stat.isFile() || stat.ino !== checkedStat.ino || stat.dev !== checkedStat.dev) {
+      throw new Error('Asset changed while opening or is not a regular file');
+    }
+    return { fd, stat };
+  } catch (error) {
+    closeSync(fd);
+    throw error;
   }
-
-  // Generic chunked stream fallback
-  const fd = openSync(filePath, 'r');
-  let position = 0;
-  return new ReadableStream<Uint8Array>({
-    pull(controller) {
-      const buffer = Buffer.alloc(chunkSize);
-      const bytesRead = readSync(fd, buffer, 0, chunkSize, position);
-      if (bytesRead === 0) {
-        closeSync(fd);
-        controller.close();
-        return;
-      }
-      position += bytesRead;
-      controller.enqueue(buffer.subarray(0, bytesRead));
-    },
-    cancel() {
-      try {
-        closeSync(fd);
-      } catch {
-        // ignore
-      }
-    },
-  });
 }
 
 export function createBufferStream(
@@ -287,13 +272,17 @@ export function generateAssetManifest(directory: string): StaticAssetManifest {
           if (!realEntryPath.startsWith(realRootDir + sep) && realEntryPath !== realRootDir) {
             continue;
           }
-          const stat = statSync(realEntryPath);
-          if (!stat.isFile()) continue;
+          const { fd, stat } = openAssetFile(realRootDir, fullPath);
 
           const relPath = posix.normalize(
             '/' + relative(realRootDir, fullPath).split(sep).join('/'),
           );
-          const buffer = readFileSync(realEntryPath);
+          let buffer: Buffer;
+          try {
+            buffer = readFileSync(fd);
+          } finally {
+            closeSync(fd);
+          }
           const hash = computeContentHash(buffer);
           const etag = computeETag(hash);
           const contentType = getMimeType(fullPath);
@@ -334,7 +323,13 @@ export function packageStaticAssets(options: PackageStaticAssetsOptions): Static
 
   for (const [relPath, entry] of Object.entries(manifest.assets)) {
     const filePath = join(realRootDir, relPath.replace(/^\//, '').split('/').join(sep));
-    const buffer = readFileSync(filePath);
+    const { fd } = openAssetFile(realRootDir, filePath);
+    let buffer: Buffer;
+    try {
+      buffer = readFileSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     const isText = isTextMimeType(entry.contentType);
 
     const content = isText ? buffer.toString('utf-8') : buffer.toString('base64');
@@ -470,24 +465,7 @@ export function createStaticAssetHandler(
       return new Response('Not Found', { status: 404 });
     }
 
-    // Security check: traversal in normalized path
-    if (normalizedPath.includes('..')) {
-      if (fallthrough) return undefined;
-      return new Response('Forbidden', { status: 403 });
-    }
-
-    // Security check: hidden files and segments starting with '.'
     const segments = normalizedPath.split('/').filter(Boolean);
-    for (const segment of segments) {
-      if (segment === '..') {
-        if (fallthrough) return undefined;
-        return new Response('Forbidden', { status: 403 });
-      }
-      if (segment.startsWith('.')) {
-        if (fallthrough) return undefined;
-        return new Response('Not Found', { status: 404 });
-      }
-    }
 
     // Resolve pre-packaged assets if available
     let assetPackage: StaticAssetPackage | undefined = options.package;
@@ -514,7 +492,10 @@ export function createStaticAssetHandler(
     }
 
     const dirExists = existsSync(options.directory);
-    const useLive = options.live !== undefined ? options.live : dirExists;
+    const hasPackagedContents =
+      assetPackage &&
+      Object.values(assetPackage.assets ?? {}).some((entry) => entry.content !== undefined);
+    const useLive = options.live ?? (dirExists && !hasPackagedContents);
 
     // Local dev: read live from disk
     if (useLive && dirExists) {
@@ -527,12 +508,6 @@ export function createStaticAssetHandler(
       }
 
       const targetPath = resolve(realRootDir, ...segments);
-
-      // Verify path stays within rootDir
-      if (!targetPath.startsWith(realRootDir + sep) && targetPath !== realRootDir) {
-        if (fallthrough) return undefined;
-        return new Response('Forbidden', { status: 403 });
-      }
 
       if (!existsSync(targetPath)) {
         if (fallthrough) return undefined;
@@ -553,26 +528,17 @@ export function createStaticAssetHandler(
         return new Response('Forbidden', { status: 403 });
       }
 
-      let stat: ReturnType<typeof statSync>;
+      let opened: ReturnType<typeof openAssetFile>;
       try {
-        stat = statSync(realTargetPath);
+        opened = openAssetFile(realRootDir, targetPath);
       } catch {
         if (fallthrough) return undefined;
         return new Response('Not Found', { status: 404 });
       }
-
-      if (stat.isDirectory() || !stat.isFile()) {
-        if (fallthrough) return undefined;
-        return new Response('Not Found', { status: 404 });
-      }
-
+      const { fd, stat } = opened;
       const contentType = getMimeType(realTargetPath);
       const size = stat.size;
-
-      // Compute content hash & ETag live
-      const contentBuffer = readFileSync(realTargetPath);
-      const hash = computeContentHash(contentBuffer);
-      const etag = computeETag(hash);
+      const etag = `W/"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}-${stat.ctimeMs.toString(16)}"`;
 
       // ETag conditional check
       const ifNoneMatch = request.headers.get('if-none-match');
@@ -582,6 +548,7 @@ export function createStaticAssetHandler(
         if (options.cacheControl) {
           headers.set('Cache-Control', options.cacheControl);
         }
+        closeSync(fd);
         return new Response(null, {
           status: 304,
           headers,
@@ -597,10 +564,11 @@ export function createStaticAssetHandler(
       }
 
       if (method === 'HEAD') {
+        closeSync(fd);
         return new Response(null, { status: 200, headers });
       }
 
-      const stream = createFileStream(realTargetPath);
+      const stream = createFileStream(fd);
       return new Response(stream, { status: 200, headers });
     }
 
@@ -612,7 +580,7 @@ export function createStaticAssetHandler(
         : `/${normalizedPath}`;
       const entry = assetPackage.assets[posixKey] ?? assetPackage.assets[altKey];
 
-      if (!entry) {
+      if (!entry || entry.content === undefined) {
         if (fallthrough) return undefined;
         return new Response('Not Found', { status: 404 });
       }
@@ -648,15 +616,10 @@ export function createStaticAssetHandler(
         return new Response(null, { status: 200, headers });
       }
 
-      let data: Uint8Array;
-      if (entry.content !== undefined) {
-        data =
-          entry.encoding === 'base64'
-            ? Buffer.from(entry.content, 'base64')
-            : Buffer.from(entry.content, 'utf-8');
-      } else {
-        data = new Uint8Array(0);
-      }
+      const data =
+        entry.encoding === 'base64'
+          ? Buffer.from(entry.content, 'base64')
+          : Buffer.from(entry.content, 'utf-8');
 
       const stream = createBufferStream(data);
       return new Response(stream, { status: 200, headers });

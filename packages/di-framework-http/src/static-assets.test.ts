@@ -1,15 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
+import * as fs from 'node:fs';
 import {
-  chmodSync,
-  existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   clearRegisteredStaticAssets,
   createStaticAssetHandler,
@@ -21,11 +22,11 @@ import {
   registerStaticAssets,
 } from '../index.ts';
 
-const TEST_DIR = resolve('/tmp/di-framework-static-test-' + Math.random().toString(36).slice(2));
+let TEST_DIR: string;
+let outsideDir: string;
 
 function setupTestFiles() {
-  rmSync(TEST_DIR, { recursive: true, force: true });
-  mkdirSync(TEST_DIR, { recursive: true });
+  TEST_DIR = mkdtempSync(join(tmpdir(), 'di-static-test-'));
 
   writeFileSync(join(TEST_DIR, 'index.html'), '<!doctype html><html>Hello</html>');
   writeFileSync(join(TEST_DIR, 'style.css'), 'body { color: red; }');
@@ -45,8 +46,7 @@ function setupTestFiles() {
   } catch {}
 
   // External symlink (escape attempt)
-  const outsideDir = resolve(TEST_DIR, '../outside-' + Math.random().toString(36).slice(2));
-  mkdirSync(outsideDir, { recursive: true });
+  outsideDir = mkdtempSync(join(tmpdir(), 'di-static-outside-'));
   writeFileSync(join(outsideDir, 'secret.txt'), 'sensitive outside data');
   try {
     symlinkSync(outsideDir, join(TEST_DIR, 'symlink-outside'));
@@ -61,6 +61,7 @@ describe('Static Assets Serving', () => {
 
   afterEach(() => {
     rmSync(TEST_DIR, { recursive: true, force: true });
+    rmSync(outsideDir, { recursive: true, force: true });
     clearRegisteredStaticAssets();
   });
 
@@ -208,7 +209,7 @@ describe('Static Assets Serving', () => {
     // 4. Conditional request with weak ETag -> 304
     const weakRes = await router.fetch(
       new Request('http://localhost/assets/style.css', {
-        headers: { 'If-None-Match': `W/${etag}` },
+        headers: { 'If-None-Match': etag!.startsWith('W/') ? etag! : `W/${etag}` },
       }),
     );
     expect(weakRes.status).toBe(304);
@@ -487,5 +488,167 @@ describe('Static Assets Serving', () => {
     const res = await router.fetch(new Request('http://localhost/mounted/style.css'));
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('body { color: red; }');
+  });
+  it('prefers packaged contents over a live directory unless live is explicitly enabled', async () => {
+    const pkg = packageStaticAssets({ directory: TEST_DIR });
+    unlinkSync(join(TEST_DIR, 'style.css'));
+    const handler = createStaticAssetHandler('/assets', {
+      directory: TEST_DIR,
+      package: pkg,
+      cacheControl: 'max-age=60',
+    });
+    const response = (await handler(new Request('http://localhost/assets/style.css')))!;
+    expect(await response.text()).toBe('body { color: red; }');
+    const conditional = (await handler(
+      new Request('http://localhost/assets/style.css', {
+        headers: { 'if-none-match': response.headers.get('etag')! },
+      }),
+    ))!;
+    expect(conditional.status).toBe(304);
+    expect(conditional.headers.get('cache-control')).toBe('max-age=60');
+    const live = createStaticAssetHandler('/assets', {
+      directory: TEST_DIR,
+      package: pkg,
+      live: true,
+    });
+    expect((await live(new Request('http://localhost/assets/style.css')))!.status).toBe(404);
+  });
+
+  it('writes package outputs and loads object, file and registered manifests', async () => {
+    const outputDir = join(outsideDir, 'build');
+    const pkg = packageStaticAssets({
+      directory: TEST_DIR,
+      outputDir,
+      outFile: join(outputDir, 'assets.js'),
+      prefix: '/generated',
+    });
+    expect(readFileSync(join(outputDir, 'assets.js'), 'utf8')).toContain(
+      'registerStaticAssets("/generated"',
+    );
+    expect(
+      JSON.parse(readFileSync(join(outputDir, 'manifest.json'), 'utf8')).assets['/style.css'],
+    ).toBeDefined();
+    for (const manifest of [pkg, join(outputDir, 'static-assets.json')]) {
+      const handler = createStaticAssetHandler('/assets/', { directory: TEST_DIR, manifest });
+      expect(await (await handler(new Request('http://localhost/assets/style.css')))!.text()).toBe(
+        'body { color: red; }',
+      );
+    }
+    writeFileSync(join(outputDir, 'broken.json'), '{');
+    const invalid = createStaticAssetHandler('/assets', {
+      directory: 'missing',
+      manifest: join(outputDir, 'broken.json'),
+    });
+    expect((await invalid(new Request('http://localhost/assets/x')))!.status).toBe(404);
+    registerStaticAssets('virtual-directory', pkg);
+    const registered = createStaticAssetHandler('/virtual', { directory: 'virtual-directory' });
+    expect((await registered(new Request('http://localhost/virtual/style.css')))!.status).toBe(200);
+    expect(() => generateAssetManifest(join(TEST_DIR, 'missing'))).toThrow('Directory not found');
+    symlinkSync(join(outsideDir, 'build/assets.js'), join(TEST_DIR, 'external.js'));
+    expect(generateAssetManifest(TEST_DIR).assets['/external.js']).toBeUndefined();
+  });
+
+  it('handles malformed paths and missing assets consistently with fallthrough', async () => {
+    for (const fallthrough of [false, true]) {
+      const handler = createStaticAssetHandler('/assets', { directory: TEST_DIR, fallthrough });
+      expect(await handler(new Request('http://localhost/unrelated'))).toBeUndefined();
+      for (const [suffix, status] of [
+        ['%', 400],
+        ['bad%00', 403],
+        ['%252e%252e%2ffile', 403],
+        ['..%2ffile', 403],
+        ['.hidden', 404],
+        ['', 404],
+        ['subdir', 404],
+      ] as const) {
+        const response = await handler(new Request('http://localhost/assets/' + suffix));
+        if (fallthrough) expect(response).toBeUndefined();
+        else expect(response!.status).toBe(status);
+      }
+      const pkg = packageStaticAssets({ directory: TEST_DIR });
+      const packaged = createStaticAssetHandler('/assets', {
+        directory: 'missing',
+        package: pkg,
+        fallthrough,
+      });
+      const missing = await packaged(new Request('http://localhost/assets/missing'));
+      expect(missing?.status).toBe(fallthrough ? undefined : 404);
+      const empty = createStaticAssetHandler('/assets', { directory: 'missing', fallthrough });
+      expect((await empty(new Request('http://localhost/assets/missing')))?.status).toBe(
+        fallthrough ? undefined : 404,
+      );
+    }
+    expect(getMimeType('unknown.xyz')).toBe('application/octet-stream');
+    expect(matchesIfNoneMatch('"other", W/"value"', '"value"')).toBe(true);
+  });
+
+  it('streams files under Node ESM without Bun globals or require', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const outFile = join(outsideDir, 'static-assets.mjs');
+    const result = await Bun.build({
+      entrypoints: [join(import.meta.dir, 'static-assets.ts')],
+      target: 'node',
+      format: 'esm',
+      outdir: outsideDir,
+      naming: 'static-assets.mjs',
+    });
+    expect(result.success).toBe(true);
+    const child = spawnSync(
+      'node',
+      [
+        '--input-type=module',
+        '-e',
+        `
+      const { createStaticAssetHandler, createFileStream } = await import(process.argv[1]);
+      const handler = createStaticAssetHandler('/assets', { directory: process.argv[2] });
+      const response = await handler(new Request('http://localhost/assets/style.css'));
+      if (response.status !== 200) throw new Error('Unexpected status');
+      console.log(await response.text());
+      const stream = createFileStream(process.argv[2] + '/style.css', 2);
+      console.log(await new Response(stream).text());
+    `,
+        outFile,
+        TEST_DIR,
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(child.stderr).toBe('');
+    expect(child.status).toBe(0);
+    expect(child.stdout).toContain('body { color: red; }');
+  });
+
+  it('returns a miss if the live root or target disappears during path resolution', async () => {
+    const realpath = fs.realpathSync;
+    for (const failAt of [TEST_DIR, join(realpath(TEST_DIR), 'style.css')]) {
+      for (const fallthrough of [true, false]) {
+        const spy = spyOn(fs, 'realpathSync').mockImplementation(((file: any, ...args: any[]) => {
+          if (file === failAt) throw new Error('path disappeared');
+          return (realpath as any)(file, ...args);
+        }) as any);
+        try {
+          const handler = createStaticAssetHandler('/assets', { directory: TEST_DIR, fallthrough });
+          expect((await handler(new Request('http://localhost/assets/style.css')))?.status).toBe(
+            fallthrough ? undefined : 404,
+          );
+        } finally {
+          spy.mockRestore();
+        }
+      }
+    }
+    const handler = createStaticAssetHandler('/assets', { directory: TEST_DIR });
+    expect((await handler(new Request('http://localhost/assets/%25')))!.status).toBe(404);
+    expect((await handler(new Request('http://localhost/assets/%2541')))!.status).toBe(404);
+    symlinkSync(TEST_DIR, join(TEST_DIR, 'self-link'));
+    const dirLink = join(TEST_DIR, 'outside-link');
+    symlinkSync(outsideDir, dirLink);
+    expect(generateAssetManifest(TEST_DIR).assets['/outside-link']).toBeUndefined();
+  });
+  it('uses live files with metadata-only manifests and refuses missing packaged contents', async () => {
+    const manifest = generateAssetManifest(TEST_DIR);
+    const live = createStaticAssetHandler('/assets', { directory: TEST_DIR, manifest });
+    const response = (await live(new Request('http://localhost/assets/style.css')))!;
+    expect(await response.text()).toBe('body { color: red; }');
+    const missing = createStaticAssetHandler('/assets', { directory: 'missing', manifest });
+    expect((await missing(new Request('http://localhost/assets/style.css')))!.status).toBe(404);
   });
 });
