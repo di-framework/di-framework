@@ -240,7 +240,7 @@ export class ActorRuntime implements InvocationTarget {
       const invocation: ActorInvocation = { actorId: compositeId, active: true, parent };
       return this.invocationStorage.run(invocation, async () => {
         try {
-          await this.ensureMigrations(reg, compositeId);
+          await this.ensureActorMigrated(reg, compositeId, actorKey);
           const tx = await this._storage.beginTransaction(compositeId);
           const context = new ActorContextInstance({
             actorId: compositeId,
@@ -250,59 +250,61 @@ export class ActorRuntime implements InvocationTarget {
             actors: this,
           });
 
-          const instance = await this.getOrCreateInstance(reg, compositeId, context);
-          const meta = getOrCreateActorMetadata(reg.ctor);
+          const wasActive = this.instances.has(compositeId);
+          let timedOut = false;
+          try {
+            const instance = await this.getOrCreateInstance(reg, compositeId, context);
+            const meta = getOrCreateActorMetadata(reg.ctor);
 
-          // Verify method exists and is callable
-          let targetMethodName = methodName;
-          let methodOptions: any;
+            // Verify method exists and is callable
+            let targetMethodName = methodName;
+            let methodOptions: any;
 
-          if (meta.methods.size > 0) {
-            const direct = meta.methods.get(methodName);
-            if (direct) {
-              targetMethodName = String(direct.methodName);
-              methodOptions = direct.options;
-            } else {
-              // Look up by exposed name option
-              let matched = false;
-              for (const [mName, mMeta] of meta.methods.entries()) {
-                if (mMeta.name === methodName) {
-                  targetMethodName = String(mName);
-                  methodOptions = mMeta.options;
-                  matched = true;
-                  break;
+            if (meta.methods.size > 0) {
+              const direct = meta.methods.get(methodName);
+              if (direct) {
+                targetMethodName = String(direct.methodName);
+                methodOptions = direct.options;
+              } else {
+                // Look up by exposed name option
+                let matched = false;
+                for (const [mName, mMeta] of meta.methods.entries()) {
+                  if (mMeta.name === methodName) {
+                    targetMethodName = String(mName);
+                    methodOptions = mMeta.options;
+                    matched = true;
+                    break;
+                  }
+                }
+                if (!matched) {
+                  throw new ActorMethodNotFoundError(reg.name, methodName);
                 }
               }
-              if (!matched) {
-                throw new ActorMethodNotFoundError(reg.name, methodName);
+            }
+
+            if (typeof instance[targetMethodName] !== 'function') {
+              throw new ActorMethodNotFoundError(reg.name, methodName);
+            }
+
+            // Update context reference on instance
+            instance.__actorContext = context;
+            for (const prop of meta.contextProperties) {
+              try {
+                instance[prop] = context;
+              } catch {
+                // Getter fallback
               }
             }
-          }
 
-          if (typeof instance[targetMethodName] !== 'function') {
-            throw new ActorMethodNotFoundError(reg.name, methodName);
-          }
-
-          // Update context reference on instance
-          instance.__actorContext = context;
-          for (const prop of meta.contextProperties) {
-            try {
-              instance[prop] = context;
-            } catch {
-              // Getter fallback
+            // Prepare final arguments (including parameter-injected contexts)
+            const finalArgs = [...args];
+            const paramIndices = meta.contextParams.get(targetMethodName);
+            if (paramIndices) {
+              for (const idx of paramIndices) {
+                finalArgs[idx] = context;
+              }
             }
-          }
 
-          // Prepare final arguments (including parameter-injected contexts)
-          const finalArgs = [...args];
-          const paramIndices = meta.contextParams.get(targetMethodName);
-          if (paramIndices) {
-            for (const idx of paramIndices) {
-              finalArgs[idx] = context;
-            }
-          }
-
-          try {
             const executeCall = async () => {
               return await actorContextStorage.run(context, () => {
                 return instance[targetMethodName].apply(instance, finalArgs);
@@ -314,6 +316,7 @@ export class ActorRuntime implements InvocationTarget {
               let timeoutHandle: any;
               const timeoutPromise = new Promise((_, reject) => {
                 timeoutHandle = setTimeout(() => {
+                  timedOut = true;
                   reject(
                     new Error(
                       `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
@@ -334,6 +337,7 @@ export class ActorRuntime implements InvocationTarget {
             await tx.commit();
             return result;
           } catch (error) {
+            if (!wasActive || timedOut) this.instances.delete(compositeId);
             await tx.rollback();
             throw error;
           }

@@ -102,7 +102,7 @@ console.log(await account.getBalance()); // Still 100!
 
 Calling the same actor through its reference from an active invocation rejects with a reentrancy error. Call `this.otherMethod()` to share the current invocation and transaction. Indirect cycles such as A→B→A also reject while the earlier invocation remains active.
 
-Clearing a mailbox rejects queued calls. A method timeout rolls back its storage transaction but cannot cancel JavaScript already running in the method; late storage access rejects, and the runtime observes the abandoned call's rejection.
+Clearing a mailbox rejects queued calls. A failed activating invocation evicts its instance so activation can initialize storage again. Timed-out instances are discarded before subsequent calls. A method timeout rolls back its storage transaction but cannot cancel JavaScript already running in the method; late storage access rejects, and the runtime observes the abandoned call's rejection.
 
 ## Unit Testing with Isolated Temporary SQLite Storage
 

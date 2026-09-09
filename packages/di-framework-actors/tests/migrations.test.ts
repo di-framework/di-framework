@@ -236,3 +236,149 @@ describe('Actor Migrations', () => {
     }
   });
 });
+
+it('runs non-SQL migrations in order once per storage instance and reports failures', async () => {
+  const { InMemoryActorStorage, runActorMigrations, clearInMemoryActorMigrationHistory } =
+    await import('../src/index');
+  const storage = new InMemoryActorStorage();
+  const calls: string[] = [];
+  const migrations = [
+    {
+      version: '1.10',
+      description: 'later',
+      up: async (ctx: ActorMigrationContext) => {
+        calls.push(ctx.version);
+        expect(await ctx.sql('')).toEqual([]);
+        expect(await ctx.run('')).toEqual({ changes: 0 });
+      },
+    },
+    {
+      version: '1.2',
+      description: 'earlier',
+      up: async (ctx: ActorMigrationContext) => {
+        calls.push(ctx.version);
+        await ctx.storage.set(ctx.actorId, 'ready', true);
+      },
+    },
+  ];
+  const options = {
+    actorType: 'Fallback',
+    actorKey: 'key',
+    compositeId: 'Fallback:key',
+    storage,
+    migrations,
+  };
+  await runActorMigrations(options);
+  await runActorMigrations(options);
+  expect(calls).toEqual(['1.2', '1.10']);
+  const isolated = new InMemoryActorStorage();
+  await runActorMigrations({ ...options, storage: isolated });
+  expect(await isolated.get<boolean>('Fallback:key', 'ready')).toBe(true);
+  clearInMemoryActorMigrationHistory();
+  await expect(
+    runActorMigrations({
+      ...options,
+      migrations: [
+        {
+          version: '3',
+          description: 'failure',
+          up: async () => {
+            throw new Error('failed fallback');
+          },
+        },
+      ],
+    }),
+  ).rejects.toThrow(ActorMigrationError);
+});
+
+it('discovers repo migrations with matching actor bindings', async () => {
+  const { Migration, clearMigrationRegistry } = await import('@di-framework/repo');
+  const { runActorMigrations } = await import('../src/index');
+  @Migration({ version: 1, description: 'repo actor schema', binding: 'RepoActor' })
+  class RepoActorMigration {
+    async up(ctx: any) {
+      await ctx.sql('CREATE TABLE migrated (id INT)');
+    }
+  }
+  const storage = SqliteActorStorage.temporary();
+  try {
+    await runActorMigrations({
+      actorType: 'RepoActor',
+      actorKey: 'key',
+      compositeId: 'RepoActor:key',
+      storage,
+    });
+    const db = await storage.getDatabase('RepoActor:key');
+    expect(db.query("SELECT name FROM sqlite_master WHERE name='migrated'").get()).toEqual({
+      name: 'migrated',
+    });
+  } finally {
+    clearMigrationRegistry();
+    await storage.close();
+  }
+});
+
+it('maps down migration contexts and preserves integrity error versions', async () => {
+  const { spyOn } = await import('bun:test');
+  const { MigrationRunner, MigrationIntegrityError } = await import('@di-framework/repo');
+  const { runActorMigrations } = await import('../src/index');
+  const storage = SqliteActorStorage.temporary();
+  let context: ActorMigrationContext | undefined;
+  const migrations = [
+    {
+      version: '1',
+      description: 'reversible',
+      up: async () => {},
+      down: async (ctx: ActorMigrationContext) => {
+        context = ctx;
+      },
+    },
+  ];
+  const options = {
+    actorType: 'Reversible',
+    actorKey: 'key',
+    compositeId: 'Reversible:key',
+    storage,
+    migrations,
+  };
+  const execute = spyOn(MigrationRunner.prototype, 'execute').mockImplementation(async function (
+    this: any,
+  ) {
+    const definition = this.configuredMigrations[0];
+    await definition.down({
+      version: '1',
+      description: 'reversible',
+      db: await this.getDb(),
+      sql: async () => [],
+      run: async () => ({ changes: 0 }),
+    });
+    return {} as any;
+  });
+  try {
+    await runActorMigrations(options);
+    expect(context?.actorId).toBe('Reversible:key');
+    expect(context?.storage).toBe(storage);
+    execute.mockImplementation(async () => {
+      throw new MigrationIntegrityError('changed migration', '1');
+    });
+    await expect(runActorMigrations(options)).rejects.toMatchObject({ migrationVersion: '1' });
+  } finally {
+    execute.mockRestore();
+    await storage.close();
+  }
+});
+
+it('registers namespaced actors and clears actor migration registration', async () => {
+  const { clearRegisteredActorMigrations, getRegisteredActorMigrations, InMemoryActorStorage } =
+    await import('../src/index');
+  @Actor({ namespace: 'test', name: 'Namespaced' })
+  class Namespaced {
+    read() {
+      return 42;
+    }
+  }
+  const runtime = new ActorRuntime({ actors: [Namespaced], storage: new InMemoryActorStorage() });
+  expect(await runtime.get(Namespaced, 'key').read()).toBe(42);
+  clearRegisteredActorMigrations();
+  expect(getRegisteredActorMigrations(Namespaced)).toEqual([]);
+});

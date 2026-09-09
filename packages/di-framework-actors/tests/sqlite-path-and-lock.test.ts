@@ -6,7 +6,6 @@ import {
   Actor,
   ActorLockError,
   ActorMethod,
-  ActorRuntime,
   actorIdentityToPath,
   parseActorIdentity,
   SqliteActorStorage,
@@ -231,4 +230,61 @@ describe('Safe Identity Mapping and File Locking', () => {
       }
     });
   });
+});
+
+it('never steals a live or incomplete lock and serializes stale recovery', async () => {
+  const { acquireActorLock } = await import('../src/storage/lock');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-recovery-review-'));
+  const target = path.join(dir, 'actor.db');
+  const lock = target + '.lock';
+  try {
+    fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, acquiredAt: 0 }));
+    await expect(acquireActorLock(target, 'actor', { lockTimeoutMs: 1 })).rejects.toThrow(
+      ActorLockError,
+    );
+    fs.writeFileSync(lock, '');
+    await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
+    fs.writeFileSync(lock, JSON.stringify({ pid: 9999999 }));
+    fs.writeFileSync(lock + '.recovery', '');
+    await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
+    expect(JSON.parse(fs.readFileSync(lock, 'utf8')).pid).toBe(9999999);
+    fs.unlinkSync(lock + '.recovery');
+    const release = await acquireActorLock(target, 'actor');
+    await expect(acquireActorLock(target, 'actor')).rejects.toThrow(ActorLockError);
+    await release();
+    await release();
+    expect(fs.existsSync(lock)).toBe(false);
+    const releaseMemory = await acquireActorLock('file:review-lock', 'actor');
+    await expect(acquireActorLock('file:review-lock', 'actor')).rejects.toThrow(ActorLockError);
+    await releaseMemory();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('bounds underscore sanitization and handles empty identity segments', () => {
+  const result = actorIdentityToPath({
+    namespace: '_'.repeat(100000),
+    actorName: '_'.repeat(100000),
+    actorKey: '',
+  });
+  expect(result).toContain(path.join('default', 'actor'));
+  expect(parseActorIdentity('Name')).toEqual({ actorName: 'Name', actorKey: '' });
+});
+
+it('validates mapped containment and supports a filesystem-root base directory', async () => {
+  const { spyOn } = await import('bun:test');
+  expect(actorIdentityToPath('Root:key', { baseDir: path.parse(process.cwd()).root })).toContain(
+    path.join('default', 'Root'),
+  );
+  const root = path.resolve('safe-base');
+  const outside = path.resolve('outside.db');
+  const resolver = spyOn(path, 'resolve').mockReturnValueOnce(root).mockReturnValueOnce(outside);
+  try {
+    expect(() => actorIdentityToPath('Actor:key', { baseDir: root })).toThrow(
+      'Path traversal attempt',
+    );
+  } finally {
+    resolver.mockRestore();
+  }
 });

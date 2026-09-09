@@ -21,6 +21,7 @@ export class ActorLockError extends Error {
 }
 
 export interface LockOptions {
+  /** Retained for compatibility; live process locks never expire by age. */
   lockTimeoutMs?: number;
   inMemory?: boolean;
 }
@@ -52,7 +53,6 @@ export async function acquireActorLock(
   actorId: string,
   options: LockOptions = {},
 ): Promise<() => Promise<void>> {
-  const lockTimeoutMs = options.lockTimeoutMs ?? 30000;
   const inMemory = options.inMemory === true || targetPath.startsWith('file:');
 
   if (inMemory) {
@@ -80,7 +80,7 @@ export async function acquireActorLock(
 
   const tryCreateLock = (): boolean => {
     try {
-      const fd = fs.openSync(lockPath, 'wx');
+      const fd = fs.openSync(lockPath, 'wx', 0o600);
       const payload = JSON.stringify({
         pid: process.pid,
         actorId,
@@ -108,24 +108,31 @@ export async function acquireActorLock(
       lockInfo = null;
     }
 
-    const isStale =
-      !lockInfo ||
-      typeof lockInfo.pid !== 'number' ||
-      !isPidAlive(lockInfo.pid) ||
-      (typeof lockInfo.acquiredAt === 'number' && Date.now() - lockInfo.acquiredAt > lockTimeoutMs);
-
-    if (isStale) {
-      // Stale lock detected; remove and retry acquisition
-      try {
-        fs.unlinkSync(lockPath);
-      } catch {}
-
-      if (!tryCreateLock()) {
-        throw new ActorLockError(actorId, lockPath, lockInfo?.pid);
-      }
-    } else {
-      // Active process owns the lock
+    // Invalid or partially written payloads are not evidence that the owner died.
+    if (!lockInfo || typeof lockInfo.pid !== 'number' || isPidAlive(lockInfo.pid)) {
       throw new ActorLockError(actorId, lockPath, lockInfo?.pid);
+    }
+
+    // Serialize recovery separately from ownership. Re-read under this guard so
+    // another recovering process cannot unlink a newly acquired ownership lock.
+    const recoveryPath = `${lockPath}.recovery`;
+    let recoveryFd: number;
+    try {
+      recoveryFd = fs.openSync(recoveryPath, 'wx', 0o600);
+    } catch (error: any) {
+      if (error.code === 'EEXIST') throw new ActorLockError(actorId, lockPath, lockInfo.pid);
+      throw error;
+    }
+    try {
+      const current = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+      if (typeof current.pid !== 'number' || isPidAlive(current.pid)) {
+        throw new ActorLockError(actorId, lockPath, current.pid);
+      }
+      fs.unlinkSync(lockPath);
+      if (!tryCreateLock()) throw new ActorLockError(actorId, lockPath);
+    } finally {
+      fs.closeSync(recoveryFd);
+      fs.unlinkSync(recoveryPath);
     }
   }
 
