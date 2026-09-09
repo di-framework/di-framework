@@ -36,3 +36,20 @@ export function getActorMetadata(target: any): ActorMetadata | undefined {
   const ctor = getTargetConstructor(target);
   return metadataRegistry.get(ctor);
 }
+
+const decoratedActorClasses = new Set<Constructor>();
+
+export function registerDecoratedActorClass(target: any): void {
+  const ctor = getTargetConstructor(target);
+  if (typeof ctor === "function") {
+    decoratedActorClasses.add(ctor);
+  }
+}
+
+export function getDecoratedActorClasses(): Constructor[] {
+  return Array.from(decoratedActorClasses);
+}
+
+export function clearDecoratedActorClasses(): void {
+  decoratedActorClasses.clear();
+}
