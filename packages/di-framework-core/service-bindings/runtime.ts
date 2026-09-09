@@ -149,7 +149,7 @@ export class ServiceBindingRuntime {
       }
       // Also discover own properties that are functions
       for (const name of Object.getOwnPropertyNames(instance)) {
-        if (typeof (instance as any)[name] === 'function') {
+        if (name !== 'constructor' && typeof (instance as any)[name] === 'function') {
           operations.add(name);
         }
       }
@@ -284,7 +284,8 @@ export class ServiceBindingRuntime {
     }
 
     // 7. Invoke target operation
-    const method = targetService.instance[operation];
+    const targetInstance = targetService.instance;
+    const method = targetInstance[operation];
     if (typeof method !== 'function') {
       throw new IncompatibleContractError(
         effectiveCaller,
@@ -295,7 +296,7 @@ export class ServiceBindingRuntime {
       );
     }
 
-    return await method.apply(targetService.instance, args);
+    return await method.apply(targetInstance, args);
   }
 
   /**
