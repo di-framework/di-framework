@@ -1,4 +1,5 @@
-import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types.js';
+import { queueRegistry } from '../decorators.js';
+import type { EnqueueOptions, Job, ListJobsFilter, QueueInfo } from '../types.js';
 import type { QueueBackend } from './contract.js';
 
 export class InMemoryQueueBackend implements QueueBackend {
@@ -47,6 +48,7 @@ export class InMemoryQueueBackend implements QueueBackend {
       options?.jobId ??
       `job_${enqueuedAt}_${this.nextId++}_${Math.random().toString(36).substring(2, 9)}`;
 
+    const defaults = queueRegistry.getForQueue(queueName)[0]?.options;
     const job: Job<T> = {
       id,
       queueName,
@@ -54,9 +56,9 @@ export class InMemoryQueueBackend implements QueueBackend {
       status: 'pending',
       priority: options?.priority ?? 0,
       attempts: 0,
-      maxRetries: options?.maxRetries ?? 3,
-      backoffMs: options?.backoffMs ?? 1000,
-      timeoutMs: options?.timeoutMs ?? 30000,
+      maxRetries: options?.maxRetries ?? defaults?.maxRetries ?? 3,
+      backoffMs: options?.backoffMs ?? defaults?.backoffMs ?? 1000,
+      timeoutMs: options?.timeoutMs ?? defaults?.timeoutMs ?? 30000,
       enqueuedAt,
       availableAt: enqueuedAt + (options?.delayMs ?? 0),
       idempotencyKey,
@@ -115,7 +117,7 @@ export class InMemoryQueueBackend implements QueueBackend {
       const backoff =
         retryAfterMs !== undefined
           ? retryAfterMs
-          : Math.min(job.backoffMs * Math.pow(2, job.attempts - 1), 60000);
+          : Math.min(job.backoffMs * 2 ** (job.attempts - 1), 60000);
       job.availableAt = this.now() + backoff;
     } else {
       job.status = 'dead-letter';
@@ -174,7 +176,10 @@ export class InMemoryQueueBackend implements QueueBackend {
   }
 
   async listQueues(): Promise<QueueInfo[]> {
-    const stats = new Map<string, { pending: number; processing: number; completed: number; deadLetter: number; total: number }>();
+    const stats = new Map<
+      string,
+      { pending: number; processing: number; completed: number; deadLetter: number; total: number }
+    >();
 
     for (const job of this.jobs.values()) {
       let q = stats.get(job.queueName);
@@ -250,7 +255,11 @@ export class InMemoryQueueBackend implements QueueBackend {
     return false;
   }
 
-  async drain(queueName?: string, maxSteps = 1000, handler?: (job: Job<any>) => Promise<void>): Promise<number> {
+  async drain(
+    queueName?: string,
+    maxSteps = 1000,
+    handler?: (job: Job<any>) => Promise<void>,
+  ): Promise<number> {
     let count = 0;
     while (count < maxSteps) {
       const stepped = await this.step(queueName, handler);

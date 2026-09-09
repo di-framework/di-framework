@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 import { container as globalContainer } from '@di-framework/core';
-import { Container, Component } from '@di-framework/core/decorators';
+import { Component, Container } from '@di-framework/core/decorators';
 import { InMemoryQueueBackend } from '../src/backend/memory.js';
 import { SqliteQueueBackend } from '../src/backend/sqlite.js';
-import { QueueHandler, queueRegistry } from '../src/decorators.js';
+import { QueueHandler } from '../src/decorators.js';
 import { ContainerQueueDispatcher } from '../src/dispatcher.js';
-import { queue, QueueManager } from '../src/producer.js';
+import { QueueManager } from '../src/producer.js';
 import type { JobMetadata } from '../src/types.js';
 import { QueueWorker } from '../src/worker.js';
 
 describe('Queues Integration', () => {
-    it('resolves owning service through DI, processes job, and acknowledges only after async completion', async () => {
+  it('resolves owning service through DI, processes job, and acknowledges only after async completion', async () => {
     const backend = new InMemoryQueueBackend();
     const manager = new QueueManager(backend);
 
@@ -62,11 +62,7 @@ describe('Queues Integration', () => {
     const completed = await backend.getJob(job.id);
     expect(completed!.status).toBe('completed');
     expect(asyncCompleted).toBe(true);
-    expect(callLog).toEqual([
-      'start:rec-123',
-      'audit:rec-123',
-      `end:rec-123:${job.id}`,
-    ]);
+    expect(callLog).toEqual(['start:rec-123', 'audit:rec-123', `end:rec-123:${job.id}`]);
 
     await worker.stop();
   });

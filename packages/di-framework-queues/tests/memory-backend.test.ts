@@ -25,8 +25,16 @@ describe('InMemoryQueueBackend', () => {
 
   it('supports idempotency via idempotencyKey', async () => {
     const backend = new InMemoryQueueBackend(1000);
-    const job1 = await backend.enqueue('emails', { to: 'alice@example.com' }, { idempotencyKey: 'welcome-alice' });
-    const job2 = await backend.enqueue('emails', { to: 'alice@example.com' }, { idempotencyKey: 'welcome-alice' });
+    const job1 = await backend.enqueue(
+      'emails',
+      { to: 'alice@example.com' },
+      { idempotencyKey: 'welcome-alice' },
+    );
+    const job2 = await backend.enqueue(
+      'emails',
+      { to: 'alice@example.com' },
+      { idempotencyKey: 'welcome-alice' },
+    );
 
     expect(job1.id).toBe(job2.id);
     const list = await backend.listJobs('emails');
@@ -145,8 +153,8 @@ describe('InMemoryQueueBackend', () => {
   it('reports queue stats through listQueues', async () => {
     const backend = new InMemoryQueueBackend();
     await backend.enqueue('q1', 'p1');
-    const j2 = await backend.enqueue('q1', 'p2');
-    const j3 = await backend.enqueue('q1', 'p3', { maxRetries: 1 });
+    await backend.enqueue('q1', 'p2');
+    await backend.enqueue('q1', 'p3', { maxRetries: 1 });
     await backend.enqueue('q2', 'p4');
 
     await backend.dequeue('q1'); // p1 is processing

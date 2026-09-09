@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
-import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { queueRegistry } from '../decorators.js';
 import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types.js';
 import type { QueueBackend } from './contract.js';
 
@@ -42,6 +43,7 @@ export class SqliteQueueBackend implements QueueBackend {
     try {
       this.db.exec('PRAGMA journal_mode = WAL;');
       this.db.exec('PRAGMA synchronous = NORMAL;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
     } catch {
       // WAL might not be supported on in-memory db
     }
@@ -127,9 +129,10 @@ export class SqliteQueueBackend implements QueueBackend {
       `job_${enqueuedAt}_${this.nextId++}_${Math.random().toString(36).substring(2, 9)}`;
 
     const priority = options?.priority ?? 0;
-    const maxRetries = options?.maxRetries ?? 3;
-    const backoffMs = options?.backoffMs ?? 1000;
-    const timeoutMs = options?.timeoutMs ?? 30000;
+    const defaults = queueRegistry.getForQueue(queueName)[0]?.options;
+    const maxRetries = options?.maxRetries ?? defaults?.maxRetries ?? 3;
+    const backoffMs = options?.backoffMs ?? defaults?.backoffMs ?? 1000;
+    const timeoutMs = options?.timeoutMs ?? defaults?.timeoutMs ?? 30000;
     const availableAt = enqueuedAt + (options?.delayMs ?? 0);
     const serializedPayload = JSON.stringify(payload);
 
@@ -203,7 +206,7 @@ export class SqliteQueueBackend implements QueueBackend {
       return this.rowToJob(candidate);
     });
 
-    return tx();
+    return tx.immediate();
   }
 
   async complete(jobId: string): Promise<void> {
@@ -220,7 +223,7 @@ export class SqliteQueueBackend implements QueueBackend {
   async fail(jobId: string, error: Error | string, retryAfterMs?: number): Promise<void> {
     const now = Date.now();
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack ?? null : null;
+    const errorStack = error instanceof Error ? (error.stack ?? null) : null;
 
     const tx = this.db.transaction(() => {
       const job = this.db
@@ -232,7 +235,7 @@ export class SqliteQueueBackend implements QueueBackend {
         const backoff =
           retryAfterMs !== undefined
             ? retryAfterMs
-            : Math.min(job.backoff_ms * Math.pow(2, job.attempts - 1), 60000);
+            : Math.min(job.backoff_ms * 2 ** (job.attempts - 1), 60000);
         const nextAvailable = now + backoff;
 
         this.db

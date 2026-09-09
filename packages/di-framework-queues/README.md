@@ -15,3 +15,7 @@ Durable job queues with local development and wasmCloud deployment integration f
 - **Tooling & wasmCloud Integration**:
   - CLI: `queue list`, `queue inspect <name>`, `queue retry <name> [jobId]`.
   - wasmCloud build/analysis discovery, private dispatch invocation, and deployment manifest generation without exposed HTTP endpoints.
+
+Handler retry, backoff, and timeout options provide enqueue defaults after the handler module is imported. Explicit enqueue options take precedence. Import handler modules before creating jobs when using these defaults.
+
+Timeouts mark the attempt failed, but do not interrupt the handler. Handlers should make side effects idempotent and cooperate with their own cancellation mechanism. Promise.race observes late handler rejection; a timed-out handler may still finish after a retry begins.

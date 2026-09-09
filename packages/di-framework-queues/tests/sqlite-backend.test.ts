@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { SqliteQueueBackend } from '../src/backend/sqlite.js';
 
 describe('SqliteQueueBackend', () => {
@@ -29,8 +29,16 @@ describe('SqliteQueueBackend', () => {
 
   it('supports idempotency across repeated enqueues', async () => {
     const backend = new SqliteQueueBackend(':memory:');
-    const j1 = await backend.enqueue('payments', { txnId: 'tx-100', amount: 50 }, { idempotencyKey: 'charge-tx-100' });
-    const j2 = await backend.enqueue('payments', { txnId: 'tx-100', amount: 50 }, { idempotencyKey: 'charge-tx-100' });
+    const j1 = await backend.enqueue(
+      'payments',
+      { txnId: 'tx-100', amount: 50 },
+      { idempotencyKey: 'charge-tx-100' },
+    );
+    const j2 = await backend.enqueue(
+      'payments',
+      { txnId: 'tx-100', amount: 50 },
+      { idempotencyKey: 'charge-tx-100' },
+    );
 
     expect(j1.id).toBe(j2.id);
     const jobs = await backend.listJobs('payments');
@@ -76,12 +84,19 @@ describe('SqliteQueueBackend', () => {
   });
 
   it('persists data across restarts and recovers unacknowledged jobs', async () => {
-    const dbPath = join(tmpdir(), `test-queue-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    const dbPath = join(
+      tmpdir(),
+      `test-queue-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+    );
     try {
       // Process 1: Enqueue jobs, dequeue one and "crash" without completing
       const backend1 = new SqliteQueueBackend(dbPath);
-      const pendingJob = await backend1.enqueue('invoices', { invoiceId: 'inv-1' });
-      const inFlightJob = await backend1.enqueue('invoices', { invoiceId: 'inv-2' }, { maxRetries: 3, priority: 10 });
+      await backend1.enqueue('invoices', { invoiceId: 'inv-1' });
+      const inFlightJob = await backend1.enqueue(
+        'invoices',
+        { invoiceId: 'inv-2' },
+        { maxRetries: 3, priority: 10 },
+      );
 
       // Dequeue inv-2 with very short lease (10ms)
       const d = await backend1.dequeue('invoices', 10);
@@ -147,12 +162,7 @@ describe('SqliteQueueBackend', () => {
     };
 
     // 4 concurrent workers
-    await Promise.all([
-      claimWorker(),
-      claimWorker(),
-      claimWorker(),
-      claimWorker(),
-    ]);
+    await Promise.all([claimWorker(), claimWorker(), claimWorker(), claimWorker()]);
 
     expect(processed.size).toBe(20);
     const stats = await backend.listQueues();

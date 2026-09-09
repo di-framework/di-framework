@@ -11,13 +11,14 @@ export class QueueWorker {
   private pollTimers = new Map<string, any>();
   private recoveryTimer: any;
   private inFlight = new Set<Promise<void>>();
-  private options: Required<QueueWorkerOptions>;
+  private options: Required<Omit<QueueWorkerOptions, 'queues'>>;
 
   constructor(
     backend: QueueBackend,
     dispatcher?: QueueDispatcher,
     options: QueueWorkerOptions = {},
   ) {
+    for (const name of options.queues ?? []) this.queues.add(name);
     this.backend = backend;
     this.dispatcher = dispatcher ?? new ContainerQueueDispatcher();
     this.options = {
@@ -171,10 +172,7 @@ export class QueueWorker {
       const timeoutPromise = new Promise<void>((resolve) => {
         timeoutId = setTimeout(resolve, graceMs);
       });
-      await Promise.race([
-        Promise.all([...this.inFlight]),
-        timeoutPromise,
-      ]);
+      await Promise.race([Promise.all([...this.inFlight]), timeoutPromise]);
       clearTimeout(timeoutId);
     }
   }

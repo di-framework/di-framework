@@ -385,3 +385,51 @@ describe('http adapter', () => {
     expect(emptyOutgoing.trailers).toEqual({ kind: 'empty', type: undefined });
   });
 });
+
+describe('queue adapter', () => {
+  it('converts WIT jobs to runtime jobs for every supported application entrypoint', async () => {
+    const {
+      dispatchJob,
+      dispatch,
+      requireGuestsObject: validateGuests,
+    } = await import('../assets/queue-adapter.ts');
+    const received: any[] = [];
+    const accept = async (job: any) => {
+      received.push(job);
+    };
+    const job = {
+      id: 'job-1',
+      queue: 'receipts',
+      payload: '{"amount":7}',
+      attempt: 2,
+      createdAt: 123n,
+    };
+    for (const app of [{ dispatch: accept }, { execute: accept }, accept]) {
+      expect(await dispatchJob(job, app)).toEqual({ tag: 'ok', val: undefined });
+    }
+    expect(received).toHaveLength(3);
+    expect(received[0]).toMatchObject({
+      queueName: 'receipts',
+      attempts: 2,
+      enqueuedAt: 123,
+      payload: { amount: 7 },
+      status: 'processing',
+    });
+    await dispatchJob({ ...job, payload: 'plain' }, accept);
+    expect(received[3].payload).toBe('plain');
+    expect(await dispatch.dispatch(job)).toEqual({ tag: 'ok', val: undefined });
+    expect(() => validateGuests(null)).toThrow('guests object');
+    expect(() => validateGuests({})).not.toThrow();
+  });
+
+  it('returns a stable failure without leaking handler exception details', async () => {
+    const { dispatchJob } = await import('../assets/queue-adapter.ts');
+    const job = { id: 'bad', queue: 'q', payload: '{}', attempt: 1, createdAt: 0 };
+    expect(await dispatchJob(job, {})).toEqual({ tag: 'err', val: 'Queue dispatch failed' });
+    expect(
+      await dispatchJob(job, () => {
+        throw new Error('private database details');
+      }),
+    ).toEqual({ tag: 'err', val: 'Queue dispatch failed' });
+  });
+});

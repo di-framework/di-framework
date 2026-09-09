@@ -70,6 +70,7 @@ export interface ListJobsFilter {
 }
 
 export interface QueueWorkerOptions {
+  queues?: string[];
   concurrency?: number;
   pollIntervalMs?: number;
   leaseTimeoutMs?: number;

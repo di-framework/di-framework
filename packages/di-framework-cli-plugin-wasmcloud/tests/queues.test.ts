@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  discoverQueueHandlers,
-  isQueueWorkerProject,
-  parseQueueHandlersInFile,
-} from '../src/queues';
-import { renderWorkloadManifest } from '../src/workload';
-import { renderWorldWit, queueProjectRequirements } from '../src/wit';
 import { requirementsForProject } from '../src/build';
+import { isQueueWorkerProject, parseQueueHandlersInFile } from '../src/queues';
+import { queueProjectRequirements, renderWorldWit } from '../src/wit';
+import { renderWorkloadManifest } from '../src/workload';
 import { makeWorkspace } from './helpers';
-import { loadProject } from '../src/project';
 
 const REGISTRY = {
   push: 'registry.example.com/team',
@@ -190,9 +185,7 @@ export class TestWorker {
       (r) => r.package === 'di-framework:queues' && r.direction === 'export',
     );
     expect(hasQueueExport).toBe(true);
-    const hasHttpExport = reqs.some(
-      (r) => r.package === 'wasi:http' && r.direction === 'export',
-    );
+    const hasHttpExport = reqs.some((r) => r.package === 'wasi:http' && r.direction === 'export');
     expect(hasHttpExport).toBe(false);
   });
 });

@@ -1,9 +1,12 @@
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Job, ListJobsFilter, QueueBackend, QueueInfo } from '@di-framework/queues';
 import { CommandFailure } from '../../command.js';
 
 export function resolveQueueDbPath(explicitDb?: string, cwd = process.cwd()): string {
+  if (explicitDb === ':memory:') return explicitDb;
   if (explicitDb) {
     return isAbsolute(explicitDb) ? explicitDb : resolve(cwd, explicitDb);
   }
@@ -22,9 +25,21 @@ export function resolveQueueDbPath(explicitDb?: string, cwd = process.cwd()): st
   return dotDiDb;
 }
 
-export async function openQueueBackend(dbPath: string): Promise<QueueBackend> {
+export async function openQueueBackend(
+  dbPath: string,
+  importModule: (specifier: string) => Promise<any> = (specifier) => import(specifier),
+): Promise<QueueBackend> {
   try {
-    const { SqliteQueueBackend } = await import('@di-framework/queues');
+    let loaded: any;
+    try {
+      const requireFromProject = createRequire(join(process.cwd(), 'package.json'));
+      loaded = await importModule(
+        pathToFileURL(requireFromProject.resolve('@di-framework/queues')).href,
+      );
+    } catch {
+      loaded = await importModule('@di-framework/queues');
+    }
+    const { SqliteQueueBackend } = loaded;
     return new SqliteQueueBackend(dbPath);
   } catch (cause) {
     throw new CommandFailure(

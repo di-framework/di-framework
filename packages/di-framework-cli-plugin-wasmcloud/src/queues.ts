@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 import type { WasmcloudProject } from './project.js';
@@ -22,8 +22,7 @@ function stringLiteral(node: ts.Expression | undefined): string | undefined {
   return undefined;
 }
 
-function numericLiteral(node: ts.Expression | undefined): number | undefined {
-  if (node === undefined) return undefined;
+function numericLiteral(node: ts.Expression): number | undefined {
   if (ts.isNumericLiteral(node)) return Number(node.text);
   return undefined;
 }
@@ -51,26 +50,25 @@ function methodDecorators(node: ts.MethodDeclaration): readonly ts.Decorator[] {
   return [...fromModifiers, ...(legacy ?? [])];
 }
 
-function classDecorators(node: ts.ClassDeclaration): readonly ts.Decorator[] {
-  const fromModifiers = (node.modifiers ?? []).filter((modifier) =>
-    ts.isDecorator(modifier),
-  ) as ts.Decorator[];
-  const legacy = (node as ts.ClassDeclaration & { decorators?: readonly ts.Decorator[] })
-    .decorators;
-  return [...fromModifiers, ...(legacy ?? [])];
-}
-
 function findSourceFiles(dir: string, fileList: string[] = []): string[] {
   if (!existsSync(dir)) return fileList;
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.di-framework' || entry.name === '.git') {
+      if (
+        entry.name === 'node_modules' ||
+        entry.name === 'dist' ||
+        entry.name === '.di-framework' ||
+        entry.name === '.git'
+      ) {
         continue;
       }
       findSourceFiles(fullPath, fileList);
-    } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx') || entry.name.endsWith('.js'))) {
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx') || entry.name.endsWith('.js'))
+    ) {
       fileList.push(fullPath);
     }
   }

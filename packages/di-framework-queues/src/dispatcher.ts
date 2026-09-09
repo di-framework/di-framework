@@ -1,6 +1,6 @@
 import { container as defaultContainer } from '@di-framework/core';
 import { queueRegistry } from './decorators.js';
-import type { Job, JobMetadata, QueueHandlerMetadata } from './types.js';
+import type { Job, JobMetadata } from './types.js';
 
 export interface QueueDispatcher {
   dispatch<T = any, R = any>(queueName: string, job: Job<T>): Promise<R>;
@@ -23,19 +23,14 @@ export class ContainerQueueDispatcher implements QueueDispatcher {
     this.container = containerResolver;
   }
 
-  registerHandler(
-    queueName: string,
-    target: any,
-    methodName: string,
-    options?: any,
-  ): void {
+  registerHandler(queueName: string, target: any, methodName: string, options?: any): void {
     this.customHandlers.set(queueName, { target, methodName, options });
   }
 
   async dispatch<T = any, R = any>(queueOrJob: string | Job<T>, maybeJob?: Job<T>): Promise<R> {
     let queueName: string;
     let job: Job<T>;
-    if (typeof queueOrJob === "string") {
+    if (typeof queueOrJob === 'string') {
       queueName = queueOrJob;
       job = maybeJob!;
     } else {
@@ -49,9 +44,12 @@ export class ContainerQueueDispatcher implements QueueDispatcher {
         handler = registered[0];
       } else if (registered.length > 1) {
         const matched = registered.find((h) => {
-          const targetClass = typeof h.target === "function" ? h.target : h.target.constructor;
-          if ("has" in this.container && typeof (this.container as any).has === "function") {
-            return (this.container as any).has(targetClass) || (this.container as any).has(targetClass.name);
+          const targetClass = typeof h.target === 'function' ? h.target : h.target.constructor;
+          if ('has' in this.container && typeof (this.container as any).has === 'function') {
+            return (
+              (this.container as any).has(targetClass) ||
+              (this.container as any).has(targetClass.name)
+            );
           }
           return false;
         });
@@ -73,7 +71,10 @@ export class ContainerQueueDispatcher implements QueueDispatcher {
       try {
         instance = this.container.resolve<any>(targetClass.name);
       } catch {
-        if ('register' in this.container && typeof (this.container as any).register === 'function') {
+        if (
+          'register' in this.container &&
+          typeof (this.container as any).register === 'function'
+        ) {
           (this.container as any).register(targetClass);
           instance = this.container.resolve<any>(targetClass);
         } else {
@@ -97,7 +98,7 @@ export class ContainerQueueDispatcher implements QueueDispatcher {
       idempotencyKey: job.idempotencyKey,
     };
 
-    const timeoutMs = handler.options?.timeoutMs ?? job.timeoutMs ?? 30000;
+    const timeoutMs = job.timeoutMs ?? handler.options?.timeoutMs ?? 30000;
 
     let timer: any;
     const timeoutPromise = new Promise<never>((_, reject) => {
