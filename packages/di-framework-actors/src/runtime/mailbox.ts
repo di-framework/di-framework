@@ -133,9 +133,8 @@ export class ActorMailbox {
   }
 
   clear(): void {
-    this.queue.length = 0;
-    this._runningCalls = 0;
-    this.processing = false;
-    this._admissionClosed = false;
+    const pending = this.queue.splice(0);
+    for (const task of pending)
+      task.reject(new Error('Actor mailbox cleared before invocation could run'));
   }
 }

@@ -111,3 +111,45 @@ describe('Transactional In-Memory Storage', () => {
     expect(await storage.get<number>('TransactionalActor:acc-2', 'balance')).toBe(100);
   });
 });
+
+it('lists staged changes, clears transactions, and isolates storage snapshots', async () => {
+  const storage = new InMemoryActorStorage();
+  expect(await storage.entries('missing')).toEqual([]);
+  expect(await storage.keys('missing')).toEqual([]);
+  expect(await storage.delete('missing', 'x')).toBe(false);
+  expect(storage.dump('missing')).toEqual({});
+  await storage.set('a', 'keep', { value: 1 });
+  await storage.set('a', 'remove', 2);
+  const tx = await storage.beginTransaction('a');
+  expect(await tx.has('keep')).toBe(true);
+  await tx.delete('remove');
+  expect(await tx.has('remove')).toBe(false);
+  await tx.set('new', 3);
+  expect(await tx.has('new')).toBe(true);
+  expect(await tx.keys()).toEqual(['keep', 'new']);
+  expect(await tx.entries()).toEqual([
+    ['keep', { value: 1 }],
+    ['new', 3],
+  ]);
+  await tx.commit();
+  expect(await storage.delete('a', 'new')).toBe(true);
+  const snapshot = storage.dump('a');
+  snapshot.keep.value = 9;
+  expect(await storage.entries('a')).toEqual([['keep', { value: 1 }]]);
+  const clear = await storage.beginTransaction('a');
+  await clear.clear();
+  expect(await clear.get('keep')).toBeUndefined();
+  expect(await clear.has('keep')).toBe(false);
+  expect(await clear.delete('keep')).toBe(false);
+  expect(await clear.keys()).toEqual([]);
+  await clear.set('replacement', null);
+  await clear.commit();
+  expect(storage.dump('a')).toEqual({ replacement: null });
+  await storage.clear('a');
+  expect(storage.dump('a')).toEqual({});
+  await storage.set('b', 'last', 1);
+  const remove = await storage.beginTransaction('b');
+  await remove.delete('last');
+  await remove.commit();
+  expect(storage.dump('b')).toEqual({});
+});

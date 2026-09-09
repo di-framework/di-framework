@@ -276,3 +276,56 @@ describe('SqliteActorStorage Persistence and Transactions', () => {
     }
   });
 });
+
+it('rejects undefined and lists staged SQLite changes consistently', async () => {
+  const storage = SqliteActorStorage.temporary({ idleTimeoutMs: 0 });
+  const id = 'Listed:key';
+  try {
+    await expect(storage.set(id, 'invalid', undefined)).rejects.toThrow('undefined');
+    expect(await storage.has(id, 'invalid')).toBe(false);
+    await storage.set(id, 'keep', { n: 1 });
+    await storage.set(id, 'remove', 2);
+    const tx = await storage.beginTransaction(id);
+    await expect(tx.set('invalid', undefined)).rejects.toThrow('undefined');
+    await tx.delete('remove');
+    await tx.set('new', 3);
+    expect(await tx.keys()).toEqual(['keep', 'new']);
+    expect(await tx.entries()).toEqual([
+      ['keep', { n: 1 }],
+      ['new', 3],
+    ]);
+    expect(await tx.has('keep')).toBe(true);
+    expect(await tx.has('remove')).toBe(false);
+    await tx.commit();
+    expect(await storage.dump(id)).toEqual({ keep: { n: 1 }, new: 3 });
+    const clear = await storage.beginTransaction(id);
+    await clear.clear();
+    expect(await clear.keys()).toEqual([]);
+    expect(await clear.has('keep')).toBe(false);
+    await clear.set('replacement', null);
+    await clear.commit();
+    expect(await storage.entries(id)).toEqual([['replacement', null]]);
+    const native = await storage.beginTransaction(id);
+    expect((native as any).getDatabase()).toBe(await storage.getDatabase(id));
+    await native.rollback();
+    await storage.clearAll();
+    expect(await storage.dump(id)).toEqual({});
+  } finally {
+    await storage.close();
+  }
+  await expect(storage.get(id, 'keep')).rejects.toThrow('closed');
+  expect(await storage.cleanupIdleConnections()).toBe(0);
+});
+
+it('deletes direct SQLite state and preserves timer cleanup behavior', async () => {
+  const storage = SqliteActorStorage.temporary({ idleTimeoutMs: 1 });
+  try {
+    await storage.set('Timer:key', 'value', 1);
+    expect(await storage.delete('Timer:key', 'value')).toBe(true);
+    expect(await storage.delete('Timer:key', 'missing')).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 1050));
+    expect((storage as any).connections.size).toBe(0);
+  } finally {
+    await storage.close();
+  }
+});
