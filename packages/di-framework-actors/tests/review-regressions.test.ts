@@ -126,3 +126,53 @@ it('exposes actor metadata, context construction, storage and symbol-safe refere
   expect(ctx.actorKey).toBe('key');
   await tx.rollback();
 });
+
+it('rejects indirect actor cycles and releases every involved mailbox', async () => {
+  class First {
+    @ActorContext ctx!: ActorContext;
+    async callSecond() {
+      return this.ctx.actors.get(Second, 'b').callFirst();
+    }
+    async read() {
+      return 'first';
+    }
+  }
+  class Second {
+    @ActorContext ctx!: ActorContext;
+    async callFirst() {
+      return this.ctx.actors.get(First, 'a').read();
+    }
+    async read() {
+      return 'second';
+    }
+  }
+  const runtime = new ActorRuntime({ actors: [First, Second] });
+  await expect(runtime.get(First, 'a').callSecond()).rejects.toThrow('Reentrant invocation');
+  expect(await runtime.get(First, 'a').read()).toBe('first');
+  expect(await runtime.get(Second, 'b').read()).toBe('second');
+});
+
+it('allows descendants to invoke an ancestor after that invocation has completed', async () => {
+  const gate = deferred<void>();
+  let descendant!: Promise<number>;
+  class Parent {
+    @ActorContext ctx!: ActorContext;
+    async launch() {
+      descendant = this.ctx.actors.get(Child, 'child').later();
+    }
+    async read() {
+      return 42;
+    }
+  }
+  class Child {
+    @ActorContext ctx!: ActorContext;
+    async later() {
+      await gate.promise;
+      return this.ctx.actors.get(Parent, 'parent').read();
+    }
+  }
+  const runtime = new ActorRuntime({ actors: [Parent, Child] });
+  await runtime.get(Parent, 'parent').launch();
+  gate.resolve();
+  expect(await descendant).toBe(42);
+});

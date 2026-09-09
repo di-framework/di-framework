@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { getOrCreateActorMetadata } from '../decorators/keys.js';
 import { InMemoryActorStorage } from '../storage/memory.js';
 import type { ActorStorage } from '../storage/types.js';
@@ -23,7 +24,14 @@ export interface ActorRuntimeOptions {
   actors?: Constructor[];
 }
 
+interface ActorInvocation {
+  actorId: string;
+  active: boolean;
+  parent?: ActorInvocation;
+}
+
 export class ActorRuntime implements InvocationTarget {
+  private readonly invocationStorage = new AsyncLocalStorage<ActorInvocation>();
   private readonly _storage: ActorStorage;
   private readonly registryByName = new Map<string, ActorRegistration>();
   private readonly registryByCtor = new Map<Constructor, ActorRegistration>();
@@ -181,113 +189,120 @@ export class ActorRuntime implements InvocationTarget {
     }
 
     const compositeId = `${reg.name}:${actorKey}`;
-    if (
-      actorContextStorage.getStore()?.actors === this &&
-      actorContextStorage.getStore()?.actorId === compositeId
-    ) {
-      throw new Error(
-        `Reentrant invocation of actor '${compositeId}' is not supported. Call the instance method directly instead.`,
-      );
+    const parent = this.invocationStorage.getStore();
+    for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {
+      if (ancestor.active && ancestor.actorId === compositeId) {
+        throw new Error(
+          `Reentrant invocation of actor '${compositeId}' is not supported. Call the instance method directly instead.`,
+        );
+      }
     }
     const mailbox = this.getOrCreateMailbox(compositeId);
 
-    return mailbox.enqueue(async () => {
-      const tx = await this._storage.beginTransaction(compositeId);
-      const context = new ActorContextInstance({
-        actorId: compositeId,
-        actorKey,
-        actorType: reg.name,
-        storage: tx,
-        actors: this,
-      });
+    return mailbox.enqueue(() => {
+      const invocation: ActorInvocation = { actorId: compositeId, active: true, parent };
+      return this.invocationStorage.run(invocation, async () => {
+        try {
+          const tx = await this._storage.beginTransaction(compositeId);
+          const context = new ActorContextInstance({
+            actorId: compositeId,
+            actorKey,
+            actorType: reg.name,
+            storage: tx,
+            actors: this,
+          });
 
-      const instance = await this.getOrCreateInstance(reg, compositeId, context);
-      const meta = getOrCreateActorMetadata(reg.ctor);
+          const instance = await this.getOrCreateInstance(reg, compositeId, context);
+          const meta = getOrCreateActorMetadata(reg.ctor);
 
-      // Verify method exists and is callable
-      let targetMethodName = methodName;
-      let methodOptions: any;
+          // Verify method exists and is callable
+          let targetMethodName = methodName;
+          let methodOptions: any;
 
-      if (meta.methods.size > 0) {
-        const direct = meta.methods.get(methodName);
-        if (direct) {
-          targetMethodName = String(direct.methodName);
-          methodOptions = direct.options;
-        } else {
-          // Look up by exposed name option
-          let matched = false;
-          for (const [mName, mMeta] of meta.methods.entries()) {
-            if (mMeta.name === methodName) {
-              targetMethodName = String(mName);
-              methodOptions = mMeta.options;
-              matched = true;
-              break;
+          if (meta.methods.size > 0) {
+            const direct = meta.methods.get(methodName);
+            if (direct) {
+              targetMethodName = String(direct.methodName);
+              methodOptions = direct.options;
+            } else {
+              // Look up by exposed name option
+              let matched = false;
+              for (const [mName, mMeta] of meta.methods.entries()) {
+                if (mMeta.name === methodName) {
+                  targetMethodName = String(mName);
+                  methodOptions = mMeta.options;
+                  matched = true;
+                  break;
+                }
+              }
+              if (!matched) {
+                throw new ActorMethodNotFoundError(reg.name, methodName);
+              }
             }
           }
-          if (!matched) {
+
+          if (typeof instance[targetMethodName] !== 'function') {
             throw new ActorMethodNotFoundError(reg.name, methodName);
           }
-        }
-      }
 
-      if (typeof instance[targetMethodName] !== 'function') {
-        throw new ActorMethodNotFoundError(reg.name, methodName);
-      }
+          // Update context reference on instance
+          instance.__actorContext = context;
+          for (const prop of meta.contextProperties) {
+            try {
+              instance[prop] = context;
+            } catch {
+              // Getter fallback
+            }
+          }
 
-      // Update context reference on instance
-      instance.__actorContext = context;
-      for (const prop of meta.contextProperties) {
-        try {
-          instance[prop] = context;
-        } catch {
-          // Getter fallback
-        }
-      }
-
-      // Prepare final arguments (including parameter-injected contexts)
-      const finalArgs = [...args];
-      const paramIndices = meta.contextParams.get(targetMethodName);
-      if (paramIndices) {
-        for (const idx of paramIndices) {
-          finalArgs[idx] = context;
-        }
-      }
-
-      try {
-        const executeCall = async () => {
-          return await actorContextStorage.run(context, () => {
-            return instance[targetMethodName].apply(instance, finalArgs);
-          });
-        };
-
-        let result: any;
-        if (methodOptions?.timeout && methodOptions.timeout > 0) {
-          let timeoutHandle: any;
-          const timeoutPromise = new Promise((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-              reject(
-                new Error(
-                  `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
-                ),
-              );
-            }, methodOptions.timeout);
-          });
+          // Prepare final arguments (including parameter-injected contexts)
+          const finalArgs = [...args];
+          const paramIndices = meta.contextParams.get(targetMethodName);
+          if (paramIndices) {
+            for (const idx of paramIndices) {
+              finalArgs[idx] = context;
+            }
+          }
 
           try {
-            result = await Promise.race([executeCall(), timeoutPromise]);
-          } finally {
-            clearTimeout(timeoutHandle);
-          }
-        } else {
-          result = await executeCall();
-        }
+            const executeCall = async () => {
+              return await actorContextStorage.run(context, () => {
+                return instance[targetMethodName].apply(instance, finalArgs);
+              });
+            };
 
-        await tx.commit();
-        return result;
-      } catch (error) {
-        await tx.rollback();
-        throw error;
-      }
+            let result: any;
+            if (methodOptions?.timeout && methodOptions.timeout > 0) {
+              let timeoutHandle: any;
+              const timeoutPromise = new Promise((_, reject) => {
+                timeoutHandle = setTimeout(() => {
+                  reject(
+                    new Error(
+                      `Actor method '${reg.name}.${methodName}' timed out after ${methodOptions.timeout}ms.`,
+                    ),
+                  );
+                }, methodOptions.timeout);
+              });
+
+              try {
+                result = await Promise.race([executeCall(), timeoutPromise]);
+              } finally {
+                clearTimeout(timeoutHandle);
+              }
+            } else {
+              result = await executeCall();
+            }
+
+            await tx.commit();
+            return result;
+          } catch (error) {
+            await tx.rollback();
+            throw error;
+          }
+        } finally {
+          invocation.active = false;
+        }
+      });
     });
   }
 
