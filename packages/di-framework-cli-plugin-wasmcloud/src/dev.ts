@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CliIo, CommandResult } from '@di-framework/cli-extension';
+import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
 import { discoverBindings } from './bindings.js';
 import { buildComponent, requirementsForProject } from './build.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
@@ -41,9 +41,19 @@ export async function runWasmcloudDev(
   const options = parseDevArgs(args);
   const project = loadProject(deps.cwd());
   await buildComponent(project, io, deps);
-  const lock = JSON.parse(
-    readFileSync(join(project.projectRoot, '.di-framework', 'wit.lock.json'), 'utf8'),
-  ) as WitLock;
+  const lockPath = join(project.projectRoot, '.di-framework', 'wit.lock.json');
+  let tls: boolean;
+  try {
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8')) as WitLock;
+    tls = lock.requirements.some((requirement) => requirement.package === 'wasi:tls');
+  } catch (error) {
+    throw new CommandFailure(
+      'WASMCLOUD_WIT_LOCK_INVALID',
+      `Cannot read generated WIT requirements from ${lockPath}. Rerun wasmcloud build before starting the dev server.`,
+      3,
+      { path: lockPath, cause: String(error) },
+    );
+  }
   const runner = resolveDevRunner(deps);
   const washConfigPath =
     runner.kind === 'wash'
@@ -66,7 +76,7 @@ export async function runWasmcloudDev(
       host: options.host,
       port: options.port,
       washConfigPath,
-      tls: lock.requirements.some((requirement) => requirement.package === 'wasi:tls'),
+      tls,
     }),
     { cwd: project.projectRoot },
   );
