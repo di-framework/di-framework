@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseDevArgs, runWasmcloudDev } from '../src/dev';
 import { captureIo, expectFailure, fakeDeps, makeProject, type RunnerInvocation } from './helpers';
@@ -22,6 +23,37 @@ describe('parseDevArgs', () => {
 });
 
 describe('runWasmcloudDev', () => {
+  for (const contents of [undefined, '{', '{}']) {
+    it(`reports an unusable generated WIT lock (${contents ?? 'missing'}) without starting a server`, async () => {
+      const root = makeProject();
+      const lockPath = join(root, '.di-framework', 'wit.lock.json');
+      const invocations: RunnerInvocation[] = [];
+      const output = captureIo();
+      await expect(
+        runWasmcloudDev(
+          [],
+          output.io,
+          fakeDeps({
+            cwd: root,
+            invocations,
+            componentOutput: () => {
+              if (contents === undefined) rmSync(lockPath);
+              else writeFileSync(lockPath, contents);
+              return 'fake-wasm-component';
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: 'WASMCLOUD_WIT_LOCK_INVALID',
+        exitCode: 3,
+        message: expect.stringContaining('Rerun wasmcloud build'),
+        details: { path: lockPath, cause: expect.any(String) },
+      });
+      expect(invocations).toHaveLength(1);
+      expect(output.stdout.join('')).not.toContain('Serving on');
+    });
+  }
+
   it('enables host TLS and network access when the built component imports TLS', async () => {
     const root = makeProject();
     const invocations: RunnerInvocation[] = [];

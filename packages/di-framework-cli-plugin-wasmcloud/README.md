@@ -125,6 +125,25 @@ and certificate inspection are unsupported and throw explicit errors. Server-sid
 the host ingress. This is a client subset, without connection pooling or HTTP/2.
 Use `tls.connect(options)` rather than calling `.connect()` on a `TLSSocket`.
 
+HTTPS responses without `Content-Length` or chunked encoding finish only when the
+peer closes the connection. If the peer keeps it open, the response can wait indefinitely.
+Set `options.timeout` and destroy the request in its `timeout` handler; the timeout
+is an inactivity notification and does not cancel the request automatically:
+
+```ts
+import { get } from 'node:https';
+
+const req = get('https://example.com/', { timeout: 10_000 }, (res) => {
+  res.on('data', (chunk) => console.log(chunk.toString()));
+  res.on('error', (error) => console.error(error));
+});
+req.on('timeout', () => req.destroy(new Error('HTTPS request timed out')));
+req.on('error', (error) => console.error(error));
+```
+
+Use a separate deadline timer if the entire operation must finish within a fixed
+time, including a peer that keeps sending data without closing the response.
+
 Run `DI_WASI_TLS_SMOKE=1 bun test tests/node-compat-tls-native.test.ts` from this package
 to compile and exercise both clients against real Wasmtime TLS. This opt-in check needs
 the componentizer, Wasmtime 48, OpenSSL, and network access to `example.com`; it also
