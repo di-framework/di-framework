@@ -1,4 +1,4 @@
-import { getActorMetadata, getOrCreateActorMetadata } from '../decorators/keys.js';
+import { getOrCreateActorMetadata } from '../decorators/keys.js';
 import { InMemoryActorStorage } from '../storage/memory.js';
 import type { ActorStorage } from '../storage/types.js';
 import {
@@ -8,7 +8,7 @@ import {
   type ActorRef,
   type Constructor,
 } from '../types.js';
-import { ActorContext, actorContextStorage } from './context.js';
+import { ActorContextInstance, actorContextStorage } from './context.js';
 import { ActorMailbox } from './mailbox.js';
 import { createActorReference, type InvocationTarget } from './reference.js';
 
@@ -125,7 +125,7 @@ export class ActorRuntime implements InvocationTarget {
   private async getOrCreateInstance(
     reg: ActorRegistration,
     compositeId: string,
-    context: ActorContext,
+    context: ActorContextInstance,
   ): Promise<any> {
     let instance = this.instances.get(compositeId);
     if (!instance) {
@@ -181,11 +181,19 @@ export class ActorRuntime implements InvocationTarget {
     }
 
     const compositeId = `${reg.name}:${actorKey}`;
+    if (
+      actorContextStorage.getStore()?.actors === this &&
+      actorContextStorage.getStore()?.actorId === compositeId
+    ) {
+      throw new Error(
+        `Reentrant invocation of actor '${compositeId}' is not supported. Call the instance method directly instead.`,
+      );
+    }
     const mailbox = this.getOrCreateMailbox(compositeId);
 
     return mailbox.enqueue(async () => {
       const tx = await this._storage.beginTransaction(compositeId);
-      const context = new ActorContext({
+      const context = new ActorContextInstance({
         actorId: compositeId,
         actorKey,
         actorType: reg.name,
@@ -315,7 +323,7 @@ export class ActorRuntime implements InvocationTarget {
    * Clears all active instances, mailboxes, and storage.
    */
   async clear(): Promise<void> {
-    for (const [compositeId, instance] of this.instances.entries()) {
+    for (const instance of this.instances.values()) {
       if (typeof instance.onDeactivate === 'function') {
         try {
           await instance.onDeactivate();
