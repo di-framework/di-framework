@@ -410,7 +410,16 @@ describe('queue adapter', () => {
       attempt: 2,
       createdAt: 123n,
     };
-    for (const app of [{ dispatch: accept }, { execute: accept }, accept]) {
+    for (const app of [
+      {
+        dispatch: async (queueName: string, job: any) => {
+          expect(queueName).toBe('receipts');
+          await accept(job);
+        },
+      },
+      { execute: accept },
+      accept,
+    ]) {
       expect(await dispatchJob(job, app)).toEqual({ tag: 'ok', val: undefined });
     }
     expect(received).toHaveLength(3);
@@ -423,15 +432,19 @@ describe('queue adapter', () => {
     });
     await dispatchJob({ ...job, payload: 'plain' }, accept);
     expect(received[3].payload).toBe('plain');
-    expect(await dispatch.dispatch(job)).toEqual({ tag: 'ok', val: undefined });
+    expect(await dispatch.dispatch(job)).toBeUndefined();
     expect(() => validateGuests(null)).toThrow('guests object');
     expect(() => validateGuests({})).not.toThrow();
   });
 
   it('returns a stable failure without leaking handler exception details', async () => {
-    const { dispatchJob } = await import('../assets/queue-adapter.ts');
+    const { dispatchJob, dispatch } = await import('../assets/queue-adapter.ts');
     const job = { id: 'bad', queue: 'q', payload: '{}', attempt: 1, createdAt: 0 };
     expect(await dispatchJob(job, {})).toEqual({ tag: 'err', val: 'Queue dispatch failed' });
+    applicationState.current = () => {
+      throw new Error('private database details');
+    };
+    await expect(dispatch.dispatch(job)).rejects.toBe('Queue dispatch failed');
     expect(
       await dispatchJob(job, () => {
         throw new Error('private database details');

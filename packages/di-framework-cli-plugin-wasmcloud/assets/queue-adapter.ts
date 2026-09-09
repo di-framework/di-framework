@@ -49,7 +49,7 @@ export async function dispatchJob(
     };
 
     if (typeof app?.dispatch === 'function') {
-      await app.dispatch(jobObject);
+      await app.dispatch(job.queue, jobObject);
     } else if (typeof app?.execute === 'function') {
       await app.execute(jobObject);
     } else if (typeof app === 'function') {
@@ -65,4 +65,10 @@ export async function dispatchJob(
   }
 }
 
-export const dispatch = { dispatch: dispatchJob };
+// Top-level WIT results use the exception convention, unlike nested tagged results.
+export const dispatch = {
+  async dispatch(job: DispatchJob): Promise<void> {
+    const result = await dispatchJob(job);
+    if (result.tag === 'err') throw result.val;
+  },
+};

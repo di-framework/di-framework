@@ -19,3 +19,11 @@ Durable job queues with local development and wasmCloud deployment integration f
 Handler retry, backoff, and timeout options provide enqueue defaults after the handler module is imported. Explicit enqueue options take precedence. Import handler modules before creating jobs when using these defaults.
 
 Timeouts mark the attempt failed, but do not interrupt the handler. Handlers should make side effects idempotent and cooperate with their own cancellation mechanism. Promise.race observes late handler rejection; a timed-out handler may still finish after a retry begins.
+
+### Portable runtime imports
+
+`@di-framework/queues/portable` exports queue contracts, decorators, producers,
+dispatchers, workers, and the memory backend without importing `bun:sqlite` or
+filesystem utilities. The wasmCloud bundler selects this entry using the
+`wasmcloud` export condition. The native root entry continues to export
+`SqliteQueueBackend`. This entry alone does not provide durable Wasm storage.

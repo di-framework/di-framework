@@ -51,7 +51,15 @@ export function requirementsForProject(
     ? queueProjectRequirements()
     : project.ingress !== false
       ? defaultProjectRequirements()
-      : [];
+      : [
+          {
+            package: 'wasi:cli',
+            version: '0.3.0',
+            interfaces: ['run'],
+            direction: 'export' as const,
+            source: 'cron-adapter',
+          },
+        ];
   return [...baseRequirements, ...requirementsFromBindings(bindings)];
 }
 

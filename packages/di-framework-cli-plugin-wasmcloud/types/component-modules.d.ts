@@ -72,3 +72,10 @@ declare module '@babel/plugin-transform-async-to-generator' {
   const plugin: import('@babel/core').PluginItem;
   export default plugin;
 }
+
+declare module 'virtual:di-framework-wasmcloud-runtime' {
+  export function loadApplication(): Promise<any>;
+}
+declare module 'wasi:cli/environment@0.3.0' {
+  export function getEnvironment(): Array<[string, string]>;
+}

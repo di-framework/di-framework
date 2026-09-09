@@ -131,6 +131,15 @@ export function runtimeRequirementsFromJavaScript(source: string): WitRequiremen
       source: NODE_COMPAT_SOURCE,
     });
   }
+  if (source.includes('wasi:cli/environment@0.3.0')) {
+    requirements.push({
+      package: 'wasi:cli',
+      version: '0.3.0',
+      interfaces: ['environment'],
+      direction: 'import',
+      source: NODE_COMPAT_SOURCE,
+    });
+  }
   return requirements;
 }
 

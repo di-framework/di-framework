@@ -30,6 +30,6 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src/**/*", "index.ts"],
+  "include": ["src/**/*", "index.ts", "portable.ts"],
   "exclude": ["example/**/*", "**/*.test.ts", "node_modules", "dist"]
 }

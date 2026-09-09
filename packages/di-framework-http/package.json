@@ -9,9 +9,14 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "wasmcloud": "./dist/portable.js",
       "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./portable": {
+      "types": "./dist/portable.d.ts",
+      "default": "./dist/portable.js"
     }
   },
   "author": "@di-framework Contributors",
@@ -31,7 +36,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build ./index.ts --outdir ./dist --target node --external @di-framework/core --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build ./index.ts ./portable.ts --outdir ./dist --target node --external @di-framework/core --external itty-router && tsc --emitDeclarationOnly --declaration --outDir dist",
     "prepublishOnly": "npm run build",
     "dev": "bun ../../examples/http-router/index.ts",
     "test": "bun test"
