@@ -1,0 +1,40 @@
+{
+  "name": "@di-framework/actors",
+  "version": "5.3.0",
+  "description": "Local virtual actor runtime with serialized invocations and transactional in-memory storage for di-framework.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "license": "(MIT OR Apache-2.0)",
+  "author": "@di-framework Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-actors"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "scripts": {
+    "test": "bun test",
+    "build": "rm -rf dist && bun x tsc -p tsconfig.build.json"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@di-framework/core": "^5",
+    "typescript": "^5"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

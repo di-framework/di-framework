@@ -128,6 +128,7 @@ describe('publish command', () => {
     it('includes all expected packages', () => {
       expect(PACKAGES).toContain('packages/di-framework-core');
       expect(PACKAGES).toContain('packages/di-framework-repo');
+      expect(PACKAGES).toContain('packages/di-framework-actors');
       expect(PACKAGES).toContain('packages/di-framework-http');
       expect(PACKAGES).toContain('packages/di-framework-graphql');
       expect(PACKAGES).toContain('packages/di-framework-events');
