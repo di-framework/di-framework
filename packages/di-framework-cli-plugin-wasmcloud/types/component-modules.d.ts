@@ -10,6 +10,17 @@ declare module 'virtual:di-framework-application' {
   export default application;
 }
 
+declare module 'virtual:di-framework-wasmcloud-actors' {
+  export const actorRuntime: unknown;
+  export const dispatchActorInvocation: (
+    actorType: string,
+    actorKey: string,
+    method: string,
+    args?: unknown[],
+  ) => Promise<unknown>;
+  export const actors: unknown[];
+}
+
 declare module 'virtual:di-framework-wasmcloud-guests' {
   export const guests: Record<string, unknown>;
 }

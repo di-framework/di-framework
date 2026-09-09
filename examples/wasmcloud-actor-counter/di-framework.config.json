@@ -1,0 +1,5 @@
+{
+  "name": "wasmcloud-actor-counter",
+  "entry": "src/index.ts",
+  "actors": true
+}
