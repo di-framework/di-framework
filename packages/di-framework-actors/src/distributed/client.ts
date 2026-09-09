@@ -1,6 +1,8 @@
 /**
  * Remote actor client and proxy reference generator.
  */
+
+import type { ActorRef, Constructor } from '../types.js';
 import {
   ActorAuthorizationError,
   ActorBackpressureError,
@@ -9,10 +11,6 @@ import {
   ActorOwnershipConflictError,
   StaleOwnerWriteError,
 } from './errors.js';
-import type {
-  ActorRef,
-  Constructor,
-} from '../types.js';
 import type {
   ActorRpcRequest,
   ActorRpcResponse,
@@ -114,8 +112,30 @@ export class RemoteActorClient {
 
     while (attempt <= maxRetries) {
       attempt++;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0)
+        throw new ActorDeadlineExceededError(`${actorType}:${actorKey}`, deadline, requestId);
+      let receivedResponse = false;
       try {
-        const response: ActorRpcResponse = await this.transport.send(request);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let response: ActorRpcResponse;
+        try {
+          response = await Promise.race([
+            this.transport.send(request),
+            new Promise<ActorRpcResponse>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new ActorDeadlineExceededError(`${actorType}:${actorKey}`, deadline, requestId),
+                  ),
+                remaining,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+        receivedResponse = true;
 
         if (response.success) {
           return response.result;
@@ -129,6 +149,8 @@ export class RemoteActorClient {
 
         // Do not retry authorization, stale owner, or business logic errors
         const nonRetryable =
+          receivedResponse ||
+          err instanceof ActorDeadlineExceededError ||
           err instanceof ActorAuthorizationError ||
           err instanceof StaleOwnerWriteError ||
           err instanceof ActorBackpressureError ||
@@ -141,7 +163,7 @@ export class RemoteActorClient {
         }
 
         // Delay with linear backoff before retransmitting request with the SAME requestId
-        const delay = baseDelay * attempt;
+        const delay = Math.min(baseDelay * attempt, Math.max(0, deadline - Date.now()));
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -153,7 +175,11 @@ export class RemoteActorClient {
    * Returns a typed actor reference proxy that forwards all method invocations
    * over the remote transport.
    */
-  get<T extends object>(actorClass: Constructor<T>, actorKey: string, options?: RemoteRefOptions): ActorRef<T>;
+  get<T extends object>(
+    actorClass: Constructor<T>,
+    actorKey: string,
+    options?: RemoteRefOptions,
+  ): ActorRef<T>;
   get<T = any>(actorName: string, actorKey: string, options?: RemoteRefOptions): ActorRef<T>;
   get<T extends object>(
     actorClassOrName: Constructor<T> | string,

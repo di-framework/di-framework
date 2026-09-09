@@ -3,19 +3,17 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   Actor,
-  ActorAuthorizationError,
   ActorBackpressureError,
   ActorContext,
-  ActorDeadlineExceededError,
   ActorMethod,
   ActorRpcDispatcher,
   ActorRuntime,
+  createActorBindingPolicy,
   InMemoryActorStorage,
   MemoryActorTransport,
   RemoteActorClient,
   SqliteActorStorage,
   StaleOwnerWriteError,
-  createActorBindingPolicy,
 } from '../src/index.js';
 
 @Actor({ name: 'OrderActor' })
@@ -26,7 +24,10 @@ class OrderActor {
   private callCount = 0;
 
   @ActorMethod()
-  async placeOrder(orderId: string, amount: number): Promise<{ orderId: string; total: number; callCount: number }> {
+  async placeOrder(
+    orderId: string,
+    amount: number,
+  ): Promise<{ orderId: string; total: number; callCount: number }> {
     this.callCount++;
     const prevTotal = (await this.ctx.storage.get<number>('total')) ?? 0;
     const newTotal = prevTotal + amount;
@@ -51,7 +52,10 @@ describe('Distributed Actors Protocol & Reliability', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = path.join('/tmp', `actors-dist-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tempDir = path.join(
+      '/tmp',
+      `actors-dist-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     fs.mkdirSync(tempDir, { recursive: true });
   });
 
@@ -145,7 +149,9 @@ describe('Distributed Actors Protocol & Reliability', () => {
       });
       expect(resUnauthNs.success).toBe(false);
       expect(resUnauthNs.error?.name).toBe('ActorAuthorizationError');
-      expect(resUnauthNs.error?.message).toContain("Access to namespace 'restricted-sandbox' is not authorized");
+      expect(resUnauthNs.error?.message).toContain(
+        "Access to namespace 'restricted-sandbox' is not authorized",
+      );
 
       // Case C: Unauthorized method
       const resUnauthMethod = await dispatcher.dispatch({
@@ -158,7 +164,9 @@ describe('Distributed Actors Protocol & Reliability', () => {
       });
       expect(resUnauthMethod.success).toBe(false);
       expect(resUnauthMethod.error?.name).toBe('ActorAuthorizationError');
-      expect(resUnauthMethod.error?.message).toContain("Method 'placeOrder' on actor 'OrderActor' is not authorized");
+      expect(resUnauthMethod.error?.message).toContain(
+        "Method 'placeOrder' on actor 'OrderActor' is not authorized",
+      );
 
       // Case D: Authorized invocation succeeds
       const resAuth = await dispatcher.dispatch({
@@ -257,7 +265,6 @@ describe('Distributed Actors Protocol & Reliability', () => {
       const runtime = new ActorRuntime({ storage, actors: [OrderActor] });
       const dispatcher = new ActorRpcDispatcher({ runtime });
       const transport = new MemoryActorTransport(dispatcher);
-      const client = new RemoteActorClient({ transport });
 
       // Direct invocation via dispatcher with requestId
       const req1 = {

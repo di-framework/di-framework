@@ -93,56 +93,78 @@ export class MemoryActorTransport implements ActorTransport {
  * Child process IPC transport for multi-process test harness.
  */
 export class ChildProcessIpcTransport implements ActorTransport {
-  private readonly child: any;
   private readonly pendingRequests = new Map<
     string,
-    { resolve: (resp: ActorRpcResponse) => void; reject: (err: any) => void }
+    {
+      promise: Promise<ActorRpcResponse>;
+      resolve: (response: ActorRpcResponse) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
+  private disconnected = false;
 
-  constructor(child: any) {
-    this.child = child;
-
-    // Support Bun child process IPC or standard Node child_process
-    const onMessage = (data: any) => {
-      if (!data || typeof data !== 'object') return;
-      const resp = data as ActorRpcResponse;
-      if (resp.requestId && this.pendingRequests.has(resp.requestId)) {
-        const pending = this.pendingRequests.get(resp.requestId);
-        if (pending) {
-          this.pendingRequests.delete(resp.requestId);
-          pending.resolve(resp);
-        }
-      }
-    };
-
+  constructor(private readonly child: any) {
     if (typeof child.on === 'function') {
-      child.on('message', onMessage);
+      child.on('message', (data: unknown) => this.handleIncomingMessage(data));
+      const disconnect = () => {
+        this.disconnected = true;
+        for (const pending of this.pendingRequests.values()) {
+          clearTimeout(pending.timer);
+          pending.reject(new Error('ChildProcessIpcTransport: Child process disconnected.'));
+        }
+        this.pendingRequests.clear();
+      };
+      child.on('exit', disconnect);
+      child.on('close', disconnect);
+      child.on('error', disconnect);
+      child.on('disconnect', disconnect);
     }
   }
 
   handleIncomingMessage(data: any): void {
     if (!data || typeof data !== 'object') return;
-    const resp = data as ActorRpcResponse;
-    if (resp.requestId && this.pendingRequests.has(resp.requestId)) {
-      const pending = this.pendingRequests.get(resp.requestId);
-      if (pending) {
-        this.pendingRequests.delete(resp.requestId);
-        pending.resolve(resp);
-      }
-    }
+    const pending = this.pendingRequests.get(data.requestId);
+    if (!pending) return;
+    this.pendingRequests.delete(data.requestId);
+    clearTimeout(pending.timer);
+    pending.resolve(data as ActorRpcResponse);
   }
 
   async send(request: ActorRpcRequest): Promise<ActorRpcResponse> {
-    return new Promise((resolve, reject) => {
-      this.pendingRequests.set(request.requestId, { resolve, reject });
-
+    if (this.disconnected) throw new Error('ChildProcessIpcTransport: Child process disconnected.');
+    const existing = this.pendingRequests.get(request.requestId);
+    if (existing) return existing.promise;
+    let resolve!: (response: ActorRpcResponse) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<ActorRpcResponse>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    const fail = (error: Error) => {
+      const pending = this.pendingRequests.get(request.requestId);
+      if (!pending) return;
+      this.pendingRequests.delete(request.requestId);
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    };
+    const remaining = Math.max(0, (request.deadline ?? Date.now() + 30000) - Date.now());
+    const timer = setTimeout(
+      () => fail(new Error('ChildProcessIpcTransport: Request timed out.')),
+      remaining,
+    );
+    this.pendingRequests.set(request.requestId, { promise, resolve, reject, timer });
+    try {
       if (typeof this.child.send === 'function') {
         this.child.send(request);
       } else if (this.child.stdin && typeof this.child.stdin.write === 'function') {
         this.child.stdin.write(`${JSON.stringify(request)}\n`);
       } else {
-        reject(new Error('ChildProcessIpcTransport: Child process has no send() or stdin.'));
+        throw new Error('ChildProcessIpcTransport: Child process has no send() or stdin.');
       }
-    });
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)));
+    }
+    return promise;
   }
 }

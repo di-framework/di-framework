@@ -2,7 +2,6 @@
  * Test cluster harness for launching and communicating with child process actor nodes.
  */
 import * as path from 'node:path';
-import * as readline from 'node:readline';
 import type {
   ActorOwnershipRecord,
   ActorRpcRequest,
@@ -35,11 +34,14 @@ export interface TestWorkerNode {
 export function spawnTestWorker(ownerId: string, baseDir: string): TestWorkerNode {
   const workerScript = path.resolve(__dirname, 'worker.ts');
 
-  const proc = Bun.spawn(['bun', 'run', workerScript, `--ownerId=${ownerId}`, `--baseDir=${baseDir}`], {
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'inherit',
-  });
+  const proc = Bun.spawn(
+    ['bun', 'run', workerScript, `--ownerId=${ownerId}`, `--baseDir=${baseDir}`],
+    {
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'inherit',
+    },
+  );
 
   const pendingRequests = new Map<string, (data: any) => void>();
 

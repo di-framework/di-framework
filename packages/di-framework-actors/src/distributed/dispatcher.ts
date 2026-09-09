@@ -7,11 +7,7 @@ import {
   ActorDeadlineExceededError,
   StaleOwnerWriteError,
 } from './errors.js';
-import type {
-  ActorAuthorizationPolicy,
-  ActorRpcRequest,
-  ActorRpcResponse,
-} from './types.js';
+import type { ActorAuthorizationPolicy, ActorRpcRequest, ActorRpcResponse } from './types.js';
 
 export interface ActorRpcDispatcherOptions {
   runtime: ActorRuntime;
@@ -52,7 +48,7 @@ export class ActorRpcDispatcher {
 
     if (!requestId) {
       return {
-        requestId: requestId ?? 'unknown',
+        requestId: 'unknown',
         success: false,
         error: {
           name: 'InvalidRequestError',
@@ -74,7 +70,9 @@ export class ActorRpcDispatcher {
 
     // 1. Deadline check before processing
     if (deadline !== undefined && Date.now() > deadline) {
-      const compositeId = namespace ? `${namespace}:${actorType}:${actorKey}` : `${actorType}:${actorKey}`;
+      const compositeId = namespace
+        ? `${namespace}:${actorType}:${actorKey}`
+        : `${actorType}:${actorKey}`;
       const err = new ActorDeadlineExceededError(compositeId, deadline, requestId);
       return {
         requestId,
@@ -121,7 +119,9 @@ export class ActorRpcDispatcher {
         generation: expectedGeneration,
       });
 
-      const ownership = await this.runtime.getActorOwnership(actorType, actorKey).catch(() => null);
+      const ownership = await this.runtime
+        .getActorOwnership(actorType, actorKey, { namespace })
+        .catch(() => null);
 
       return {
         requestId,
