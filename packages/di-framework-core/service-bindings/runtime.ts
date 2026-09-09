@@ -2,7 +2,6 @@ import { useContainer } from '../container.js';
 import {
   IncompatibleContractError,
   MissingBindingError,
-  ServiceBindingError,
   TargetUnavailableError,
   UnauthorizedOperationError,
   UnboundCallerError,
@@ -13,7 +12,6 @@ import type {
   BindingStatusReport,
   CallerBindingConfig,
   ExportedServiceDefinition,
-  InvocationContext,
   ServiceBindingConfiguration,
   ServiceDiagnostic,
   ServiceExportOptions,
@@ -130,10 +128,8 @@ export class ServiceBindingRuntime {
     targetClassOrInstance: any,
     options: ServiceExportOptions,
   ): ExportedServiceDefinition {
-    const instance =
-      typeof targetClassOrInstance === 'function'
-        ? new targetClassOrInstance()
-        : targetClassOrInstance;
+    const isClass = typeof targetClassOrInstance === 'function';
+    const instance = isClass ? targetClassOrInstance.prototype : targetClassOrInstance;
 
     // Discover operations
     const operations = new Set<string>();
@@ -143,7 +139,7 @@ export class ServiceBindingRuntime {
       }
     } else {
       // Auto-discover prototype methods
-      const proto = Object.getPrototypeOf(instance);
+      const proto = isClass ? instance : Object.getPrototypeOf(instance);
       if (proto) {
         for (const name of Object.getOwnPropertyNames(proto)) {
           if (name !== 'constructor' && typeof (instance as any)[name] === 'function') {
@@ -153,7 +149,7 @@ export class ServiceBindingRuntime {
       }
       // Also discover own properties that are functions
       for (const name of Object.getOwnPropertyNames(instance)) {
-        if (typeof (instance as any)[name] === 'function') {
+        if (name !== 'constructor' && typeof (instance as any)[name] === 'function') {
           operations.add(name);
         }
       }
@@ -161,7 +157,12 @@ export class ServiceBindingRuntime {
 
     const definition: ExportedServiceDefinition = {
       name: options.name,
-      instance,
+      get instance() {
+        if (!isClass) return instance;
+        const container = useContainer();
+        if (!container.has(targetClassOrInstance)) container.register(targetClassOrInstance);
+        return container.resolve(targetClassOrInstance);
+      },
       operations,
       version: options.version,
       description: options.description,
@@ -283,7 +284,8 @@ export class ServiceBindingRuntime {
     }
 
     // 7. Invoke target operation
-    const method = targetService.instance[operation];
+    const targetInstance = targetService.instance;
+    const method = targetInstance[operation];
     if (typeof method !== 'function') {
       throw new IncompatibleContractError(
         effectiveCaller,
@@ -294,7 +296,7 @@ export class ServiceBindingRuntime {
       );
     }
 
-    return await method.apply(targetService.instance, args);
+    return await method.apply(targetInstance, args);
   }
 
   /**
@@ -412,7 +414,9 @@ export class ServiceBindingRuntime {
         const parsed = JSON.parse(process.env.DI_SERVICE_GRANTS);
         if (Array.isArray(parsed)) {
           for (const grant of parsed) {
-            this.registry.addGrant(grant);
+            if (!grant.environment || grant.environment === this.environment) {
+              this.registry.addGrant(grant);
+            }
           }
         }
       } catch (e) {

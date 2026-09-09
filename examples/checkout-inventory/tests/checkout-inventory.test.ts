@@ -4,7 +4,6 @@ import {
   LocalServiceDevManager,
   ServiceBindingRuntime,
   serviceBindingToken,
-  TargetUnavailableError,
   UnboundCallerError,
 } from '@di-framework/core/service-bindings';
 import { CheckoutService } from '../src/checkout/CheckoutService.js';
@@ -152,4 +151,10 @@ describe('Checkout / Inventory Service Bindings Example', () => {
     expect(table).toContain('rogue-service');
     expect(table).toContain('UNBOUND');
   });
+});
+
+it('reports stock for known and unknown inventory items', async () => {
+  const inventory = new InventoryService();
+  expect(await inventory.checkStock('laptop')).toBe(10);
+  expect(await inventory.checkStock('unknown')).toBe(0);
 });
