@@ -77,6 +77,10 @@ console.log(await account.getBalance()); // Still 100!
 1. **Serialized Per Actor**: All method invocations on `actors.get(AccountActor, 'A')` run one-by-one. An invocation must fully complete (including asynchronous `await`s) before the next invocation on the same actor begins.
 2. **Concurrent Across Actors**: Calls to `actors.get(AccountActor, 'A')` and `actors.get(AccountActor, 'B')` execute concurrently.
 
+Calling the same actor through its reference from an active invocation rejects with a reentrancy error. Call `this.otherMethod()` to share the current invocation and transaction. Avoid cyclic reference calls across actors, which can also wait on each other's mailboxes.
+
+Clearing a mailbox rejects queued calls. A method timeout rolls back its storage transaction but cannot cancel JavaScript already running in the method; late storage access rejects, and the runtime observes the abandoned call's rejection.
+
 ## Unit Testing with Isolated Runtimes
 
 For test isolation, instantiate a fresh `ActorRuntime`:
