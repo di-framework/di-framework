@@ -293,3 +293,7 @@ In distributed systems, a successful commit can precede a lost response (network
 | **Consistency** | Strong single-writer consistency backed by storage fencing tokens. Stale owner commits fail with `StaleOwnerWriteError`. |
 | **Retry & Deduplication** | At-least-once transport delivery combined with storage idempotency cache guarantees exactly-once execution semantics. |
 | **Storage Failure Model** | Uncommitted transactions automatically roll back on error, crash, or fencing violation. Surviving nodes recover state directly from authoritative SQLite files upon failover. |
+
+SQLite actor inspection records original identities separately from sanitized filenames. Legacy files without identity metadata expose a filename-derived display key with `identityInferred: true`; accessing the actor by its original identity upgrades that metadata.
+
+A reload timeout aborts reload and restores admission without closing an active transaction. With the `fail` policy, queued calls already rejected remain rejected; the running call can still finish. Retry reload after it completes.

@@ -59,3 +59,40 @@ it('preserves namespace routing, request options, ownership and inspection acros
     await runtime.clear();
   }
 });
+
+it('enforces synchronous and asynchronous authorization before local execution', async () => {
+  let calls = 0;
+  @Actor()
+  class Protected {
+    run() {
+      calls++;
+      return calls;
+    }
+  }
+  const policies = [
+    () => false,
+    async () => false,
+    async () => {
+      throw new Error('policy unavailable');
+    },
+  ];
+  for (const authorize of policies) {
+    const runtime = new ActorRuntime({ actors: [Protected], authorizationPolicy: { authorize } });
+    try {
+      await expect(runtime.get(Protected, 'key').run()).rejects.toBeInstanceOf(Error);
+      expect(calls).toBe(0);
+      expect(await runtime.listActors()).toEqual([]);
+    } finally {
+      await runtime.clear();
+    }
+  }
+  const runtime = new ActorRuntime({
+    actors: [Protected],
+    authorizationPolicy: { authorize: async () => true },
+  });
+  try {
+    expect(await runtime.get(Protected, 'key').run()).toBe(1);
+  } finally {
+    await runtime.clear();
+  }
+});
