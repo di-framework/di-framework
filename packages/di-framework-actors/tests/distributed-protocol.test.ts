@@ -264,8 +264,6 @@ describe('Distributed Actors Protocol & Reliability', () => {
       const storage = new SqliteActorStorage({ baseDir: tempDir });
       const runtime = new ActorRuntime({ storage, actors: [OrderActor] });
       const dispatcher = new ActorRpcDispatcher({ runtime });
-      const transport = new MemoryActorTransport(dispatcher);
-
       // Direct invocation via dispatcher with requestId
       const req1 = {
         requestId: 'req-idem-100',
