@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 test('portable queue entry excludes native SQLite and filesystem imports', async () => {
   const bundle = await Bun.build({
-    entrypoints: [join(import.meta.dir, 'portable.ts')],
+    entrypoints: [join(import.meta.dir, '../src/portable.ts')],
     target: 'node',
     packages: 'external',
   });
