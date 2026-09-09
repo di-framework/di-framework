@@ -7,6 +7,7 @@ import { transformAsync } from '@babel/core';
 import asyncToGenerator from '@babel/plugin-transform-async-to-generator';
 import { rolldown } from 'rolldown';
 import { lowerForAwait } from './async-transform.js';
+import { emptyActorsModule } from './actors.js';
 import { emptyGuestsModule } from './guests.js';
 import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env.js';
 import {
@@ -49,6 +50,7 @@ export type BundleOptions = {
   entryPath: string;
   outFile: string;
   guestsPath?: string;
+  actorsPath?: string;
   projectRoot?: string;
   files?: Record<string, string>;
   env?: Record<string, string | undefined>;
@@ -93,8 +95,20 @@ const NODE_COMPAT_SEED_RESOLVED = `\0${NODE_COMPAT_SEED_ID}`;
 export function nodeCompatibilityPlugin(
   entryPath: string,
   guestsPath?: string,
-  seed: NodeCompatSeed = EMPTY_NODE_COMPAT_SEED,
+  seedOrActorsPath?: NodeCompatSeed | string,
+  maybeSeed?: NodeCompatSeed,
 ) {
+  let actorsPath: string | undefined;
+  let seed: NodeCompatSeed = EMPTY_NODE_COMPAT_SEED;
+  if (typeof seedOrActorsPath === 'string') {
+    actorsPath = seedOrActorsPath;
+    seed = maybeSeed ?? EMPTY_NODE_COMPAT_SEED;
+  } else if (seedOrActorsPath && typeof seedOrActorsPath === 'object') {
+    seed = seedOrActorsPath;
+  } else if (maybeSeed) {
+    seed = maybeSeed;
+  }
+
   const aliases = wasmcloudNodeEnv().alias;
   return {
     name: 'di-framework-component-runtime',
@@ -103,11 +117,15 @@ export function nodeCompatibilityPlugin(
       if (source === 'virtual:di-framework-wasmcloud-guests') {
         return guestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
       }
+      if (source === 'virtual:di-framework-wasmcloud-actors') {
+        return actorsPath ?? '\0virtual:di-framework-wasmcloud-actors-empty';
+      }
       if (isNodeCompatSeedSource(source)) return NODE_COMPAT_SEED_RESOLVED;
       return aliases[source] ?? null;
     },
     load(id: string) {
       if (id === '\0virtual:di-framework-wasmcloud-guests-empty') return emptyGuestsModule();
+      if (id === '\0virtual:di-framework-wasmcloud-actors-empty') return emptyActorsModule();
       if (id === NODE_COMPAT_SEED_RESOLVED) return renderNodeCompatSeedModule(seed);
       return null;
     },
@@ -279,6 +297,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     entryPath,
     outFile,
     guestsPath,
+    actorsPath,
     projectRoot,
     files,
     env,
@@ -309,6 +328,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
         nodeCompatibilityPlugin(
           entryPath,
           guestsPath,
+          actorsPath,
           createNodeCompatSeed({ files, env, cwd, projectRoot }),
         ),
       ],
@@ -322,8 +342,11 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
             id.includes('/node-compat/bootstrap.') ||
             id.includes('/node-compat/fetch-runtime.') ||
             id.includes('virtual:di-framework-wasmcloud-guests') ||
+            id.includes('virtual:di-framework-wasmcloud-actors') ||
             id.endsWith('/guests.js') ||
-            id.endsWith('\\guests.js')
+            id.endsWith('\\guests.js') ||
+            id.endsWith('/actors.js') ||
+            id.endsWith('\\actors.js')
           );
         },
       },

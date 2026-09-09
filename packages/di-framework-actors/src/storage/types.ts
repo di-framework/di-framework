@@ -63,7 +63,9 @@ export interface ActorStorageTransaction {
   /**
    * Looks up an idempotency record within this transaction or committed storage.
    */
-  getIdempotencyRecord?(requestId: string): Promise<{ response: unknown; createdAt: number } | undefined>;
+  getIdempotencyRecord?(
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined>;
 
   /**
    * Optional reference to the underlying database instance.
@@ -151,11 +153,7 @@ export interface ActorStorage {
   /**
    * Directly sets a committed idempotency record.
    */
-  setIdempotencyRecord?(
-    actorId: string,
-    requestId: string,
-    response: unknown,
-  ): Promise<void>;
+  setIdempotencyRecord?(actorId: string, requestId: string, response: unknown): Promise<void>;
 
   /**
    * Optional hook to close and release resources for an individual actor.

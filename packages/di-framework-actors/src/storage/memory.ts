@@ -1,7 +1,7 @@
 /**
  * In-memory transactional storage implementation for @di-framework/actors.
  */
-import { StaleOwnerWriteError, ActorOwnershipConflictError } from '../distributed/errors.js';
+import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors.js';
 import type { ActorOwnershipRecord } from '../distributed/types.js';
 import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
 
@@ -29,11 +29,7 @@ export class InMemoryActorStorageTransaction implements ActorStorageTransaction 
   private clearAllStaged = false;
   private closed = false;
 
-  constructor(
-    actorId: string,
-    storage: InMemoryActorStorage,
-    options?: TransactionOptions,
-  ) {
+  constructor(actorId: string, storage: InMemoryActorStorage, options?: TransactionOptions) {
     this.actorId = actorId;
     this.storage = storage;
     this.ownerId = options?.ownerId;
@@ -150,8 +146,7 @@ export class InMemoryActorStorageTransaction implements ActorStorageTransaction 
       const current = await this.storage.getOwnership(this.actorId);
       if (
         current &&
-        (current.generation > this.generation ||
-          (this.ownerId && current.ownerId !== this.ownerId))
+        (current.generation > this.generation || (this.ownerId && current.ownerId !== this.ownerId))
       ) {
         throw new StaleOwnerWriteError(
           this.actorId,
@@ -329,11 +324,7 @@ export class InMemoryActorStorage implements ActorStorage {
     return { response: cloneValue(record.response), createdAt: record.createdAt };
   }
 
-  async setIdempotencyRecord(
-    actorId: string,
-    requestId: string,
-    response: unknown,
-  ): Promise<void> {
+  async setIdempotencyRecord(actorId: string, requestId: string, response: unknown): Promise<void> {
     let actorMap = this.idempotency.get(actorId);
     if (!actorMap) {
       actorMap = new Map();

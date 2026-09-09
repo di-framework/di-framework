@@ -194,6 +194,19 @@ const actors = await discoverActorClasses({ rootDir: "src" });
 const registrationCode = generateActorRegistration(actors);
 ```
 
+## wasmCloud Component & Deployment Integration
+
+Virtual actors are supported directly in wasmCloud WebAssembly components through `@di-framework/cli-plugin-wasmcloud`.
+
+### Runtime Execution Model
+- **Activation & Mailboxes**: Actor instances and mailbox queues reside in-memory within the guest WebAssembly component.
+- **Host Storage Binding**: SQLite persistent storage is mapped through host volume mounts (e.g. `/data/actors`, controlled via `ACTOR_STORAGE_DIR`). Actor methods interact with transactional storage without managing low-level guest filesystem handles.
+- **Pre-Activation Migrations**: Schema migrations run prior to enabling an actor to process calls. If a migration fails, the actor is not activated.
+
+### Single-Host Safety vs. Distributed Capabilities
+- **Single-Host Model**: The initial wasmCloud actor deployment model provides resilient single-host execution with persistent volume storage and single-writer SQLite locking. Workload manifests strictly enforce `replicas: 1` and use `strategy: { type: "Recreate" }` for draining in-flight calls and releasing file locks before a new application version starts.
+- **Distributed Capabilities**: Multi-host clustering, partitioned actor placement across wasmCloud nodes, and distributed consensus are handled by distributed actor extensions (Issue #410).
+
 ## License
 
 MIT OR Apache-2.0
@@ -293,6 +306,8 @@ In distributed systems, a successful commit can precede a lost response (network
 | **Consistency** | Strong single-writer consistency backed by storage fencing tokens. Stale owner commits fail with `StaleOwnerWriteError`. |
 | **Retry & Deduplication** | At-least-once transport delivery combined with storage idempotency cache guarantees exactly-once execution semantics. |
 | **Storage Failure Model** | Uncommitted transactions automatically roll back on error, crash, or fencing violation. Surviving nodes recover state directly from authoritative SQLite files upon failover. |
+
+Bun contract-test helpers are available from `@di-framework/actors/testing`. Import production runtime APIs from `@di-framework/actors`; that entry point does not load the test runner.
 
 SQLite actor inspection records original identities separately from sanitized filenames. Legacy files without identity metadata expose a filename-derived display key with `identityInferred: true`; accessing the actor by its original identity upgrades that metadata.
 

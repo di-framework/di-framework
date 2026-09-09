@@ -2,6 +2,7 @@ import { createHash, type Hash } from 'node:crypto';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
+import { discoverActors, renderActorsModule } from './actors.js';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
 import { renderGuestsModule } from './guests.js';
@@ -33,6 +34,7 @@ export type BuildSummary = {
   deploymentDigest: string;
   entry: string;
   profile: string;
+  actors?: string[];
 };
 
 export function requirementsForProject(
@@ -148,6 +150,7 @@ export async function buildComponent(
   const generatedWit = join(generatedDirectory, 'wit');
   const bundledJavaScript = join(generatedDirectory, 'component.js');
   const bindings = discoverBindings(project, deps);
+  const actors = discoverActors(project);
   const requirements = requirementsForProject(project, deps);
 
   rmSync(generatedDirectory, { recursive: true, force: true });
@@ -168,6 +171,7 @@ export async function buildComponent(
     `${JSON.stringify(OCI_ARTIFACT_PLATFORM, null, 2)}\n`,
   );
   if (bindings.length > 0) writeGuestsModule(generatedDirectory, bindings);
+  if (actors.length > 0) writeFileSync(join(generatedDirectory, 'actors.js'), renderActorsModule(actors));
 
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
@@ -176,6 +180,7 @@ export async function buildComponent(
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
+      actorsPath: actors.length > 0 ? join(generatedDirectory, 'actors.js') : undefined,
       projectRoot: project.projectRoot,
     });
   } catch (error) {
@@ -221,6 +226,7 @@ export async function buildComponent(
     deploymentDigest,
     entry: relative(project.projectRoot, project.entryPath),
     profile: BUILD_PROFILE_NAME,
+    ...(actors.length > 0 ? { actors: actors.map((a) => a.actorName) } : {}),
   };
   writeFileSync(
     join(generatedDirectory, 'build.json'),
