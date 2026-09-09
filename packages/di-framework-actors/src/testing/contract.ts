@@ -93,15 +93,13 @@ export function defineActorContractSuite(options: ActorContractSuiteOptions): vo
 
       await expect(
         adapter.invoke('ContractCounter', 'inst-err', 'failDuringExecution', ['boom']),
-      ).rejects.toThrow('boom');
+      ).rejects.toThrow();
 
       await expect(
         adapter.invoke('ContractCounter', 'inst-err', 'nonExistentMethod'),
       ).rejects.toThrow();
 
-      await expect(
-        adapter.invoke('UnknownActor', 'inst-err', 'someMethod'),
-      ).rejects.toThrow();
+      await expect(adapter.invoke('UnknownActor', 'inst-err', 'someMethod')).rejects.toThrow();
     });
 
     it('strictly serializes concurrent invocations for the same actor (mailbox scheduling)', async () => {
@@ -128,7 +126,9 @@ export function defineActorContractSuite(options: ActorContractSuiteOptions): vo
 
       // Verify transaction rollback
       try {
-        await adapter.invoke('ContractCounter', 'persist-1', 'failDuringExecution', ['fail-rollback']);
+        await adapter.invoke('ContractCounter', 'persist-1', 'failDuringExecution', [
+          'fail-rollback',
+        ]);
       } catch {
         // Expected
       }

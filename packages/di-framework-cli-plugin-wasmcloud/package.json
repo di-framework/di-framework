@@ -41,7 +41,7 @@
     "@babel/core": "7.29.7",
     "@babel/plugin-transform-async-to-generator": "7.29.7",
     "@bytecodealliance/jco": "1.32.1",
-    "@di-framework/actors": "workspace:*",
+    "@di-framework/actors": "^5",
     "@di-framework/cli-extension": "^5",
     "@di-framework/componentize-qjs": "0.4.4-di.2",
     "@noble/ciphers": "2.4.0",

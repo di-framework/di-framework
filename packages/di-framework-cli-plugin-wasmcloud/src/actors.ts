@@ -1,13 +1,19 @@
 import * as fs from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import type { ActorRuntime } from '@di-framework/actors';
 import ts from 'typescript';
 import { ALWAYS_SKIP_DIRECTORIES } from './manifest.js';
-import { isInside } from './paths.js';
 import type { WasmcloudProject } from './project.js';
 
 export const WASMCLOUD_ACTORS_GLOBAL = 'di-framework.wasmcloud.actors';
-export const ACTORS_INVOCATION_PATH = '/_actors/invoke';
+
+import { ACTORS_INVOCATION_PATH, handleActorInvocationRequest } from './actor-protocol.js';
+
+export {
+  ACTORS_INVOCATION_PATH,
+  handleActorInvocationRequest,
+  isActorInvocationRequest,
+} from './actor-protocol.js';
 
 export interface ActorMethodRecord {
   name: string;
@@ -29,123 +35,25 @@ export interface ActorModuleOptions {
   defaultStorageDir?: string;
 }
 
-export function isActorInvocationRequest(request: Request): boolean {
-  try {
-    const url = new URL(request.url);
-    return (
-      url.pathname === ACTORS_INVOCATION_PATH ||
-      url.pathname === '/actors/invoke' ||
-      url.pathname.startsWith('/_actors/') ||
-      request.headers.has('x-actor-type') ||
-      request.headers.get('x-actor-dispatch') === 'true'
-    );
-  } catch {
-    return false;
-  }
-}
-
-export async function handleActorInvocationRequest(
-  request: Request,
-  runtime?: ActorRuntime,
-  dispatchFn?: (actorType: string, actorKey: string, method: string, args?: unknown[]) => Promise<unknown>,
-): Promise<Response> {
-  if (!runtime && !dispatchFn) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: { name: 'ActorRuntimeError', message: 'No actor runtime or actors registered in this component' },
-      }),
-      { status: 404, headers: { 'content-type': 'application/json' } },
-    );
-  }
-
-  try {
-    let actorType: string | undefined;
-    let actorKey: string | undefined;
-    let method: string | undefined;
-    let args: unknown[] = [];
-
-    const url = new URL(request.url);
-    const subPath = url.pathname.replace(/^\/_actors\/?/, '');
-    const pathParts = subPath ? subPath.split('/').filter(Boolean) : [];
-
-    if (request.method === 'POST') {
-      const body = await request.json().catch(() => ({}));
-      actorType = body.actorType ?? request.headers.get('x-actor-type') ?? pathParts[0];
-      actorKey = body.actorKey ?? request.headers.get('x-actor-key') ?? pathParts[1];
-      method = body.method ?? request.headers.get('x-actor-method') ?? pathParts[2];
-      args = Array.isArray(body.args) ? body.args : [];
-    } else {
-      actorType = request.headers.get('x-actor-type') ?? pathParts[0];
-      actorKey = request.headers.get('x-actor-key') ?? pathParts[1];
-      method = request.headers.get('x-actor-method') ?? pathParts[2];
-      const qArgs = url.searchParams.get('args');
-      if (qArgs) {
-        try {
-          const parsed = JSON.parse(qArgs);
-          args = Array.isArray(parsed) ? parsed : [parsed];
-        } catch {
-          args = [qArgs];
-        }
-      }
-    }
-
-    if (!actorType || !actorKey || !method) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            name: 'ActorInvocationBadRequest',
-            message: 'actorType, actorKey, and method are required for actor invocation',
-          },
-        }),
-        { status: 400, headers: { 'content-type': 'application/json' } },
-      );
-    }
-
-    const invoke = dispatchFn ?? ((t, k, m, a) => runtime!.invoke(t, k, m, a ?? []));
-    const result = await invoke(actorType, actorKey, method, args);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        result,
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
-  } catch (error: any) {
-    const name = error?.name ?? 'Error';
-    const message = error?.message ?? String(error);
-    const isNotFound = name === 'ActorNotRegisteredError' || name === 'ActorMethodNotFoundError';
-    const isBadRequest = name === 'ActorInvocationBadRequest';
-    const status = isNotFound ? 404 : isBadRequest ? 400 : 500;
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: {
-          name,
-          message,
-          actorType: error?.actorType,
-          actorKey: error?.actorKey,
-          methodName: error?.methodName,
-          migration: error?.migration,
-        },
-      }),
-      { status, headers: { 'content-type': 'application/json' } },
-    );
-  }
-}
-
 export interface WasmcloudActorAdapter {
   handle(request: Request): Promise<Response>;
   invoke(actorType: string, actorKey: string, method: string, args?: unknown[]): Promise<unknown>;
-  dispatchActorInvocation(actorType: string, actorKey: string, method: string, args?: unknown[]): Promise<unknown>;
+  dispatchActorInvocation(
+    actorType: string,
+    actorKey: string,
+    method: string,
+    args?: unknown[],
+  ): Promise<unknown>;
   actorRuntime: ActorRuntime;
 }
 
 export function createWasmcloudActorAdapter(actorRuntime: ActorRuntime): WasmcloudActorAdapter {
-  const dispatchActorInvocation = async (actorType: string, actorKey: string, method: string, args: unknown[] = []) => {
+  const dispatchActorInvocation = async (
+    actorType: string,
+    actorKey: string,
+    method: string,
+    args: unknown[] = [],
+  ) => {
     return await actorRuntime.invoke(actorType, actorKey, method, args);
   };
 
@@ -153,7 +61,12 @@ export function createWasmcloudActorAdapter(actorRuntime: ActorRuntime): Wasmclo
     return await handleActorInvocationRequest(request, actorRuntime, dispatchActorInvocation);
   };
 
-  const invoke = async (actorType: string, actorKey: string, method: string, args: unknown[] = []): Promise<unknown> => {
+  const invoke = async (
+    actorType: string,
+    actorKey: string,
+    method: string,
+    args: unknown[] = [],
+  ): Promise<unknown> => {
     const request = new Request(`http://localhost${ACTORS_INVOCATION_PATH}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -210,7 +123,8 @@ function classDecorators(node: ts.ClassDeclaration): readonly ts.Decorator[] {
   const fromModifiers = (node.modifiers ?? []).filter((modifier) =>
     ts.isDecorator(modifier),
   ) as ts.Decorator[];
-  const legacy = (node as ts.ClassDeclaration & { decorators?: readonly ts.Decorator[] }).decorators;
+  const legacy = (node as ts.ClassDeclaration & { decorators?: readonly ts.Decorator[] })
+    .decorators;
   return [...fromModifiers, ...(legacy ?? [])];
 }
 
@@ -218,7 +132,8 @@ function methodDecorators(node: ts.MethodDeclaration): readonly ts.Decorator[] {
   const fromModifiers = (node.modifiers ?? []).filter((modifier) =>
     ts.isDecorator(modifier),
   ) as ts.Decorator[];
-  const legacy = (node as ts.MethodDeclaration & { decorators?: readonly ts.Decorator[] }).decorators;
+  const legacy = (node as ts.MethodDeclaration & { decorators?: readonly ts.Decorator[] })
+    .decorators;
   return [...fromModifiers, ...(legacy ?? [])];
 }
 
@@ -295,7 +210,8 @@ function parseActorFile(filePath: string, projectRoot: string): ActorDiscoveredR
     // Scan methods
     const methods: ActorMethodRecord[] = [];
     for (const member of statement.members) {
-      if (!ts.isMethodDeclaration(member) || !member.name || !ts.isIdentifier(member.name)) continue;
+      if (!ts.isMethodDeclaration(member) || !member.name || !ts.isIdentifier(member.name))
+        continue;
 
       const methodName = member.name.text;
       let isActorMethod = false;
@@ -382,12 +298,20 @@ export function discoverActors(project: WasmcloudProject): ActorDiscoveredRecord
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (ALWAYS_SKIP_DIRECTORIES.has(entry.name) || entry.name === 'dist' || entry.name === '.di-framework') {
+        if (
+          ALWAYS_SKIP_DIRECTORIES.has(entry.name) ||
+          entry.name === 'dist' ||
+          entry.name === '.di-framework'
+        ) {
           continue;
         }
         scanDir(fullPath);
       } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.js'))) {
-        if (entry.name.endsWith('.d.ts') || entry.name.endsWith('.test.ts') || entry.name.endsWith('.spec.ts')) {
+        if (
+          entry.name.endsWith('.d.ts') ||
+          entry.name.endsWith('.test.ts') ||
+          entry.name.endsWith('.spec.ts')
+        ) {
           continue;
         }
         const fileActors = parseActorFile(fullPath, root);
@@ -419,9 +343,7 @@ export function renderActorsModule(
 ): string {
   const lines: string[] = [];
 
-  lines.push(
-    "import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';",
-  );
+  lines.push("import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';");
 
   const importedClassNames: string[] = [];
   for (const actor of actors) {

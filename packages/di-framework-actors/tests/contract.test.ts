@@ -1,14 +1,13 @@
-import { describe, afterAll } from 'bun:test';
+import { afterAll, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ActorRuntime, SqliteActorStorage } from '../src/index.js';
 import {
-  ActorRuntime,
   ContractCounterActor,
   ContractFailingMigrationActor,
   defineActorContractSuite,
-  SqliteActorStorage,
-} from '../src/index.js';
+} from '../src/testing/index.js';
 
 describe('Local Actor Contract Tests', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-contract-local-'));
@@ -45,7 +44,10 @@ describe('Local Actor Contract Tests', () => {
         // Use an invalid directory (e.g. a file path treated as a directory)
         const invalidFile = path.join(tempDir, 'invalid-dir-file');
         fs.writeFileSync(invalidFile, 'not-a-dir');
-        storage = new SqliteActorStorage({ baseDir: path.join(invalidFile, 'sub'), fileLocking: true });
+        storage = new SqliteActorStorage({
+          baseDir: path.join(invalidFile, 'sub'),
+          fileLocking: true,
+        });
         runtime = new ActorRuntime({ storage });
         runtime.register(ContractCounterActor);
       },
@@ -67,4 +69,8 @@ describe('Local Actor Contract Tests', () => {
       // Ignore
     }
   });
+});
+
+it('provides a callable method on the failing-migration fixture', async () => {
+  expect(await new ContractFailingMigrationActor().ping()).toBe('pong');
 });

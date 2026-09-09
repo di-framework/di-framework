@@ -312,3 +312,5 @@ The wasmCloud plugin natively integrates virtual actors from `@di-framework/acto
 - **Persistent Volumes**: Generated manifests provision a Kubernetes `PersistentVolumeClaim` mounted at `/data/actors`.
 - **Upgrade & Drain Behavior**: The workload uses Kubernetes rollout `strategy: { type: "Recreate" }`, guaranteeing that the terminating pod drains active calls and releases SQLite locks before the new version activates and executes pending migrations.
 - **Single-Host vs. Distributed**: Single-host wasmCloud actor deployment is designed for standalone, resilient edge or single-node deployments. Distributed actor clustering, key partitioning, and remote consensus across wasmCloud nodes are part of distributed actor capabilities.
+
+Actor HTTP dispatch is restricted to the reserved `/_actors/` path. Actor headers on other paths do not intercept application requests. Error responses expose stable error names and generic messages; they omit internal exception details and migration objects.

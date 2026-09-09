@@ -2,13 +2,12 @@ import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ActorRuntime, SqliteActorStorage } from '../../di-framework-actors/src/index';
 import {
-  ActorRuntime,
   ContractCounterActor,
   ContractFailingMigrationActor,
   defineActorContractSuite,
-  SqliteActorStorage,
-} from '@di-framework/actors';
+} from '../../di-framework-actors/src/testing/index';
 import {
   ACTORS_INVOCATION_PATH,
   createWasmcloudActorAdapter,
@@ -47,7 +46,10 @@ describe('wasmCloud Actor Adapter Integration', () => {
           if (storage) await storage.close();
           const invalidFile = path.join(tempDir, 'invalid-dir-file');
           fs.writeFileSync(invalidFile, 'not-a-dir');
-          storage = new SqliteActorStorage({ baseDir: path.join(invalidFile, 'sub'), fileLocking: true });
+          storage = new SqliteActorStorage({
+            baseDir: path.join(invalidFile, 'sub'),
+            fileLocking: true,
+          });
           runtime = new ActorRuntime({ storage });
           runtime.register(ContractCounterActor);
           adapter = createWasmcloudActorAdapter(runtime);
@@ -121,4 +123,79 @@ describe('wasmCloud Actor Adapter Integration', () => {
       // Ignore
     }
   });
+});
+
+it('parses actor paths, headers and query arguments and limits error details', async () => {
+  const { isActorInvocationRequest, handleActorInvocationRequest } = await import('../src/actors');
+  expect(isActorInvocationRequest({ url: 'invalid' } as Request)).toBe(false);
+  expect(isActorInvocationRequest(new Request('http://local/actors/invoke'))).toBe(false);
+  expect(
+    isActorInvocationRequest(
+      new Request('http://local/', { headers: { 'x-actor-type': 'Counter' } }),
+    ),
+  ).toBe(false);
+  expect(
+    isActorInvocationRequest(
+      new Request('http://local/', { headers: { 'x-actor-dispatch': 'true' } }),
+    ),
+  ).toBe(false);
+  expect(isActorInvocationRequest(new Request('http://local/'))).toBe(false);
+  expect((await handleActorInvocationRequest(new Request('http://local/'))).status).toBe(404);
+  for (const [query, expected] of [
+    ['[1,2]', [1, 2]],
+    ['3', [3]],
+    ['raw', ['raw']],
+  ] as const) {
+    const req = new Request(
+      'http://local/_actors/Counter/key/read?args=' + encodeURIComponent(query),
+    );
+    const response = await handleActorInvocationRequest(
+      req,
+      undefined,
+      async (type, key, method, args) => ({ type, key, method, args }),
+    );
+    expect(await response.json()).toEqual({
+      success: true,
+      result: { type: 'Counter', key: 'key', method: 'read', args: expected },
+    });
+  }
+  const bad = new Request('http://local/_actors/invoke', { method: 'POST', body: '{bad' });
+  expect((await handleActorInvocationRequest(bad, undefined, async () => 1)).status).toBe(400);
+  for (const name of [
+    'Error',
+    'ActorInvocationBadRequest',
+    'ActorMethodNotFoundError',
+    'ActorMigrationError',
+  ]) {
+    const response = await handleActorInvocationRequest(
+      new Request('http://local/_actors/Counter/key/read'),
+      undefined,
+      async () => {
+        throw Object.assign(new Error('private detail'), {
+          name,
+          migration: { stack: 'private stack' },
+        });
+      },
+    );
+    const body = await response.text();
+    expect(body).not.toContain('private');
+    expect(response.status).toBe(
+      name === 'ActorInvocationBadRequest' ? 400 : name === 'ActorMethodNotFoundError' ? 404 : 500,
+    );
+  }
+  const runtime = new ActorRuntime();
+  class Plain {
+    read() {
+      return 'ok';
+    }
+  }
+  runtime.register(Plain);
+  const adapter = createWasmcloudActorAdapter(runtime);
+  expect(await adapter.dispatchActorInvocation('Plain', 'key', 'read')).toBe('ok');
+  const response = await handleActorInvocationRequest(
+    new Request('http://local/_actors/Plain/key/read'),
+    runtime,
+  );
+  expect((await response.json()).result).toBe('ok');
+  await runtime.clear();
 });

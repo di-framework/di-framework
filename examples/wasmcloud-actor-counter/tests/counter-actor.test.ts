@@ -99,7 +99,7 @@ describe('wasmCloud CounterActor Example Tests', () => {
 
       await expect(
         adapter.invoke('Counter', 'counter-adapter-rollback', 'failingAction'),
-      ).rejects.toThrow('Action failed intentionally');
+      ).rejects.toThrow('Actor invocation failed');
 
       const count = await adapter.invoke('Counter', 'counter-adapter-rollback', 'getCount');
       expect(count).toBe(50);

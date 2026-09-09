@@ -2,18 +2,17 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  discoverActors,
-  renderActorsModule,
-  renderWorkloadManifest,
-} from '../src/index.js';
+import { discoverActors, renderActorsModule, renderWorkloadManifest } from '../src/index.js';
 import type { WasmcloudProject } from '../src/project.js';
 import type { ClusterConnection } from '../src/target.js';
 
 describe('wasmCloud Actor Build & Manifest Generation', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wasmcloud-actor-build-'));
 
-  const makeProject = (srcFiles: Record<string, string>, configExtra: Record<string, unknown> = {}): WasmcloudProject => {
+  const makeProject = (
+    srcFiles: Record<string, string>,
+    configExtra: Record<string, unknown> = {},
+  ): WasmcloudProject => {
     const projDir = path.join(tmp, `proj-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const srcDir = path.join(projDir, 'src');
     fs.mkdirSync(srcDir, { recursive: true });
@@ -93,9 +92,11 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
     const actors = discoverActors(project);
     const moduleSource = renderActorsModule(actors);
 
-    expect(moduleSource).toContain("import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';");
-    expect(moduleSource).toContain("import { UserActor } from");
-    expect(moduleSource).toContain("actorRuntime.register(UserActor, {");
+    expect(moduleSource).toContain(
+      "import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';",
+    );
+    expect(moduleSource).toContain('import { UserActor } from');
+    expect(moduleSource).toContain('actorRuntime.register(UserActor, {');
     expect(moduleSource).toContain('export async function dispatchActorInvocation(');
     expect(moduleSource).toContain('export { actorRuntime, storage, UserActor };');
     expect(moduleSource).toContain('globalThis[Symbol.for("di-framework.wasmcloud.actors")]');
@@ -143,14 +144,94 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
 
     // Rejects replicas > 1
     expect(() =>
-      renderWorkloadManifest(
-        project,
-        connection,
-        'registry.example.com/actor-app:v1',
-        [],
-        [],
-        { hasActors: true, replicas: 2 },
-      ),
+      renderWorkloadManifest(project, connection, 'registry.example.com/actor-app:v1', [], [], {
+        hasActors: true,
+        replicas: 2,
+      }),
     ).toThrow('Actor deployments with SQLite persistent storage require replicas: 1');
   });
+});
+
+it('discovers nested actors, alternate decorators and entrypoints outside src', async () => {
+  const { spyOn } = await import('bun:test');
+  const { makeProject } = await import('./helpers');
+  const { loadProject } = await import('../src/project');
+  const { nodeCompatibilityPlugin } = await import('../src/deps');
+  const root = makeProject();
+  try {
+    fs.mkdirSync(path.join(root, 'src', 'nested'));
+    fs.mkdirSync(path.join(root, 'src', 'node_modules'));
+    fs.writeFileSync(path.join(root, 'src', 'types.d.ts'), 'declare class Actor {}');
+    fs.writeFileSync(path.join(root, 'src', 'skip.test.ts'), '@Actor class Ignored {}');
+    fs.writeFileSync(path.join(root, 'src', 'plain.ts'), 'export const value = 1;');
+    const file = path.join(root, 'src', 'nested', 'actors.ts');
+    fs.writeFileSync(
+      file,
+      `
+      @other() export class NotActor {}
+      @Actor export class Bare { @ActorMethod read() {} }
+      @lib.Actor({ name: 'Configured', namespace: 'app', migrations: [migration], enabled: true, disabled: false, ...extra })
+      export class Configured {
+        @lib.ActorMethod('fetch') read() {}
+        @ActorMethod(dynamic) dynamic() {}
+        @ActorMethod({ name: 'alias', timeout: 2, enabled: true, disabled: false, ...extra }) timed() {}
+        @Other() skipped() {}
+      }
+      @Actor(dynamic) export class Dynamic {}
+    `,
+    );
+    const project = loadProject(root);
+    const records = discoverActors(project);
+    expect(records.map((record) => record.actorName)).toEqual(['Bare', 'Configured', 'Dynamic']);
+    expect(records[1]?.hasMigrations).toBe(true);
+    expect(records[1]?.methods.map((method) => method.name)).toEqual(['fetch', 'dynamic', 'alias']);
+    const read = fs.readFileSync;
+    const missing = spyOn(fs, 'readFileSync').mockImplementation(((
+      filePath: any,
+      ...args: any[]
+    ) => {
+      if (filePath === file) throw new Error('disappeared');
+      return (read as any)(filePath, ...args);
+    }) as typeof fs.readFileSync);
+    try {
+      expect(discoverActors(project)).toEqual([]);
+    } finally {
+      missing.mockRestore();
+    }
+    const extra = path.join(root, 'extra.js');
+    fs.writeFileSync(extra, '@Actor("Outside") export class Outside {}');
+    expect(
+      discoverActors({ ...project, entryPath: extra }).some(
+        (record) => record.actorName === 'Outside',
+      ),
+    ).toBe(true);
+    fs.rmSync(path.join(root, 'src'), { recursive: true });
+    expect(discoverActors({ ...project, entryPath: extra })).toHaveLength(1);
+    expect(
+      discoverActors({
+        ...project,
+        projectRoot: path.join(root, 'missing'),
+        entryPath: path.join(root, 'missing.js'),
+      }),
+    ).toEqual([]);
+    const plugin = nodeCompatibilityPlugin('/app.ts', undefined, '/actors.js');
+    expect(plugin.resolveId('virtual:di-framework-wasmcloud-actors')).toBe('/actors.js');
+    const empty = nodeCompatibilityPlugin('/app.ts');
+    expect(empty.resolveId('virtual:di-framework-wasmcloud-actors')).toContain('actors-empty');
+    expect(empty.load(empty.resolveId('virtual:di-framework-wasmcloud-actors')!)).toContain(
+      'actorRuntime = undefined',
+    );
+    expect(nodeCompatibilityPlugin('/app.ts', undefined, undefined, {} as any)).toBeDefined();
+    expect(nodeCompatibilityPlugin('/app.ts', undefined, {} as any)).toBeDefined();
+    fs.mkdirSync(path.join(root, '.di-framework'));
+    const generatedEntry = path.join(root, '.di-framework', 'generated.js');
+    fs.writeFileSync(generatedEntry, '@Actor() export class Generated {}');
+    expect(
+      discoverActors({ ...project, entryPath: generatedEntry }).find(
+        (actor) => actor.className === 'Generated',
+      )?.importPath,
+    ).toBe('./generated.js');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

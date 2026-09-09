@@ -139,3 +139,5 @@ Virtual actors are supported directly in wasmCloud WebAssembly components throug
 ## License
 
 MIT OR Apache-2.0
+
+Bun contract-test helpers are available from `@di-framework/actors/testing`. Import production runtime APIs from `@di-framework/actors`; that entry point does not load the test runner.
