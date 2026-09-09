@@ -422,3 +422,16 @@ describe('runWasmcloudBuild', () => {
     expect(result.text).toContain('Built');
   });
 });
+
+it('writes the cron invoker dependency for ingress-free components without scheduled jobs', async () => {
+  const root = makeProject({ name: 'Empty Worker', entry: 'src/app.ts', ingress: false });
+  await buildComponent(
+    loadProject(root),
+    captureIo().io,
+    fakeDeps({ cwd: root, assets: makeAssets() }),
+  );
+  expect(readFileSync(join(root, '.di-framework', 'cron-adapter.js'), 'utf8')).toContain(
+    './cron-invoker.js',
+  );
+  expect(readFileSync(join(root, '.di-framework', 'cron-invoker.js'), 'utf8')).toContain('export');
+});

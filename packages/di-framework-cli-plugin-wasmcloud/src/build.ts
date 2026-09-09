@@ -188,6 +188,8 @@ export async function buildComponent(
   if (bindings.length > 0) writeGuestsModule(generatedDirectory, bindings);
   if (cronJobs.length > 0) {
     writeFileSync(join(generatedDirectory, 'cron.json'), `${JSON.stringify(cronJobs, null, 2)}\n`);
+  }
+  if (cronJobs.length > 0 || !hasHttp) {
     writeFileSync(join(generatedDirectory, 'cron-invoker.js'), renderCronInvokerModule(cronJobs));
   }
   if (!hasHttp && !isWorker) {
