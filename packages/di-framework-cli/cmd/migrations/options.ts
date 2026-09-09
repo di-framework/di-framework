@@ -156,21 +156,18 @@ export async function createCliMigrationRunner(
     }
   }
 
-  const discovered = await repo.discoverManifestMigrations({
-    manifestPath,
-    directory: dirPath,
-    cwd,
-  });
-
-  const mismatchedBindings = [
-    ...new Set(discovered.filter((m) => m.binding !== binding).map((m) => m.binding)),
-  ];
-  if (mismatchedBindings.length > 0 && !discovered.some((m) => m.binding === binding)) {
-    throw new CommandFailure(
-      'MIGRATION_BINDING_MISMATCH',
-      `No migrations found for binding '${binding}'. Available bindings: ${mismatchedBindings.join(', ')}. Select one with --binding.`,
-      2,
-    );
+  const discoveryOptions = { manifestPath, directory: dirPath, cwd };
+  const discovered = await repo.discoverManifestMigrations({ ...discoveryOptions, binding });
+  if (discovered.length === 0) {
+    const unfiltered = await repo.discoverManifestMigrations(discoveryOptions);
+    const availableBindings = [...new Set(unfiltered.map((m) => m.binding))];
+    if (availableBindings.length > 0) {
+      throw new CommandFailure(
+        'MIGRATION_BINDING_MISMATCH',
+        `No migrations found for binding '${binding}'. Available bindings: ${availableBindings.join(', ')}. Select one with --binding.`,
+        2,
+      );
+    }
   }
 
   // 3. Resolve database connection

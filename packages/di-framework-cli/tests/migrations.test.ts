@@ -2,9 +2,9 @@ import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { clearMigrationRegistry } from '../../di-framework-repo/src/migrations/decorator';
 import type { CliIo } from '../command';
 import { main } from '../main';
-import { clearMigrationRegistry } from '../../di-framework-repo/src/migrations/decorator';
 
 function captureIo() {
   const stdout: string[] = [];
@@ -283,6 +283,15 @@ describe('Migration CLI diagnostics and loading', () => {
       ).toBe(0);
       expect(cap.stdout.join('')).toMatch(/No migrations applied|No pending migrations/);
     }
+  });
+
+  test('assigns an explicit binding to SQL files without a binding header', async () => {
+    const { createCliMigrationRunner } = await import('../cmd/migrations/options');
+    mkdirSync(join(dir, 'migrations'));
+    writeFileSync(join(dir, 'migrations/1_init.sql'), 'CREATE TABLE tenant (id INT)');
+    const runner = await createCliMigrationRunner({ modules: [], db: ':memory:', binding: 'tenant' }, dir);
+    expect((await runner.execute()).applied[0]?.binding).toBe('tenant');
+    await runner.close();
   });
 
   test('reports invalid steps, imports, connections, execution, and history', async () => {
