@@ -1,5 +1,5 @@
 import type { ActorOptions, Constructor } from '../types.js';
-import { getOrCreateActorMetadata } from './keys.js';
+import { getOrCreateActorMetadata, registerDecoratedActorClass } from './keys.js';
 
 /**
  * Marks a class as an Actor in di-framework.
@@ -18,6 +18,7 @@ export function Actor(targetOrOptions?: Constructor | ActorOptions | string): an
     // Called without parentheses: @Actor
     const meta = getOrCreateActorMetadata(targetOrOptions);
     meta.name = targetOrOptions.name;
+    registerDecoratedActorClass(targetOrOptions);
     return targetOrOptions;
   }
 
@@ -39,6 +40,7 @@ export function Actor(targetOrOptions?: Constructor | ActorOptions | string): an
     } else {
       meta.name = target.name;
     }
+    registerDecoratedActorClass(target);
     return target;
   };
 }

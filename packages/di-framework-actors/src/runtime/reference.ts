@@ -6,6 +6,7 @@ export interface InvocationTarget {
     actorKey: string,
     methodName: string,
     args: any[],
+    options?: any,
   ): Promise<any>;
 }
 
@@ -16,8 +17,12 @@ export function createActorReference<T extends object>(
   actorClassOrName: Constructor<T> | string,
   actorKey: string,
   targetInvoker: InvocationTarget,
+  defaultOptions?: any,
+  explicitActorType?: string,
 ): ActorRef<T> {
-  const actorType = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+  const rawName = typeof actorClassOrName === 'string' ? actorClassOrName : actorClassOrName.name;
+  const actorType =
+    explicitActorType ?? (rawName.includes(':') ? rawName.split(':').pop()! : rawName);
   const compositeId = `${actorType}:${actorKey}`;
 
   const target = {
@@ -37,7 +42,7 @@ export function createActorReference<T extends object>(
       }
 
       return (...args: any[]) => {
-        return targetInvoker.invoke(actorClassOrName, actorKey, prop, args);
+        return targetInvoker.invoke(actorClassOrName, actorKey, prop, args, defaultOptions);
       };
     },
   });

@@ -13,6 +13,7 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@di-framework/actors": "workspace:*",
     "@di-framework/cli": "workspace:*",
     "@di-framework/core": "workspace:*",
     "@di-framework/graphql": "workspace:*",

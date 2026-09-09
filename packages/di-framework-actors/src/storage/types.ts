@@ -1,6 +1,7 @@
 /**
  * Storage abstractions and transaction contracts for @di-framework/actors.
  */
+import type { ActorOwnershipRecord } from '../distributed/types.js';
 
 /**
  * Transaction interface for an actor's storage operations.
@@ -55,9 +56,26 @@ export interface ActorStorageTransaction {
   rollback(): Promise<void>;
 
   /**
+   * Stages an idempotency record to be committed atomically with this transaction.
+   */
+  setIdempotencyRecord?(requestId: string, response: unknown): Promise<void>;
+
+  /**
+   * Looks up an idempotency record within this transaction or committed storage.
+   */
+  getIdempotencyRecord?(
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined>;
+
+  /**
    * Optional reference to the underlying database instance.
    */
   getDatabase?(): any;
+}
+
+export interface TransactionOptions {
+  ownerId?: string;
+  generation?: number;
 }
 
 /**
@@ -103,7 +121,39 @@ export interface ActorStorage {
   /**
    * Begins an isolated storage transaction for the given actor.
    */
-  beginTransaction(actorId: string): Promise<ActorStorageTransaction>;
+  beginTransaction(actorId: string, options?: TransactionOptions): Promise<ActorStorageTransaction>;
+
+  /**
+   * Retrieves the current ownership record for an actor, or null if unassigned.
+   */
+  getOwnership?(actorId: string): Promise<ActorOwnershipRecord | null>;
+
+  /**
+   * Acquires or renews single-writer ownership for an actor with a monotonically increasing generation fencing token.
+   */
+  acquireOwnership?(
+    actorId: string,
+    ownerId: string,
+    options?: { leaseTtlMs?: number; force?: boolean },
+  ): Promise<ActorOwnershipRecord>;
+
+  /**
+   * Releases ownership of an actor if held by ownerId.
+   */
+  releaseOwnership?(actorId: string, ownerId: string): Promise<boolean>;
+
+  /**
+   * Retrieves a committed idempotency record by request ID.
+   */
+  getIdempotencyRecord?(
+    actorId: string,
+    requestId: string,
+  ): Promise<{ response: unknown; createdAt: number } | undefined>;
+
+  /**
+   * Directly sets a committed idempotency record.
+   */
+  setIdempotencyRecord?(actorId: string, requestId: string, response: unknown): Promise<void>;
 
   /**
    * Optional hook to close and release resources for an individual actor.
