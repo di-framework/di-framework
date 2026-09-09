@@ -12,6 +12,7 @@
     "examples",
     "examples/packages/*",
     "examples/checkout-inventory",
+    "examples/scheduled-worker",
     "examples/wasmcloud-actor-counter"
   ],
   "scripts": {

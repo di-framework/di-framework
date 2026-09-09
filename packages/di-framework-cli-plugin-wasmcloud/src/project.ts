@@ -8,6 +8,8 @@ export const CONFIG_FILE_NAME = 'di-framework.config.json';
 export type WasmcloudProject = {
   /** Display name exactly as configured. */
   applicationName: string;
+  /** Explicit actor deployment override for programmatically constructed projects. */
+  actors?: boolean;
   /** Explicit WASI DNS allowlist, separate from outbound HTTP permissions. */
   allowedIpNameLookups?: string[];
   configPath: string;
@@ -22,6 +24,10 @@ export type WasmcloudProject = {
   version: string;
   /** `name` slugified into a WIT package identifier. */
   witName: string;
+  /** Whether this component exposes an HTTP ingress handler. Defaults to true. */
+  ingress?: boolean;
+  /** Cron execution mode override. */
+  cronMode?: 'in-process' | 'external';
 };
 
 export function findUp(startDirectory: string, fileName: string): string | undefined {
@@ -154,8 +160,13 @@ export function loadProject(startDirectory: string): WasmcloudProject {
       ? packageJson.version
       : '0.1.0';
 
+  const ingress = config.ingress !== false && config.http !== false;
+  const cronMode = config.cronMode === 'external' ? 'external' : undefined;
+
   return {
     applicationName: config.name,
+    ingress,
+    ...(cronMode ? { cronMode } : {}),
     ...(config.allowedIpNameLookups === undefined
       ? {}
       : { allowedIpNameLookups: config.allowedIpNameLookups as string[] }),

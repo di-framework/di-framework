@@ -3,10 +3,12 @@ import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
 import { discoverActors } from './actors.js';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
+import { type DiscoveredCronJob, discoverScheduledJobs } from './cron.js';
 import type { WasmcloudDeps } from './deps.js';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
 import { captureKubectl, runKubectl } from './kubernetes.js';
 import type { WasmcloudProject } from './project.js';
+import { asWitIdentifier } from './project.js';
 import type { ClusterConnection } from './target.js';
 import { defaultProjectRequirements, type WitRequirement } from './wit.js';
 
@@ -41,8 +43,10 @@ export function renderWorkloadManifest(
   requirements: readonly WitRequirement[] = defaultProjectRequirements(),
   bindings: readonly BindingRecord[] = [],
   options?: WorkloadManifestOptions | boolean,
+  cronJobs: readonly DiscoveredCronJob[] = [],
 ): string {
-  const opts: WorkloadManifestOptions = typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
+  const opts: WorkloadManifestOptions =
+    typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
   const hasActors = opts.hasActors ?? false;
 
   if (hasActors) {
@@ -81,7 +85,6 @@ spec:
   resources:
     requests:
       storage: ${storageSize}
----
 `
     : '';
 
@@ -97,19 +100,23 @@ spec:
     : '';
 
   const actorEnv = hasActors
-    ? `          env:
-            - name: ACTOR_STORAGE_DIR
+    ? `            - name: ACTOR_STORAGE_DIR
               value: ${yamlQuote(mountPath)}
 `
     : '';
 
   const strategy = hasActors
-    ? `        strategy:
-          type: Recreate
+    ? `      strategy:
+        type: Recreate
 `
     : '';
 
-  return `${pvcSection}apiVersion: v1
+  const hasHttp = project.ingress !== false;
+  const sections: string[] = [];
+  if (hasActors) sections.push(pvcSection.trimEnd());
+
+  if (hasHttp) {
+    sections.push(`apiVersion: v1
 kind: Service
 metadata:
   name: ${name}
@@ -122,9 +129,22 @@ spec:
     - name: http
       port: 80
       targetPort: 80
-      protocol: TCP
----
-apiVersion: runtime.wasmcloud.dev/v1alpha1
+      protocol: TCP`);
+  }
+
+  const cronEnv =
+    cronJobs.length > 0
+      ? `            - name: DI_CRON_MODE
+              value: "external"
+`
+      : '';
+  const componentEnv =
+    hasActors || cronJobs.length > 0
+      ? `          env:
+${actorEnv}${cronEnv}`
+      : '';
+
+  const workloadDeployment = `apiVersion: runtime.wasmcloud.dev/v1alpha1
 kind: WorkloadDeployment
 metadata:
   name: ${name}
@@ -137,13 +157,21 @@ spec:
     spec:
 ${strategy}      hostSelector:
         hostgroup: default
-      kubernetes:
-        service:
+${
+  hasHttp || hasActors
+    ? `      kubernetes:
+${
+  hasHttp
+    ? `        service:
           name: ${name}
-${actorVolumes}      components:
+`
+    : ''
+}${actorVolumes}`
+    : ''
+}      components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${actorEnv}${
+${componentEnv}${
   project.allowedIpNameLookups === undefined
     ? ''
     : `          localResources:
@@ -152,7 +180,7 @@ ${actorEnv}${
 }${renderHostInterfacesYaml(
   hostInterfacesFromRequirements(
     requirements,
-    { httpHost: project.applicationName },
+    hasHttp ? { httpHost: project.applicationName } : {},
     bindings.map((binding) => ({
       name: binding.name,
       className: binding.className,
@@ -161,8 +189,48 @@ ${actorEnv}${
       secretFrom: binding.secretFrom,
     })),
   ),
-)}
-`;
+)}`;
+
+  sections.push(workloadDeployment);
+
+  for (const job of cronJobs) {
+    const jobKebab =
+      job.kebabId || asWitIdentifier(job.name || `${job.className}-${job.methodName}`);
+    const jobResourceName = `${name}-${jobKebab}`;
+    sections.push(`apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${jobResourceName}
+  namespace: ${connection.namespace}
+  labels:
+${labels}
+    di-framework.dev/cron-job: ${yamlQuote(job.jobId)}
+spec:
+  schedule: ${yamlQuote(job.cronExpression)}
+  concurrencyPolicy: ${job.allowConcurrent ? 'Allow' : 'Forbid'}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+${labels.replace(/^/gm, '        ')}
+            di-framework.dev/cron-job: ${yamlQuote(job.jobId)}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: scheduler-dispatch
+              image: ${yamlQuote(image)}
+              env:
+                - name: DI_CRON_MODE
+                  value: "external"
+                - name: DI_CRON_INVOKE_JOB
+                  value: ${yamlQuote(job.jobId)}
+              args:
+                - "cron:invoke"
+                - ${yamlQuote(job.jobId)}`);
+  }
+
+  return sections.join('\n---\n') + '\n';
 }
 
 export async function applyWorkload(
@@ -173,9 +241,18 @@ export async function applyWorkload(
   deps: WasmcloudDeps,
 ): Promise<string> {
   const bindings = discoverBindings(project, deps);
-  const hasActors = discoverActors(project).length > 0 || (project as any).actors === true;
   const requirements = [...defaultProjectRequirements(), ...requirementsFromBindings(bindings)];
-  const manifest = renderWorkloadManifest(project, connection, image, requirements, bindings, { hasActors });
+  const hasActors = discoverActors(project).length > 0 || project.actors === true;
+  const cronJobs = discoverScheduledJobs(project.projectRoot);
+  const manifest = renderWorkloadManifest(
+    project,
+    connection,
+    image,
+    requirements,
+    bindings,
+    { hasActors },
+    cronJobs,
+  );
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);
@@ -197,7 +274,13 @@ export async function deleteWorkload(
   await runKubectl(
     deps,
     connection,
-    ['delete', `${WORKLOAD_DEPLOYMENT_RESOURCE}/${name}`, `service/${name}`, '--ignore-not-found'],
+    [
+      'delete',
+      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
+      '-l',
+      `app.kubernetes.io/name=${name}`,
+      '--ignore-not-found',
+    ],
     project.projectRoot,
   );
 }

@@ -7,7 +7,8 @@
 /**
  * Represents a service class constructor
  */
-export type ServiceClass<T> = new (...args: any[]) => T;
+export type ServiceClass<T = any> = new (...args: any[]) => T;
+export type Constructor<T = any> = new (...args: any[]) => T;
 
 /**
  * Represents a factory function that creates a service

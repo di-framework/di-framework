@@ -72,6 +72,18 @@
       "bun": "./dist/service-bindings/*.js",
       "import": "./dist/service-bindings/*.js",
       "default": "./dist/service-bindings/*.js"
+    },
+    "./cron": {
+      "types": "./dist/cron/index.d.ts",
+      "bun": "./dist/cron/index.js",
+      "import": "./dist/cron/index.js",
+      "default": "./dist/cron/index.js"
+    },
+    "./cron/*": {
+      "types": "./dist/cron/*.d.ts",
+      "bun": "./dist/cron/*.js",
+      "import": "./dist/cron/*.js",
+      "default": "./dist/cron/*.js"
     }
   },
   "bugs": {
