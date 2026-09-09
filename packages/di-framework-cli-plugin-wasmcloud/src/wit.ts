@@ -70,6 +70,15 @@ export function defaultProjectRequirements(): WitRequirement[] {
  */
 export function runtimeRequirementsFromJavaScript(source: string): WitRequirement[] {
   const requirements: WitRequirement[] = [];
+  if (source.includes('wasi:tls/client@0.3.0-draft')) {
+    requirements.push({
+      package: 'wasi:tls',
+      version: '0.3.0-draft',
+      interfaces: ['client', 'types'],
+      direction: 'import',
+      source: NODE_COMPAT_SOURCE,
+    });
+  }
   const socketInterfaces: string[] = [];
   if (source.includes(`${WASI_SOCKETS_PACKAGE}/types@${WASI_SOCKETS_VERSION}`)) {
     socketInterfaces.push('types');

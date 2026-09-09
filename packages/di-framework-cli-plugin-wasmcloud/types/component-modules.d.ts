@@ -39,6 +39,15 @@ declare module 'wasi:sockets/ip-name-lookup@0.3.0' {
   export function resolveAddresses(name: string): Promise<unknown>;
 }
 
+declare module 'wasi:tls/client@0.3.0-draft' {
+  export class Connector {
+    constructor();
+    send(cleartext: AsyncIterable<Uint8Array>): unknown;
+    receive(ciphertext: AsyncIterable<Uint8Array>): unknown;
+    static connect(connector: Connector, serverName: string): Promise<unknown>;
+  }
+}
+
 declare module 'wasi:random/random@0.3.0' {
   export function getRandomBytes(maxLen: bigint | number): unknown;
 }

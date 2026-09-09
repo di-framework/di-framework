@@ -97,12 +97,37 @@ socket security (`createHash` / `createHmac` / `randomBytes` / `randomUUID` / `s
 AES-GCM, ECDH P-256). `node:http` is HTTP/1.1 on that TCP overlay (`createServer`, `request` /
 `get`, `'upgrade'`) so the Node WebSocket adapter (`ws`) can handshake. Those WIT imports are added
 to the guest world only when the bundle actually uses them; they are runtime WASI, not wasmCloud
-`hostInterfaces`. `node:tls`, `https`, and `child_process` stay unenv mocks. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
+`hostInterfaces`. `node:tls` supplies client `connect` / `TLSSocket` (including an existing
+`node:net` socket for STARTTLS) through the host's `wasi:tls/client@0.3.0-draft` encryption
+and decryption streams. `node:https` supplies HTTP/1.1 `request` / `get` and an Agent
+that carries connection options; requests wait for verified `secureConnect` before sending.
+`child_process` stays an unenv mock. Config files from the project (`*.json` / `*.yaml` / `*.toml` / `.env`) are
 seeded into that filesystem at componentize time. Do not put secrets in those files. Stock jco 1.32.1 / componentize-qjs 0.4.4 uses wasmtime 47,
 which stubs unknown imports with sync `func_new` and fails at wizer with
 `type mismatch with async`. Sync imports such as `wasi:config@0.2.0-rc.1` also
 componentize with stock jco and run on `wasmtime serve -S config`. Build state
 lives in the disposable `.di-framework/` directory.
+
+TLS requires a host with the opt-in `wasi-tls` feature, such as a TLS-enabled
+`wash-runtime` build, or Wasmtime 48 with `-S p3=y,tls=y,inherit-network=y,allow-ip-name-lookup=y`.
+The draft WIT is pinned to the wasmCloud interface; importing TLS or HTTPS adds it to the
+component world automatically. A host without it cannot instantiate that component.
+See [wasmCloud host TLS configuration](https://wasmcloud.com/docs/runtime/building-custom-hosts/#tls-for-wasitls-components).
+
+Certificate chain and server-name verification are mandatory and use the host's trust store.
+Use `servername` when connecting by address to a DNS-named service, and configure private
+CA trust on the host, including in local development. Guest `ca` / client certificates,
+`rejectUnauthorized: false`, custom identity checks, TLS versions/ciphers, ALPN, sessions,
+and certificate inspection are unsupported and throw explicit errors. Server-side
+`tls.createServer` / `https.createServer` are unsupported; incoming HTTPS terminates at
+the host ingress. This is a client subset, without connection pooling or HTTP/2.
+Use `tls.connect(options)` rather than calling `.connect()` on a `TLSSocket`.
+
+Run `DI_WASI_TLS_SMOKE=1 bun test tests/node-compat-tls-native.test.ts` from this package
+to compile and exercise both clients against real Wasmtime TLS. This opt-in check needs
+the componentizer, Wasmtime 48, OpenSSL, and network access to `example.com`; it also
+starts a temporary local HTTPS server to confirm that an untrusted certificate is rejected.
+
 Package versions are independent of the component-model preview: a WASI 0.3 guest may
 still import `wasmcloud:*` packages at their own versions.
 
