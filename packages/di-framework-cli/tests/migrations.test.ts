@@ -1,10 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CliIo } from '../command';
 import { main } from '../main';
+import { clearMigrationRegistry } from '../../di-framework-repo/src/migrations/decorator';
 
 function captureIo() {
   const stdout: string[] = [];
@@ -22,6 +22,7 @@ describe('CLI Migrations Commands', () => {
   let migDir: string;
 
   beforeEach(() => {
+    clearMigrationRegistry();
     tmpDir = mkdtempSync(join(import.meta.dir, '.tmp-cli-migrations-'));
     dbPath = join(tmpDir, 'test.db');
     migDir = join(tmpDir, 'migrations');
@@ -29,6 +30,7 @@ describe('CLI Migrations Commands', () => {
   });
 
   afterEach(() => {
+    clearMigrationRegistry();
     try {
       rmSync(tmpDir, { recursive: true, force: true });
     } catch {}
@@ -218,5 +220,123 @@ export class CustomModMigration {
     const code = await main(['migrations', 'status', '--db'], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.join('')).toContain('Missing value for --db');
+  });
+});
+
+describe('Migration CLI diagnostics and loading', () => {
+  let dir: string;
+  beforeEach(() => {
+    clearMigrationRegistry();
+    dir = mkdtempSync(join(import.meta.dir, '.tmp-cli-migration-review-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  test('reports binding mismatch instead of silently declaring a named manifest up to date', async () => {
+    const { createCliMigrationRunner } = await import('../cmd/migrations/options');
+    writeFileSync(
+      join(dir, 'migrations.json'),
+      JSON.stringify({
+        binding: 'accounts',
+        migrations: [{ version: 1, description: 'init', up: 'CREATE TABLE t (id INT)' }],
+      }),
+    );
+    await expect(createCliMigrationRunner({ modules: [], db: ':memory:' }, dir)).rejects.toThrow(
+      'Available bindings: accounts',
+    );
+    const runner = await createCliMigrationRunner(
+      { modules: [], db: ':memory:', binding: 'accounts' },
+      dir,
+    );
+    expect((await runner.execute()).applied).toHaveLength(1);
+    await runner.close();
+    const cap = captureIo();
+    expect(
+      await main(
+        [
+          'migrations',
+          'status',
+          '--db',
+          ':memory:',
+          '--manifest',
+          join(dir, 'migrations.json'),
+          '--binding',
+          'accounts',
+        ],
+        cap.io,
+      ),
+    ).toBe(0);
+  });
+
+  test('discovers the default directory and reports empty execute and dry-run plans', async () => {
+    const { createCliMigrationRunner } = await import('../cmd/migrations/options');
+    mkdirSync(join(dir, 'migrations'));
+    const runner = await createCliMigrationRunner({ modules: [], db: ':memory:' }, dir);
+    expect((await runner.status()).isUpToDate).toBe(true);
+    await runner.close();
+    for (const flags of [[], ['--dry-run']]) {
+      const cap = captureIo();
+      expect(
+        await main(
+          ['migrations', 'execute', '--db', ':memory:', '--dir', join(dir, 'migrations'), ...flags],
+          cap.io,
+        ),
+      ).toBe(0);
+      expect(cap.stdout.join('')).toMatch(/No migrations applied|No pending migrations/);
+    }
+  });
+
+  test('reports invalid steps, imports, connections, execution, and history', async () => {
+    const { parseMigrationCliArgs, createCliMigrationRunner } = await import(
+      '../cmd/migrations/options'
+    );
+    expect(() => parseMigrationCliArgs(['--step', 'no'])).toThrow('positive integer');
+    await expect(
+      createCliMigrationRunner({ modules: ['missing.ts'], db: ':memory:' }, dir),
+    ).rejects.toThrow('Failed to import');
+    await expect(
+      createCliMigrationRunner({ modules: [], db: join(dir, 'missing/db.sqlite') }, dir),
+    ).rejects.toThrow('Failed to connect');
+    const sqlDir = join(dir, 'migrations');
+    mkdirSync(sqlDir);
+    writeFileSync(join(sqlDir, '1_bad.sql'), 'THIS IS NOT SQL');
+    const failure = captureIo();
+    expect(
+      await main(['migrations', 'execute', '--db', ':memory:', '--dir', sqlDir], failure.io),
+    ).toBe(1);
+    expect(failure.stderr.join('')).toContain('Migration execution failed');
+    writeFileSync(join(sqlDir, '1_bad.sql'), 'CREATE TABLE t (id INT)');
+    const db = join(dir, 'history.db');
+    const success = captureIo();
+    expect(await main(['migrations', 'execute', '--db', db, '--dir', sqlDir], success.io)).toBe(0);
+    writeFileSync(join(sqlDir, '1_bad.sql'), 'CREATE TABLE changed (id INT)');
+    const status = captureIo();
+    expect(await main(['migrations', 'status', '--db', db, '--dir', sqlDir], status.io)).toBe(1);
+    expect(status.stderr.join('')).toContain('Failed to determine migration status');
+  });
+
+  test('falls back to project and monorepo resolution and reports an unavailable repo package', async () => {
+    const { loadMigrationRepoOperations } = await import('../cmd/migrations/options');
+    const repo = await import('../../di-framework-repo/src/index');
+    let calls: string[] = [];
+    const project = await loadMigrationRepoOperations(process.cwd(), async (specifier) => {
+      calls.push(specifier);
+      if (calls.length === 1) throw new Error('direct unavailable');
+      return repo;
+    });
+    expect(project).toBe(repo);
+    expect(calls).toHaveLength(2);
+    calls = [];
+    const fallback = await loadMigrationRepoOperations(process.cwd(), async (specifier) => {
+      calls.push(specifier);
+      if (calls.length < 3) throw new Error('package unavailable');
+      return repo;
+    });
+    expect(fallback).toBe(repo);
+    expect(calls[2]).toContain('di-framework-repo/src/index.ts');
+    await expect(
+      loadMigrationRepoOperations(dir, async () => {
+        throw new Error('unavailable');
+      }),
+    ).rejects.toThrow('Unable to load @di-framework/repo');
   });
 });
