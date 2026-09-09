@@ -1,0 +1,19 @@
+{
+  "name": "wasmcloud-actor-counter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@di-framework/actors": "workspace:*",
+    "@di-framework/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@di-framework/cli": "workspace:*",
+    "@di-framework/cli-plugin-wasmcloud": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

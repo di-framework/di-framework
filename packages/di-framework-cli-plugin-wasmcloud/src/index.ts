@@ -1,6 +1,20 @@
 import { defineExtension } from '@di-framework/cli-extension';
 import { createWasmcloudCommand } from './command.js';
 
+export {
+  ACTORS_INVOCATION_PATH,
+  type ActorDiscoveredRecord,
+  type ActorMethodRecord,
+  type ActorModuleOptions,
+  createWasmcloudActorAdapter,
+  discoverActors,
+  emptyActorsModule,
+  handleActorInvocationRequest,
+  isActorInvocationRequest,
+  renderActorsModule,
+  type WasmcloudActorAdapter,
+  WASMCLOUD_ACTORS_GLOBAL,
+} from './actors.js';
 export { parseAppCommandArgs, parsePlatformCommandArgs, parsePlatformInitArgs } from './args.js';
 export {
   type BindingRecord,
@@ -112,6 +126,7 @@ export {
   deleteWorkload,
   isReady,
   renderWorkloadManifest,
+  type WorkloadManifestOptions,
 } from './workload.js';
 
 export default defineExtension({

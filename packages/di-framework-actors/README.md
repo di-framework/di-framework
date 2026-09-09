@@ -118,6 +118,20 @@ await runtime.clear();
 await storage.close();
 ```
 
+
+## wasmCloud Component & Deployment Integration
+
+Virtual actors are supported directly in wasmCloud WebAssembly components through `@di-framework/cli-plugin-wasmcloud`.
+
+### Runtime Execution Model
+- **Activation & Mailboxes**: Actor instances and mailbox queues reside in-memory within the guest WebAssembly component.
+- **Host Storage Binding**: SQLite persistent storage is mapped through host volume mounts (e.g. `/data/actors`, controlled via `ACTOR_STORAGE_DIR`). Actor methods interact with transactional storage without managing low-level guest filesystem handles.
+- **Pre-Activation Migrations**: Schema migrations run prior to enabling an actor to process calls. If a migration fails, the actor is not activated.
+
+### Single-Host Safety vs. Distributed Capabilities
+- **Single-Host Model**: The initial wasmCloud actor deployment model provides resilient single-host execution with persistent volume storage and single-writer SQLite locking. Workload manifests strictly enforce `replicas: 1` and use `strategy: { type: "Recreate" }` for draining in-flight calls and releasing file locks before a new application version starts.
+- **Distributed Capabilities**: Multi-host clustering, partitioned actor placement across wasmCloud nodes, and distributed consensus are handled by distributed actor extensions (Issue #410).
+
 ## License
 
 MIT OR Apache-2.0

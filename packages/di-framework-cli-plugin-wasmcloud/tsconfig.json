@@ -4,6 +4,8 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
+      "@di-framework/actors": ["../di-framework-actors/dist/index.d.ts"],
+      "@di-framework/actors/*": ["../di-framework-actors/dist/*"],
       "@di-framework/cli-extension": ["../di-framework-cli-extension/dist/index.d.ts"],
       "@di-framework/cli-extension/*": ["../di-framework-cli-extension/dist/*"]
     }

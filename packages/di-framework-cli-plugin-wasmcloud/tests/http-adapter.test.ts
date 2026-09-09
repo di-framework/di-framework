@@ -42,6 +42,12 @@ mock.module('virtual:di-framework-wasmcloud-guests', () => ({
   guests: {},
 }));
 
+mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+  actorRuntime: undefined,
+  dispatchActorInvocation: undefined,
+  actors: [],
+}));
+
 mock.module('virtual:di-framework-application', () => ({
   default: (request: Request) => {
     const current = applicationState.current;

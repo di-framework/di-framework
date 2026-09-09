@@ -1,8 +1,13 @@
 // Keep this side-effect import first: application services can resolve bindings at module startup.
 import 'virtual:di-framework-wasmcloud-guests';
+import 'virtual:di-framework-wasmcloud-actors';
 
 import application from 'virtual:di-framework-application';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
+import {
+  actorRuntime,
+  dispatchActorInvocation,
+} from 'virtual:di-framework-wasmcloud-actors';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 import { collectBytes } from './fetch-runtime.ts';
 
@@ -121,8 +126,133 @@ async function toWebRequest(incoming: {
   });
 }
 
+function isActorInvocation(request: Request): boolean {
+  try {
+    const url = new URL(request.url);
+    return (
+      url.pathname === '/_actors/invoke' ||
+      url.pathname === '/actors/invoke' ||
+      url.pathname.startsWith('/_actors/') ||
+      request.headers.has('x-actor-type') ||
+      request.headers.get('x-actor-dispatch') === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function handleActorInvocation(request: Request): Promise<Response> {
+  const dispatchFn = dispatchActorInvocation as
+    | ((actorType: string, actorKey: string, method: string, args?: unknown[]) => Promise<unknown>)
+    | undefined;
+
+  if (!dispatchFn && !actorRuntime) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: { name: 'ActorRuntimeError', message: 'No actor runtime or actors registered in this component' },
+      }),
+      { status: 404, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  try {
+    let actorType: string | undefined;
+    let actorKey: string | undefined;
+    let method: string | undefined;
+    let args: unknown[] = [];
+
+    const url = new URL(request.url);
+    const subPath = url.pathname.replace(/^\/_actors\/?/, '');
+    const pathParts = subPath ? subPath.split('/').filter(Boolean) : [];
+
+    if (request.method === 'POST') {
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      actorType = (body.actorType as string) ?? request.headers.get('x-actor-type') ?? pathParts[0];
+      actorKey = (body.actorKey as string) ?? request.headers.get('x-actor-key') ?? pathParts[1];
+      method = (body.method as string) ?? request.headers.get('x-actor-method') ?? pathParts[2];
+      args = Array.isArray(body.args) ? body.args : [];
+    } else {
+      actorType = request.headers.get('x-actor-type') ?? pathParts[0];
+      actorKey = request.headers.get('x-actor-key') ?? pathParts[1];
+      method = request.headers.get('x-actor-method') ?? pathParts[2];
+      const qArgs = url.searchParams.get('args');
+      if (qArgs) {
+        try {
+          const parsed = JSON.parse(qArgs);
+          args = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          args = [qArgs];
+        }
+      }
+    }
+
+    if (!actorType || !actorKey || !method) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            name: 'ActorInvocationBadRequest',
+            message: 'actorType, actorKey, and method are required for actor invocation',
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+    }
+
+    const invoke =
+      dispatchFn ??
+      ((t: string, k: string, m: string, a: unknown[] = []) =>
+        (actorRuntime as any).invoke(t, k, m, a));
+    const result = await invoke(actorType, actorKey, method, args);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        result,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  } catch (error: any) {
+    const name = error?.name ?? 'Error';
+    const message = error?.message ?? String(error);
+    const isNotFound = name === 'ActorNotRegisteredError' || name === 'ActorMethodNotFoundError';
+    const isBadRequest = name === 'ActorInvocationBadRequest';
+    const status = isNotFound ? 404 : isBadRequest ? 400 : 500;
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: {
+          name,
+          message,
+          actorType: error?.actorType,
+          actorKey: error?.actorKey,
+          methodName: error?.methodName,
+          migration: error?.migration,
+        },
+      }),
+      { status, headers: { 'content-type': 'application/json' } },
+    );
+  }
+}
+
 async function dispatch(request: Request): Promise<Response> {
   const handler = application as Application;
+  if (!handler || (typeof handler !== 'function' && typeof (handler as any).fetch !== 'function')) {
+    if (actorRuntime) {
+      return new Response(
+        JSON.stringify({
+          name: 'wasmcloud-actor-component',
+          actors: (actorRuntime as any).getRegisteredActors?.()?.map((a: any) => a.name) ?? [],
+          status: 'running',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    throw new TypeError('The default application export must return a Web Response object');
+  }
+
   const response =
     typeof handler === 'function' ? await handler(request) : await handler.fetch(request);
 
@@ -168,7 +298,11 @@ async function fromWebResponse(response: Response): Promise<unknown> {
 export const handler = {
   async handle(incoming: Parameters<typeof toWebRequest>[0]): Promise<unknown> {
     try {
-      return await fromWebResponse(await dispatch(await toWebRequest(incoming)));
+      const request = await toWebRequest(incoming);
+      if (isActorInvocation(request)) {
+        return await fromWebResponse(await handleActorInvocation(request));
+      }
+      return await fromWebResponse(await dispatch(request));
     } catch (error) {
       console.error('Unhandled DI Framework request error', error);
       return await fromWebResponse(

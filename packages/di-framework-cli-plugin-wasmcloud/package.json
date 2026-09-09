@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
+    "build": "rm -rf dist && bun x tsc -p tsconfig.dist.json && bun build assets/http-adapter.ts --outfile dist/assets/http-adapter.js --packages bundle --external 'wasi:*' --external 'wasmcloud:*' --external 'virtual:di-framework-application' --external 'virtual:di-framework-wasmcloud-guests' --external 'virtual:di-framework-wasmcloud-actors' && cp -R assets/wit dist/assets/wit && cp -R assets/platform dist/assets/platform"
   },
   "exports": {
     ".": {
@@ -38,7 +38,10 @@
     }
   },
   "dependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/plugin-transform-async-to-generator": "7.29.7",
     "@bytecodealliance/jco": "1.32.1",
+    "@di-framework/actors": "workspace:*",
     "@di-framework/cli-extension": "^5",
     "@di-framework/componentize-qjs": "0.4.4-di.2",
     "@noble/ciphers": "2.4.0",
@@ -46,9 +49,7 @@
     "@noble/hashes": "2.4.0",
     "rolldown": "1.2.7",
     "typescript": "^5",
-    "unenv": "2.0.0-rc.24",
-    "@babel/core": "7.29.7",
-    "@babel/plugin-transform-async-to-generator": "7.29.7"
+    "unenv": "2.0.0-rc.24"
   },
   "peerDependencies": {
     "typescript": "^5"

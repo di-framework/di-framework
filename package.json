@@ -10,7 +10,8 @@
   "workspaces": [
     "packages/*",
     "examples",
-    "examples/packages/*"
+    "examples/packages/*",
+    "examples/wasmcloud-actor-counter"
   ],
   "scripts": {
     "build": "bun run packages/di-framework-cli/main.ts mx build",
