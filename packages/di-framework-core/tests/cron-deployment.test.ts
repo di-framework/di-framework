@@ -68,6 +68,7 @@ describe('Deployment-aware @Cron execution in core', () => {
     // Set container to external cron mode
     container.setCronMode('external');
     expect(container.isExternalCron()).toBe(true);
+    expect(container.getCronMode()).toBe('external');
 
     container.register(InComponentWorker);
     container.resolve(InComponentWorker);
