@@ -3,6 +3,7 @@
 # component into a local tools directory (default: <package>/.tools).
 #
 #   scripts/install-tools.sh            # wasm-tools + wac + wasi-sdk
+#   scripts/install-tools.sh --wac-only # composition only (uses the prebuilt provider)
 #   scripts/install-tools.sh --rust     # ...plus a hermetic rustup toolchain
 #                                       # (only needed when `rustup` is absent)
 #
@@ -21,9 +22,11 @@ TOOLS_DIR="${DF_SQLITE_TOOLS_DIR:-$PKG_DIR/.tools}"
 BIN_DIR="$TOOLS_DIR/bin"
 CACHE_DIR="$TOOLS_DIR/cache"
 WITH_RUST=0
+WAC_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --rust) WITH_RUST=1 ;;
+    --wac-only) WAC_ONLY=1 ;;
     -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
@@ -150,6 +153,11 @@ install_rust() {
   "$CARGO_HOME/bin/rustup" toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$RUST_TARGET" --no-self-update
   log "ok      rust ${RUST_TOOLCHAIN} + ${RUST_TARGET} (RUSTUP_HOME=$RUSTUP_HOME)"
 }
+
+if [ "$WAC_ONLY" = 1 ]; then
+  install_wac
+  exit 0
+fi
 
 install_wasm_tools
 install_wac
