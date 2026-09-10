@@ -1,4 +1,4 @@
-import { detectSqliteBackend, openSqliteDatabase, type SqliteBackend } from '../sqlite/open.js';
+import { detectSqliteBackend, openSqliteDatabase, type SqliteBackend } from '../sqlite/open';
 import {
   type BunSqliteLike,
   isSqlDatabase,
@@ -6,8 +6,8 @@ import {
   SQL_DATABASE_BRAND,
   wrapBunSqliteDatabase,
   wrapNodeSqliteDatabase,
-} from '../sqlite/sql-database.js';
-import type { MigrationDatabase } from './types.js';
+} from '../sqlite/sql-database';
+import type { MigrationDatabase } from './types';
 
 export const MIGRATION_DB_BRAND = SQL_DATABASE_BRAND;
 

@@ -1,6 +1,6 @@
-import { createMigrationDatabase } from './database.js';
-import { getRegisteredMigrations } from './decorator.js';
-import { compareVersions, sortMigrations } from './discovery.js';
+import { createMigrationDatabase } from './database';
+import { getRegisteredMigrations } from './decorator';
+import { compareVersions, sortMigrations } from './discovery';
 import type {
   AutoApplyOptions,
   ExecuteOptions,
@@ -13,14 +13,14 @@ import type {
   MigrationRunnerOptions,
   MigrationStatus,
   StatusOptions,
-} from './types.js';
+} from './types';
 import {
   MigrationError,
   MigrationExecutionError,
   MigrationIntegrityError,
   MigrationLockError,
   MigrationOrderError,
-} from './types.js';
+} from './types';
 
 export class MigrationRunner {
   private dbPromise: Promise<MigrationDatabase> | null = null;

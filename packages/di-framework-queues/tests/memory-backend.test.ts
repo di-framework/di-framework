@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InMemoryQueueBackend } from '../src/backend/memory.js';
+import { InMemoryQueueBackend } from '../src/backend/memory';
 
 describe('InMemoryQueueBackend', () => {
   it('enqueues, dequeues, and completes jobs deterministically', async () => {

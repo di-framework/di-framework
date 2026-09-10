@@ -4,7 +4,7 @@
  * portable (wasmcloud) entry never imports, so Wasm bundles stay free of
  * `bun:sqlite` / `node:sqlite` references.
  */
-import type { SqlDatabase } from './sql-database.js';
+import type { SqlDatabase } from './sql-database';
 
 export type SqliteBackend = 'bun' | 'node' | 'wasm';
 

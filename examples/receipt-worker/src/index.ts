@@ -1,12 +1,12 @@
 import { Container } from '@di-framework/core';
 import { ContainerQueueDispatcher } from '@di-framework/queues';
-import { AuditLogService } from './AuditLogService.js';
-import { ReceiptProcessor } from './ReceiptProcessor.js';
+import { AuditLogService } from './AuditLogService';
+import { ReceiptProcessor } from './ReceiptProcessor';
 
-export * from './types.js';
-export * from './AuditLogService.js';
-export * from './ReceiptProcessor.js';
-export * from './ReceiptProducer.js';
+export * from './AuditLogService';
+export * from './ReceiptProcessor';
+export * from './ReceiptProducer';
+export * from './types';
 
 export const container = new Container();
 container.register(AuditLogService);

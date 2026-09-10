@@ -2,18 +2,18 @@ import * as fs from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { ActorRuntime } from '@di-framework/actors';
 import ts from 'typescript';
-import { ALWAYS_SKIP_DIRECTORIES } from './manifest.js';
-import type { WasmcloudProject } from './project.js';
+import { ALWAYS_SKIP_DIRECTORIES } from './manifest';
+import type { WasmcloudProject } from './project';
 
 export const WASMCLOUD_ACTORS_GLOBAL = 'di-framework.wasmcloud.actors';
 
-import { ACTORS_INVOCATION_PATH, handleActorInvocationRequest } from './actor-protocol.js';
+import { ACTORS_INVOCATION_PATH, handleActorInvocationRequest } from './actor-protocol';
 
 export {
   ACTORS_INVOCATION_PATH,
   handleActorInvocationRequest,
   isActorInvocationRequest,
-} from './actor-protocol.js';
+} from './actor-protocol';
 
 export interface ActorMethodRecord {
   name: string;

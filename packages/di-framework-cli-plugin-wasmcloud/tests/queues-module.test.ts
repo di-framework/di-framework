@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { emptyQueuesModule, renderQueuesModule } from '../src/queues-module.js';
+import { emptyQueuesModule, renderQueuesModule } from '../src/queues-module';
 
 describe('renderQueuesModule', () => {
   it('serializes handler config and emits worker bootstrap helpers', () => {

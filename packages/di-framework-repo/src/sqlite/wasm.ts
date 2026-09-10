@@ -8,13 +8,8 @@
  * return `{ tag: 'ok' | 'err', val }` records, others throw an error object
  * carrying the variant as `payload`. Both shapes are normalized here.
  */
-import { registerSqliteOpener } from './open.js';
-import {
-  createSqlDatabase,
-  type SqlDatabase,
-  type SqlDriver,
-  type SqlRow,
-} from './sql-database.js';
+import { registerSqliteOpener } from './open';
+import { createSqlDatabase, type SqlDatabase, type SqlDriver, type SqlRow } from './sql-database';
 
 export const WASM_SQLITE_MODULE_ID = 'di-framework:sqlite/database@0.1.0';
 

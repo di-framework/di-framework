@@ -1,4 +1,4 @@
-import type { DiscoveredQueueHandler } from './queues.js';
+import type { DiscoveredQueueHandler } from './queues';
 
 /** Generated module that opens SQLite-backed queues and pumps workers per request. */
 export function renderQueuesModule(handlers: readonly DiscoveredQueueHandler[]): string {

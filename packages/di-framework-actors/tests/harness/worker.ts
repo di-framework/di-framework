@@ -2,10 +2,10 @@
  * Worker process entrypoint for multi-process distributed actor testing.
  */
 import * as readline from 'node:readline';
-import { Actor, ActorContext, ActorMethod } from '../../src/decorators/index.js';
-import { ActorRpcDispatcher } from '../../src/distributed/dispatcher.js';
-import { ActorRuntime } from '../../src/runtime/runtime.js';
-import { SqliteActorStorage } from '../../src/storage/sqlite.js';
+import { Actor, ActorContext, ActorMethod } from '../../src/decorators/index';
+import { ActorRpcDispatcher } from '../../src/distributed/dispatcher';
+import { ActorRuntime } from '../../src/runtime/runtime';
+import { SqliteActorStorage } from '../../src/storage/sqlite';
 
 @Actor({ name: 'CounterActor' })
 export class CounterActor {

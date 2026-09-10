@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  Actor,
-  ActorContext,
-  ActorMethod,
-  ActorRuntime,
-  InMemoryActorStorage,
-} from '../src/index.js';
+import { Actor, ActorContext, ActorMethod, ActorRuntime, InMemoryActorStorage } from '../src/index';
 
 @Actor()
 class TransactionalActor {

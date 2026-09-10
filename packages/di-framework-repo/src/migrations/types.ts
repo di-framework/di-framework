@@ -1,4 +1,4 @@
-import type { SqlDatabase } from '../sqlite/sql-database.js';
+import type { SqlDatabase } from '../sqlite/sql-database';
 
 export interface MigrationOptions {
   version: number | string;

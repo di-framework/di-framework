@@ -4,8 +4,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { getActorMetadata } from '../decorators/keys.js';
-import type { Constructor } from '../types.js';
+import { getActorMetadata } from '../decorators/keys';
+import type { Constructor } from '../types';
 
 export interface ActorDiscoveryOptions {
   cwd?: string;

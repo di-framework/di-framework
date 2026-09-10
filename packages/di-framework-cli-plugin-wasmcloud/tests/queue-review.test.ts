@@ -5,8 +5,8 @@ import {
   discoverQueueHandlers,
   isQueueWorkerProject,
   parseQueueHandlersInFile,
-} from '../src/queues.js';
-import { makeWorkspace } from './helpers.js';
+} from '../src/queues';
+import { makeWorkspace } from './helpers';
 
 test('queue discovery handles nested namespaces, decorator forms, and ignored directories', () => {
   const { root } = makeWorkspace();

@@ -4,9 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Import decorator APIs directly from built dist artifacts
-import { Container as Injectable } from '../../di-framework-core/dist/decorators/index.js';
-import { buildTypeGraph, SemanticRegistry, setRegistry } from '../dist/core.js';
-import { Action, Arg, Field, Lookup, Portal, SemanticType } from '../dist/index.js';
+import { Container as Injectable } from '../../di-framework-core/dist/decorators/index';
+import { buildTypeGraph, SemanticRegistry, setRegistry } from '../dist/core';
+import { Action, Arg, Field, Lookup, Portal, SemanticType } from '../dist/index';
 
 function withDistRegistry<T>(fn: (registry: InstanceType<typeof SemanticRegistry>) => T): T {
   const fresh = new SemanticRegistry();

@@ -1,8 +1,8 @@
 /**
  * Transport implementations for distributed actor RPC.
  */
-import type { ActorRpcDispatcher } from './dispatcher.js';
-import type { ActorRpcRequest, ActorRpcResponse, ActorTransport } from './types.js';
+import type { ActorRpcDispatcher } from './dispatcher';
+import type { ActorRpcRequest, ActorRpcResponse, ActorTransport } from './types';
 
 /**
  * In-memory transport connecting a client to a local or simulated remote ActorRpcDispatcher.

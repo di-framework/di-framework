@@ -3,7 +3,7 @@ import {
   getOwnMetadata,
   TELEMETRY_LISTENER_METADATA_KEY,
   TELEMETRY_METADATA_KEY,
-} from '../container.js';
+} from '../container';
 
 /**
  * Options for the @Telemetry decorator

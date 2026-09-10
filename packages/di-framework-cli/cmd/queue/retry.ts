@@ -1,6 +1,6 @@
 import type { Job } from '@di-framework/queues';
-import { CommandFailure, type CliIo, type CommandResult } from '../../command.js';
-import { openQueueBackend, resolveQueueDbPath, retryQueueJobs } from './options.js';
+import { type CliIo, CommandFailure, type CommandResult } from '../../command';
+import { openQueueBackend, resolveQueueDbPath, retryQueueJobs } from './options';
 
 export { retryQueueJobs };
 

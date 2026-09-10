@@ -1,8 +1,8 @@
 import type { SqlDatabase } from '@di-framework/repo';
 import { createWasmSqliteDatabase } from '@di-framework/repo';
-import { queueRegistry } from '../decorators.js';
-import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types.js';
-import type { QueueBackend } from './contract.js';
+import { queueRegistry } from '../decorators';
+import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types';
+import type { QueueBackend } from './contract';
 
 /**
  * SQLite queue backend for Wasm guests. Uses the composed di-framework:sqlite

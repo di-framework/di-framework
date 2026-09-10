@@ -19,7 +19,7 @@
   "homepage": "https://github.com/di-framework/di-framework#readme",
   "scripts": {
     "test": "bun test",
-    "build": "rm -rf dist && bun x tsc -p tsconfig.build.json"
+    "build": "rm -rf dist && bun x tsc -p tsconfig.build.json && bun ../di-framework-cli/scripts/fix-esm-imports.ts dist"
   },
   "exports": {
     ".": {

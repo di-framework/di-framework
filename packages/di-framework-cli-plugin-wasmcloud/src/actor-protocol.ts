@@ -1,5 +1,5 @@
 import type { ActorRpcRequest, ActorRuntime } from '@di-framework/actors';
-import { authorizeControlRequest, unauthorizedResponse } from './control/auth.js';
+import { authorizeControlRequest, unauthorizedResponse } from './control/auth';
 
 export const ACTORS_INVOCATION_PATH = '/_actors/invoke';
 

@@ -1,4 +1,4 @@
-import { invalidUsage, readOptionValue } from './support.js';
+import { invalidUsage, readOptionValue } from './support';
 
 export type AppCommandOptions = {
   name?: string;

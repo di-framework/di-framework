@@ -6,7 +6,7 @@ import type {
   BlobObject,
   BlobPutOptions,
   BlobSignedUrlOptions,
-} from './types.js';
+} from './types';
 
 export interface BlobStorageAdapter {
   get(key: string): Promise<BlobObject | null>;

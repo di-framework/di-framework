@@ -1,5 +1,5 @@
-import type { CloudFoundryServiceInfoCreator } from '../spi/creator.js';
-import type { RawVcapServiceData, RedisServiceInfo } from '../types.js';
+import type { CloudFoundryServiceInfoCreator } from '../spi/creator';
+import type { RawVcapServiceData, RedisServiceInfo } from '../types';
 
 const REDIS_PATTERNS = ['redis', 'rediscloud', 'redislabs'];
 

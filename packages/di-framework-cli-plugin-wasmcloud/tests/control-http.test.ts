@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { authorizeControlRequest, unauthorizedResponse } from '../src/control/auth.js';
+import { authorizeControlRequest, unauthorizedResponse } from '../src/control/auth';
 import {
   cronJobIdFromRequest,
   handleCronInvokeRequest,
   isCronInvokeRequest,
-} from '../src/control/cron.js';
+} from '../src/control/cron';
 import {
   handleQueueControlRequest,
   isQueueControlRequest,
   type QueueControlBackend,
-} from '../src/control/queues.js';
+} from '../src/control/queues';
 
 const TOKEN = 'secret-token';
 const ADMIN_TOKEN = 'admin-token';

@@ -1,4 +1,4 @@
-import type { EnqueueOptions, Job, ListJobsFilter, QueueInfo } from '../types.js';
+import type { EnqueueOptions, Job, ListJobsFilter, QueueInfo } from '../types';
 
 export interface QueueBackend {
   readonly name: string;

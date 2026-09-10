@@ -1,4 +1,4 @@
-import type { ActorMetadata, Constructor } from '../types.js';
+import type { ActorMetadata, Constructor } from '../types';
 
 export const ACTOR_METADATA_KEY = 'di:actor';
 export const ACTOR_METHOD_METADATA_KEY = 'di:actor:method';

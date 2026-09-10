@@ -1,4 +1,4 @@
-import { authorizeControlRequest, unauthorizedResponse } from './auth.js';
+import { authorizeControlRequest, unauthorizedResponse } from './auth';
 
 export const CRON_INVOKE_PATH_PREFIX = '/_di/cron/';
 

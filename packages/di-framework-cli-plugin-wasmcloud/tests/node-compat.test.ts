@@ -171,7 +171,7 @@ describe('guest process and module', () => {
     env.APP_PORT = '3000';
     expect(env.APP_PORT).toBe('3000');
     expect(Object.entries(env)).toEqual([['APP_PORT', '3000']]);
-    expect(Object.getOwnPropertyDescriptor(env, 'NOPE')).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(env, 'NOOP')).toBeUndefined();
     expect('APP_PORT' in env).toBe(true);
     delete env.APP_PORT;
     expect(env.APP_PORT).toBeUndefined();

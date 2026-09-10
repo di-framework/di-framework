@@ -13,8 +13,8 @@ import {
   StaleOwnerWriteError,
   WasmSqliteActorStorage,
   type WasmSqliteDatabaseFactory,
-} from '../src/index.js';
-import * as portable from '../src/portable.js';
+} from '../src/index';
+import * as portable from '../src/portable';
 
 /**
  * Test double for `createWasmSqliteDatabase`: the same `SqlDatabase` shape the

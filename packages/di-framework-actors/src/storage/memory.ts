@@ -1,9 +1,9 @@
 /**
  * In-memory transactional storage implementation for @di-framework/actors.
  */
-import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors.js';
-import type { ActorOwnershipRecord } from '../distributed/types.js';
-import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
+import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors';
+import type { ActorOwnershipRecord } from '../distributed/types';
+import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
 
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;

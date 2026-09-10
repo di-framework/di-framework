@@ -1,4 +1,4 @@
-import { defineMetadata, getOwnMetadata, SUBSCRIBER_METADATA_KEY } from '../container.js';
+import { defineMetadata, getOwnMetadata, SUBSCRIBER_METADATA_KEY } from '../container';
 
 /**
  * Marks a method to subscribe to a custom event emitted on the container.

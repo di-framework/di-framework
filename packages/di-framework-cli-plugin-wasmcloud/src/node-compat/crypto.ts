@@ -1,7 +1,7 @@
-import { toBytes, toNodeBuffer } from './bytes.js';
-import { createHash, createHmac, Hash, Hmac } from './crypto-hash.js';
-import { getRandomValues, randomUUID, subtle, webcrypto } from './crypto-subtle.js';
-import { getRandomBytes } from './wasi-random.js';
+import { toBytes, toNodeBuffer } from './bytes';
+import { createHash, createHmac, Hash, Hmac } from './crypto-hash';
+import { getRandomValues, randomUUID, subtle, webcrypto } from './crypto-subtle';
+import { getRandomBytes } from './wasi-random';
 
 export { createHash, createHmac, getRandomValues, Hash, Hmac, randomUUID, subtle, webcrypto };
 
