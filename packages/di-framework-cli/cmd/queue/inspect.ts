@@ -1,6 +1,6 @@
 import type { Job, JobStatus } from '@di-framework/queues';
-import { CommandFailure, type CliIo, type CommandResult } from '../../command';
-import { inspectQueue, openQueueBackend, resolveQueueDbPath } from './options';
+import { CommandFailure, type CliIo, type CommandResult } from '../../command.js';
+import { inspectQueue, openQueueBackend, resolveQueueDbPath } from './options.js';
 
 export { inspectQueue };
 

@@ -1,6 +1,6 @@
-import type { ExternalToken } from './external-token';
+import type { ExternalToken } from './external-token.js';
 // biome-ignore lint/style/useImportType: verifies that an ordinary import used only as a type is safely skipped
-import { ImportedToken } from './external-token';
+import { ImportedToken } from './external-token.js';
 
 export enum NumericRole {
   Guest,

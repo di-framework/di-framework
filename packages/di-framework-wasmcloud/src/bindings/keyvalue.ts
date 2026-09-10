@@ -1,5 +1,5 @@
-import { requireGuest, tryGetGuest } from '../guests';
-import { getBindingMetadata } from '../metadata';
+import { requireGuest, tryGetGuest } from '../guests.js';
+import { getBindingMetadata } from '../metadata.js';
 
 export type KeyValueGuest = {
   open(identifier: string): Promise<unknown>;

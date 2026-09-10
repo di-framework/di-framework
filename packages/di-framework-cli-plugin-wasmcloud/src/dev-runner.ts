@@ -1,5 +1,5 @@
 import { CommandFailure } from '@di-framework/cli-extension';
-import type { WasmcloudDeps } from './deps';
+import type { WasmcloudDeps } from './deps.js';
 
 export const DEV_RUNNER_ENV = 'DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER';
 export type DevRunnerKind = 'wasmtime' | 'wash' | 'jco';

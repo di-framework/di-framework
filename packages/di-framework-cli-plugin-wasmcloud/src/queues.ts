@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
-import type { WasmcloudProject } from './project';
+import type { WasmcloudProject } from './project.js';
 
 export type DiscoveredQueueHandler = {
   className: string;

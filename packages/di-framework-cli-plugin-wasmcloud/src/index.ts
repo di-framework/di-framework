@@ -5,10 +5,10 @@ export {
   normalizeCronExpression,
   renderCronAdapterModule,
   renderCronInvokerModule,
-} from './cron';
+} from './cron.js';
 
 import { defineExtension } from '@di-framework/cli-extension';
-import { createWasmcloudCommand } from './command';
+import { createWasmcloudCommand } from './command.js';
 
 export {
   ACTORS_INVOCATION_PATH,
@@ -23,15 +23,15 @@ export {
   renderActorsModule,
   type WasmcloudActorAdapter,
   WASMCLOUD_ACTORS_GLOBAL,
-} from './actors';
-export { parseAppCommandArgs, parsePlatformCommandArgs, parsePlatformInitArgs } from './args';
+} from './actors.js';
+export { parseAppCommandArgs, parsePlatformCommandArgs, parsePlatformInitArgs } from './args.js';
 export {
   type BindingRecord,
   defaultSecretName,
   discoverBindings,
   parseBindingsFile,
   requirementsFromBindings,
-} from './bindings';
+} from './bindings.js';
 export {
   BUILD_PROFILE,
   buildComponent,
@@ -40,13 +40,13 @@ export {
   runWasmcloudBuild,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_VERSION,
-} from './build';
-export { createWasmcloudCommand } from './command';
+} from './build.js';
+export { createWasmcloudCommand } from './command.js';
 export {
   runWasmcloudDeploy,
   type WasmcloudDeployData,
   type WasmcloudDeployResult,
-} from './deploy';
+} from './deploy.js';
 export {
   type BundleOptions,
   COMPONENT_IMPORT_EXTERNAL,
@@ -59,33 +59,33 @@ export {
   nodeCompatibilityPlugin,
   resolveComponentizeQjsPath,
   type WasmcloudDeps,
-} from './deps';
-export { runWasmcloudDestroy } from './destroy';
-export { parseDevArgs, runWasmcloudDev } from './dev';
-export { DEV_RUNNER_ENV, resolveDevRunner } from './dev-runner';
+} from './deps.js';
+export { runWasmcloudDestroy } from './destroy.js';
+export { parseDevArgs, runWasmcloudDev } from './dev.js';
+export { DEV_RUNNER_ENV, resolveDevRunner } from './dev-runner.js';
 export {
   discoverProjects,
   findConfigFiles,
   resolveApplication,
-} from './discovery';
-export { runWasmcloudDoctor } from './doctor';
-export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests';
-export { hostInterfacesFromRequirements } from './host-interface';
+} from './discovery.js';
+export { runWasmcloudDoctor } from './doctor.js';
+export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests.js';
+export { hostInterfacesFromRequirements } from './host-interface.js';
 export {
   DEPLOY_MANIFEST_NAME,
   type DeployManifest,
   type DeployTarget,
   loadDeployManifest,
   parseDeployManifest,
-} from './manifest';
-export { wasmcloudNodeEnv, wasmcloudUnenvPreset } from './node-compat/env';
+} from './manifest.js';
+export { wasmcloudNodeEnv, wasmcloudUnenvPreset } from './node-compat/env.js';
 export {
   compactEnviron,
   createNodeCompatSeed,
   NODE_COMPAT_SEED_ID,
   type NodeCompatSeed,
-} from './node-compat/seed';
-export { OCI_ARTIFACT_PLATFORM } from './oci';
+} from './node-compat/seed.js';
+export { OCI_ARTIFACT_PLATFORM } from './oci.js';
 export {
   loadPlatformOutputs,
   PLATFORM_OUTPUT_SCHEMA_VERSION,
@@ -93,14 +93,14 @@ export {
   resolvePlatformDirectory,
   runWasmcloudPlatformDeploy,
   runWasmcloudPlatformDestroy,
-} from './platform';
+} from './platform.js';
 export {
   createPlatformProjectName,
   LOCAL_PLATFORM_PATH,
   PLATFORM_PROJECT_TOKEN,
   PLATFORM_START_COMMAND,
   runWasmcloudPlatformInit,
-} from './platform-init';
+} from './platform-init.js';
 export {
   asWitIdentifier,
   CONFIG_FILE_NAME,
@@ -108,24 +108,24 @@ export {
   loadProject,
   resolveInside,
   type WasmcloudProject,
-} from './project';
-export { contentDigest, ociReference, projectRelativePath, publishComponent } from './publish';
-export { pulumiEnvironment, runPulumi } from './pulumi';
+} from './project.js';
+export { contentDigest, ociReference, projectRelativePath, publishComponent } from './publish.js';
+export { pulumiEnvironment, runPulumi } from './pulumi.js';
 export {
   type DiscoveredQueueHandler,
   discoverQueueHandlers,
   isQueueWorkerProject,
   parseQueueHandlersInFile,
-} from './queues';
+} from './queues.js';
 export {
   materializeRegistry,
   type RegistryInput,
   type RegistryLocation,
   registryReferenceHost,
   registryUsesPlainHttp,
-} from './registry';
-export { resolveConnection, resolveTarget } from './target';
-export { renderWashDevYaml, writeWashDevConfig } from './wash-dev';
+} from './registry.js';
+export { resolveConnection, resolveTarget } from './target.js';
+export { renderWashDevYaml, writeWashDevConfig } from './wash-dev.js';
 export {
   aggregateRequirements,
   COMPONENT_MODEL,
@@ -141,7 +141,7 @@ export {
   runtimeRequirementsFromJavaScript,
   socketRequirementsFromJavaScript,
   type WitRequirement,
-} from './wit';
+} from './wit.js';
 export {
   applyWorkload,
   deleteWorkload,
@@ -149,7 +149,7 @@ export {
   renderQueueConsumersYaml,
   renderWorkloadManifest,
   type WorkloadManifestOptions,
-} from './workload';
+} from './workload.js';
 
 export default defineExtension({
   schemaVersion: 1,

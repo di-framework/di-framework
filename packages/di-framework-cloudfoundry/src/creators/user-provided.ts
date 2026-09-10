@@ -1,5 +1,5 @@
-import type { CloudFoundryServiceInfoCreator } from '../spi/creator';
-import type { RawVcapServiceData, UserProvidedServiceInfo } from '../types';
+import type { CloudFoundryServiceInfoCreator } from '../spi/creator.js';
+import type { RawVcapServiceData, UserProvidedServiceInfo } from '../types.js';
 
 export class UserProvidedServiceInfoCreator
   implements CloudFoundryServiceInfoCreator<UserProvidedServiceInfo>

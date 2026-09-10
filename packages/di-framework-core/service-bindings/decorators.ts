@@ -1,7 +1,7 @@
-import { defineMetadata, getOwnMetadata, useContainer } from '../container';
-import { createServiceBindingClient, serviceBindingToken } from './proxy';
-import { ServiceBindingRuntime } from './runtime';
-import type { ServiceBindingOptions, ServiceExportOptions } from './types';
+import { defineMetadata, getOwnMetadata, useContainer } from '../container.js';
+import { createServiceBindingClient, serviceBindingToken } from './proxy.js';
+import { ServiceBindingRuntime } from './runtime.js';
+import type { ServiceBindingOptions, ServiceExportOptions } from './types.js';
 
 export const SERVICE_EXPORT_METADATA_KEY = 'di:service-export';
 export const SERVICE_BINDING_METADATA_KEY = 'di:service-binding';

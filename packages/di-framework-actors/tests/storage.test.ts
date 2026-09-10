@@ -5,7 +5,7 @@ import {
   ActorMethod,
   ActorRuntime,
   InMemoryActorStorage,
-} from '../src/index';
+} from '../src/index.js';
 
 @Actor()
 class TransactionalActor {

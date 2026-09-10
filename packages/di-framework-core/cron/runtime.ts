@@ -1,6 +1,6 @@
-import { type Container, useContainer } from '../container';
-import type { Constructor } from '../types';
-import { CronConcurrencyError, CronExecutionError, CronJobNotFoundError } from './errors';
+import { type Container, useContainer } from '../container.js';
+import type { Constructor } from '../types.js';
+import { CronConcurrencyError, CronExecutionError, CronJobNotFoundError } from './errors.js';
 import type {
   CronExecutionResult,
   CronInvocationContext,
@@ -8,7 +8,7 @@ import type {
   CronMode,
   CronOptions,
   CronStatusReport,
-} from './types';
+} from './types.js';
 
 export function normalizeCronExpression(schedule: string | number): string {
   if (typeof schedule === 'number') {

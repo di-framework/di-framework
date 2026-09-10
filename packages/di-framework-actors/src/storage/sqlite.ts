@@ -7,11 +7,11 @@ import { Database } from 'bun:sqlite';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors';
-import type { ActorOwnershipRecord } from '../distributed/types';
-import { acquireActorLock } from './lock';
-import { actorIdentityToPath, trimUnderscores } from './path';
-import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
+import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors.js';
+import type { ActorOwnershipRecord } from '../distributed/types.js';
+import { acquireActorLock } from './lock.js';
+import { actorIdentityToPath, trimUnderscores } from './path.js';
+import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
 
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;

@@ -1,4 +1,4 @@
-import type { BlobStorageAdapter } from './adapter';
+import type { BlobStorageAdapter } from './adapter.js';
 import type {
   BlobBody,
   BlobListOptions,
@@ -7,7 +7,7 @@ import type {
   BlobObject,
   BlobPutOptions,
   BlobSignedUrlOptions,
-} from './types';
+} from './types.js';
 
 export abstract class BaseBlobRepository {
   protected constructor(protected readonly adapter: BlobStorageAdapter) {}

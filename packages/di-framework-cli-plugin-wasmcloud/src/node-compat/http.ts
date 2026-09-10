@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { concatBytes, toBytes, toNodeBuffer } from './bytes';
+import { concatBytes, toBytes, toNodeBuffer } from './bytes.js';
 import {
   CHUNKED_END,
   ChunkedDecoder,
@@ -14,14 +14,14 @@ import {
   parseHttpResponse,
   serializeHttpRequest,
   serializeHttpResponse,
-} from './http-parser';
+} from './http-parser.js';
 import {
   type AddressInfo,
   createConnection,
   createServer as createNetServer,
   type Server as NetServer,
   type Socket,
-} from './net';
+} from './net.js';
 
 export const METHODS = [
   'ACL',

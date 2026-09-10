@@ -1,4 +1,4 @@
-import type { ActorRef, Constructor } from '../types';
+import type { ActorRef, Constructor } from '../types.js';
 
 export interface InvocationTarget {
   invoke(

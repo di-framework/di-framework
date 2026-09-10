@@ -5,7 +5,7 @@ import {
   type IpSocketAddress,
   ipSocketAddress,
   parseIpSocketAddress,
-} from './socket-address';
+} from './socket-address.js';
 
 export type WasiResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 

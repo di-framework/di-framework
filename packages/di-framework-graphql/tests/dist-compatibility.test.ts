@@ -4,9 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Import decorator APIs directly from built dist artifacts
-import { Container as Injectable } from '../../di-framework-core/dist/decorators/index';
-import { buildTypeGraph, SemanticRegistry, setRegistry } from '../dist/core';
-import { Action, Arg, Field, Lookup, Portal, SemanticType } from '../dist/index';
+import { Container as Injectable } from '../../di-framework-core/dist/decorators/index.js';
+import { buildTypeGraph, SemanticRegistry, setRegistry } from '../dist/core.js';
+import { Action, Arg, Field, Lookup, Portal, SemanticType } from '../dist/index.js';
 
 function withDistRegistry<T>(fn: (registry: InstanceType<typeof SemanticRegistry>) => T): T {
   const fresh = new SemanticRegistry();
@@ -83,9 +83,9 @@ describe('Dist Artifacts & Packaging Compatibility', () => {
     const rootDir = path.resolve(import.meta.dir, '../../..');
 
     const nodeScript = `
-      import { Container as Injectable } from "./packages/di-framework-core/dist/container";
-      import { SemanticType, Portal, Field, Arg, Action, Lookup } from "./packages/di-framework-graphql/dist/index";
-      import { buildTypeGraph, SemanticRegistry, setRegistry } from "./packages/di-framework-graphql/dist/core";
+      import { Container as Injectable } from "./packages/di-framework-core/dist/container.js";
+      import { SemanticType, Portal, Field, Arg, Action, Lookup } from "./packages/di-framework-graphql/dist/index.js";
+      import { buildTypeGraph, SemanticRegistry, setRegistry } from "./packages/di-framework-graphql/dist/core.js";
 
       if (typeof Injectable !== "function") throw new Error("Injectable is not a function");
       if (typeof SemanticType !== "function") throw new Error("SemanticType is not a function");

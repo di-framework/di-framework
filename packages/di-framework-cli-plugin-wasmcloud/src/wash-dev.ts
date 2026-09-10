@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
-import type { BindingRecord } from './bindings';
-import { type HostInterface, hostInterfacesFromRequirements, yamlQuote } from './host-interface';
-import type { WasmcloudProject } from './project';
-import type { WitRequirement } from './wit';
+import type { BindingRecord } from './bindings.js';
+import { type HostInterface, hostInterfacesFromRequirements, yamlQuote } from './host-interface.js';
+import type { WasmcloudProject } from './project.js';
+import type { WitRequirement } from './wit.js';
 
 export const WASH_DEV_CONFIG_NAME = 'wash-dev.yaml';
 

@@ -1,4 +1,4 @@
-import { nodeCompatSeed } from './seed-virtual';
+import { nodeCompatSeed } from './seed-virtual.js';
 
 export const env: Record<string, string | undefined> = new Proxy(
   Object.create(null) as Record<string, string | undefined>,

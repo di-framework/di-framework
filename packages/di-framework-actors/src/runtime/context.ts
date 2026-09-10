@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { getOrCreateActorMetadata } from '../decorators/keys';
-import type { ActorStorageTransaction } from '../storage/types';
+import { getOrCreateActorMetadata } from '../decorators/keys.js';
+import type { ActorStorageTransaction } from '../storage/types.js';
 
 export const actorContextStorage = new AsyncLocalStorage<ActorContextInstance>();
 

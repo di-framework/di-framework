@@ -2,7 +2,7 @@
  * Remote actor client and proxy reference generator.
  */
 
-import type { ActorRef, Constructor } from '../types';
+import type { ActorRef, Constructor } from '../types.js';
 import {
   ActorAuthorizationError,
   ActorBackpressureError,
@@ -10,13 +10,13 @@ import {
   ActorNotOwnerError,
   ActorOwnershipConflictError,
   StaleOwnerWriteError,
-} from './errors';
+} from './errors.js';
 import type {
   ActorRpcRequest,
   ActorRpcResponse,
   ActorTransport,
   RemoteRefOptions,
-} from './types';
+} from './types.js';
 
 export interface RemoteActorClientOptions extends RemoteRefOptions {
   transport: ActorTransport;

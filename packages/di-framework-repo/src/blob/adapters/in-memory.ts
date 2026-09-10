@@ -1,4 +1,4 @@
-import type { BlobStorageAdapter } from '../adapter';
+import type { BlobStorageAdapter } from '../adapter.js';
 import type {
   BlobBody,
   BlobListOptions,
@@ -7,8 +7,8 @@ import type {
   BlobObject,
   BlobPutOptions,
   BlobSignedUrlOptions,
-} from '../types';
-import { bodyToUint8Array, computeEtag, createBlobObject } from '../utils';
+} from '../types.js';
+import { bodyToUint8Array, computeEtag, createBlobObject } from '../utils.js';
 
 interface StoredBlob {
   data: Uint8Array;

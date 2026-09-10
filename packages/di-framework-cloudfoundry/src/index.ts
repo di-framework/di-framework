@@ -1,4 +1,4 @@
-export { parseVcapApplication } from './application-info';
+export { parseVcapApplication } from './application-info.js';
 
 export {
   bindCloudFoundryConnectors,
@@ -8,39 +8,39 @@ export {
   CF_ENVIRONMENT_TOKEN,
   CF_REDIS_TOKEN,
   CF_RELATIONAL_TOKEN,
-} from './bindings';
-export { AmqpServiceInfoCreator } from './creators/amqp';
-export { BlobStorageServiceInfoCreator } from './creators/blob-storage';
-export { RedisServiceInfoCreator } from './creators/redis';
-export { RelationalServiceInfoCreator } from './creators/relational';
+} from './bindings.js';
+export { AmqpServiceInfoCreator } from './creators/amqp.js';
+export { BlobStorageServiceInfoCreator } from './creators/blob-storage.js';
+export { RedisServiceInfoCreator } from './creators/redis.js';
+export { RelationalServiceInfoCreator } from './creators/relational.js';
 
-export { UserProvidedServiceInfoCreator } from './creators/user-provided';
+export { UserProvidedServiceInfoCreator } from './creators/user-provided.js';
 
 export {
   CloudFoundryService,
   EnableCloudFoundryConnectors,
   VcapApplication,
-} from './decorators';
+} from './decorators.js';
 
 export {
   CloudFoundryDetector,
   isCloudFoundry,
-} from './detector';
+} from './detector.js';
 
 export {
   CloudFoundryEnvironment,
   type CloudFoundryEnvironmentOptions,
   getDefaultEnvironment,
   resetDefaultEnvironment,
-} from './environment';
+} from './environment.js';
 
-export type { CloudFoundryServiceInfoCreator } from './spi/creator';
+export type { CloudFoundryServiceInfoCreator } from './spi/creator.js';
 
 export {
   getDefaultRegistry,
   parseVcapServices,
   ServiceInfoCreatorRegistry,
-} from './spi/registry';
+} from './spi/registry.js';
 
 export type {
   AmqpServiceInfo,
@@ -57,4 +57,4 @@ export type {
   ServiceFilter,
   ServicePredicate,
   UserProvidedServiceInfo,
-} from './types';
+} from './types.js';

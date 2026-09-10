@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Job, ListJobsFilter, QueueBackend, QueueInfo } from '@di-framework/queues';
-import { CommandFailure } from '../../command';
+import { CommandFailure } from '../../command.js';
 
 export function resolveQueueDbPath(explicitDb?: string, cwd = process.cwd()): string {
   if (explicitDb === ':memory:') return explicitDb;

@@ -5,10 +5,10 @@
  * request deduplication, and remote RPC invocation.
  */
 
-export * from './decorators/index';
-export * from './dev/index';
-export * from './distributed/index';
-export * from './migrations/index';
-export * from './runtime/index';
-export * from './storage/index';
-export * from './types';
+export * from './decorators/index.js';
+export * from './dev/index.js';
+export * from './distributed/index.js';
+export * from './migrations/index.js';
+export * from './runtime/index.js';
+export * from './storage/index.js';
+export * from './types.js';

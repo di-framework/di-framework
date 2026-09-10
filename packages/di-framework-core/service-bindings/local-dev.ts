@@ -1,5 +1,5 @@
-import { ServiceBindingRuntime } from './runtime';
-import type { BindingStatusReport, ServiceDiagnostic, ServiceExportOptions } from './types';
+import { ServiceBindingRuntime } from './runtime.js';
+import type { BindingStatusReport, ServiceDiagnostic, ServiceExportOptions } from './types.js';
 
 export interface LocalDevServiceRegistration {
   name: string;

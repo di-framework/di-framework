@@ -9,7 +9,7 @@ import {
   ActorReloadError,
   ActorRuntime,
   SqliteActorStorage,
-} from '../src/index';
+} from '../src/index.js';
 
 describe('Actor Hot Reload', () => {
   let tmpDir: string;

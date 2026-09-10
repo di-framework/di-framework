@@ -1,6 +1,6 @@
-import './fetch-runtime';
-import { installAsyncContext } from './async-hooks';
-import timers from './timers';
+import './fetch-runtime.js';
+import { installAsyncContext } from './async-hooks.js';
+import timers from './timers.js';
 
 installAsyncContext();
 const global = globalThis as Record<string, unknown>;

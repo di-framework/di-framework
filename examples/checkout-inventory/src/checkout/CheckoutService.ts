@@ -1,6 +1,6 @@
 import { Container } from '@di-framework/core/decorators';
 import { ServiceBinding } from '@di-framework/core/service-bindings';
-import type { InventoryContract, ReservationItem } from '../contracts/inventory';
+import type { InventoryContract, ReservationItem } from '../contracts/inventory.js';
 
 export interface OrderRequest {
   orderId: string;

@@ -8,7 +8,7 @@ import {
   isIP,
   isIPv4,
   isIPv6,
-} from './socket-address';
+} from './socket-address.js';
 import {
   asAsyncIterable,
   createTcpSocket,
@@ -21,7 +21,7 @@ import {
   unwrapAsync,
   unwrapResult,
   type WasiTcpSocket,
-} from './wasi-sockets';
+} from './wasi-sockets.js';
 
 export { isIP, isIPv4, isIPv6 };
 

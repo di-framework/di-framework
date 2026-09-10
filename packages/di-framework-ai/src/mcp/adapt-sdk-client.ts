@@ -55,8 +55,8 @@ export interface AdaptSdkClientOptions {
  *
  * @example
  * ```ts
- * import { Client } from "@modelcontextprotocol/sdk/client/index";
- * import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio";
+ * import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+ * import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
  * import { adaptSdkClient, createMcpToolCallbackProvider } from "@di-framework/ai";
  *
  * const client = new Client({ name: "app", version: "1.0.0" });

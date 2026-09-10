@@ -2,9 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { discoverActors, renderActorsModule, renderWorkloadManifest } from '../src/index';
-import type { WasmcloudProject } from '../src/project';
-import type { ClusterConnection } from '../src/target';
+import { discoverActors, renderActorsModule, renderWorkloadManifest } from '../src/index.js';
+import type { WasmcloudProject } from '../src/project.js';
+import type { ClusterConnection } from '../src/target.js';
 
 describe('wasmCloud Actor Build & Manifest Generation', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wasmcloud-actor-build-'));
@@ -60,7 +60,7 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
         }
       `,
       'index.ts': `
-        export { CounterActor } from './counter-actor';
+        export { CounterActor } from './counter-actor.js';
       `,
     });
 
@@ -86,7 +86,7 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
           async getName(): Promise<string> { return 'alice'; }
         }
       `,
-      'index.ts': `export { UserActor } from './user-actor';`,
+      'index.ts': `export { UserActor } from './user-actor.js';`,
     });
 
     const actors = discoverActors(project);

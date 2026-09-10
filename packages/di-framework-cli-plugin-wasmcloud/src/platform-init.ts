@@ -13,10 +13,10 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
-import { parsePlatformInitArgs } from './args';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { DEPLOY_MANIFEST_NAME, findDeployManifest } from './manifest';
-import { parseToml, TomlParseError } from './toml';
+import { parsePlatformInitArgs } from './args.js';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
+import { DEPLOY_MANIFEST_NAME, findDeployManifest } from './manifest.js';
+import { parseToml, TomlParseError } from './toml.js';
 
 export const LOCAL_PLATFORM_PATH = 'deploy/platform';
 export const LOCAL_TARGET_NAME = 'local';

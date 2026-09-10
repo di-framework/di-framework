@@ -1,13 +1,13 @@
 import { defineMetadata, getOwnMetadata, useContainer } from '@di-framework/core/container';
-import { bindCloudFoundryConnectors, CF_APPLICATION_TOKEN } from './bindings';
-import { getDefaultEnvironment } from './environment';
+import { bindCloudFoundryConnectors, CF_APPLICATION_TOKEN } from './bindings.js';
+import { getDefaultEnvironment } from './environment.js';
 import type {
   CloudFoundryApplicationInfo,
   CloudFoundryServiceInfo,
   CloudFoundryServiceOptions,
   EnableCloudFoundryConnectorsOptions,
   ServiceFilter,
-} from './types';
+} from './types.js';
 
 const INJECT_METADATA_KEY = 'di:inject';
 

@@ -5,7 +5,7 @@ export {
   type ExtensionManifest,
   type ManifestIssue,
   validateExtensionManifest,
-} from './manifest';
+} from './manifest.js';
 export {
   type CliIo,
   type CliStream,
@@ -16,4 +16,4 @@ export {
   type ExitCode,
   isCommandFailure,
   type JsonValue,
-} from './types';
+} from './types.js';

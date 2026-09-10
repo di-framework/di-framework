@@ -1,2 +1,2 @@
-export * from './discovery';
-export * from './manager';
+export * from './discovery.js';
+export * from './manager.js';

@@ -1,7 +1,7 @@
 /**
  * Storage abstractions and transaction contracts for @di-framework/actors.
  */
-import type { ActorOwnershipRecord } from '../distributed/types';
+import type { ActorOwnershipRecord } from '../distributed/types.js';
 
 /**
  * Transaction interface for an actor's storage operations.

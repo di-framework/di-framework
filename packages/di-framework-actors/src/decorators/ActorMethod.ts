@@ -1,5 +1,5 @@
-import type { ActorMethodOptions } from '../types';
-import { getOrCreateActorMetadata } from './keys';
+import type { ActorMethodOptions } from '../types.js';
+import { getOrCreateActorMetadata } from './keys.js';
 
 /**
  * Marks a method on an Actor class as an invocable actor method.

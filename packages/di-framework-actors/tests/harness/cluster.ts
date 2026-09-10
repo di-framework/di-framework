@@ -7,7 +7,7 @@ import type {
   ActorRpcRequest,
   ActorRpcResponse,
   ActorTransport,
-} from '../../src/distributed/types';
+} from '../../src/distributed/types.js';
 
 export interface TestWorkerNode {
   readonly ownerId: string;

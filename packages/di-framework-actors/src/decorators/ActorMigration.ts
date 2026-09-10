@@ -1,1 +1,1 @@
-export { ActorMigration } from '../migrations/decorator';
+export { ActorMigration } from '../migrations/decorator.js';

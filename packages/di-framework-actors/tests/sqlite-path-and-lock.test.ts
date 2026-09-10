@@ -9,7 +9,7 @@ import {
   actorIdentityToPath,
   parseActorIdentity,
   SqliteActorStorage,
-} from '../src/index';
+} from '../src/index.js';
 
 @Actor()
 class LockedActor {

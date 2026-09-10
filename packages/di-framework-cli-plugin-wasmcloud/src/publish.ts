@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import type { CliIo } from '@di-framework/cli-extension';
-import type { WasmcloudDeps } from './deps';
-import type { WasmcloudProject } from './project';
-import { registryReferenceHost, registryUsesPlainHttp } from './registry';
-import { toolFailed } from './support';
-import type { ClusterConnection } from './target';
+import type { WasmcloudDeps } from './deps.js';
+import type { WasmcloudProject } from './project.js';
+import { registryReferenceHost, registryUsesPlainHttp } from './registry.js';
+import { toolFailed } from './support.js';
+import type { ClusterConnection } from './target.js';
 
 export type PublishedImage = {
   artifactDigest: string;

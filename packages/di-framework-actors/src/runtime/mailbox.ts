@@ -1,4 +1,4 @@
-import { ActorAdmissionClosedError } from '../types';
+import { ActorAdmissionClosedError } from '../types.js';
 
 interface QueueItem {
   task: () => Promise<void>;
@@ -10,7 +10,7 @@ interface QueueItem {
  * Ensures complete asynchronous serialization of invocations for a single actor,
  * supports admission control, hot reload draining, failing unstarted work, and metrics inspection.
  */
-import { ActorBackpressureError } from '../distributed/errors';
+import { ActorBackpressureError } from '../distributed/errors.js';
 
 export interface ActorMailboxOptions {
   maxQueueLength?: number;

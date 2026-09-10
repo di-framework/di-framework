@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { Client } from '@modelcontextprotocol/sdk/client/index';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import {
   adaptSdkClient,

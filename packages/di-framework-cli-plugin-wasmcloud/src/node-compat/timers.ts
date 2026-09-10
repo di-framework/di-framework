@@ -1,5 +1,5 @@
 import { now, waitUntil } from 'wasi:clocks/monotonic-clock@0.3.0';
-import { AsyncLocalStorage } from './async-hooks';
+import { AsyncLocalStorage } from './async-hooks.js';
 
 let nextId = 1;
 const pending = new Map<number, Timeout>();

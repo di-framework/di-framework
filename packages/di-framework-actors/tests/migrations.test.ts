@@ -8,7 +8,7 @@ import {
   ActorMigrationError,
   ActorRuntime,
   SqliteActorStorage,
-} from '../src/index';
+} from '../src/index.js';
 
 @Actor({
   name: 'MigratedActor',

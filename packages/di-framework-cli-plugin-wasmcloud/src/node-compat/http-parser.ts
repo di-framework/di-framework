@@ -1,4 +1,4 @@
-import { concatBytes, decodeUtf8, encodeUtf8 } from './bytes';
+import { concatBytes, decodeUtf8, encodeUtf8 } from './bytes.js';
 
 export const MAX_HEADER_SIZE = 16_384;
 

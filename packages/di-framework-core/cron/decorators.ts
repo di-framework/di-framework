@@ -1,5 +1,5 @@
-import { CRON_METADATA_KEY, defineMetadata, getOwnMetadata } from '../container';
-import type { CronOptions } from './types';
+import { CRON_METADATA_KEY, defineMetadata, getOwnMetadata } from '../container.js';
+import type { CronOptions } from './types.js';
 
 export const CRON_JOB_DEFINITIONS_KEY = 'di:cron:definitions';
 

@@ -1,12 +1,12 @@
 import { useContainer } from '@di-framework/core/container';
-import { CloudFoundryEnvironment } from './environment';
+import { CloudFoundryEnvironment } from './environment.js';
 import type {
   AmqpServiceInfo,
   BlobStorageServiceInfo,
   EnableCloudFoundryConnectorsOptions,
   RedisServiceInfo,
   RelationalServiceInfo,
-} from './types';
+} from './types.js';
 
 export const CF_ENVIRONMENT_TOKEN = 'cf:environment';
 export const CF_APPLICATION_TOKEN = 'cf:application';

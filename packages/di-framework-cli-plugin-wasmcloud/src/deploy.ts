@@ -1,14 +1,14 @@
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
-import { parseAppCommandArgs } from './args';
-import { buildComponent } from './build';
-import { discoverScheduledJobs } from './cron';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { resolveApplication } from './discovery';
-import { loadDeployManifest } from './manifest';
-import { publishComponent } from './publish';
-import type { RegistryLocation } from './registry';
-import { resolveConnection, resolveTarget } from './target';
-import { applyWorkload, deploymentResourceName } from './workload';
+import { parseAppCommandArgs } from './args.js';
+import { buildComponent } from './build.js';
+import { discoverScheduledJobs } from './cron.js';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
+import { resolveApplication } from './discovery.js';
+import { loadDeployManifest } from './manifest.js';
+import { publishComponent } from './publish.js';
+import type { RegistryLocation } from './registry.js';
+import { resolveConnection, resolveTarget } from './target.js';
+import { applyWorkload, deploymentResourceName } from './workload.js';
 
 export type WasmcloudDeployData = {
   cronJobs?: Array<{ jobId: string; schedule: string | number; cronExpression: string }>;

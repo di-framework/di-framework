@@ -1,11 +1,11 @@
-import { AmqpServiceInfoCreator } from '../creators/amqp';
-import { BlobStorageServiceInfoCreator } from '../creators/blob-storage';
-import { RedisServiceInfoCreator } from '../creators/redis';
-import { RelationalServiceInfoCreator } from '../creators/relational';
-import { UserProvidedServiceInfoCreator } from '../creators/user-provided';
-import { CloudFoundryDetector } from '../detector';
-import type { CloudFoundryServiceInfo, RawVcapServiceData } from '../types';
-import type { CloudFoundryServiceInfoCreator } from './creator';
+import { AmqpServiceInfoCreator } from '../creators/amqp.js';
+import { BlobStorageServiceInfoCreator } from '../creators/blob-storage.js';
+import { RedisServiceInfoCreator } from '../creators/redis.js';
+import { RelationalServiceInfoCreator } from '../creators/relational.js';
+import { UserProvidedServiceInfoCreator } from '../creators/user-provided.js';
+import { CloudFoundryDetector } from '../detector.js';
+import type { CloudFoundryServiceInfo, RawVcapServiceData } from '../types.js';
+import type { CloudFoundryServiceInfoCreator } from './creator.js';
 
 export class ServiceInfoCreatorRegistry {
   private creators: CloudFoundryServiceInfoCreator[] = [];

@@ -2,10 +2,10 @@ import { expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseQueueInspectArgs, runQueueInspect } from '../cmd/queue/inspect';
-import { parseQueueListArgs, runQueueList } from '../cmd/queue/list';
-import { openQueueBackend, resolveQueueDbPath } from '../cmd/queue/options';
-import { parseQueueRetryArgs, runQueueRetry } from '../cmd/queue/retry';
+import { parseQueueInspectArgs, runQueueInspect } from '../cmd/queue/inspect.js';
+import { parseQueueListArgs, runQueueList } from '../cmd/queue/list.js';
+import { openQueueBackend, resolveQueueDbPath } from '../cmd/queue/options.js';
+import { parseQueueRetryArgs, runQueueRetry } from '../cmd/queue/retry.js';
 
 test('queue parsers reject incomplete flags and extra arguments', () => {
   for (const args of [['--db'], ['--db', '--json']])

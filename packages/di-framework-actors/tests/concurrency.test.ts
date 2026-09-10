@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { Actor, ActorContext, ActorMethod, ActorRuntime } from '../src/index';
+import { Actor, ActorContext, ActorMethod, ActorRuntime } from '../src/index.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

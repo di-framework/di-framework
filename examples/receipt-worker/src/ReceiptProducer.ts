@@ -1,5 +1,5 @@
 import { queue, type Job, type QueueProducer } from '@di-framework/queues';
-import type { ReceiptJobPayload } from './types';
+import type { ReceiptJobPayload } from './types.js';
 
 export class ReceiptProducer {
   private readonly producer: QueueProducer<ReceiptJobPayload>;

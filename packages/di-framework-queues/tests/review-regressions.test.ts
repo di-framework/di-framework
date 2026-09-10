@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
 import { QueueHandler as CoreQueueHandler } from '@di-framework/core';
-import { InMemoryQueueBackend } from '../src/backend/memory';
-import { SqliteQueueBackend } from '../src/backend/sqlite';
-import { getQueueHandlerMetadata, QueueHandler, queueRegistry } from '../src/decorators';
-import { ContainerQueueDispatcher } from '../src/dispatcher';
-import { QueueManager } from '../src/producer';
-import { QueueWorker } from '../src/worker';
+import { InMemoryQueueBackend } from '../src/backend/memory.js';
+import { SqliteQueueBackend } from '../src/backend/sqlite.js';
+import { getQueueHandlerMetadata, QueueHandler, queueRegistry } from '../src/decorators.js';
+import { ContainerQueueDispatcher } from '../src/dispatcher.js';
+import { QueueManager } from '../src/producer.js';
+import { QueueWorker } from '../src/worker.js';
 
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

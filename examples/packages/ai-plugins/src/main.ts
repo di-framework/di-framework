@@ -7,8 +7,8 @@ import {
   resolvePluginPackageDirectories,
   validatePluginCatalog,
 } from '@di-framework/ai-utils';
-import { Client } from '@modelcontextprotocol/sdk/client/index';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 export const exampleRoot = join(import.meta.dir, '..');
 export const OFFICIAL_PLUGIN_PACKAGE = '@di-framework/plugin';

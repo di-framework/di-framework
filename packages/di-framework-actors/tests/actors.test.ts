@@ -6,7 +6,7 @@ import {
   ActorMethodNotFoundError,
   ActorNotRegisteredError,
   actors,
-} from '../src/index';
+} from '../src/index.js';
 
 @Actor()
 class CounterActor {

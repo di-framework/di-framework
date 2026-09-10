@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
 import ts from 'typescript';
-import type { WasmcloudDeps } from './deps';
-import { asWitIdentifier, type WasmcloudProject } from './project';
-import type { WitRequirement } from './wit';
+import type { WasmcloudDeps } from './deps.js';
+import { asWitIdentifier, type WasmcloudProject } from './project.js';
+import type { WitRequirement } from './wit.js';
 
 export type BindingKind =
   | 'Postgres'

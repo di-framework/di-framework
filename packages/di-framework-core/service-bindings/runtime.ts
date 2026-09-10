@@ -1,13 +1,13 @@
-import { useContainer } from '../container';
+import { useContainer } from '../container.js';
 import {
   IncompatibleContractError,
   MissingBindingError,
   TargetUnavailableError,
   UnauthorizedOperationError,
   UnboundCallerError,
-} from './errors';
-import { serviceBindingToken } from './proxy';
-import { ServiceBindingRegistry } from './registry';
+} from './errors.js';
+import { serviceBindingToken } from './proxy.js';
+import { ServiceBindingRegistry } from './registry.js';
 import type {
   BindingStatusReport,
   CallerBindingConfig,
@@ -15,7 +15,7 @@ import type {
   ServiceBindingConfiguration,
   ServiceDiagnostic,
   ServiceExportOptions,
-} from './types';
+} from './types.js';
 
 export class ServiceBindingRuntime {
   private static instance: ServiceBindingRuntime | undefined;

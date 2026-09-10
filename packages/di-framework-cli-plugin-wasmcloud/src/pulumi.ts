@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { WasmcloudDeps } from './deps';
-import { toolFailed } from './support';
+import type { WasmcloudDeps } from './deps.js';
+import { toolFailed } from './support.js';
 
 /** Local file backend and passphrase defaults, without touching the caller's environment. */
 export function pulumiEnvironment(

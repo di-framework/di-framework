@@ -6,9 +6,9 @@ import {
   serviceBindingToken,
   UnboundCallerError,
 } from '@di-framework/core/service-bindings';
-import { CheckoutService } from '../src/checkout/CheckoutService';
-import { InventoryService } from '../src/inventory/InventoryService';
-import { RogueCallerService } from '../src/unbound/RogueCallerService';
+import { CheckoutService } from '../src/checkout/CheckoutService.js';
+import { InventoryService } from '../src/inventory/InventoryService.js';
+import { RogueCallerService } from '../src/unbound/RogueCallerService.js';
 
 describe('Checkout / Inventory Service Bindings Example', () => {
   let dev: LocalServiceDevManager;

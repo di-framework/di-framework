@@ -1,1 +1,1 @@
-export { ActorContext } from '../runtime/context';
+export { ActorContext } from '../runtime/context.js';

@@ -6,7 +6,7 @@ import type {
   MigrationExecutionContext,
   MigrationMetadata,
   MigrationOptions,
-} from './types';
+} from './types.js';
 
 export const MIGRATION_METADATA_KEY = 'repo:migration';
 

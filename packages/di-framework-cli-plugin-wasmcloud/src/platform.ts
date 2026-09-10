@@ -2,12 +2,12 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
 import { CommandFailure } from '@di-framework/cli-extension';
-import { parsePlatformCommandArgs } from './args';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { loadDeployManifest, type ManagedTarget } from './manifest';
-import { resolveInsideRoot } from './paths';
-import { pulumiEnvironment, runPulumi } from './pulumi';
-import { materializeRegistry, type RegistryInput, type RegistryLocation } from './registry';
+import { parsePlatformCommandArgs } from './args.js';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
+import { loadDeployManifest, type ManagedTarget } from './manifest.js';
+import { resolveInsideRoot } from './paths.js';
+import { pulumiEnvironment, runPulumi } from './pulumi.js';
+import { materializeRegistry, type RegistryInput, type RegistryLocation } from './registry.js';
 
 export const PLATFORM_OUTPUT_SCHEMA_VERSION = 2;
 

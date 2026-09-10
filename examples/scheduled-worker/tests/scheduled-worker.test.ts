@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { join } from 'node:path';
 import { discoverScheduledJobs, renderWorkloadManifest } from '@di-framework/cli-plugin-wasmcloud';
 import { Container, CronRuntime } from '@di-framework/core';
-import { AuditLogger } from '../src/services/AuditLogger';
-import { DatabaseRepository } from '../src/services/DatabaseRepository';
-import { type MaintenanceReport, MaintenanceService } from '../src/services/MaintenanceService';
+import { AuditLogger } from '../src/services/AuditLogger.js';
+import { DatabaseRepository } from '../src/services/DatabaseRepository.js';
+import { type MaintenanceReport, MaintenanceService } from '../src/services/MaintenanceService.js';
 
 describe('Scheduled Worker Example (@Cron in wasmCloud)', () => {
   let container: Container;

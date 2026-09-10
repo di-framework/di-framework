@@ -1,7 +1,7 @@
 /**
  * Core type definitions for @di-framework/actors.
  */
-import type { ActorMigrationDefinition } from './migrations/types';
+import type { ActorMigrationDefinition } from './migrations/types.js';
 
 export type Constructor<T = any> = new (...args: any[]) => T;
 
@@ -272,7 +272,7 @@ export interface ActorDetailedInspection extends ActorInspectionInfo {
   state?: Record<string, any>;
 }
 
-export * from './distributed/errors';
-export * from './distributed/types';
-export { ActorMigrationError } from './migrations/types';
-export { ActorLockError } from './storage/lock';
+export * from './distributed/errors.js';
+export * from './distributed/types.js';
+export { ActorMigrationError } from './migrations/types.js';
+export { ActorLockError } from './storage/lock.js';

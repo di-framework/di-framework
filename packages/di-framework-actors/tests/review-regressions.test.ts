@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { ActorContext, ActorMethod, ActorRuntime } from '../src/index';
-import { ActorMailbox } from '../src/runtime/mailbox';
+import { ActorContext, ActorMethod, ActorRuntime } from '../src/index.js';
+import { ActorMailbox } from '../src/runtime/mailbox.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -100,8 +100,8 @@ describe('Actor invocation lifecycle regressions', () => {
 });
 
 it('exposes actor metadata, context construction, storage and symbol-safe references', async () => {
-  const { getActorMetadata, getTargetConstructor } = await import('../src/decorators/keys');
-  const { InMemoryActorStorage } = await import('../src/storage/memory');
+  const { getActorMetadata, getTargetConstructor } = await import('../src/decorators/keys.js');
+  const { InMemoryActorStorage } = await import('../src/storage/memory.js');
   class Example {
     read() {
       return 1;

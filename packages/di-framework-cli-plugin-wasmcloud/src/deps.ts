@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { transformAsync } from '@babel/core';
 import asyncToGenerator from '@babel/plugin-transform-async-to-generator';
 import { rolldown } from 'rolldown';
-import { lowerForAwait } from './async-transform';
-import { emptyActorsModule } from './actors';
-import { emptyGuestsModule } from './guests';
-import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env';
+import { lowerForAwait } from './async-transform.js';
+import { emptyActorsModule } from './actors.js';
+import { emptyGuestsModule } from './guests.js';
+import { rolldownInject, wasmcloudNodeEnv } from './node-compat/env.js';
 import {
   createNodeCompatSeed,
   EMPTY_NODE_COMPAT_SEED,
@@ -17,7 +17,7 @@ import {
   NODE_COMPAT_SEED_ID,
   type NodeCompatSeed,
   renderNodeCompatSeedModule,
-} from './node-compat/seed';
+} from './node-compat/seed.js';
 
 export type ProcessRunOptions = {
   cwd: string;

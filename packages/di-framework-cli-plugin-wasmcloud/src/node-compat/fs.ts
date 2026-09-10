@@ -1,4 +1,4 @@
-import { nodeCompatSeed } from './seed-virtual';
+import { nodeCompatSeed } from './seed-virtual.js';
 
 type ErrnoException = Error & {
   code: string;

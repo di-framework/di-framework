@@ -1,5 +1,5 @@
-import { ServiceBindingRuntime } from './runtime';
-import type { ServiceBindingOptions } from './types';
+import { ServiceBindingRuntime } from './runtime.js';
+import type { ServiceBindingOptions } from './types.js';
 
 export interface ServiceBindingClientMetadata {
   bindingName: string;

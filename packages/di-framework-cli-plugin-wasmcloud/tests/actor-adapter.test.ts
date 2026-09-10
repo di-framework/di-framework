@@ -12,7 +12,7 @@ import {
   ACTORS_INVOCATION_PATH,
   createWasmcloudActorAdapter,
   type WasmcloudActorAdapter,
-} from '../src/index';
+} from '../src/index.js';
 
 describe('wasmCloud Actor Adapter Integration', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-contract-wasmcloud-'));

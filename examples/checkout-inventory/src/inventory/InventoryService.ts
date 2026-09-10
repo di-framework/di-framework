@@ -5,7 +5,7 @@ import type {
   ReleaseResult,
   ReservationItem,
   ReservationResult,
-} from '../contracts/inventory';
+} from '../contracts/inventory.js';
 
 /**
  * Inventory Service exports callable operations to bound callers.

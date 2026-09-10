@@ -1,6 +1,6 @@
-import { queueRegistry } from '../decorators';
-import type { EnqueueOptions, Job, ListJobsFilter, QueueInfo } from '../types';
-import type { QueueBackend } from './contract';
+import { queueRegistry } from '../decorators.js';
+import type { EnqueueOptions, Job, ListJobsFilter, QueueInfo } from '../types.js';
+import type { QueueBackend } from './contract.js';
 
 export class InMemoryQueueBackend implements QueueBackend {
   readonly name = 'in-memory';

@@ -1,8 +1,8 @@
 import { CommandFailure } from '@di-framework/cli-extension';
-import type { WasmcloudDeps } from './deps';
-import type { DeployManifest, DeployTarget, ExternalTarget, ManagedTarget } from './manifest';
-import { loadPlatformOutputs, type PlatformOutputs, resolvePlatformDirectory } from './platform';
-import { materializeRegistry, type RegistryLocation } from './registry';
+import type { WasmcloudDeps } from './deps.js';
+import type { DeployManifest, DeployTarget, ExternalTarget, ManagedTarget } from './manifest.js';
+import { loadPlatformOutputs, type PlatformOutputs, resolvePlatformDirectory } from './platform.js';
+import { materializeRegistry, type RegistryLocation } from './registry.js';
 
 export type ClusterConnection = {
   target: string;

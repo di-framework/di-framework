@@ -3,8 +3,8 @@ import {
   Agent as HttpAgent,
   type RequestOptions as HttpOptions,
   type IncomingMessage,
-} from './http';
-import { type ConnectionOptions, connect, TLSSocket, unsupported, validateOptions } from './tls';
+} from './http.js';
+import { type ConnectionOptions, connect, TLSSocket, unsupported, validateOptions } from './tls.js';
 
 export type RequestOptions = Omit<HttpOptions, 'agent'> &
   ConnectionOptions & { agent?: Agent | false };

@@ -1,7 +1,7 @@
 /**
  * Actor migration decorator and registry.
  */
-import type { ActorMigrationDefinition, ActorMigrationOptions } from './types';
+import type { ActorMigrationDefinition, ActorMigrationOptions } from './types.js';
 
 const actorMigrationRegistry = new Map<string, ActorMigrationDefinition[]>();
 

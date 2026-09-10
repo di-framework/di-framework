@@ -8,29 +8,29 @@
  * No external dependencies required (no reflect-metadata needed).
  */
 
-export { Bootstrap } from './Bootstrap';
-export { Builder } from './Builder';
+export { Bootstrap } from './Bootstrap.js';
+export { Builder } from './Builder.js';
 export {
   Bean,
   type BeanDefinition,
   type BeanOptions,
   type BeanToken,
   Configuration,
-} from './Configuration';
+} from './Configuration.js';
 export {
   Component,
   Container,
   getInjectionContainer,
   isInjectable,
-} from './Container';
-export { Cron } from './Cron';
-export { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys';
-export { Publisher, type PublisherOptions } from './Publisher';
-export { QueueHandler, type QueueHandlerOptions, type QueueHandlerMetadata } from './QueueHandler';
+} from './Container.js';
+export { Cron } from './Cron.js';
+export { INJECT_METADATA_KEY, INJECTABLE_METADATA_KEY } from './keys.js';
+export { Publisher, type PublisherOptions } from './Publisher.js';
+export { QueueHandler, type QueueHandlerOptions, type QueueHandlerMetadata } from './QueueHandler.js';
 export {
   ExportOperation,
   ExportService,
   ServiceBinding,
-} from './ServiceBinding';
-export { Subscriber } from './Subscriber';
-export { Telemetry, TelemetryListener, type TelemetryOptions } from './Telemetry';
+} from './ServiceBinding.js';
+export { Subscriber } from './Subscriber.js';
+export { Telemetry, TelemetryListener, type TelemetryOptions } from './Telemetry.js';

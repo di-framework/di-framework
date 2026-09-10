@@ -5,5 +5,5 @@ export {
   SERVICE_BINDING_METADATA_KEY,
   SERVICE_EXPORT_METADATA_KEY,
   ServiceBinding,
-} from '../service-bindings/decorators';
-export { serviceBindingToken } from '../service-bindings/proxy';
+} from '../service-bindings/decorators.js';
+export { serviceBindingToken } from '../service-bindings/proxy.js';

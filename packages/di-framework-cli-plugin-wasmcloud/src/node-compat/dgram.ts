@@ -6,7 +6,7 @@ import {
   type IpSocketAddress,
   ipSocketAddress,
   unspecifiedAddress,
-} from './socket-address';
+} from './socket-address.js';
 import {
   createUdpSocket,
   firstOfTuple,
@@ -18,7 +18,7 @@ import {
   unwrapAsync,
   unwrapResult,
   type WasiUdpSocket,
-} from './wasi-sockets';
+} from './wasi-sockets.js';
 
 export type RemoteInfo = {
   address: string;

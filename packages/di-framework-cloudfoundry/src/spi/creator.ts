@@ -1,4 +1,4 @@
-import type { CloudFoundryServiceInfo, RawVcapServiceData } from '../types';
+import type { CloudFoundryServiceInfo, RawVcapServiceData } from '../types.js';
 
 /**
  * Service Provider Interface (SPI) for converting raw VCAP_SERVICES entry data

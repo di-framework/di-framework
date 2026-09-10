@@ -45,7 +45,7 @@ describe('parseNpmPackJson', () => {
   });
 
   it('defaults missing pack fields when filename is present', () => {
-    expect(parseNpmPackJson(JSON.stringify({ filename: 'pkg.tgz', files: 'noop' }))).toEqual({
+    expect(parseNpmPackJson(JSON.stringify({ filename: 'pkg.tgz', files: 'nope' }))).toEqual({
       id: '',
       name: '',
       version: '',

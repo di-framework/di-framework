@@ -1,6 +1,6 @@
 import { Component, Cron, Container as Injectable } from '@di-framework/core/decorators';
-import { AuditLogger } from './AuditLogger';
-import { DatabaseRepository, type PruneSummary } from './DatabaseRepository';
+import { AuditLogger } from './AuditLogger.js';
+import { DatabaseRepository, type PruneSummary } from './DatabaseRepository.js';
 
 export interface MaintenanceReport {
   job: string;

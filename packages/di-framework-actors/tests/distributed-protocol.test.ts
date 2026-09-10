@@ -14,7 +14,7 @@ import {
   RemoteActorClient,
   SqliteActorStorage,
   StaleOwnerWriteError,
-} from '../src/index';
+} from '../src/index.js';
 
 @Actor({ name: 'OrderActor' })
 class OrderActor {

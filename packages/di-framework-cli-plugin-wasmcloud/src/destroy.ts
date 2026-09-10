@@ -1,10 +1,10 @@
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
-import { parseAppCommandArgs } from './args';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { resolveApplication } from './discovery';
-import { loadDeployManifest } from './manifest';
-import { resolveConnection, resolveTarget } from './target';
-import { deleteWorkload, deploymentResourceName } from './workload';
+import { parseAppCommandArgs } from './args.js';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
+import { resolveApplication } from './discovery.js';
+import { loadDeployManifest } from './manifest.js';
+import { resolveConnection, resolveTarget } from './target.js';
+import { deleteWorkload, deploymentResourceName } from './workload.js';
 
 export async function runWasmcloudDestroy(
   args: readonly string[],

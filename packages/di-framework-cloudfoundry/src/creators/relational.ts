@@ -1,5 +1,5 @@
-import type { CloudFoundryServiceInfoCreator } from '../spi/creator';
-import type { RawVcapServiceData, RelationalDialect, RelationalServiceInfo } from '../types';
+import type { CloudFoundryServiceInfoCreator } from '../spi/creator.js';
+import type { RawVcapServiceData, RelationalDialect, RelationalServiceInfo } from '../types.js';
 
 const POSTGRES_PATTERNS = ['postgres', 'postgresql', 'elephantsql', 'crunchy'];
 const MYSQL_PATTERNS = ['mysql', 'cleardb', 'mariadb'];

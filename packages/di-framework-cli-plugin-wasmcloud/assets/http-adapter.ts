@@ -1,7 +1,7 @@
 import {
   handleActorInvocationRequest,
   isActorInvocationRequest as isActorInvocation,
-} from '../src/actor-protocol';
+} from '../src/actor-protocol.js';
 // Keep this side-effect import first: application services can resolve bindings at module startup.
 import 'virtual:di-framework-wasmcloud-guests';
 import 'virtual:di-framework-wasmcloud-actors';

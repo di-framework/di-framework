@@ -9,7 +9,7 @@ import {
   ActorMethod,
   ActorRuntime,
   SqliteActorStorage,
-} from '../src/index';
+} from '../src/index.js';
 
 describe('Actor Namespace and Multi-Application Workspaces', () => {
   let tmpDir: string;

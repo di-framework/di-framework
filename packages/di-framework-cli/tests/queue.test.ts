@@ -3,10 +3,10 @@ import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteQueueBackend } from '@di-framework/queues';
-import { runQueueInspect } from '../cmd/queue/inspect';
-import { runQueueList } from '../cmd/queue/list';
-import { runQueueRetry } from '../cmd/queue/retry';
-import type { CliIo } from '../command';
+import { runQueueInspect } from '../cmd/queue/inspect.js';
+import { runQueueList } from '../cmd/queue/list.js';
+import { runQueueRetry } from '../cmd/queue/retry.js';
+import type { CliIo } from '../command.js';
 
 function createCaptureIo(): { stdout: string[]; stderr: string[]; io: CliIo } {
   const stdout: string[] = [];

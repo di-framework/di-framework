@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
-import { findUp } from './project';
-import type { RegistryInput } from './registry';
-import { parseToml, TomlParseError } from './toml';
+import { findUp } from './project.js';
+import type { RegistryInput } from './registry.js';
+import { parseToml, TomlParseError } from './toml.js';
 
 export const DEPLOY_MANIFEST_NAME = 'di-framework.deploy.toml';
 

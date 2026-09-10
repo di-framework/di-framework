@@ -1,10 +1,10 @@
 import * as fs from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
-import type { DiscoveryConfig } from './manifest';
-import { ALWAYS_SKIP_DIRECTORIES } from './manifest';
-import { isInside } from './paths';
-import { CONFIG_FILE_NAME, loadProject, type WasmcloudProject } from './project';
+import type { DiscoveryConfig } from './manifest.js';
+import { ALWAYS_SKIP_DIRECTORIES } from './manifest.js';
+import { isInside } from './paths.js';
+import { CONFIG_FILE_NAME, loadProject, type WasmcloudProject } from './project.js';
 
 export type DiscoveredProjects = Map<string, WasmcloudProject>;
 

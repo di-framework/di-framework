@@ -1,4 +1,4 @@
-import type { CommandNode } from './types';
+import type { CommandNode } from './types.js';
 
 /** Manifest format understood by the di-framework CLI extension loader. */
 export const EXTENSION_SCHEMA_VERSION = 1;

@@ -1,11 +1,11 @@
 import { container } from '@di-framework/core';
-import { AuditLogger } from './services/AuditLogger';
-import { DatabaseRepository } from './services/DatabaseRepository';
-import { MaintenanceService } from './services/MaintenanceService';
+import { AuditLogger } from './services/AuditLogger.js';
+import { DatabaseRepository } from './services/DatabaseRepository.js';
+import { MaintenanceService } from './services/MaintenanceService.js';
 
-export * from './services/AuditLogger';
-export * from './services/DatabaseRepository';
-export * from './services/MaintenanceService';
+export * from './services/AuditLogger.js';
+export * from './services/DatabaseRepository.js';
+export * from './services/MaintenanceService.js';
 
 // Register services in DI container
 container.register(AuditLogger);

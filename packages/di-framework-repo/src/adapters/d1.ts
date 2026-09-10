@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { type SqlAdapterOptions, SqlStorageAdapter } from './sql';
+import { type SqlAdapterOptions, SqlStorageAdapter } from './sql.js';
 export interface D1Result<T = Record<string, unknown>> {
   results?: T[];
   success?: boolean;
