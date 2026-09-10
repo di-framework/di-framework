@@ -87,15 +87,16 @@ export class ReceiptWorker {
     ).toBe(true);
   });
 
-  it('renders WIT world with di-framework:queues/dispatch export for worker requirements', () => {
+  it('renders WIT world with HTTP and sqlite imports for worker requirements', () => {
     const requirements = queueProjectRequirements();
     const wit = renderWorldWit('receipt-worker', '1.0.0', requirements);
 
-    expect(wit).toContain('export di-framework:queues/dispatch@0.1.0;');
-    expect(wit).not.toContain('wasi:http/handler');
+    expect(wit).toContain('export wasi:http/handler@0.3.0;');
+    expect(wit).toContain('import di-framework:sqlite/database@0.1.0;');
+    expect(wit).not.toContain('export di-framework:queues/dispatch@0.1.0;');
   });
 
-  it('renders WorkloadDeployment for worker without Kubernetes Service and with queueConsumers', () => {
+  it('renders WorkloadDeployment for worker with control HTTP Service and SQLite storage', () => {
     const { root } = makeWorkspace();
     const project = {
       projectRoot: root,
@@ -105,6 +106,7 @@ export class ReceiptWorker {
       version: '1.0.0',
       outputPath: join(root, 'dist', 'receipt-worker.wasm'),
       applicationType: 'worker',
+      ingress: false,
     };
 
     const handlers = [
@@ -138,19 +140,18 @@ export class ReceiptWorker {
       handlers,
     );
 
-    // Should NOT contain Kubernetes Service
-    expect(yaml).not.toContain('kind: Service');
-    expect(yaml).not.toContain('service:');
-
-    // Should contain WorkloadDeployment
+    // Cluster Service is required for producer/admin HTTP control.
+    expect(yaml).toContain('kind: Service');
     expect(yaml).toContain('kind: WorkloadDeployment');
     expect(yaml).toContain('name: receipt-worker');
-    expect(yaml).toContain('queueConsumers:');
-    expect(yaml).toContain('- queue: "receipts"');
-    expect(yaml).toContain('concurrency: 3');
-    expect(yaml).toContain('maxRetries: 4');
-    expect(yaml).toContain('backoffMs: 250');
-    expect(yaml).toContain('timeoutMs: 15000');
+    expect(yaml).toContain('deployPolicy: Recreate');
+    expect(yaml).toContain('hostgroup: storage');
+    expect(yaml).toContain('QUEUE_DB_PATH');
+    expect(yaml).toContain('DI_QUEUE_RECEIPTS_CONCURRENCY: "3"');
+    expect(yaml).toContain('DI_QUEUE_RECEIPTS_MAX_RETRIES: "4"');
+    expect(yaml).toContain('DI_QUEUE_RECEIPTS_BACKOFF_MS: "250"');
+    expect(yaml).toContain('DI_QUEUE_RECEIPTS_TIMEOUT_MS: "15000"');
+    expect(yaml).not.toContain('queueConsumers:');
   });
 
   it('derives requirementsForProject based on queue worker detection', () => {
@@ -183,11 +184,11 @@ export class TestWorker {
     };
 
     const reqs = requirementsForProject(project as any);
-    const hasQueueExport = reqs.some(
-      (r) => r.package === 'di-framework:queues' && r.direction === 'export',
+    const hasSqliteImport = reqs.some(
+      (r) => r.package === 'di-framework:sqlite' && r.direction === 'import',
     );
-    expect(hasQueueExport).toBe(true);
+    expect(hasSqliteImport).toBe(true);
     const hasHttpExport = reqs.some((r) => r.package === 'wasi:http' && r.direction === 'export');
-    expect(hasHttpExport).toBe(false);
+    expect(hasHttpExport).toBe(true);
   });
 });

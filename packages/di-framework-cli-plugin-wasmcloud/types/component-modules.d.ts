@@ -12,6 +12,7 @@ declare module 'virtual:di-framework-application' {
 
 declare module 'virtual:di-framework-wasmcloud-actors' {
   export const actorRuntime: unknown;
+  export function getActorRuntime(): unknown;
   export const dispatchActorInvocation: (
     actorType: string,
     actorKey: string,
@@ -74,8 +75,42 @@ declare module '@babel/plugin-transform-async-to-generator' {
 }
 
 declare module 'virtual:di-framework-wasmcloud-runtime' {
+  export function ensureWasiEnvironment(): void;
   export function loadApplication(): Promise<any>;
 }
+
+declare module 'virtual:di-framework-wasmcloud-cron' {
+  export function invokeJob(jobId: string, context?: Record<string, unknown>): Promise<unknown>;
+}
+
+declare module 'virtual:di-framework-wasmcloud-queues' {
+  export function getQueueBackend(): unknown;
+  export function ensureQueueWorkers(): Promise<void>;
+  export function pumpQueueWorkers(maxJobsPerQueue?: number): Promise<number>;
+}
+
+declare module 'di-framework:sqlite/database@0.1.0' {
+  export type SqlValue =
+    | { tag: 'null' }
+    | { tag: 'integer'; val: bigint | number }
+    | { tag: 'real'; val: number }
+    | { tag: 'text'; val: string }
+    | { tag: 'blob'; val: Uint8Array };
+
+  export type SqlError = { tag: string; val?: string };
+  export type Row = Array<[string, SqlValue]>;
+
+  export class Connection {
+    run(sql: string, params: SqlValue[]): { tag: 'ok'; val: bigint | number } | { tag: 'err'; val: SqlError };
+    query(sql: string, params: SqlValue[]): { tag: 'ok'; val: Row[] } | { tag: 'err'; val: SqlError };
+    first(sql: string, params: SqlValue[]): { tag: 'ok'; val: Row | null } | { tag: 'err'; val: SqlError };
+    exec(sql: string): { tag: 'ok'; val?: undefined } | { tag: 'err'; val: SqlError };
+    close(): { tag: 'ok'; val?: undefined } | { tag: 'err'; val: SqlError };
+  }
+
+  export function open(path: string): { tag: 'ok'; val: Connection } | { tag: 'err'; val: SqlError };
+}
+
 declare module 'wasi:cli/environment@0.3.0' {
   export function getEnvironment(): Array<[string, string]>;
 }

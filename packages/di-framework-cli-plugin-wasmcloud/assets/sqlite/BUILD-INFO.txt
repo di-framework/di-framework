@@ -1,0 +1,13 @@
+component:       di-framework:sqlite@0.1.0
+profile:         release
+built:           2026-09-10T01:31:26Z
+rustc:           rustc 1.97.1 (8bab26f4f 2026-07-14)
+target:          wasm32-wasip2
+wasi-sdk:        34.0
+wasm-tools:      wasm-tools 1.258.0 (5c6d31c78 2026-08-24)
+rusqlite:        0.40.2
+libsqlite3-sys:  0.38.2 (SQLite 3.53.2)
+wit-bindgen:     0.61.1
+LIBSQLITE3_FLAGS: -DSQLITE_OS_OTHER=1 -DSQLITE_TEMP_STORE=3 -DSQLITE_OMIT_WAL -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DEFAULT_SYNCHRONOUS=2 -DSQLITE_MAX_MMAP_SIZE=0 -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_DEFAULT_MEMSTATUS=0
+CFLAGS_wasm32_wasip2: --target=wasm32-wasip2 -Os
+size:            1247830 bytes

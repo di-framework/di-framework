@@ -35,7 +35,8 @@
     }
   },
   "dependencies": {
-    "@di-framework/core": "^5"
+    "@di-framework/core": "^5",
+    "@di-framework/repo": "^5"
   },
   "peerDependencies": {
     "@di-framework/core": "^5",

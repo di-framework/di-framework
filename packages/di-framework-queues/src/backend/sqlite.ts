@@ -5,13 +5,32 @@ import { queueRegistry } from '../decorators.js';
 import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types.js';
 import type { QueueBackend } from './contract.js';
 
+export interface SqliteQueueBackendOptions {
+  path?: string;
+  db?: Database;
+  /**
+   * Use a rollback journal (`journal_mode=DELETE`, `synchronous=FULL`) instead of
+   * WAL. Required for databases that are also opened through the WASI SQLite
+   * component, whose VFS has no file locking or shared memory for WAL.
+   * Defaults to true when `DI_SQLITE_BACKEND=wasm`.
+   */
+  durableWasi?: boolean;
+}
+
+function wasmBackendRequested(): boolean {
+  return process.env.DI_SQLITE_BACKEND?.trim().toLowerCase() === 'wasm';
+}
+
 export class SqliteQueueBackend implements QueueBackend {
   readonly name = 'sqlite';
+  /** Journal configuration applied at construction. */
+  readonly journalMode: 'wal' | 'delete';
   private db: Database;
   private nextId = 1;
 
-  constructor(databaseOrPath: string | Database | { path?: string; db?: Database } = ':memory:') {
+  constructor(databaseOrPath: string | Database | SqliteQueueBackendOptions = ':memory:') {
     let resolved: string | Database = ':memory:';
+    let durableWasi = wasmBackendRequested();
     if (typeof databaseOrPath === 'string') {
       resolved = databaseOrPath;
     } else if (databaseOrPath instanceof Database) {
@@ -21,8 +40,10 @@ export class SqliteQueueBackend implements QueueBackend {
         resolved = databaseOrPath as Database;
       } else {
         resolved = databaseOrPath.path ?? databaseOrPath.db ?? ':memory:';
+        if (databaseOrPath.durableWasi !== undefined) durableWasi = databaseOrPath.durableWasi;
       }
     }
+    this.journalMode = durableWasi ? 'delete' : 'wal';
 
     if (typeof resolved === 'string') {
       if (resolved !== ':memory:' && !resolved.startsWith('file::memory:')) {
@@ -41,8 +62,14 @@ export class SqliteQueueBackend implements QueueBackend {
     }
 
     try {
-      this.db.exec('PRAGMA journal_mode = WAL;');
-      this.db.exec('PRAGMA synchronous = NORMAL;');
+      if (this.journalMode === 'delete') {
+        // Rollback journal + full sync: the only durable mode shared with the WASI component.
+        this.db.exec('PRAGMA journal_mode = DELETE;');
+        this.db.exec('PRAGMA synchronous = FULL;');
+      } else {
+        this.db.exec('PRAGMA journal_mode = WAL;');
+        this.db.exec('PRAGMA synchronous = NORMAL;');
+      }
       this.db.exec('PRAGMA busy_timeout = 5000;');
     } catch {
       // WAL might not be supported on in-memory db

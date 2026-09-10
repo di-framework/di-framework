@@ -1,3 +1,5 @@
+import type { SqlDatabase } from '../sqlite/sql-database.js';
+
 export interface MigrationOptions {
   version: number | string;
   description: string;
@@ -20,14 +22,11 @@ export interface MigrationClassInstance {
 
 export type MigrationClass = new (...args: any[]) => MigrationClassInstance;
 
-export interface MigrationDatabase {
-  run(sql: string, params?: unknown[]): Promise<{ changes?: number }>;
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
-  first<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | null>;
-  exec(sql: string): Promise<void>;
-  transaction<T>(fn: (db: MigrationDatabase) => Promise<T>): Promise<T>;
-  close?(): Promise<void> | void;
-}
+/**
+ * Database handle migrations execute against. Structurally identical to
+ * `SqlDatabase`, so any Bun, Node, or Wasm-backed handle can run migrations.
+ */
+export type MigrationDatabase = SqlDatabase;
 
 export interface MigrationExecutionContext {
   binding: string;

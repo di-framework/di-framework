@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
-import { createMigrationDatabase, isMigrationDatabase } from '../src/migrations/database';
+// The package entry registers the bun:sqlite / node:sqlite openers used for path inputs.
+import { createMigrationDatabase, isMigrationDatabase } from '../src/index';
 
 async function exercise(db: Awaited<ReturnType<typeof createMigrationDatabase>>) {
   await db.exec('CREATE TABLE t (value INTEGER)');
@@ -76,7 +77,9 @@ test('adapts SQL storage methods, transaction delegates, and missing capabilitie
   await db.run('INSERT INTO t VALUES (?)', [1]);
   expect(await db.query('SELECT * FROM t')).toEqual([{ value: 1 }]);
   expect(await db.first<{ value: number }>('SELECT * FROM t')).toEqual({ value: 1 });
-  expect(await db.transaction(async (tx) => tx.first<{ value: number }>('SELECT * FROM t'))).toEqual({ value: 1 });
+  expect(
+    await db.transaction(async (tx) => tx.first<{ value: number }>('SELECT * FROM t')),
+  ).toEqual({ value: 1 });
   await db.close?.();
   const rowsOnly = await createMigrationDatabase({ allRows: () => [{ value: 2 }] });
   expect(await rowsOnly.first<{ value: number }>('select')).toEqual({ value: 2 });

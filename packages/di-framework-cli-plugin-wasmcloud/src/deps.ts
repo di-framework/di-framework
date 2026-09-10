@@ -51,6 +51,8 @@ export type BundleOptions = {
   outFile: string;
   guestsPath?: string;
   actorsPath?: string;
+  cronPath?: string;
+  queuesPath?: string;
   projectRoot?: string;
   files?: Record<string, string>;
   env?: Record<string, string | undefined>;
@@ -60,7 +62,7 @@ export type BundleOptions = {
 export type Bundler = (options: BundleOptions) => Promise<void>;
 
 /** Component imports are WIT specifiers, not npm packages. */
-export const COMPONENT_IMPORT_EXTERNAL = /^(wasi|wasmcloud):/;
+export const COMPONENT_IMPORT_EXTERNAL = /^(wasi|wasmcloud|di-framework):/;
 
 /** Every process, filesystem-adjacent, and toolchain boundary the commands touch. */
 export type WasmcloudDeps = {
@@ -91,22 +93,46 @@ export type WasmcloudDeps = {
 
 const NODE_COMPAT_SEED_RESOLVED = `\0${NODE_COMPAT_SEED_ID}`;
 
+export type NodeCompatibilityPaths = {
+  guestsPath?: string;
+  actorsPath?: string;
+  cronPath?: string;
+  queuesPath?: string;
+};
+
 /** Resolves the virtual application module and Node built-ins through unenv. */
 export function nodeCompatibilityPlugin(
   entryPath: string,
-  guestsPath?: string,
+  guestsPath?: string | NodeCompatibilityPaths,
   seedOrActorsPath?: NodeCompatSeed | string,
   maybeSeed?: NodeCompatSeed,
 ) {
   let actorsPath: string | undefined;
+  let cronPath: string | undefined;
+  let queuesPath: string | undefined;
+  let resolvedGuestsPath: string | undefined;
   let seed: NodeCompatSeed = EMPTY_NODE_COMPAT_SEED;
-  if (typeof seedOrActorsPath === 'string') {
-    actorsPath = seedOrActorsPath;
-    seed = maybeSeed ?? EMPTY_NODE_COMPAT_SEED;
-  } else if (seedOrActorsPath && typeof seedOrActorsPath === 'object') {
-    seed = seedOrActorsPath;
-  } else if (maybeSeed) {
-    seed = maybeSeed;
+
+  if (guestsPath !== undefined && typeof guestsPath === 'object') {
+    resolvedGuestsPath = guestsPath.guestsPath;
+    actorsPath = guestsPath.actorsPath;
+    cronPath = guestsPath.cronPath;
+    queuesPath = guestsPath.queuesPath;
+    if (typeof seedOrActorsPath === 'object' && seedOrActorsPath) {
+      seed = seedOrActorsPath;
+    } else if (maybeSeed) {
+      seed = maybeSeed;
+    }
+  } else {
+    resolvedGuestsPath = guestsPath;
+    if (typeof seedOrActorsPath === 'string') {
+      actorsPath = seedOrActorsPath;
+      seed = maybeSeed ?? EMPTY_NODE_COMPAT_SEED;
+    } else if (seedOrActorsPath && typeof seedOrActorsPath === 'object') {
+      seed = seedOrActorsPath;
+    } else if (maybeSeed) {
+      seed = maybeSeed;
+    }
   }
 
   const aliases = wasmcloudNodeEnv().alias;
@@ -122,10 +148,16 @@ export function nodeCompatibilityPlugin(
         );
       }
       if (source === 'virtual:di-framework-wasmcloud-guests') {
-        return guestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
+        return resolvedGuestsPath ?? '\0virtual:di-framework-wasmcloud-guests-empty';
       }
       if (source === 'virtual:di-framework-wasmcloud-actors') {
         return actorsPath ?? '\0virtual:di-framework-wasmcloud-actors-empty';
+      }
+      if (source === 'virtual:di-framework-wasmcloud-cron') {
+        return cronPath ?? '\0virtual:di-framework-wasmcloud-cron-empty';
+      }
+      if (source === 'virtual:di-framework-wasmcloud-queues') {
+        return queuesPath ?? '\0virtual:di-framework-wasmcloud-queues-empty';
       }
       if (isNodeCompatSeedSource(source)) return NODE_COMPAT_SEED_RESOLVED;
       return aliases[source] ?? null;
@@ -133,6 +165,12 @@ export function nodeCompatibilityPlugin(
     load(id: string) {
       if (id === '\0virtual:di-framework-wasmcloud-guests-empty') return emptyGuestsModule();
       if (id === '\0virtual:di-framework-wasmcloud-actors-empty') return emptyActorsModule();
+      if (id === '\0virtual:di-framework-wasmcloud-cron-empty') {
+        return 'export async function invokeJob() { throw new Error("No cron jobs registered"); }\n';
+      }
+      if (id === '\0virtual:di-framework-wasmcloud-queues-empty') {
+        return 'export function getQueueBackend() { return undefined; }\nexport async function ensureQueueWorkers() {}\nexport async function pumpQueueWorkers() { return 0; }\n';
+      }
       if (id === NODE_COMPAT_SEED_RESOLVED) return renderNodeCompatSeedModule(seed);
       return null;
     },
@@ -305,6 +343,8 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
     outFile,
     guestsPath,
     actorsPath,
+    cronPath,
+    queuesPath,
     projectRoot,
     files,
     env,
@@ -334,8 +374,7 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
         },
         nodeCompatibilityPlugin(
           entryPath,
-          guestsPath,
-          actorsPath,
+          { guestsPath, actorsPath, cronPath, queuesPath },
           createNodeCompatSeed({ files, env, cwd, projectRoot }),
         ),
       ],

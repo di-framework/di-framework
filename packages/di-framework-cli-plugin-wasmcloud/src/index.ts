@@ -144,10 +144,14 @@ export {
 } from './wit.js';
 export {
   applyWorkload,
+  CRON_INVOKER_IMAGE,
+  DEFAULT_STORAGE_MOUNT,
   deleteWorkload,
+  HOST_STORAGE_ROOT,
+  hostStoragePath,
   isReady,
-  renderQueueConsumersYaml,
   renderWorkloadManifest,
+  STORAGE_HOSTGROUP,
   type WorkloadManifestOptions,
 } from './workload.js';
 

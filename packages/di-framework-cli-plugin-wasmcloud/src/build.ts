@@ -1,6 +1,7 @@
 import { createHash, type Hash } from 'node:crypto';
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
 import { discoverActors, renderActorsModule } from './actors.js';
 import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
@@ -19,11 +20,13 @@ import {
   queueProjectRequirements,
   renderWorldWit,
   runtimeRequirementsFromJavaScript,
+  sqliteProjectRequirements,
   WASI_HTTP_INTERFACE,
   WASI_HTTP_VERSION,
   type WitLock,
   type WitRequirement,
 } from './wit.js';
+import { renderQueuesModule } from './queues-module.js';
 
 export { COMPONENT_MODEL, WASI_HTTP_INTERFACE, WASI_HTTP_VERSION };
 export const BUILD_PROFILE_NAME = 'wasmcloud-http';
@@ -46,10 +49,16 @@ export function requirementsForProject(
   deps: WasmcloudDeps = DEFAULT_DEPS,
 ): WitRequirement[] {
   const bindings = discoverBindings(project, deps);
-  const isWorker = isQueueWorkerProject(project, discoverQueueHandlers(project));
+  const queueHandlers = discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, queueHandlers);
+  const cronJobs = discoverScheduledJobs(project.projectRoot);
+  const actors = discoverActors(project);
+  const needsControlHttp =
+    isWorker || cronJobs.length > 0 || queueHandlers.length > 0 || actors.length > 0;
+  const hasHttp = (project.ingress !== false && !isWorker) || needsControlHttp;
   const baseRequirements = isWorker
     ? queueProjectRequirements()
-    : project.ingress !== false
+    : hasHttp
       ? defaultProjectRequirements()
       : [
           {
@@ -122,6 +131,64 @@ function isWasmMagic(path: string): boolean {
   );
 }
 
+async function composeSqliteProvider(
+  project: WasmcloudProject,
+  deps: WasmcloudDeps,
+  io: CliIo,
+): Promise<void> {
+  const provider = join(deps.assetsDirectory(), 'sqlite', 'di-framework-sqlite.wasm');
+  if (!existsSync(provider)) {
+    throw new CommandFailure(
+      'WASMCLOUD_SQLITE_PROVIDER_MISSING',
+      `Packaged SQLite provider missing at ${provider}`,
+      3,
+      { application: project.applicationName },
+    );
+  }
+  const composed = `${project.outputPath}.composed`;
+  const toolsDir = join(deps.assetsDirectory(), '..', '..', 'di-framework-sqlite-component', '.tools', 'bin');
+  const envPath = [
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      'di-framework-sqlite-component',
+      '.tools',
+      'bin',
+    ),
+    process.env.PATH ?? '',
+  ].join(':');
+  void toolsDir;
+  const wac =
+    deps.capture('wac', ['--version']) !== undefined
+      ? 'wac'
+      : join(
+          dirname(fileURLToPath(import.meta.url)),
+          '..',
+          '..',
+          'di-framework-sqlite-component',
+          '.tools',
+          'bin',
+          'wac',
+        );
+  io.stdout.write('Composing di-framework:sqlite provider...\n');
+  const result = await deps.runCaptured(
+    wac,
+    ['plug', '--plug', provider, project.outputPath, '-o', composed],
+    { cwd: project.projectRoot, env: { ...process.env, PATH: envPath } },
+  );
+  if (result.exitCode !== 0) {
+    throw new CommandFailure(
+      'WASMCLOUD_SQLITE_COMPOSE_FAILED',
+      `wac plug failed: ${result.stderr || result.stdout}`,
+      3,
+      { application: project.applicationName, exitCode: result.exitCode },
+    );
+  }
+  writeFileSync(project.outputPath, readFileSync(composed));
+  rmSync(composed, { force: true });
+}
+
 async function inspectComponentImports(
   project: WasmcloudProject,
   requirements: readonly WitRequirement[],
@@ -170,7 +237,9 @@ export async function buildComponent(
   const bindings = discoverBindings(project, deps);
   const cronJobs = discoverScheduledJobs(project.projectRoot);
   const isWorker = isQueueWorkerProject(project, discoverQueueHandlers(project));
-  const hasHttp = project.ingress !== false && !isWorker;
+  const queueHandlers = discoverQueueHandlers(project);
+  const needsControlHttp = isWorker || cronJobs.length > 0;
+  const hasHttp = (project.ingress !== false && !isWorker) || needsControlHttp;
   const profile = isWorker
     ? 'wasmcloud-worker'
     : hasHttp
@@ -178,6 +247,19 @@ export async function buildComponent(
       : CRON_BUILD_PROFILE_NAME;
   const actors = discoverActors(project);
   const requirements = requirementsForProject(project, deps);
+  if (actors.length > 0) {
+    for (const requirement of sqliteProjectRequirements()) {
+      if (
+        !requirements.some(
+          (entry) =>
+            entry.package === requirement.package &&
+            entry.interfaces.join(',') === requirement.interfaces.join(','),
+        )
+      ) {
+        requirements.push(requirement);
+      }
+    }
+  }
 
   rmSync(generatedDirectory, { recursive: true, force: true });
   mkdirSync(join(generatedWit, 'deps'), { recursive: true });
@@ -208,19 +290,22 @@ export async function buildComponent(
   }
   if (actors.length > 0)
     writeFileSync(join(generatedDirectory, 'actors.js'), renderActorsModule(actors));
+  if (queueHandlers.length > 0) {
+    writeFileSync(join(generatedDirectory, 'queues.js'), renderQueuesModule(queueHandlers));
+  }
 
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
     await deps.bundler({
-      adapterPath: isWorker
-        ? join(deps.assetsDirectory(), 'queue-adapter.js')
-        : hasHttp
-          ? join(deps.assetsDirectory(), 'http-adapter.js')
-          : join(generatedDirectory, 'cron-adapter.js'),
+      adapterPath: hasHttp
+        ? join(deps.assetsDirectory(), 'http-adapter.js')
+        : join(generatedDirectory, 'cron-adapter.js'),
       entryPath: project.entryPath,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
       actorsPath: actors.length > 0 ? join(generatedDirectory, 'actors.js') : undefined,
+      cronPath: cronJobs.length > 0 ? join(generatedDirectory, 'cron-invoker.js') : undefined,
+      queuesPath: queueHandlers.length > 0 ? join(generatedDirectory, 'queues.js') : undefined,
       projectRoot: project.projectRoot,
     });
   } catch (error) {
@@ -249,7 +334,23 @@ export async function buildComponent(
   if (componentize.exitCode !== 0) {
     throw toolFailed(componentize.tool, componentize.exitCode);
   }
-  await inspectComponentImports(project, finalRequirements, deps);
+
+  const needsSqliteCompose = finalRequirements.some(
+    (requirement) =>
+      requirement.package === 'di-framework:sqlite' && requirement.direction === 'import',
+  );
+  if (needsSqliteCompose) {
+    await composeSqliteProvider(project, deps, io);
+  }
+
+  await inspectComponentImports(
+    project,
+    finalRequirements.filter(
+      (requirement) =>
+        !(requirement.package === 'di-framework:sqlite' && requirement.direction === 'import'),
+    ),
+    deps,
+  );
 
   const deploymentDigest = canonicalBuildDigest(
     bundledJavaScript,
@@ -257,6 +358,9 @@ export async function buildComponent(
     join(generatedDirectory, 'oci-config.json'),
     lock,
     profile,
+    needsSqliteCompose
+      ? join(deps.assetsDirectory(), 'sqlite', 'di-framework-sqlite.wasm')
+      : undefined,
   );
   const artifactDigest = digestBytes(readFileSync(project.outputPath));
   const summary: BuildSummary = {
@@ -281,7 +385,8 @@ export async function buildComponent(
 /**
  * Stable logical version for deployment. ComponentizeJS snapshots can contain
  * nondeterministic engine bytes, so the rollout key is the canonical bundle,
- * WIT lock, OCI configuration, and pinned build profile instead of the final bytes.
+ * WIT lock, OCI configuration, pinned build profile, and (when composed) the
+ * pinned SQLite provider artifact — not the final componentize output bytes.
  */
 export function canonicalBuildDigest(
   bundledJavaScript: string,
@@ -289,6 +394,7 @@ export function canonicalBuildDigest(
   ociConfig: string,
   lock: WitLock,
   profile: string = BUILD_PROFILE_NAME,
+  sqliteProvider?: string,
 ): string {
   const hash = createHash('sha256');
   addDigestEntry(hash, 'profile', `${profile}\n${COMPONENT_MODEL}`);
@@ -298,6 +404,9 @@ export function canonicalBuildDigest(
   for (const file of listFiles(witDirectory)) {
     const name = relative(witDirectory, file).split(sep).join('/');
     addDigestEntry(hash, `wit/${name}`, readFileSync(file));
+  }
+  if (sqliteProvider !== undefined) {
+    addDigestEntry(hash, 'sqlite-provider', readFileSync(sqliteProvider));
   }
   return hash.digest('hex');
 }

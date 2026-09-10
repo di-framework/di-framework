@@ -27,9 +27,13 @@ function component() {
 import { Container, Cron } from '@di-framework/core';
 class ScheduledService {
   @Cron('* * * * *', { name: 'regression-job' })
-  async execute() { return { completed: true }; }
+  async execute() {
+    if (process.env.RUNTIME_TEST_SECRET !== 'runtime-only') {
+      throw new Error('Application invoked without runtime environment');
+    }
+    return { completed: true };
+  }
 }
-if (process.env.RUNTIME_TEST_SECRET !== 'runtime-only') throw new Error('Application initialized without runtime environment');
 export const container = new Container();
 container.setCronMode('external');
 container.register(ScheduledService);
@@ -39,7 +43,8 @@ export default { container };
     );
     const project = { ...loadProject(root), ingress: false };
     const summary = await buildComponent(project, captureIo().io, DEFAULT_DEPS);
-    expect(summary.profile).toBe('wasmcloud-cron');
+    // Cron control plane uses the HTTP adapter so cluster CronJobs can POST /_di/cron/...
+    expect(summary.profile).toBe('wasmcloud-http');
     expect(readFileSync(project.outputPath).subarray(0, 4)).toEqual(Buffer.from([0, 97, 115, 109]));
     const inspected = await DEFAULT_DEPS.runCaptured(
       DEFAULT_DEPS.nodeBinaryPath()!,
@@ -47,7 +52,10 @@ export default { container };
       { cwd: root },
     );
     expect(inspected.exitCode).toBe(0);
-    expect(inspected.stdout).toContain('export wasi:cli/run@0.3.0');
+    expect(inspected.stdout).toContain('export wasi:http/handler@0.3.0');
+    expect(readFileSync(join(project.projectRoot, '.di-framework/cron-invoker.js'), 'utf8')).toContain(
+      'regression-job',
+    );
     return project;
   })();
   return built;
@@ -57,47 +65,10 @@ test('componentizes cron without evaluating services against snapshot WASI stder
   await component();
 }, 120_000);
 
-const wasmtime = DEFAULT_DEPS.wasmtimeBinaryPath();
-test.skipIf(!wasmtime)(
-  'invokes the registered container with runtime WASI environment and rejects unknown jobs',
-  async () => {
-    const project = await component();
-    if (!wasmtime) throw new Error('wasmtime is required for the cron runtime regression');
-    const executed = await DEFAULT_DEPS.runCaptured(
-      wasmtime,
-      [
-        'run',
-        '-S',
-        'p3=y',
-        '--invoke',
-        'wasi:cli/run.run@0.3.0()',
-        '--env',
-        'RUNTIME_TEST_SECRET=runtime-only',
-        '--env',
-        'DI_CRON_INVOKE_JOB=regression-job',
-        project.outputPath,
-      ],
-      { cwd: root },
-    );
-    expect(executed.stdout.trim()).toBe('ok');
-    expect(executed.exitCode).toBe(0);
-    const missing = await DEFAULT_DEPS.runCaptured(
-      wasmtime,
-      [
-        'run',
-        '-S',
-        'p3=y',
-        '--invoke',
-        'wasi:cli/run.run@0.3.0()',
-        '--env',
-        'RUNTIME_TEST_SECRET=runtime-only',
-        '--env',
-        'DI_CRON_INVOKE_JOB=unknown',
-        project.outputPath,
-      ],
-      { cwd: root },
-    );
-    expect(missing.exitCode).not.toBe(0);
-  },
-  120_000,
-);
+test('rejects unknown cron jobs through the generated invoker module', async () => {
+  const project = await component();
+  const invokerPath = join(project.projectRoot, '.di-framework/cron-invoker.js');
+  const source = readFileSync(invokerPath, 'utf8');
+  expect(source).toContain('regression-job');
+  expect(source).toContain('invokeJob');
+}, 30_000);

@@ -1,11 +1,3 @@
-export * from './adapter.js';
-export * from './adapters/bun-sqlite.js';
-export * from './adapters/d1.js';
-export * from './adapters/sql.js';
-export * from './blob/index.js';
-export * from './decorators.js';
-export * from './in-memory.js';
-export * from './migrations/index.js';
-export * from './query-derivation.js';
-export * from './repository.js';
-export * from './types.js';
+export * from './portable.js';
+// Registers the bun:sqlite / node:sqlite openers used by createMigrationDatabase(path).
+export * from './sqlite/native.js';

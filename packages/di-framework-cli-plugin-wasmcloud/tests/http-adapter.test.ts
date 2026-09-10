@@ -44,8 +44,24 @@ mock.module('virtual:di-framework-wasmcloud-guests', () => ({
 
 mock.module('virtual:di-framework-wasmcloud-actors', () => ({
   actorRuntime: undefined,
+  getActorRuntime: () => undefined,
   dispatchActorInvocation: undefined,
   actors: [],
+}));
+
+mock.module('virtual:di-framework-wasmcloud-cron', () => ({
+  invokeJob: async () => ({ completed: true }),
+}));
+
+mock.module('virtual:di-framework-wasmcloud-queues', () => ({
+  getQueueBackend: () => undefined,
+  ensureQueueWorkers: async () => undefined,
+  pumpQueueWorkers: async () => 0,
+}));
+
+mock.module('virtual:di-framework-wasmcloud-runtime', () => ({
+  ensureWasiEnvironment: () => undefined,
+  loadApplication: async () => ({}),
 }));
 
 mock.module('virtual:di-framework-application', () => ({
@@ -73,7 +89,8 @@ mock.module('wasi:http/types@0.3.0', () => ({
   },
 }));
 
-const { handler, requireGuestsObject } = await import('../assets/http-adapter.ts');
+const httpAdapter = await import(`../assets/http-adapter.ts?t=${Date.now()}`);
+const { handler, requireGuestsObject } = httpAdapter;
 
 function readable(...values: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -468,8 +485,12 @@ it('routes only reserved actor paths and supports actor-only health responses', 
   };
   try {
     mock.module('virtual:di-framework-wasmcloud-actors', () => ({
-      actorRuntime: runtime,
-      dispatchActorInvocation: undefined,
+      // Leave actorRuntime unset so the adapter uses dispatchActorInvocation
+      // (ActorRpcDispatcher needs a full runtime surface).
+      actorRuntime: undefined,
+      getActorRuntime: () => undefined,
+      dispatchActorInvocation: async (type: string, key: string, method: string) =>
+        runtime.invoke(type, key, method),
       actors: [],
     }));
     const invoked = (await handler.handle(
@@ -477,10 +498,17 @@ it('routes only reserved actor paths and supports actor-only health responses', 
     )) as Outgoing;
     expect(invoked.statusCode).toBe(200);
     mock.module('virtual:di-framework-application', () => ({ default: undefined }));
+    mock.module('virtual:di-framework-wasmcloud-actors', () => ({
+      actorRuntime: runtime,
+      getActorRuntime: () => runtime,
+      dispatchActorInvocation: undefined,
+      actors: [],
+    }));
     const health = (await handler.handle(incoming({ path: '/' }))) as Outgoing;
     expect(health.statusCode).toBe(200);
     mock.module('virtual:di-framework-wasmcloud-actors', () => ({
       actorRuntime: undefined,
+      getActorRuntime: () => undefined,
       dispatchActorInvocation: undefined,
       actors: [],
     }));
@@ -489,6 +517,7 @@ it('routes only reserved actor paths and supports actor-only health responses', 
   } finally {
     mock.module('virtual:di-framework-wasmcloud-actors', () => ({
       actorRuntime: undefined,
+      getActorRuntime: () => undefined,
       dispatchActorInvocation: undefined,
       actors: [],
     }));
