@@ -152,17 +152,17 @@ export class NotificationService {
       mockJobs,
     );
 
-    // Should NOT contain a Service resource (no exposed endpoint)
-    expect(manifest).not.toContain('kind: Service');
-    expect(manifest).not.toContain('targetPort: 80');
-    expect(manifest).not.toContain('service:\n          name: batch-worker');
+    // Cluster Service is required so the CronJob invoker can reach the Wasm control API.
+    expect(manifest).toContain('kind: Service');
+    expect(manifest).toContain('targetPort: 80');
+    expect(manifest).toContain('service:\n          name: batch-worker');
 
     // Should contain WorkloadDeployment with external cron mode
     expect(manifest).toContain('kind: WorkloadDeployment');
     expect(manifest).toContain('DI_CRON_MODE');
     expect(manifest).toContain('"external"');
 
-    // Should contain Kubernetes CronJob for scheduler dispatch
+    // Should contain Kubernetes CronJob for scheduler dispatch via HTTP invoker
     expect(manifest).toContain('apiVersion: batch/v1');
     expect(manifest).toContain('kind: CronJob');
     expect(manifest).toContain('name: batch-worker-daily-backup');
@@ -170,7 +170,9 @@ export class NotificationService {
     expect(manifest).toContain('concurrencyPolicy: Forbid');
     expect(manifest).toContain('name: DI_CRON_INVOKE_JOB');
     expect(manifest).toContain('value: "daily-backup"');
-    expect(manifest).toContain('cron:invoke');
+    expect(manifest).toContain('cron-invoker');
+    expect(manifest).toContain('/_di/cron/daily-backup/invoke');
+    expect(manifest).toContain('curlimages/curl:');
   });
 
   it('retains HTTP Service when ingress is enabled along with scheduled jobs', () => {
@@ -239,14 +241,22 @@ export class NotificationService {
         .split('\n---\n')
         .map((document) => Bun.YAML.parse(document) as any);
       const workload = documents.find((document) => document.kind === 'WorkloadDeployment');
+      expect(workload.spec.deployPolicy).toBe('Recreate');
       const spec = workload.spec.template.spec;
-      expect(spec.strategy.type).toBe('Recreate');
-      expect(spec.kubernetes.volumes[0].persistentVolumeClaim.claimName).toBe('hybrid-app-storage');
-      expect(spec.components[0].env).toEqual([
-        { name: 'ACTOR_STORAGE_DIR', value: '/data/actors' },
-        { name: 'DI_CRON_MODE', value: 'external' },
-      ]);
-      expect(documents.some((document) => document.kind === 'Service')).toBe(ingress);
+      expect(spec.hostSelector.hostgroup).toBe('storage');
+      expect(spec.volumes[0].hostPath.path).toBe('/var/lib/di-framework/storage/hybrid-app');
+      expect(spec.components[0].localResources.environment.config).toEqual({
+        ACTOR_STORAGE_DIR: '/data/actors',
+        DI_CRON_MODE: 'external',
+        DI_SQLITE_BACKEND: 'wasm',
+        DI_STORAGE_DIR: '/data/actors',
+      });
+      expect(spec.components[0].localResources.volumeMounts[0]).toEqual({
+        name: 'app-storage',
+        mountPath: '/data/actors',
+      });
+      // Control HTTP remains available even when public ingress is disabled.
+      expect(documents.some((document) => document.kind === 'Service')).toBe(true);
     }
   });
 });

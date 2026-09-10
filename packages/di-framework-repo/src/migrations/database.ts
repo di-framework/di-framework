@@ -1,6 +1,15 @@
+import { detectSqliteBackend, openSqliteDatabase, type SqliteBackend } from '../sqlite/open.js';
+import {
+  type BunSqliteLike,
+  isSqlDatabase,
+  type NodeSqliteLike,
+  SQL_DATABASE_BRAND,
+  wrapBunSqliteDatabase,
+  wrapNodeSqliteDatabase,
+} from '../sqlite/sql-database.js';
 import type { MigrationDatabase } from './types.js';
 
-export const MIGRATION_DB_BRAND = Symbol.for('di-framework.migration-db');
+export const MIGRATION_DB_BRAND = SQL_DATABASE_BRAND;
 
 export function isMigrationDatabase(val: unknown): val is MigrationDatabase {
   return (
@@ -14,39 +23,37 @@ export function isMigrationDatabase(val: unknown): val is MigrationDatabase {
   );
 }
 
+/**
+ * Resolves anything migration code accepts as a database into a
+ * `MigrationDatabase`:
+ *
+ * - an existing `MigrationDatabase` / `SqlDatabase` (returned as-is)
+ * - a path or `:memory:`, opened with `bun:sqlite`, `node:sqlite`, or the
+ *   `di-framework:sqlite/database` Wasm import (`DI_SQLITE_BACKEND=wasm`, or
+ *   automatically when no native module is available)
+ * - a `bun:sqlite` `Database`, a `node:sqlite` `DatabaseSync`, or a
+ *   `SqlStorageAdapter`-like object
+ */
 export async function createMigrationDatabase(
   input: unknown,
-  runtime: 'bun' | 'node' = typeof (globalThis as any).Bun !== 'undefined' ? 'bun' : 'node',
+  runtime: SqliteBackend = detectSqliteBackend(),
 ): Promise<MigrationDatabase> {
-  if (isMigrationDatabase(input)) {
-    return input;
+  if (isMigrationDatabase(input) || isSqlDatabase(input)) {
+    return input as MigrationDatabase;
   }
 
-  // If string (file path or ':memory:')
   if (typeof input === 'string') {
-    if (runtime === 'bun') {
-      const { Database } = await import('bun:sqlite');
-      const db = new Database(input);
-      return wrapBunSqliteDatabase(db);
-    }
-    try {
-      // Node 22+ node:sqlite
-      const { DatabaseSync } = await import('node:sqlite' as string);
-      const db = new DatabaseSync(input);
-      return wrapNodeSqliteDatabase(db);
-    } catch {
-      throw new Error(`Unsupported database connection string or runtime: ${input}`);
-    }
+    return openSqliteDatabase(input, runtime);
   }
 
   // If bun:sqlite Database or BunSqliteDatabase
   if (typeof input === 'object' && input !== null && typeof (input as any).query === 'function') {
-    return wrapBunSqliteDatabase(input as any);
+    return wrapBunSqliteDatabase(input as BunSqliteLike);
   }
 
   // Accept an already-open node:sqlite DatabaseSync as well as connection strings.
   if (typeof input === 'object' && input !== null && typeof (input as any).prepare === 'function') {
-    return wrapNodeSqliteDatabase(input);
+    return wrapNodeSqliteDatabase(input as NodeSqliteLike);
   }
 
   // If SqlStorageAdapter (has protected/public run and allRows)
@@ -59,146 +66,6 @@ export async function createMigrationDatabase(
   }
 
   throw new Error(`Invalid or unsupported database instance for migrations: ${String(input)}`);
-}
-
-function wrapBunSqliteDatabase(db: any): MigrationDatabase {
-  let inTx = false;
-
-  const runSql = async (sql: string, params: unknown[] = []): Promise<{ changes?: number }> => {
-    if (typeof db.run === 'function') {
-      const result = db.run(sql, ...params);
-      return { changes: typeof result?.changes === 'number' ? result.changes : undefined };
-    }
-    const stmt = db.query(sql);
-    const result = stmt.run(...params);
-    return { changes: typeof result?.changes === 'number' ? result.changes : undefined };
-  };
-
-  const querySql = async <T = Record<string, unknown>>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T[]> => {
-    const stmt = db.query(sql);
-    return stmt.all(...params) as T[];
-  };
-
-  const firstSql = async <T = Record<string, unknown>>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T | null> => {
-    const stmt = db.query(sql);
-    if (typeof stmt.get === 'function') {
-      return (stmt.get(...params) as T | null) ?? null;
-    }
-    const rows = stmt.all(...params) as T[];
-    return rows.length > 0 ? (rows[0] ?? null) : null;
-  };
-
-  const execSql = async (sql: string): Promise<void> => {
-    if (typeof db.exec === 'function') {
-      db.exec(sql);
-    } else if (typeof db.run === 'function') {
-      db.run(sql);
-    } else {
-      db.query(sql).run();
-    }
-  };
-
-  const transaction = async <T>(fn: (txDb: MigrationDatabase) => Promise<T>): Promise<T> => {
-    if (inTx) {
-      return fn(api);
-    }
-    inTx = true;
-    await execSql('BEGIN IMMEDIATE');
-    try {
-      const res = await fn(api);
-      await execSql('COMMIT');
-      return res;
-    } catch (err) {
-      try {
-        await execSql('ROLLBACK');
-      } catch {}
-      throw err;
-    } finally {
-      inTx = false;
-    }
-  };
-
-  const api: MigrationDatabase = {
-    [MIGRATION_DB_BRAND]: true,
-    run: runSql,
-    query: querySql,
-    first: firstSql,
-    exec: execSql,
-    transaction,
-    close: () => {
-      db.close?.();
-    },
-  } as any;
-
-  return api;
-}
-
-function wrapNodeSqliteDatabase(db: any): MigrationDatabase {
-  let inTx = false;
-
-  const runSql = async (sql: string, params: unknown[] = []): Promise<{ changes?: number }> => {
-    const stmt = db.prepare(sql);
-    const result = stmt.run(...params);
-    return { changes: typeof result?.changes === 'number' ? result.changes : undefined };
-  };
-
-  const querySql = async <T = Record<string, unknown>>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T[]> => {
-    const stmt = db.prepare(sql);
-    return stmt.all(...params) as T[];
-  };
-
-  const firstSql = async <T = Record<string, unknown>>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T | null> => {
-    const stmt = db.prepare(sql);
-    return (stmt.get(...params) as T | null) ?? null;
-  };
-
-  const execSql = async (sql: string): Promise<void> => {
-    db.exec(sql);
-  };
-
-  const transaction = async <T>(fn: (txDb: MigrationDatabase) => Promise<T>): Promise<T> => {
-    if (inTx) return fn(api);
-    inTx = true;
-    await execSql('BEGIN IMMEDIATE');
-    try {
-      const res = await fn(api);
-      await execSql('COMMIT');
-      return res;
-    } catch (err) {
-      try {
-        await execSql('ROLLBACK');
-      } catch {}
-      throw err;
-    } finally {
-      inTx = false;
-    }
-  };
-
-  const api: MigrationDatabase = {
-    [MIGRATION_DB_BRAND]: true,
-    run: runSql,
-    query: querySql,
-    first: firstSql,
-    exec: execSql,
-    transaction,
-    close: () => {
-      db.close?.();
-    },
-  } as any;
-
-  return api;
 }
 
 function wrapSqlStorageAdapter(adapter: any): MigrationDatabase {

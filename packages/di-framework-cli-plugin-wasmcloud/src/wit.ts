@@ -18,6 +18,11 @@ export const QUEUE_ADAPTER_SOURCE = 'queue-adapter';
 export const DI_QUEUES_PACKAGE = 'di-framework:queues';
 export const DI_QUEUES_VERSION = '0.1.0';
 export const DI_QUEUES_INTERFACE = 'dispatch';
+export const DI_SQLITE_PACKAGE = 'di-framework:sqlite';
+export const DI_SQLITE_VERSION = '0.1.0';
+export const DI_SQLITE_INTERFACE = 'database';
+export const DI_SQLITE_TYPES_INTERFACE = 'types';
+export const SQLITE_SOURCE = 'sqlite-backend';
 
 export type WitDirection = 'import' | 'export';
 
@@ -77,8 +82,26 @@ export const QUEUE_ADAPTER_REQUIREMENTS: WitRequirement[] = [
   },
 ];
 
+export const SQLITE_IMPORT_REQUIREMENTS: WitRequirement[] = [
+  {
+    package: DI_SQLITE_PACKAGE,
+    version: DI_SQLITE_VERSION,
+    interfaces: [DI_SQLITE_TYPES_INTERFACE, DI_SQLITE_INTERFACE],
+    direction: 'import',
+    source: SQLITE_SOURCE,
+  },
+];
+
+/** Queue workers are long-lived HTTP services with SQLite-backed persistence. */
 export function queueProjectRequirements(): WitRequirement[] {
-  return QUEUE_ADAPTER_REQUIREMENTS.map((requirement) => ({ ...requirement }));
+  return [
+    ...defaultProjectRequirements(),
+    ...SQLITE_IMPORT_REQUIREMENTS.map((requirement) => ({ ...requirement })),
+  ];
+}
+
+export function sqliteProjectRequirements(): WitRequirement[] {
+  return SQLITE_IMPORT_REQUIREMENTS.map((requirement) => ({ ...requirement }));
 }
 
 /**
@@ -138,6 +161,15 @@ export function runtimeRequirementsFromJavaScript(source: string): WitRequiremen
       interfaces: ['environment'],
       direction: 'import',
       source: NODE_COMPAT_SOURCE,
+    });
+  }
+  if (source.includes(`${DI_SQLITE_PACKAGE}/${DI_SQLITE_INTERFACE}@${DI_SQLITE_VERSION}`)) {
+    requirements.push({
+      package: DI_SQLITE_PACKAGE,
+      version: DI_SQLITE_VERSION,
+      interfaces: [DI_SQLITE_TYPES_INTERFACE, DI_SQLITE_INTERFACE],
+      direction: 'import',
+      source: SQLITE_SOURCE,
     });
   }
   return requirements;

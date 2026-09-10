@@ -96,9 +96,11 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
       "import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';",
     );
     expect(moduleSource).toContain('import { UserActor } from');
-    expect(moduleSource).toContain('actorRuntime.register(UserActor, {');
+    expect(moduleSource).toContain('ensureActorRuntime()');
+    expect(moduleSource).toContain('runtime.register(UserActor, {');
     expect(moduleSource).toContain('export async function dispatchActorInvocation(');
-    expect(moduleSource).toContain('export { actorRuntime, storage, UserActor };');
+    expect(moduleSource).toContain('export { getActorRuntime as actorRuntime, storage };');
+    expect(moduleSource).toContain('export { UserActor };');
     expect(moduleSource).toContain('globalThis[Symbol.for("di-framework.wasmcloud.actors")]');
   });
 
@@ -134,13 +136,18 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
       { hasActors: true, replicas: 1 },
     );
 
-    expect(validManifest).toContain('kind: PersistentVolumeClaim');
-    expect(validManifest).toContain('name: actor-app-storage');
+    expect(validManifest).not.toContain('kind: PersistentVolumeClaim');
     expect(validManifest).toContain('replicas: 1');
+    expect(validManifest).toContain('deployPolicy: Recreate');
+    expect(validManifest).toContain('hostgroup: storage');
     expect(validManifest).toContain('mountPath: /data/actors');
-    expect(validManifest).toContain('claimName: actor-app-storage');
+    expect(validManifest).toContain('hostPath:');
+    expect(validManifest).toContain('/var/lib/di-framework/storage/actor-app');
     expect(validManifest).toContain('ACTOR_STORAGE_DIR');
-    expect(validManifest).toContain('type: Recreate');
+    expect(validManifest).toContain('localResources:');
+    expect(validManifest).toContain('environment:');
+    expect(validManifest).not.toContain('queueConsumers:');
+    expect(validManifest).not.toContain('strategy:');
 
     // Rejects replicas > 1
     expect(() =>
@@ -148,7 +155,7 @@ describe('wasmCloud Actor Build & Manifest Generation', () => {
         hasActors: true,
         replicas: 2,
       }),
-    ).toThrow('Actor deployments with SQLite persistent storage require replicas: 1');
+    ).toThrow('SQLite-backed workloads require replicas: 1');
   });
 });
 

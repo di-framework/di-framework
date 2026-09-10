@@ -2,13 +2,29 @@ import {
   handleActorInvocationRequest,
   isActorInvocationRequest as isActorInvocation,
 } from '../src/actor-protocol.js';
+import {
+  handleCronInvokeRequest,
+  handleQueueControlRequest,
+  isCronInvokeRequest,
+  isQueueControlRequest,
+} from '../src/control/index.js';
 // Keep this side-effect import first: application services can resolve bindings at module startup.
 import 'virtual:di-framework-wasmcloud-guests';
 import 'virtual:di-framework-wasmcloud-actors';
 
 import application from 'virtual:di-framework-application';
-import { actorRuntime, dispatchActorInvocation } from 'virtual:di-framework-wasmcloud-actors';
+import {
+  dispatchActorInvocation,
+  getActorRuntime,
+} from 'virtual:di-framework-wasmcloud-actors';
+import { invokeJob as cronInvokeJob } from 'virtual:di-framework-wasmcloud-cron';
+import {
+  ensureQueueWorkers,
+  getQueueBackend,
+  pumpQueueWorkers,
+} from 'virtual:di-framework-wasmcloud-queues';
 import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
+import { ensureWasiEnvironment } from 'virtual:di-framework-wasmcloud-runtime';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 import { collectBytes } from './fetch-runtime.ts';
 
@@ -128,17 +144,19 @@ async function toWebRequest(incoming: {
 }
 
 async function handleActorInvocation(request: Request): Promise<Response> {
-  return handleActorInvocationRequest(request, actorRuntime as any, dispatchActorInvocation as any);
+  const runtime = typeof getActorRuntime === 'function' ? getActorRuntime() : undefined;
+  return handleActorInvocationRequest(request, runtime as any, dispatchActorInvocation as any);
 }
 
 async function dispatch(request: Request): Promise<Response> {
   const handler = application as Application;
+  const runtime = typeof getActorRuntime === 'function' ? getActorRuntime() : undefined;
   if (!handler || (typeof handler !== 'function' && typeof (handler as any).fetch !== 'function')) {
-    if (actorRuntime) {
+    if (runtime) {
       return new Response(
         JSON.stringify({
           name: 'wasmcloud-actor-component',
-          actors: (actorRuntime as any).getRegisteredActors?.()?.map((a: any) => a.name) ?? [],
+          actors: (runtime as any).getRegisteredActors?.()?.map((a: any) => a.name) ?? [],
           status: 'running',
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -192,7 +210,24 @@ async function fromWebResponse(response: Response): Promise<unknown> {
 export const handler = {
   async handle(incoming: Parameters<typeof toWebRequest>[0]): Promise<unknown> {
     try {
+      ensureWasiEnvironment();
       const request = await toWebRequest(incoming);
+      if (isCronInvokeRequest(request)) {
+        return await fromWebResponse(await handleCronInvokeRequest(request, cronInvokeJob as any));
+      }
+      if (isQueueControlRequest(request)) {
+        await ensureQueueWorkers();
+        const controlResponse = await handleQueueControlRequest(
+          request,
+          getQueueBackend() as any,
+        );
+        try {
+          await pumpQueueWorkers();
+        } catch (error) {
+          console.error('Queue worker pump failed', error);
+        }
+        return await fromWebResponse(controlResponse);
+      }
       if (isActorInvocation(request)) {
         return await fromWebResponse(await handleActorInvocation(request));
       }

@@ -77,7 +77,9 @@ describe('wasmCloud Actor Adapter Integration', () => {
       const res = await adapter!.handle(req);
       expect(res.status).toBe(200);
       const json = await res.json();
-      expect(json).toEqual({ success: true, result: 10 });
+      expect(json.success).toBe(true);
+      expect(json.result).toBe(10);
+      expect(typeof json.requestId).toBe('string');
     });
 
     it('returns 400 when required invocation parameters are missing', async () => {
@@ -154,7 +156,7 @@ it('parses actor paths, headers and query arguments and limits error details', a
       undefined,
       async (type, key, method, args) => ({ type, key, method, args }),
     );
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       success: true,
       result: { type: 'Counter', key: 'key', method: 'read', args: expected },
     });

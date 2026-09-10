@@ -293,10 +293,10 @@ it('builds and reports scheduled-only deployments without an HTTP service', asyn
   ]);
   expect(result.text).toContain('Scheduled jobs (1): heartbeat');
   const generated = join(greeter, '.di-framework');
-  expect(readFileSync(join(generated, 'cron-adapter.js'), 'utf8')).toContain('cron-invoker.js');
+  // Cron control uses the HTTP adapter (cluster CronJob POSTs /_di/cron/...), not wasi:cli/run.
   expect(readFileSync(join(generated, 'cron-invoker.js'), 'utf8')).toContain('heartbeat');
   expect(JSON.parse(readFileSync(join(generated, 'cron.json'), 'utf8'))).toHaveLength(1);
   const yaml = readFileSync(join(generated, 'deploy', 'workload.yaml'), 'utf8');
   expect(yaml).toContain('kind: CronJob');
-  expect(yaml).not.toContain('kind: Service');
+  expect(yaml).toContain('kind: Service');
 });

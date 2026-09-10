@@ -27,6 +27,15 @@ export const WAIT_INTERVAL_MS = 2_000;
 export const WORKLOAD_DEPLOYMENT_RESOURCE = 'workloaddeployment.runtime.wasmcloud.dev';
 export const WORKLOAD_REPLICA_SET_RESOURCE = 'workloadreplicaset.runtime.wasmcloud.dev';
 
+/** Host directory where the storage hostgroup mounts the shared PVC. */
+export const HOST_STORAGE_ROOT = '/var/lib/di-framework/storage';
+/** Dedicated single-replica hostgroup that mounts persistent application storage. */
+export const STORAGE_HOSTGROUP = 'storage';
+/** Guest mount path for application SQLite storage. */
+export const DEFAULT_STORAGE_MOUNT = '/data';
+/** Pinned CronJob invoker image that POSTs to the Wasm HTTP control API. */
+export const CRON_INVOKER_IMAGE = 'curlimages/curl:8.11.1';
+
 export function deploymentResourceName(project: WasmcloudProject): string {
   return project.witName;
 }
@@ -35,35 +44,23 @@ export function generatedManifestPath(project: WasmcloudProject): string {
   return join(project.projectRoot, '.di-framework', 'deploy', 'workload.yaml');
 }
 
-export function renderQueueConsumersYaml(queueHandlers: readonly DiscoveredQueueHandler[]): string {
-  if (queueHandlers.length === 0) return '';
-  const lines = ['          queueConsumers:'];
-  for (const h of queueHandlers) {
-    lines.push(`            - queue: ${yamlQuote(h.queueName)}`);
-    if (h.options.concurrency !== undefined) {
-      lines.push(`              concurrency: ${h.options.concurrency}`);
-    }
-    if (h.options.maxRetries !== undefined) {
-      lines.push(`              maxRetries: ${h.options.maxRetries}`);
-    }
-    if (h.options.backoffMs !== undefined) {
-      lines.push(`              backoffMs: ${h.options.backoffMs}`);
-    }
-    if (h.options.timeoutMs !== undefined) {
-      lines.push(`              timeoutMs: ${h.options.timeoutMs}`);
-    }
-  }
-  return lines.join('\n') + '\n';
+export function hostStoragePath(applicationName: string): string {
+  return `${HOST_STORAGE_ROOT}/${asWitIdentifier(applicationName)}`;
 }
 
 export interface WorkloadManifestOptions {
   hasActors?: boolean;
+  hasPersistentStorage?: boolean;
   replicas?: number;
   storageVolume?: {
-    claimName?: string;
+    hostPath?: string;
     mountPath?: string;
-    storageSize?: string;
+    volumeName?: string;
   };
+  /** Secret name providing control-plane credentials (merged into WASI environment). */
+  controlSecretName?: string;
+  /** Explicit environment config values (string map for localResources.environment.config). */
+  environment?: Record<string, string>;
 }
 
 export function renderWorkloadManifest(
@@ -79,12 +76,24 @@ export function renderWorkloadManifest(
   const opts: WorkloadManifestOptions =
     typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
   const hasActors = opts.hasActors ?? false;
+  const resolvedHandlers =
+    queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
+  const isWorker = isQueueWorkerProject(project, resolvedHandlers);
+  const hasQueues = resolvedHandlers.length > 0;
+  const needsPersistentStorage =
+    opts.hasPersistentStorage ??
+    (hasActors || hasQueues || isWorker || project.persistentStorage === true);
+  const needsControlHttp = hasActors || cronJobs.length > 0 || hasQueues || isWorker;
+  // Cluster Service is required for cron invokers and queue/actor control even when
+  // public ingress is disabled.
+  const hasHttp =
+    (project.ingress !== false && !isWorker) || needsControlHttp || needsPersistentStorage;
 
-  if (hasActors) {
+  if (needsPersistentStorage) {
     if (opts.replicas !== undefined && opts.replicas !== 1) {
       throw new CommandFailure(
-        'WASMCLOUD_ACTORS_REPLICA_CONSTRAINT',
-        'Actor deployments with SQLite persistent storage require replicas: 1 to prevent competing database owners on a single host',
+        'WASMCLOUD_STORAGE_REPLICA_CONSTRAINT',
+        'SQLite-backed workloads require replicas: 1 because the WASI VFS lacks file locking',
         2,
         { replicas: opts.replicas },
       );
@@ -98,56 +107,43 @@ export function renderWorkloadManifest(
     `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
   ].join('\n');
 
-  const claimName = opts.storageVolume?.claimName ?? `${name}-storage`;
-  const mountPath = opts.storageVolume?.mountPath ?? '/data/actors';
-  const storageSize = opts.storageVolume?.storageSize ?? '1Gi';
+  const volumeName = opts.storageVolume?.volumeName ?? 'app-storage';
+  const mountPath =
+    opts.storageVolume?.mountPath ??
+    (hasActors ? `${DEFAULT_STORAGE_MOUNT}/actors` : DEFAULT_STORAGE_MOUNT);
+  const hostPath = opts.storageVolume?.hostPath ?? hostStoragePath(project.applicationName);
 
-  const pvcSection = hasActors
-    ? `apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ${claimName}
-  namespace: ${connection.namespace}
-  labels:
-${labels}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: ${storageSize}
-`
-    : '';
+  const environment: Record<string, string> = { ...(opts.environment ?? {}) };
+  if (needsPersistentStorage) {
+    environment.DI_SQLITE_BACKEND = 'wasm';
+    environment.DI_STORAGE_DIR = mountPath;
+  }
+  if (hasActors) environment.ACTOR_STORAGE_DIR = mountPath;
+  if (needsPersistentStorage && !hasActors) {
+    environment.QUEUE_DB_PATH = `${mountPath}/queue.db`;
+    environment.MIGRATION_DB_PATH = `${mountPath}/migrations.db`;
+  }
+  if (cronJobs.length > 0) environment.DI_CRON_MODE = 'external';
+  if (hasQueues) {
+    environment.DI_QUEUE_MODE = 'sqlite';
+    for (const handler of resolvedHandlers) {
+      const prefix = `DI_QUEUE_${handler.queueName.replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`;
+      if (handler.options.concurrency !== undefined) {
+        environment[`${prefix}_CONCURRENCY`] = String(handler.options.concurrency);
+      }
+      if (handler.options.maxRetries !== undefined) {
+        environment[`${prefix}_MAX_RETRIES`] = String(handler.options.maxRetries);
+      }
+      if (handler.options.backoffMs !== undefined) {
+        environment[`${prefix}_BACKOFF_MS`] = String(handler.options.backoffMs);
+      }
+      if (handler.options.timeoutMs !== undefined) {
+        environment[`${prefix}_TIMEOUT_MS`] = String(handler.options.timeoutMs);
+      }
+    }
+  }
 
-  const actorVolumes = hasActors
-    ? `        volumeMounts:
-          - name: actor-storage
-            mountPath: ${mountPath}
-        volumes:
-          - name: actor-storage
-            persistentVolumeClaim:
-              claimName: ${claimName}
-`
-    : '';
-
-  const actorEnv = hasActors
-    ? `            - name: ACTOR_STORAGE_DIR
-              value: ${yamlQuote(mountPath)}
-`
-    : '';
-
-  const strategy = hasActors
-    ? `      strategy:
-        type: Recreate
-`
-    : '';
-
-  const resolvedHandlers =
-    queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
-  const isWorker = isQueueWorkerProject(project, resolvedHandlers);
-  const hasHttp = project.ingress !== false && !isWorker;
   const sections: string[] = [];
-  if (hasActors) sections.push(pvcSection.trimEnd());
 
   if (hasHttp) {
     sections.push(`apiVersion: v1
@@ -166,17 +162,67 @@ spec:
       protocol: TCP`);
   }
 
-  const cronEnv =
-    cronJobs.length > 0
-      ? `            - name: DI_CRON_MODE
-              value: "external"
-`
-      : '';
-  const componentEnv =
-    hasActors || cronJobs.length > 0
-      ? `          env:
-${actorEnv}${cronEnv}`
-      : '';
+  const localResourcesLines: string[] = [];
+  const envKeys = Object.keys(environment).sort();
+  if (envKeys.length > 0 || opts.controlSecretName !== undefined) {
+    localResourcesLines.push('          localResources:');
+    localResourcesLines.push('            environment:');
+    if (envKeys.length > 0) {
+      localResourcesLines.push('              config:');
+      for (const key of envKeys) {
+        localResourcesLines.push(`                ${key}: ${yamlQuote(environment[key]!)}`);
+      }
+    }
+    if (opts.controlSecretName !== undefined) {
+      localResourcesLines.push('              secretFrom:');
+      localResourcesLines.push(`                - name: ${opts.controlSecretName}`);
+    }
+  } else if (project.allowedIpNameLookups !== undefined) {
+    localResourcesLines.push('          localResources:');
+  }
+
+  if (needsPersistentStorage) {
+    if (localResourcesLines.length === 0) {
+      localResourcesLines.push('          localResources:');
+    }
+    localResourcesLines.push('            volumeMounts:');
+    localResourcesLines.push(`              - name: ${volumeName}`);
+    localResourcesLines.push(`                mountPath: ${mountPath}`);
+  }
+
+  if (project.allowedIpNameLookups !== undefined) {
+    if (localResourcesLines.length === 0) {
+      localResourcesLines.push('          localResources:');
+    }
+    localResourcesLines.push(
+      `            allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}`,
+    );
+  }
+
+  const hostInterfaces = renderHostInterfacesYaml(
+    hostInterfacesFromRequirements(
+      hasHttp && !requirements.some((r) => r.package === 'wasi:http' && r.direction === 'export')
+        ? [
+            ...requirements,
+            {
+              package: 'wasi:http',
+              version: '0.3.0',
+              interfaces: ['handler'],
+              direction: 'export',
+              source: 'control-http',
+            },
+          ]
+        : requirements,
+      hasHttp ? { httpHost: project.applicationName } : {},
+      bindings.map((binding) => ({
+        name: binding.name,
+        className: binding.className,
+        config: binding.config,
+        configFrom: binding.configFrom,
+        secretFrom: binding.secretFrom,
+      })),
+    ),
+  );
 
   const workloadDeployment = `apiVersion: runtime.wasmcloud.dev/v1alpha1
 kind: WorkloadDeployment
@@ -187,43 +233,29 @@ metadata:
 ${labels}
 spec:
   replicas: 1
-  template:
+${needsPersistentStorage ? '  deployPolicy: Recreate\n' : ''}  template:
     spec:
-${strategy}      hostSelector:
-        hostgroup: default
+      hostSelector:
+        hostgroup: ${needsPersistentStorage ? STORAGE_HOSTGROUP : 'default'}
 ${
-  hasHttp || hasActors
-    ? `      kubernetes:
-${
-  hasHttp
-    ? `        service:
-          name: ${name}
+  needsPersistentStorage
+    ? `      volumes:
+        - name: ${volumeName}
+          hostPath:
+            path: ${yamlQuote(hostPath)}
 `
     : ''
-}${actorVolumes}`
+}${
+  hasHttp
+    ? `      kubernetes:
+        service:
+          name: ${name}
+`
     : ''
 }      components:
         - name: ${name}
           image: ${yamlQuote(image)}
-${componentEnv}${
-  project.allowedIpNameLookups === undefined
-    ? ''
-    : `          localResources:
-            allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}
-`
-}${isWorker ? renderQueueConsumersYaml(resolvedHandlers) : ''}${renderHostInterfacesYaml(
-  hostInterfacesFromRequirements(
-    requirements,
-    hasHttp ? { httpHost: project.applicationName } : {},
-    bindings.map((binding) => ({
-      name: binding.name,
-      className: binding.className,
-      config: binding.config,
-      configFrom: binding.configFrom,
-      secretFrom: binding.secretFrom,
-    })),
-  ),
-)}`;
+${localResourcesLines.length > 0 ? `${localResourcesLines.join('\n')}\n` : ''}${hostInterfaces}`;
 
   sections.push(workloadDeployment);
 
@@ -231,6 +263,10 @@ ${componentEnv}${
     const jobKebab =
       job.kebabId || asWitIdentifier(job.name || `${job.className}-${job.methodName}`);
     const jobResourceName = `${name}-${jobKebab}`;
+    const timeoutSeconds = Math.max(1, Math.ceil((job.timeoutMs ?? 30_000) / 1000));
+    // Job deadline must cover image pull + invoke; curl --max-time enforces the app timeout.
+    const activeDeadlineSeconds = Math.max(timeoutSeconds + 60, 90);
+    const invokeUrl = `http://${name}.${connection.namespace}.svc.cluster.local/_di/cron/${encodeURIComponent(job.jobId)}/invoke`;
     sections.push(`apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -244,6 +280,7 @@ spec:
   concurrencyPolicy: ${job.allowConcurrent ? 'Allow' : 'Forbid'}
   jobTemplate:
     spec:
+      activeDeadlineSeconds: ${activeDeadlineSeconds}
       template:
         metadata:
           labels:
@@ -252,16 +289,37 @@ ${labels.replace(/^/gm, '        ')}
         spec:
           restartPolicy: OnFailure
           containers:
-            - name: scheduler-dispatch
-              image: ${yamlQuote(image)}
+            - name: cron-invoker
+              image: ${yamlQuote(CRON_INVOKER_IMAGE)}
               env:
-                - name: DI_CRON_MODE
-                  value: "external"
+                - name: DI_CRON_INVOKE_URL
+                  value: ${yamlQuote(invokeUrl)}
                 - name: DI_CRON_INVOKE_JOB
                   value: ${yamlQuote(job.jobId)}
-              args:
-                - "cron:invoke"
-                - ${yamlQuote(job.jobId)}`);
+                - name: DI_CONTROL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${name}-control
+                      key: token
+                      optional: true
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  set -eu
+                  auth_header=""
+                  if [ -n "\${DI_CONTROL_TOKEN:-}" ]; then
+                    auth_header="Authorization: Bearer \${DI_CONTROL_TOKEN}"
+                  fi
+                  response="$(curl -sS -f -X POST \\
+                    -H "Host: ${name}" \\
+                    -H "content-type: application/json" \\
+                    \${auth_header:+-H "$auth_header"} \\
+                    --max-time ${timeoutSeconds} \\
+                    -d '{}' \\
+                    "$DI_CRON_INVOKE_URL")"
+                  echo "$response"
+                  echo "$response" | grep -q '"completed":true\\|\\"ok\\":true'`);
   }
 
   return sections.join('\n---\n') + '\n';
@@ -277,21 +335,34 @@ export async function applyWorkload(
   const bindings = discoverBindings(project, deps);
   const queueHandlers = discoverQueueHandlers(project);
   const isWorker = isQueueWorkerProject(project, queueHandlers);
-  const baseRequirements = isWorker
-    ? queueProjectRequirements()
-    : project.ingress !== false
-      ? defaultProjectRequirements()
-      : [];
-  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
   const hasActors = discoverActors(project).length > 0 || project.actors === true;
   const cronJobs = discoverScheduledJobs(project.projectRoot);
+  const hasPersistentStorage =
+    hasActors || queueHandlers.length > 0 || project.persistentStorage === true;
+  const needsHttp =
+    (project.ingress !== false && !isWorker) ||
+    hasActors ||
+    cronJobs.length > 0 ||
+    queueHandlers.length > 0 ||
+    hasPersistentStorage;
+  const baseRequirements = needsHttp
+    ? defaultProjectRequirements()
+    : isWorker
+      ? queueProjectRequirements()
+      : [];
+  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
+  await assertStorageOwnership(project, connection, deps, {
+    hasActors,
+    hasQueues: queueHandlers.length > 0,
+    hasPersistentStorage,
+  });
   const manifest = renderWorkloadManifest(
     project,
     connection,
     image,
     requirements,
     bindings,
-    { hasActors },
+    { hasActors, hasPersistentStorage },
     cronJobs,
     queueHandlers,
   );
@@ -303,6 +374,54 @@ export async function applyWorkload(
   await runKubectl(deps, connection, ['apply', '-f', path], project.projectRoot);
   await waitForReady(project, connection, deps, io);
   return path;
+}
+
+async function assertStorageOwnership(
+  project: WasmcloudProject,
+  connection: ClusterConnection,
+  deps: WasmcloudDeps,
+  flags: { hasActors: boolean; hasQueues: boolean; hasPersistentStorage?: boolean },
+): Promise<void> {
+  if (!flags.hasActors && !flags.hasQueues && !flags.hasPersistentStorage) return;
+  const name = deploymentResourceName(project);
+  const hostPath = hostStoragePath(project.applicationName);
+  const result = await captureKubectl(
+    deps,
+    connection,
+    [
+      'get',
+      WORKLOAD_DEPLOYMENT_RESOURCE,
+      '-o',
+      'json',
+      '-l',
+      `di-framework.dev/application!=${project.applicationName}`,
+    ],
+    project.projectRoot,
+  );
+  if (result.exitCode !== 0) return;
+  try {
+    const list = JSON.parse(result.stdout) as {
+      items?: Array<{
+        metadata?: { name?: string };
+        spec?: { template?: { spec?: { volumes?: Array<{ hostPath?: { path?: string } }> } } };
+      }>;
+    };
+    for (const item of list.items ?? []) {
+      for (const volume of item.spec?.template?.spec?.volumes ?? []) {
+        if (volume.hostPath?.path === hostPath) {
+          throw new CommandFailure(
+            'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT',
+            `Storage path ${hostPath} is already claimed by WorkloadDeployment ${item.metadata?.name ?? 'unknown'}`,
+            2,
+            { application: project.applicationName, path: hostPath, owner: item.metadata?.name },
+          );
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+  }
+  void name;
 }
 
 export async function deleteWorkload(
@@ -410,11 +529,11 @@ async function deploymentDiagnostics(
     },
     {
       title: 'wasmCloud host pods',
-      args: ['get', 'pods', '-l', 'wasmcloud.com/hostgroup=default', '-o', 'wide'],
+      args: ['get', 'pods', '-l', 'wasmcloud.com/hostgroup', '-o', 'wide'],
     },
     {
-      title: 'wasmCloud host logs',
-      args: ['logs', 'deployment/hostgroup-default', '--tail=100'],
+      title: 'wasmCloud storage host logs',
+      args: ['logs', 'deployment/hostgroup-storage', '--tail=100'],
     },
   ];
   const sections: string[] = [];

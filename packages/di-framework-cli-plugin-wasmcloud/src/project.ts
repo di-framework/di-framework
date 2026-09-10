@@ -29,6 +29,11 @@ export type WasmcloudProject = {
   ingress?: boolean;
   /** Cron execution mode override. */
   cronMode?: 'in-process' | 'external';
+  /**
+   * When true, deploy onto the single-replica storage hostgroup with a
+   * dedicated hostPath volume (SQLite / migration history).
+   */
+  persistentStorage?: boolean;
 };
 
 export function findUp(startDirectory: string, fileName: string): string | undefined {
@@ -163,11 +168,13 @@ export function loadProject(startDirectory: string): WasmcloudProject {
 
   const ingress = config.ingress !== false && config.http !== false;
   const cronMode = config.cronMode === 'external' ? 'external' : undefined;
+  const persistentStorage = config.persistentStorage === true;
 
   return {
     applicationName: config.name,
     ingress,
     ...(cronMode ? { cronMode } : {}),
+    ...(persistentStorage ? { persistentStorage: true } : {}),
     ...(config.allowedIpNameLookups === undefined
       ? {}
       : { allowedIpNameLookups: config.allowedIpNameLookups as string[] }),

@@ -1,4 +1,6 @@
-import type { ActorRuntime } from '@di-framework/actors';
+import type { ActorRuntime, ActorRpcRequest } from '@di-framework/actors';
+import { authorizeControlRequest, unauthorizedResponse } from './control/auth.js';
+
 export const ACTORS_INVOCATION_PATH = '/_actors/invoke';
 
 export function isActorInvocationRequest(request: Request): boolean {
@@ -8,6 +10,10 @@ export function isActorInvocationRequest(request: Request): boolean {
   } catch {
     return false;
   }
+}
+
+function randomRequestId(): string {
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export async function handleActorInvocationRequest(
@@ -33,11 +39,19 @@ export async function handleActorInvocationRequest(
     );
   }
 
+  const auth = authorizeControlRequest(request, ['invoke']);
+  if (!auth.ok) return unauthorizedResponse(auth);
+
   try {
     let actorType: string | undefined;
     let actorKey: string | undefined;
     let method: string | undefined;
     let args: unknown[] = [];
+    let requestId = randomRequestId();
+    let deadline: number | undefined;
+    let namespace: string | undefined;
+    let callerId = auth.identity.id;
+    let expectedGeneration: number | undefined;
 
     const url = new URL(request.url);
     const subPath = url.pathname.replace(/^\/_actors\/?/, '');
@@ -47,10 +61,15 @@ export async function handleActorInvocationRequest(
       const parsed = await request.json().catch(() => ({}));
       const body =
         parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-      actorType = body.actorType ?? request.headers.get('x-actor-type') ?? pathParts[0];
-      actorKey = body.actorKey ?? request.headers.get('x-actor-key') ?? pathParts[1];
-      method = body.method ?? request.headers.get('x-actor-method') ?? pathParts[2];
+      actorType = (body.actorType as string) ?? request.headers.get('x-actor-type') ?? pathParts[0];
+      actorKey = (body.actorKey as string) ?? request.headers.get('x-actor-key') ?? pathParts[1];
+      method = (body.method as string) ?? request.headers.get('x-actor-method') ?? pathParts[2];
       args = Array.isArray(body.args) ? body.args : [];
+      if (typeof body.requestId === 'string' && body.requestId) requestId = body.requestId;
+      if (typeof body.deadline === 'number') deadline = body.deadline;
+      if (typeof body.namespace === 'string') namespace = body.namespace;
+      if (typeof body.callerId === 'string') callerId = body.callerId;
+      if (typeof body.expectedGeneration === 'number') expectedGeneration = body.expectedGeneration;
     } else {
       actorType = request.headers.get('x-actor-type') ?? pathParts[0];
       actorKey = request.headers.get('x-actor-key') ?? pathParts[1];
@@ -64,6 +83,10 @@ export async function handleActorInvocationRequest(
           args = [qArgs];
         }
       }
+      const headerDeadline = request.headers.get('x-actor-deadline');
+      if (headerDeadline) deadline = Number(headerDeadline);
+      namespace = request.headers.get('x-actor-namespace') ?? undefined;
+      callerId = request.headers.get('x-actor-caller') ?? callerId;
     }
 
     if (
@@ -86,16 +109,47 @@ export async function handleActorInvocationRequest(
       );
     }
 
-    const invoke = dispatchFn ?? ((t, k, m, a) => runtime!.invoke(t, k, m, a ?? []));
-    const result = await invoke(actorType, actorKey, method, args);
+    if (runtime) {
+      // Resolve via the portable package condition at componentize time so the
+      // adapter never pulls bun:sqlite into the Wasm guest.
+      const { ActorRpcDispatcher } = await import('@di-framework/actors/portable');
+      // Always pass the options object: `instanceof ActorRuntime` fails across package
+      // entrypoints (main vs portable) and would read `options.runtime` as undefined.
+      const dispatcher = new ActorRpcDispatcher({ runtime });
+      const rpcRequest: ActorRpcRequest = {
+        requestId,
+        namespace,
+        actorType,
+        actorKey,
+        method,
+        args,
+        callerId,
+        deadline,
+        expectedGeneration,
+      };
+      const response = await dispatcher.dispatch(rpcRequest);
+      const status = response.success
+        ? 200
+        : response.error?.name === 'ActorAuthorizationError'
+          ? 403
+          : response.error?.name === 'ActorDeadlineExceededError'
+            ? 504
+            : response.error?.name === 'ActorNotRegisteredError' ||
+                response.error?.name === 'ActorMethodNotFoundError'
+              ? 404
+              : 500;
+      return new Response(JSON.stringify(response), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        result,
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
+    const invoke = dispatchFn!;
+    const result = await invoke(actorType, actorKey, method, args);
+    return new Response(JSON.stringify({ requestId, success: true, result }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
   } catch (error: any) {
     const name =
       [
@@ -103,22 +157,29 @@ export async function handleActorInvocationRequest(
         'ActorMethodNotFoundError',
         'ActorInvocationBadRequest',
         'ActorMigrationError',
+        'ActorAuthorizationError',
+        'ActorDeadlineExceededError',
       ].find((candidate) => candidate === error?.name) ?? 'ActorInvocationError';
     const isNotFound = name === 'ActorNotRegisteredError' || name === 'ActorMethodNotFoundError';
     const isBadRequest = name === 'ActorInvocationBadRequest';
-    const status = isNotFound ? 404 : isBadRequest ? 400 : 500;
-    const message = isNotFound
-      ? 'Actor or method not found'
+    const isUnauthorized = name === 'ActorAuthorizationError';
+    const isDeadline = name === 'ActorDeadlineExceededError';
+    const status = isNotFound
+      ? 404
       : isBadRequest
-        ? 'Invalid actor invocation'
-        : 'Actor invocation failed';
-
+        ? 400
+        : isUnauthorized
+          ? 403
+          : isDeadline
+            ? 504
+            : 500;
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           name,
-          message,
+          // Never echo handler exception text — it may contain private details.
+          message: 'Actor invocation failed',
         },
       }),
       { status, headers: { 'content-type': 'application/json' } },

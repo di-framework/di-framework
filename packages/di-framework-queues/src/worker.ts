@@ -58,6 +58,31 @@ export class QueueWorker {
     return true;
   }
 
+  /**
+   * Process available jobs without background timers.
+   * Used by short-lived Wasm HTTP invocations where setTimeout polling cannot outlive the request.
+   */
+  async pump(maxJobsPerQueue = 32): Promise<number> {
+    if (this.queues.size === 0) {
+      this.registerAllDeclaredQueues();
+    }
+    try {
+      await this.backend.recoverUnacknowledged(undefined, this.options.leaseTimeoutMs);
+    } catch {
+      // ignore recovery errors during request-driven pumps
+    }
+
+    let processed = 0;
+    for (const queueName of this.queues) {
+      for (let i = 0; i < maxJobsPerQueue; i += 1) {
+        const handled = await this.processNext(queueName);
+        if (!handled) break;
+        processed += 1;
+      }
+    }
+    return processed;
+  }
+
   private async executeJob(queueName: string, job: Job<any>): Promise<void> {
     try {
       await this.dispatcher.dispatch(queueName, job);

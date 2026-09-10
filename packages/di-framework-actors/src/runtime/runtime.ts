@@ -20,7 +20,6 @@ import type {
 import { runActorMigrations } from '../migrations/runner.js';
 import { InMemoryActorStorage } from '../storage/memory.js';
 import { actorIdentityToPath, parseActorIdentity } from '../storage/path.js';
-import { SqliteActorStorage } from '../storage/sqlite.js';
 import type { ActorStorage } from '../storage/types.js';
 import {
   ActorAmbiguityError,
@@ -46,6 +45,19 @@ export interface ActorRegistration {
   namespace?: string;
   ctor: Constructor;
   options?: ActorOptions;
+}
+
+/**
+ * Storage adapters that persist one database per actor under a base directory
+ * (native SqliteActorStorage, WasmSqliteActorStorage, ...). Detected structurally so
+ * the runtime never has to import a concrete adapter (and its `bun:sqlite` dependency).
+ */
+type PathMappedActorStorage = ActorStorage & { baseDir: string; inMemory: boolean };
+
+function isPathMappedStorage(storage: ActorStorage): storage is PathMappedActorStorage {
+  return (
+    typeof (storage as any).baseDir === 'string' && typeof (storage as any).inMemory === 'boolean'
+  );
 }
 
 export interface ActorRuntimeOptions {
@@ -966,7 +978,7 @@ export class ActorRuntime implements InvocationTarget {
     const pendingCalls = mb?.pendingCalls ?? 0;
 
     let storagePath: string | undefined;
-    if (this._storage instanceof SqliteActorStorage) {
+    if (isPathMappedStorage(this._storage)) {
       storagePath = actorIdentityToPath(compositeId, {
         baseDir: options.baseDir ?? this._storage.baseDir,
         inMemory: this._storage.inMemory,
@@ -1023,7 +1035,7 @@ export class ActorRuntime implements InvocationTarget {
       const isActive = this.instances.has(compositeId);
 
       let storagePath: string | undefined;
-      if (this._storage instanceof SqliteActorStorage) {
+      if (isPathMappedStorage(this._storage)) {
         storagePath = actorIdentityToPath(compositeId, {
           baseDir: options.baseDir ?? this._storage.baseDir,
           inMemory: this._storage.inMemory,

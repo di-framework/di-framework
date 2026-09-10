@@ -58,7 +58,9 @@ export function createWasmcloudActorAdapter(actorRuntime: ActorRuntime): Wasmclo
   };
 
   const handle = async (request: Request): Promise<Response> => {
-    return await handleActorInvocationRequest(request, actorRuntime, dispatchActorInvocation);
+    // Prefer the local dispatch path so mailbox serialization is preserved.
+    // HTTP adapters that need RPC deadline/auth semantics pass runtime without dispatchFn.
+    return await handleActorInvocationRequest(request, undefined, dispatchActorInvocation);
   };
 
   const invoke = async (
@@ -355,31 +357,44 @@ export function renderActorsModule(
   const defaultDir = options.defaultStorageDir ?? './.actors';
   lines.push(
     `const defaultStorageDir = ${JSON.stringify(defaultDir)};`,
-    'const storageDir = process.env.ACTOR_STORAGE_DIR || defaultStorageDir;',
-    'const storage = new SqliteActorStorage({ baseDir: storageDir, fileLocking: true });',
-    'const actorRuntime = new ActorRuntime({ storage });',
+    'let storage;',
+    'let runtime;',
     '',
+    'function resolveStorageDir() {',
+    '  return process.env.ACTOR_STORAGE_DIR || process.env.DI_STORAGE_DIR || defaultStorageDir;',
+    '}',
+    '',
+    'function ensureActorRuntime() {',
+    '  if (runtime) return runtime;',
+    '  // WASI VFS has no file locking; exclusive ownership is enforced by replicas: 1.',
+    '  // Defer until first use so WASI environment (ACTOR_STORAGE_DIR) is available.',
+    '  storage = new SqliteActorStorage({ baseDir: resolveStorageDir(), fileLocking: false });',
+    '  runtime = new ActorRuntime({ storage });',
   );
 
   for (const actor of actors) {
     lines.push(
-      `actorRuntime.register(${actor.className}, {`,
-      `  name: ${JSON.stringify(actor.actorName)},`,
-      `  namespace: ${JSON.stringify(actor.namespace)},`,
-      '});',
+      `  runtime.register(${actor.className}, {`,
+      `    name: ${JSON.stringify(actor.actorName)},`,
+      `    namespace: ${JSON.stringify(actor.namespace)},`,
+      '  });',
     );
   }
 
   lines.push(
-    '',
-    'export async function dispatchActorInvocation(actorType, actorKey, method, args = []) {',
-    '  return await actorRuntime.invoke(actorType, actorKey, method, args);',
+    '  return runtime;',
     '}',
     '',
-    `export { actorRuntime, storage, ${importedClassNames.join(', ')} };`,
+    'export async function dispatchActorInvocation(actorType, actorKey, method, args = []) {',
+    '  return await ensureActorRuntime().invoke(actorType, actorKey, method, args);',
+    '}',
+    '',
+    'export function getActorRuntime() { return ensureActorRuntime(); }',
+    'export { getActorRuntime as actorRuntime, storage };',
+    `export { ${importedClassNames.join(', ')} };`,
     '',
     `globalThis[Symbol.for(${JSON.stringify(WASMCLOUD_ACTORS_GLOBAL)})] = {`,
-    '  actorRuntime,',
+    '  get actorRuntime() { return ensureActorRuntime(); },',
     '  dispatchActorInvocation,',
     '  actors: [',
   );
@@ -398,6 +413,7 @@ export function renderActorsModule(
 export function emptyActorsModule(): string {
   return [
     'export const actorRuntime = undefined;',
+    'export function getActorRuntime() { return undefined; }',
     'export const dispatchActorInvocation = undefined;',
     'export const actors = [];',
     `globalThis[Symbol.for(${JSON.stringify(WASMCLOUD_ACTORS_GLOBAL)})] = { actors: [] };`,
