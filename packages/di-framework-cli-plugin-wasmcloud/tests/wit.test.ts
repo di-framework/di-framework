@@ -8,7 +8,9 @@ import {
   buildWitLock,
   defaultProjectRequirements,
   parsePackageId,
+  queueProjectRequirements,
   renderWorldWit,
+  sqliteProjectRequirements,
   type WitRequirement,
 } from '../src/wit';
 
@@ -49,6 +51,14 @@ const kvGroup: WitRequirement[] = [
 ];
 
 describe('WIT requirement registry', () => {
+  it('adds sqlite imports for queue workers and actor storage helpers', () => {
+    const queueReqs = queueProjectRequirements();
+    expect(queueReqs.some((req) => req.package === 'di-framework:sqlite')).toBe(true);
+    expect(sqliteProjectRequirements()).toEqual(
+      queueReqs.filter((req) => req.package === 'di-framework:sqlite'),
+    );
+  });
+
   it('keeps HTTP package version independent of the component-model preview', () => {
     const [http] = defaultProjectRequirements();
     expect(http?.package).toBe('wasi:http');

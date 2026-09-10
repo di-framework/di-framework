@@ -233,3 +233,34 @@ it('treats non-object JSON and invalid identity fields as bad requests', async (
   expect(response.status).toBe(200);
   expect(calls).toBe(1);
 });
+
+it('maps ActorRpcDispatcher error names to HTTP status codes', async () => {
+  const { handleActorInvocationRequest } = await import('../src/actor-protocol');
+  const { ActorRpcDispatcher } = await import('@di-framework/actors/portable');
+  const runtime = { invoke: async () => 1 };
+  const request = new Request('http://localhost/_actors/Counter/key/read', {
+    method: 'POST',
+    body: JSON.stringify({ actorType: 'Counter', actorKey: 'k', method: 'read' }),
+  });
+  const original = ActorRpcDispatcher.prototype.dispatch;
+  try {
+    for (const [errorName, status] of [
+      ['ActorAuthorizationError', 403],
+      ['ActorDeadlineExceededError', 504],
+      ['ActorNotRegisteredError', 404],
+      ['ActorMethodNotFoundError', 404],
+      ['ActorInvocationError', 500],
+    ] as const) {
+      ActorRpcDispatcher.prototype.dispatch = async () => ({
+        requestId: 'req-test',
+        success: false,
+        error: { name: errorName, message: 'sanitized upstream' },
+      });
+      const response = await handleActorInvocationRequest(request, runtime as any);
+      expect(response.status).toBe(status);
+      expect((await response.json()).error?.name).toBe(errorName);
+    }
+  } finally {
+    ActorRpcDispatcher.prototype.dispatch = original;
+  }
+});

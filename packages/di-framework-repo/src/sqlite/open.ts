@@ -52,13 +52,18 @@ export function isWasmSqliteBackendRequested(): boolean {
  * Picks the backend for a path: the environment override, then Bun when its
  * global is present, then Node when a native opener is registered, else Wasm.
  */
-export function detectSqliteBackend(): SqliteBackend {
+export function detectSqliteBackend(options?: {
+  bunGlobal?: unknown;
+  hasOpener?: (backend: SqliteBackend) => boolean;
+}): SqliteBackend {
   const requested = requestedSqliteBackend();
   if (requested) return requested;
-  if (typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined' && openers.has('bun')) {
+  const bunGlobal = options?.bunGlobal ?? (globalThis as { Bun?: unknown }).Bun;
+  const hasOpener = options?.hasOpener ?? ((backend) => openers.has(backend));
+  if (typeof bunGlobal !== 'undefined' && hasOpener('bun')) {
     return 'bun';
   }
-  if (openers.has('node')) return 'node';
+  if (hasOpener('node')) return 'node';
   return 'wasm';
 }
 
@@ -80,11 +85,13 @@ function fallbackOrder(backend: SqliteBackend): SqliteBackend[] {
 export async function openSqliteDatabase(
   path: string,
   backend: SqliteBackend = detectSqliteBackend(),
+  options?: { getOpener?: (backend: SqliteBackend) => SqliteOpener | undefined },
 ): Promise<SqlDatabase> {
   let lastError: unknown;
   let attempted = 0;
+  const getOpener = options?.getOpener ?? ((candidate) => openers.get(candidate));
   for (const candidate of fallbackOrder(backend)) {
-    const opener = openers.get(candidate);
+    const opener = getOpener(candidate);
     if (!opener) continue;
     attempted++;
     try {

@@ -12,8 +12,11 @@ import {
   getSqliteOpener,
   isMigrationDatabase,
   isSqlDatabase,
+  isWasmSqliteBackendRequested,
   openSqliteDatabase,
   registeredSqliteBackends,
+  registerSqliteOpener,
+  requestedSqliteBackend,
   type SqlDatabase,
   toWasmSqlParams,
   toWasmSqlValue,
@@ -433,6 +436,35 @@ describe('SqlDatabase wrappers and backend registry', () => {
       }),
     ]);
     expect(order).toEqual([1, 2, 3]);
+  });
+
+  test('detects node without Bun and reports empty opener maps', async () => {
+    expect(detectSqliteBackend({ bunGlobal: undefined, hasOpener: (backend) => backend === 'node' })).toBe(
+      'node',
+    );
+    expect(detectSqliteBackend({ bunGlobal: undefined, hasOpener: () => false })).toBe('wasm');
+    await expect(
+      openSqliteDatabase(':memory:', 'wasm', { getOpener: () => undefined }),
+    ).rejects.toThrow(/No SQLite backend is registered/);
+  });
+
+  test('reads requested sqlite backend env vars and falls back across openers', async () => {
+    const previous = process.env.DI_SQLITE_BACKEND;
+    process.env.DI_SQLITE_BACKEND = ' wasm ';
+    try {
+      expect(requestedSqliteBackend()).toBe('wasm');
+      expect(isWasmSqliteBackendRequested()).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.DI_SQLITE_BACKEND;
+      else process.env.DI_SQLITE_BACKEND = previous;
+    }
+
+    registerSqliteOpener('wasm', async () => {
+      throw new Error('wasm unavailable');
+    });
+    await expect(openSqliteDatabase(':memory:', 'wasm')).rejects.toThrow(
+      /Unsupported database connection string or runtime: :memory: \(wasm unavailable\)/,
+    );
   });
 
   test('registers bun, node, and wasm openers and honours DI_SQLITE_BACKEND', async () => {

@@ -182,18 +182,12 @@ spec:
   }
 
   if (needsPersistentStorage) {
-    if (localResourcesLines.length === 0) {
-      localResourcesLines.push('          localResources:');
-    }
     localResourcesLines.push('            volumeMounts:');
     localResourcesLines.push(`              - name: ${volumeName}`);
     localResourcesLines.push(`                mountPath: ${mountPath}`);
   }
 
   if (project.allowedIpNameLookups !== undefined) {
-    if (localResourcesLines.length === 0) {
-      localResourcesLines.push('          localResources:');
-    }
     localResourcesLines.push(
       `            allowedIpNameLookups: ${JSON.stringify(project.allowedIpNameLookups)}`,
     );
@@ -406,10 +400,11 @@ async function assertStorageOwnership(
         spec?: { template?: { spec?: { volumes?: Array<{ hostPath?: { path?: string } }> } } };
       }>;
     };
+    let conflict: CommandFailure | undefined;
     for (const item of list.items ?? []) {
       for (const volume of item.spec?.template?.spec?.volumes ?? []) {
         if (volume.hostPath?.path === hostPath) {
-          throw new CommandFailure(
+          conflict = new CommandFailure(
             'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT',
             `Storage path ${hostPath} is already claimed by WorkloadDeployment ${item.metadata?.name ?? 'unknown'}`,
             2,
@@ -418,6 +413,7 @@ async function assertStorageOwnership(
         }
       }
     }
+    if (conflict) throw conflict;
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
   }

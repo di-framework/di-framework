@@ -35,6 +35,26 @@ describe('nodeCompatibilityPlugin', () => {
         'virtual:di-framework-wasmcloud-guests',
       ),
     ).toBe('/generated/guests.js');
+    const seeded = nodeCompatibilityPlugin(
+      '/app.ts',
+      {
+        guestsPath: '/generated/guests.js',
+        actorsPath: '/generated/actors.js',
+        cronPath: '/generated/cron.js',
+        queuesPath: '/generated/queues.js',
+      },
+      { files: {}, environ: {}, cwd: '/app' },
+      { files: { '/ignored': 'x' }, environ: {}, cwd: '/seed' },
+    );
+    expect(seeded.resolveId('virtual:di-framework-wasmcloud-queues')).toBe('/generated/queues.js');
+    expect(seeded.load('\0virtual:di-framework-node-fs-seed')).toContain('"/app"');
+    const seededFromMaybe = nodeCompatibilityPlugin(
+      '/app.ts',
+      { queuesPath: '/generated/queues.js' },
+      undefined,
+      { files: { '/from-maybe': '1' }, environ: {}, cwd: '/maybe' },
+    );
+    expect(seededFromMaybe.load('\0virtual:di-framework-node-fs-seed')).toContain('"/from-maybe"');
   });
 });
 

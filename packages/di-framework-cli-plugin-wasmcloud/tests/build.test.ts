@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildComponent, requirementsForProject, runWasmcloudBuild } from '../src/build';
 import { loadProject } from '../src/project';
@@ -421,6 +422,159 @@ describe('runWasmcloudBuild', () => {
     expect(result.data).toMatchObject({ application: 'Demo App', profile: 'wasmcloud-http' });
     expect(result.text).toContain('Built');
   });
+});
+
+it('adds sqlite imports for actor-only HTTP builds when requirements omit them', async () => {
+  const root = makeProject();
+  writeFileSync(
+    join(root, 'src', 'counter.ts'),
+    `
+import { Actor, ActorMethod } from '@di-framework/actors';
+@Actor({ name: 'Counter' })
+export class Counter {
+  @ActorMethod()
+  async increment() { return 1; }
+}
+`,
+  );
+  writeFileSync(join(root, 'src', 'app.ts'), 'export { Counter } from "./counter";');
+  writeFileSync(
+    join(root, 'di-framework.config.json'),
+    `${JSON.stringify({ name: 'Actor HTTP', entry: 'src/app.ts' })}\n`,
+  );
+  const assets = makeAssets();
+  mkdirSync(join(assets, 'sqlite'), { recursive: true });
+  writeFileSync(join(assets, 'sqlite', 'di-framework-sqlite.wasm'), 'sqlite-provider');
+  await buildComponent(
+    loadProject(root),
+    captureIo().io,
+    fakeDeps({
+      cwd: root,
+      assets,
+      componentOutput: () => `\0asm sqlite-import`,
+      capturedStdout: {
+        wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import di-framework:sqlite/database@0.1.0;
+}
+`,
+      },
+    }),
+  );
+  const world = readFileSync(join(root, '.di-framework', 'wit', 'world.wit'), 'utf8');
+  expect(world).toContain('import di-framework:sqlite/database@0.1.0;');
+});
+
+it('writes queue and actor modules and composes sqlite providers for worker builds', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'wasmcloud-worker-build-'));
+  const srcDir = join(root, 'src');
+  mkdirSync(srcDir, { recursive: true });
+  writeFileSync(
+    join(srcDir, 'worker.ts'),
+    `
+import { Container } from '@di-framework/core';
+import { QueueHandler } from '@di-framework/queues';
+@Container()
+export class Worker {
+  @QueueHandler('jobs')
+  async run() {}
+}
+`,
+  );
+  writeFileSync(
+    join(srcDir, 'counter.ts'),
+    `
+import { Actor, ActorMethod } from '@di-framework/actors';
+@Actor({ name: 'Counter' })
+export class Counter {
+  @ActorMethod()
+  async increment() { return 1; }
+}
+`,
+  );
+  writeFileSync(join(srcDir, 'index.ts'), 'export * from "./worker"; export * from "./counter";');
+  writeFileSync(
+    join(root, 'di-framework.config.json'),
+    `${JSON.stringify({ name: 'Worker App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
+  );
+  writeFileSync(join(root, 'package.json'), '{ "name": "worker", "version": "1.0.0" }\n');
+  const assets = makeAssets();
+  mkdirSync(join(assets, 'sqlite'), { recursive: true });
+  writeFileSync(join(assets, 'sqlite', 'di-framework-sqlite.wasm'), 'sqlite-provider');
+  const invocations: RunnerInvocation[] = [];
+  const summary = await buildComponent(
+    loadProject(root),
+    captureIo().io,
+    fakeDeps({
+      cwd: root,
+      assets,
+      invocations,
+      componentOutput: () => `\0asm sqlite-import`,
+      capturedStdout: {
+        wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import di-framework:sqlite/database@0.1.0;
+}
+`,
+      },
+      captures: { wac: undefined },
+    }),
+  );
+  expect(summary.profile).toBe('wasmcloud-worker');
+  expect(readFileSync(join(root, '.di-framework', 'queues.js'), 'utf8')).toContain('QueueWorker');
+  expect(readFileSync(join(root, '.di-framework', 'actors.js'), 'utf8')).toContain('Counter');
+  expect(invocations.some((entry) => entry.args.includes('plug'))).toBe(true);
+});
+
+it('fails sqlite composition when the provider asset or wac plug step is missing', async () => {
+  const root = makeProject();
+  writeFileSync(
+    join(root, 'src', 'sqlite.ts'),
+    'import "di-framework:sqlite/database@0.1.0";\nexport default 1;\n',
+  );
+  const assets = makeAssets();
+  await expect(
+    buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        bundleContents: 'import "di-framework:sqlite/database@0.1.0";\nexport default 1;\n',
+        componentOutput: () => `\0asm sqlite-import`,
+        capturedStdout: {
+          wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import di-framework:sqlite/database@0.1.0;
+}
+`,
+        },
+      }),
+    ),
+  ).rejects.toMatchObject({ code: 'WASMCLOUD_SQLITE_PROVIDER_MISSING', exitCode: 3 });
+
+  mkdirSync(join(assets, 'sqlite'), { recursive: true });
+  writeFileSync(join(assets, 'sqlite', 'di-framework-sqlite.wasm'), 'sqlite-provider');
+  await expect(
+    buildComponent(
+      loadProject(root),
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        assets,
+        bundleContents: 'import "di-framework:sqlite/database@0.1.0";\nexport default 1;\n',
+        componentOutput: () => `\0asm sqlite-import`,
+        capturedStdout: {
+          wit: `world application {
+  export wasi:http/handler@0.3.0;
+  import di-framework:sqlite/database@0.1.0;
+}
+`,
+        },
+        exitCodes: { '--plug': 1 },
+      }),
+    ),
+  ).rejects.toMatchObject({ code: 'WASMCLOUD_SQLITE_COMPOSE_FAILED', exitCode: 3 });
 });
 
 it('writes the cron invoker dependency for ingress-free components without scheduled jobs', async () => {

@@ -263,6 +263,162 @@ describe('WasmSqliteActorStorage', () => {
     await storage.close();
   });
 
+  it('stages idempotency records and merges keys inside transactions', async () => {
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: createFakeWasmSqlite().factory,
+    });
+    const id = 'Idem:1';
+    await storage.setIdempotencyRecord(id, 'req-outside', { ok: true });
+
+    const tx = await storage.beginTransaction(id);
+    await tx.setIdempotencyRecord!('req-tx', { from: 'tx' });
+    expect(await tx.getIdempotencyRecord!('req-tx')).toMatchObject({ response: { from: 'tx' } });
+    expect(await tx.getIdempotencyRecord!('req-outside')).toMatchObject({ response: { ok: true } });
+    await tx.set('alpha', 1);
+    await tx.set('beta', 2);
+    expect((await tx.keys()).sort()).toEqual(['alpha', 'beta']);
+    await tx.commit();
+    expect(await storage.getIdempotencyRecord(id, 'req-tx')).toMatchObject({ response: { from: 'tx' } });
+    await storage.close();
+  });
+
+  it('supports in-memory databases, lease expiry, and closed-storage guards', async () => {
+    const fake = createFakeWasmSqlite();
+    const storage = new WasmSqliteActorStorage({
+      baseDir: ':memory:',
+      inMemory: true,
+      journalMode: 'memory',
+      synchronous: 'normal',
+      openDatabase: fake.factory,
+    });
+    const id = 'Mem:1';
+    await storage.set(id, 'x', 1);
+    expect(fake.opened.every((entry) => entry.path === ':memory:')).toBe(true);
+
+    await storage.acquireOwnership(id, 'host-a', { leaseTtlMs: 1 });
+    await Bun.sleep(5);
+    const taken = await storage.acquireOwnership(id, 'host-b');
+    expect(taken.ownerId).toBe('host-b');
+    expect(taken.generation).toBe(2);
+
+    await storage.close();
+    await expect(storage.get(id, 'x')).rejects.toThrow(/closed/);
+  });
+
+  it('rejects undefined values and clones structured data in transactions', async () => {
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: createFakeWasmSqlite().factory,
+    });
+    const id = 'Clone:1';
+    await expect(storage.set(id, 'bad', undefined)).rejects.toThrow(/undefined/);
+    const tx = await storage.beginTransaction(id);
+    await expect(tx.set('bad', undefined)).rejects.toThrow(/undefined/);
+    await tx.set('obj', { nested: { n: 1 } });
+    const read = await tx.get<{ nested: { n: number } }>('obj');
+    read!.nested.n = 99;
+    expect((await storage.get(id, 'obj'))).toBeUndefined();
+    await tx.rollback();
+
+    const tx2 = await storage.beginTransaction(id);
+    await tx2.delete('missing');
+    expect(await tx2.delete('missing')).toBe(false);
+    await tx2.set('temp', true);
+    expect(await tx2.delete('temp')).toBe(true);
+    await tx2.rollback();
+    await storage.close();
+  });
+
+  it('exposes transaction entries, database handles, and owner fencing edge cases', async () => {
+    const fake = createFakeWasmSqlite();
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: fake.factory,
+    });
+    const id = 'Edge:1';
+    await storage.set(id, 'a', 1);
+    await storage.acquireOwnership(id, 'host-a');
+    const tx = await storage.beginTransaction(id, { ownerId: 'host-a', generation: 0 });
+    await tx.set('b', 2);
+    expect(await tx.entries()).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ]);
+    expect(tx.getDatabase?.()).toBeDefined();
+    await expect(tx.commit()).rejects.toBeInstanceOf(StaleOwnerWriteError);
+
+    await storage.acquireOwnership(id, 'host-a', { force: true });
+    const badOwner = await storage.beginTransaction(id, { ownerId: 'other', generation: 1 });
+    await badOwner.set('x', 1);
+    await expect(badOwner.commit()).rejects.toBeInstanceOf(StaleOwnerWriteError);
+
+    const failing = createFakeWasmSqlite();
+    failing.factory = async (filePath) => {
+      const api = await createFakeWasmSqlite().factory(filePath);
+      const originalExec = api.exec.bind(api);
+      api.exec = async (sql) => {
+        if (sql.includes('COMMIT')) throw new Error('commit failed');
+        return originalExec(sql);
+      };
+      return api;
+    };
+    const fragile = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: failing.factory,
+    });
+    const fragileTx = await fragile.beginTransaction('Fragile:1');
+    await fragileTx.set('k', 'v');
+    await expect(fragileTx.commit()).rejects.toThrow('commit failed');
+    await fragile.close();
+    await storage.close();
+  });
+
+  it('waits for in-flight opens and closes pending connections on shutdown', async () => {
+    const fake = createFakeWasmSqlite();
+    let releaseOpen!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseOpen = resolve;
+    });
+    const delayedFactory: WasmSqliteDatabaseFactory = async (filePath) => {
+      await gate;
+      return fake.factory(filePath);
+    };
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: delayedFactory,
+    });
+    const opening = storage.set('Pending:1', 'k', 'v').catch(() => undefined);
+    const closing = storage.close();
+    releaseOpen();
+    await Promise.all([opening, closing]);
+    await expect(storage.get('Pending:1', 'k')).rejects.toThrow(/closed/);
+  });
+
+  it('supports direct database access, entries, clear helpers, and closeActor', async () => {
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      openDatabase: createFakeWasmSqlite().factory,
+    });
+    const id = 'Direct:1';
+    await storage.set(id, 'a', 1);
+    await storage.set(id, 'b', 2);
+    expect(await storage.entries<number>(id)).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ]);
+    expect(await storage.getDatabase(id)).toBeDefined();
+    await storage.clear(id);
+    expect(await storage.keys(id)).toEqual([]);
+    await storage.set(id, 'z', 3);
+    await storage.clearAll();
+    expect(await storage.keys(id)).toEqual([]);
+    await storage.set(id, 'only', true);
+    await storage.closeActor(id);
+    expect(await storage.get<boolean>(id, 'only')).toBe(true);
+    await storage.close();
+  });
+
   it('portable entry aliases SqliteActorStorage to the Wasm adapter and avoids bun:sqlite', async () => {
     expect(portable.SqliteActorStorage).toBe(WasmSqliteActorStorage);
     expect(typeof portable.ActorRuntime).toBe('function');

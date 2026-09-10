@@ -12,11 +12,24 @@ import {
   wasmcloudUnenvPreset,
 } from '../src/node-compat/env';
 import {
+  accessSync,
+  closeSync,
   constants,
+  createReadStream,
   existsSync,
+  fstatSync,
+  lstatSync,
   mkdirSync as guestMkdirSync,
-  writeFileSync as guestWriteFileSync,
+  openSync,
+  readdirSync,
   readFileSync,
+  readSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync as guestWriteFileSync,
+  writeSync,
 } from '../src/node-compat/fs';
 import { builtinModules, createRequire } from '../src/node-compat/module';
 import guestProcess, { cwd, env, nextTick } from '../src/node-compat/process';
@@ -62,6 +75,77 @@ describe('guest memfs', () => {
     expect(readFileSync('/app/rel.txt', {})).toBeInstanceOf(Uint8Array);
     expect(readFileSync('/app/rel.txt', { encoding: null })).toBeInstanceOf(Uint8Array);
     expect(constants.F_OK).toBe(0);
+  });
+
+  it('covers directory listings, stat, open/read/write, rename, rm, and streams', async () => {
+    guestWriteFileSync('/dir/file.txt', 'hello');
+    guestMkdirSync('/dir/nested', { recursive: true });
+    expect(readdirSync('/dir').sort()).toEqual(['file.txt', 'nested']);
+    const dirents = readdirSync('/dir', { withFileTypes: true }) as Array<{
+      name: string;
+      isFile(): boolean;
+      isDirectory(): boolean;
+    }>;
+    expect(dirents.find((entry) => entry.name === 'file.txt')?.isFile()).toBe(true);
+    expect(dirents.find((entry) => entry.name === 'nested')?.isDirectory()).toBe(true);
+    expect(statSync('/dir/file.txt').isFile()).toBe(true);
+    expect(statSync('/dir/nested').isDirectory()).toBe(true);
+    expect(() => statSync('/missing')).toThrow(/ENOENT/);
+
+    guestWriteFileSync('/bytes.bin', new Uint8Array([1, 2, 3]));
+    const fd = openSync('/bytes.bin', 'r+');
+    const buffer = new Uint8Array(3);
+    expect(readSync(fd, buffer)).toBe(3);
+    expect(Array.from(buffer)).toEqual([1, 2, 3]);
+    expect(writeSync(fd, new Uint8Array([4]), 0, 1, 1)).toBe(1);
+    closeSync(fd);
+    expect(readFileSync('/bytes.bin')).toBeInstanceOf(Uint8Array);
+
+    renameSync('/dir/file.txt', '/dir/renamed.txt');
+    expect(existsSync('/dir/renamed.txt')).toBe(true);
+    unlinkSync('/dir/renamed.txt');
+    rmSync('/dir/nested', { recursive: true, force: true });
+    accessSync('/dir');
+    expect(() => accessSync('/missing')).toThrow(/ENOENT/);
+
+    guestWriteFileSync('/stream.txt', 'stream-body');
+    const streamChunks: Uint8Array[] = [];
+    for await (const chunk of createReadStream('/stream.txt')) {
+      streamChunks.push(chunk);
+    }
+    expect(streamChunks).toHaveLength(1);
+    expect(new TextDecoder().decode(streamChunks[0]!)).toBe('stream-body');
+
+    const onceData: Uint8Array[] = [];
+    createReadStream('/stream.txt').once('data', (chunk) => onceData.push(chunk as Uint8Array));
+    await Promise.resolve();
+    expect(onceData).toHaveLength(1);
+
+    const appendFd = openSync('/append.txt', 'a+');
+    writeSync(appendFd, 'tail');
+    closeSync(appendFd);
+    expect(readFileSync('/append.txt', 'utf8')).toBe('tail');
+    expect(() => closeSync(999)).toThrow(/EBADF/);
+    const fdForStat = openSync('/append.txt');
+    expect(fstatSync(fdForStat).isFile()).toBe(true);
+    closeSync(fdForStat);
+    expect(lstatSync('/append.txt').isFile()).toBe(true);
+    rmSync('/append.txt', { force: true });
+    expect(() => rmSync('/missing.txt')).toThrow(/ENOENT/);
+    expect(() => openSync('/missing.txt', 'r')).toThrow(/ENOENT/);
+
+    guestMkdirSync('/tree/sub', { recursive: true });
+    guestWriteFileSync('/tree/sub/leaf.txt', 'leaf');
+    renameSync('/tree/sub', '/tree/moved');
+    expect(existsSync('/tree/moved/leaf.txt')).toBe(true);
+    expect(() => renameSync('/missing-dir', '/dest')).toThrow(/ENOENT/);
+
+    const positioned = openSync('/pos.txt', 'w+');
+    writeSync(positioned, 'abcd');
+    const buf = new Uint8Array(2);
+    expect(readSync(positioned, buf, 0, 2, 1)).toBe(2);
+    expect(new TextDecoder().decode(buf)).toBe('bc');
+    closeSync(positioned);
   });
 
   it('mkdirSync is recursive-or-EEXIST', () => {
