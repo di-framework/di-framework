@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { ChatResponse } from '../../chat/model/chat-response.ts';
 import type { Prompt } from '../../chat/prompt/prompt.ts';
 import { AiError } from '../../model/errors.ts';
