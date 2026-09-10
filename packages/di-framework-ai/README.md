@@ -401,3 +401,122 @@ Licensed under either [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APA
 # Durable vector stores
 
 The package exports `BunSqliteVectorStore`, `VectorizeVectorStore`, `PgVectorStore`, and `S3VectorStore` (for AWS S3 Vectors). All implement the same `VectorStore` API and can be passed to RAG advisors. `SearchRequest.queryEmbedding` and `Document.embedding` let callers pass precomputed vectors. The Bun store persists float32 BLOBs, exact-scans small tables, and builds a portable HNSW graph for larger ones (`searchMode: 'auto' | 'exact' | 'ann'`). Optional `wasm-similarity` accelerates exact cosine ranking and is not required. Vectorize and pgvector delegate ranking to their managed backends. `S3VectorStore` supports serverless vector search and metadata filtering directly in AWS S3 Vectors with built-in AST filter translation (`translateS3FilterExpression`). Create provider schemas and indexes out of band and keep provider clients optional so Workers and Bun bundles do not pull external SDK dependencies.
+
+## Select API or subscription access
+
+`createChatModel()` synchronously selects a model. The caller supplies that model
+through constructor injection; tests can supply `FakeChatModel` instead.
+
+```ts
+import { createChatModel, type ChatModel, Prompt } from '@di-framework/ai';
+
+class ExampleAgent {
+  constructor(private readonly model: ChatModel) {}
+  async answer(text: string) {
+    return (await this.model.call(new Prompt(text))).result?.output.text;
+  }
+}
+
+const agent = new ExampleAgent(createChatModel({
+  provider: 'openai',
+  auth: 'subscription',
+}));
+```
+
+For environment-driven programs, construct with `createChatModel()` and run:
+
+```sh
+PROVIDER=openai AUTH=subscription bun my-program.ts
+```
+
+Explicit `provider`, `auth`, and `model` override `PROVIDER`, `AUTH`, and
+`MODEL`. A provider is required. `api.model` also precedes `MODEL`; the top-level
+`model` wins over both. `env` supplies selection and API-key values and overrides
+inherited environment entries for CLI children. It does not isolate the native
+CLI from its saved configuration or other inherited environment variables.
+
+| Provider | API route | Subscription route |
+| --- | --- | --- |
+| `openai` | OpenAI; existing default model | Codex CLI |
+| `anthropic` | Anthropic; existing default model | Claude CLI |
+| `xai` | xAI OpenAI-compatible endpoint; model required | Grok CLI |
+| `agy` | Unsupported | AGY CLI |
+| `junie` | Unsupported | Junie CLI |
+| `hermes` | Unsupported | Existing Nous proxy; model required |
+
+Vendor names default to API access. Aliases `codex`, `claude`, and `grok`, and
+subscription-only providers, default to subscription access. Explicit `auth`
+always wins, including on aliases. CLI subscriptions use their native model
+default unless overridden. API keys come from `api.apiKey` or the corresponding
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `XAI_API_KEY`; xAI never borrows an
+OpenAI key. Existing HTTP constructors keep their original behavior.
+
+`api` accepts the existing HTTP provider options (including a custom `fetch`).
+`subscription` accepts `timeoutMs` (default 120000), `maxCalls` (default 32),
+`executable`, `toolCallingManager`, and `onEvent`. Irrelevant route options
+are rejected. Existing DI wiring is sufficient:
+
+```ts
+configureAi({ chatModel: () => createChatModel() });
+```
+
+### Subscription setup and boundaries
+
+CLI inference requires **Bun** and the selected CLI on PATH. Importing the package,
+creating models, and calling HTTP models remain portable. Sign in using the
+native subscription flow: `codex login` (ChatGPT), Claude's interactive login,
+`grok login`, or AGY's Google sign-in. Junie uses its native account setup
+(including `JUNIE_API_KEY` for a Junie token). Saved CLI configuration determines
+the account access; the factory neither extracts credentials nor changes login
+configuration.
+
+Subscription mode rejects explicit API options and known conflicting API keys,
+base URLs, or alternate provider-authentication environment settings. CLI
+environments are checked again when inference starts. There is **no API
+fallback** on missing executables, login errors, timeouts, or provider failures.
+This validation cannot establish which account a saved CLI configuration uses.
+
+Hermes uses `http://127.0.0.1:8645/v1` with the existing placeholder bearer.
+Start `hermes proxy start --provider nous` separately and select a Portal model.
+The factory does not start the proxy or read its credentials.
+
+Native CLIs own their internal model/tool loop. Framework callbacks are exposed
+through a private MCP child and authenticated loopback transport. Arguments are
+schema-validated, executions are sequential, and duplicate call IDs reuse the
+result. Tool context stays in the host. A manager configured on
+`ToolCallingAdvisor` takes precedence over the subscription model's manager;
+direct model calls use the explicit manager or the framework default. Authorization
+advisors therefore remain active.
+
+Responses contain completed text and `metadata.bridgeEvents`, with no pending
+tool calls to execute again. Plain text works without MCP discovery; callbacks
+require discovery. The plugin playground separately checks its promised
+`Skill` invocation. Tool-result events report the manager's output; an
+authorization advisor can return a denial as ordinary text.
+
+CLI models serialize conversation roles into task text; they do not provide
+native system-message precedence, streaming, token usage, sampling controls,
+media, provider output schemas, session resume, or `returnDirect` tools.
+Unsupported options fail with `AiError`. Stdout is limited to 4 MiB.
+Cancellation terminates the direct CLI process and closes the bridge; callback
+cancellation is cooperative through `toolContext.signal`. Temporary MCP
+configuration is removed, and the MCP child exits when its host disappears.
+Other native descendants can outlive the direct CLI process.
+
+Codex uses a read-only sandbox; Claude and Grok disable built-in tools.
+AGY and Junie retain native permissions and may retain built-in tools. Grok
+trusts the generated temporary workspace. Application prompts are not a sandbox.
+
+In the playground's September 10, 2026 checks, AGY discovered MCP but headless
+permissions denied execution; a server-scoped native permission rule is needed.
+Junie reported HTTP 403, “No active JetBrains AI subscription found.”
+These account restrictions are blocked runs, not successful validation.
+
+Validation on September 10, 2026: Codex, Claude, and Grok completed sequential
+live factory runs with the real plugin `Skill` callback; Grok also called
+`Read`. The affected package/example suite passed 879 tests, and the final
+focused suite passed 47 tests after additional limit and configuration coverage.
+AI-package and playground TypeScript checks passed. A Node-targeted bundle
+performed mocked HTTP inference without Bun. An extracted npm tarball outside
+the checkout resolved and ran its packaged MCP child through a real stdio round
+trip with a fake inference CLI. Hermes was not live-tested.

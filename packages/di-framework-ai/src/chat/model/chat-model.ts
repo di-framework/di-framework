@@ -6,7 +6,8 @@ import type { ChatResponse } from './chat-response.ts';
  * Portable chat model, aligned with Spring AI {@code ChatModel}.
  *
  * A model performs a single provider invocation. Tool loops, memory, RAG, and
- * retries belong on {@code ChatClient} / advisors — not on every model.
+ * retries belong on {@code ChatClient} / advisors. Native subscription CLI models
+ * own an internal tool loop and return completed text without pending tool calls.
  */
 export interface ChatModel {
   /**

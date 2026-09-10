@@ -8,6 +8,7 @@ import {
 } from '../../../model/tool/index.ts';
 import type { ChatMessage } from '../../messages/message.ts';
 import { ChatResponse } from '../../model/chat-response.ts';
+import { TOOL_MANAGER_CONTEXT } from '../../model/tool-execution-context.ts';
 import { hasToolCallingOptions } from '../../prompt/chat-options.ts';
 import { Prompt } from '../../prompt/prompt.ts';
 import { type ChatClientRequest, copyChatClientRequest } from '../chat-client-request.ts';
@@ -97,6 +98,7 @@ export class ToolCallingAdvisor implements ToolAdvisor {
     do {
       const processed = copyChatClientRequest(request, {
         prompt: new Prompt(instructions, request.prompt.options),
+        context: new Map([...request.context, [TOOL_MANAGER_CONTEXT, this.toolCallingManager]]),
       });
 
       // Restart advisors after this one (same as Spring chain.copy(this)).
@@ -142,6 +144,7 @@ export class ToolCallingAdvisor implements ToolAdvisor {
     do {
       const processed = copyChatClientRequest(request, {
         prompt: new Prompt(instructions, request.prompt.options),
+        context: new Map([...request.context, [TOOL_MANAGER_CONTEXT, this.toolCallingManager]]),
       });
 
       const chunks: ChatClientResponse[] = [];

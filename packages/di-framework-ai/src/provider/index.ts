@@ -20,6 +20,12 @@ export {
   toAnthropicMessages,
   toAnthropicTools,
 } from './anthropic/index.ts';
+export type {
+  ChatModelAuth,
+  ChatModelProvider,
+  CreateChatModelOptions,
+} from './create-chat-model.ts';
+export { createChatModel } from './create-chat-model.ts';
 export type { FetchLike, HttpClientOptions, JsonRequestOptions } from './http.ts';
 export {
   fetchJson,
@@ -50,3 +56,6 @@ export {
   toOpenAiToolCall,
   toOpenAiTools,
 } from './openai/index.ts';
+export type { SubscriptionChatModelOptions } from './subscription/model.ts';
+export { SubscriptionChatModel } from './subscription/model.ts';
+export type { BridgeEvent } from './subscription/server.ts';

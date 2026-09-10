@@ -489,6 +489,12 @@ export {
   toolAuthorizationAdvisor,
   toolExecutionResult,
 } from './model/tool/index.ts';
+export type {
+  ChatModelAuth,
+  ChatModelProvider,
+  CreateChatModelOptions,
+} from './provider/create-chat-model.ts';
+export { createChatModel } from './provider/create-chat-model.ts';
 // Providers (HTTP adapters — no vendor SDKs)
 export type {
   AnthropicChatOptions,
@@ -538,6 +544,9 @@ export {
   toOpenAiToolCall,
   toOpenAiTools,
 } from './provider/index.ts';
+export type { SubscriptionChatModelOptions } from './provider/subscription/model.ts';
+export { SubscriptionChatModel } from './provider/subscription/model.ts';
+export type { BridgeEvent } from './provider/subscription/server.ts';
 // RAG
 export type {
   ContextualQueryAugmenterOptions,
