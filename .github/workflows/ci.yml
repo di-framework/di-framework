@@ -52,6 +52,11 @@ jobs:
       - name: Verify optional Transformers.js peer installs
         run: bun run check-ai-utils-optional-peer
 
+      - name: Install SQLite composition tool
+        run: |
+          bash packages/di-framework-sqlite-component/scripts/install-tools.sh --wac-only
+          echo "$GITHUB_WORKSPACE/packages/di-framework-sqlite-component/.tools/bin" >> "$GITHUB_PATH"
+
       - name: Test
         run: bun test --coverage
 
