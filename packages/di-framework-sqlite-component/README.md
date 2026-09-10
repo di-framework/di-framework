@@ -207,9 +207,12 @@ that `PRAGMA journal_mode` really returns `delete` and that no `-wal` or stale
    the app; the composed component keeps only `wasi:*`/`wasmcloud:*` imports
    for the host. `compose.sh` fails if `di-framework:sqlite/database` is still
    imported afterwards.
-4. **Ship the artifact**: `make publish-asset` copies `dist/` into
-   `packages/di-framework-cli-plugin-wasmcloud/assets/sqlite/`, where
-   `composeSqliteProvider()` in the plugin's `src/build.ts` looks for it.
+4. **Ship the artifact**: the plugin package build runs `make publish-asset`,
+   which builds the provider from source and copies the WASM, recovered WIT,
+   build metadata, and checksums into
+   `packages/di-framework-cli-plugin-wasmcloud/dist/assets/sqlite/`. These generated
+   files ship in the npm package and are ignored by Git. No prebuilt provider is
+   checked into the source tree.
 
 ### WASI version note
 
