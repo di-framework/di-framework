@@ -1,5 +1,5 @@
-import { CloudFoundryDetector } from './detector.js';
-import type { CloudFoundryApplicationInfo } from './types.js';
+import { CloudFoundryDetector } from './detector';
+import type { CloudFoundryApplicationInfo } from './types';
 
 /**
  * Parses VCAP_APPLICATION JSON string, object payload, or process environment

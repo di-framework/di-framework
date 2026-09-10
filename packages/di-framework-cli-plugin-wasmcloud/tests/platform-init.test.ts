@@ -246,7 +246,7 @@ registry = "registry.example.com/team"
 
     writeFileSync(
       join(root, 'di-framework.deploy.toml'),
-      `apps = "nope"\n[targets.local]\nplatform = "deploy/platform"\n`,
+      `apps = "noop"\n[targets.local]\nplatform = "deploy/platform"\n`,
     );
     await expect(
       runWasmcloudPlatformInit([], captureIo().io, fakeDeps({ cwd: root, assets: ASSETS })),

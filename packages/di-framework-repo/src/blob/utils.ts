@@ -1,4 +1,4 @@
-import type { BlobBody, BlobMetadata, BlobObject } from './types.js';
+import type { BlobBody, BlobMetadata, BlobObject } from './types';
 
 export async function bodyToUint8Array(body: BlobBody): Promise<Uint8Array> {
   if (typeof body === 'string') {

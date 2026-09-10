@@ -1,5 +1,5 @@
 import { getRandomBytes as wasiGetRandomBytes } from 'wasi:random/random@0.3.0';
-import { toBytes } from './bytes.js';
+import { toBytes } from './bytes';
 
 function unwrapRandom(value: unknown): Uint8Array {
   if (value !== null && typeof value === 'object' && 'tag' in value) {

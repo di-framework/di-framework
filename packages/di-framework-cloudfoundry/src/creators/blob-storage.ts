@@ -1,5 +1,5 @@
-import type { CloudFoundryServiceInfoCreator } from '../spi/creator.js';
-import type { BlobStorageServiceInfo, RawVcapServiceData } from '../types.js';
+import type { CloudFoundryServiceInfoCreator } from '../spi/creator';
+import type { BlobStorageServiceInfo, RawVcapServiceData } from '../types';
 
 const S3_PATTERNS = ['s3', 'minio', 'objectstore', 'blobstore', 'blob-storage', 'ecs-s3'];
 

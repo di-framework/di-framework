@@ -1,4 +1,4 @@
-import type { Constructor } from '../types.js';
+import type { Constructor } from '../types';
 
 export type CronMode = 'in-process' | 'external';
 

@@ -1,7 +1,7 @@
-import type { QueueBackend } from './backend/contract.js';
-import { queueRegistry } from './decorators.js';
-import { ContainerQueueDispatcher, type QueueDispatcher } from './dispatcher.js';
-import type { Job, QueueWorkerOptions } from './types.js';
+import type { QueueBackend } from './backend/contract';
+import { queueRegistry } from './decorators';
+import { ContainerQueueDispatcher, type QueueDispatcher } from './dispatcher';
+import type { Job, QueueWorkerOptions } from './types';
 
 export class QueueWorker {
   private backend: QueueBackend;

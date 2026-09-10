@@ -1,7 +1,7 @@
 import { Container, Component } from '@di-framework/core/decorators';
 import { QueueHandler, type JobMetadata } from '@di-framework/queues';
-import { AuditLogService } from './AuditLogService.js';
-import type { ReceiptJobPayload, ProcessedReceipt } from './types.js';
+import { AuditLogService } from './AuditLogService';
+import type { ReceiptJobPayload, ProcessedReceipt } from './types';
 
 @Container()
 export class ReceiptProcessor {

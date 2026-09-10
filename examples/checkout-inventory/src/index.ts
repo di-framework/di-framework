@@ -1,5 +1,5 @@
-export * from './checkout/CheckoutService.js';
-export * from './contracts/inventory.js';
-export { runLocalDev } from './dev.js';
-export * from './inventory/InventoryService.js';
-export * from './unbound/RogueCallerService.js';
+export * from './checkout/CheckoutService';
+export * from './contracts/inventory';
+export { runLocalDev } from './dev';
+export * from './inventory/InventoryService';
+export * from './unbound/RogueCallerService';

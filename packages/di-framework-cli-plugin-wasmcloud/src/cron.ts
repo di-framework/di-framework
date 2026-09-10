@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { ALWAYS_SKIP_DIRECTORIES } from './manifest.js';
+import { ALWAYS_SKIP_DIRECTORIES } from './manifest';
 
 export type DiscoveredCronJob = {
   jobId: string;
@@ -269,6 +269,6 @@ export default {
  */
 export function renderCronAdapterModule(jobs: readonly DiscoveredCronJob[]): string {
   return `// Scheduled-only component adapter (no HTTP ingress)
-export * from './cron-invoker.js';
+export * from './cron-invoker';
 `;
 }

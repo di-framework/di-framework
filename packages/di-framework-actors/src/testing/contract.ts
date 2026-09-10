@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { Actor } from '../decorators/Actor.js';
-import { ActorContext } from '../decorators/ActorContext.js';
-import { ActorMethod } from '../decorators/ActorMethod.js';
-import type { ActorMigrationDefinition } from '../migrations/types.js';
-import type { ActorContext as ActorContextType } from '../runtime/context.js';
+import { Actor } from '../decorators/Actor';
+import { ActorContext } from '../decorators/ActorContext';
+import { ActorMethod } from '../decorators/ActorMethod';
+import type { ActorMigrationDefinition } from '../migrations/types';
+import type { ActorContext as ActorContextType } from '../runtime/context';
 
 @Actor({ name: 'ContractCounter' })
 export class ContractCounterActor {

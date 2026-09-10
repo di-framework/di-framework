@@ -9,7 +9,7 @@ import {
   ActorMethod,
   ActorRuntime,
   SqliteActorStorage,
-} from '../src/index.js';
+} from '../src/index';
 
 describe('Actor Inspection and Scoped Reset Tooling', () => {
   let tmpDir: string;

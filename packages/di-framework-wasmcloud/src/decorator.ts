@@ -3,7 +3,7 @@ import {
   isWitIdentifier,
   rejectsPlaintextSecret,
   type WasmCloudBindingOptions,
-} from './metadata.js';
+} from './metadata';
 
 export type { WasmCloudBindingOptions };
 

@@ -1,8 +1,8 @@
 import { useContainer } from '@di-framework/core/container';
 import { LocalServiceDevManager, UnboundCallerError } from '@di-framework/core/service-bindings';
-import { CheckoutService } from './checkout/CheckoutService.js';
-import { InventoryService } from './inventory/InventoryService.js';
-import { RogueCallerService } from './unbound/RogueCallerService.js';
+import { CheckoutService } from './checkout/CheckoutService';
+import { InventoryService } from './inventory/InventoryService';
+import { RogueCallerService } from './unbound/RogueCallerService';
 
 export async function runLocalDev() {
   console.log('=== Starting Local Service Bindings Mesh ===\n');

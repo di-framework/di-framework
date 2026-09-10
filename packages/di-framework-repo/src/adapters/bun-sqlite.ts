@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { type SqlAdapterOptions, SqlStorageAdapter } from './sql.js';
+import { type SqlAdapterOptions, SqlStorageAdapter } from './sql';
 
 export interface BunSqliteDatabase {
   query(sql: string): {

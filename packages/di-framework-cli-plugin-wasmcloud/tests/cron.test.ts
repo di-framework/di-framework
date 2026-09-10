@@ -8,10 +8,10 @@ import {
   normalizeCronExpression,
   renderCronAdapterModule,
   renderCronInvokerModule,
-} from '../src/cron.js';
-import type { WasmcloudProject } from '../src/project.js';
-import type { ClusterConnection } from '../src/target.js';
-import { renderWorkloadManifest } from '../src/workload.js';
+} from '../src/cron';
+import type { WasmcloudProject } from '../src/project';
+import type { ClusterConnection } from '../src/target';
+import { renderWorkloadManifest } from '../src/workload';
 
 describe('wasmCloud @Cron discovery and deployment generation', () => {
   it('normalizes schedules to 5-field cron expressions', () => {
@@ -100,7 +100,7 @@ export class NotificationService {
     expect(invokerModule).toContain('nightly-reindex');
 
     const adapterModule = renderCronAdapterModule(mockJobs);
-    expect(adapterModule).toContain("export * from './cron-invoker.js'");
+    expect(adapterModule).toContain("export * from './cron-invoker'");
   });
 
   it('generates deployment configuration for external scheduler dispatch and suppresses endpoint when ingress: false', () => {

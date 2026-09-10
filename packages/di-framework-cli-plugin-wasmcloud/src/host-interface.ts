@@ -7,7 +7,7 @@ import {
   WASI_RANDOM_PACKAGE,
   WASI_SOCKETS_PACKAGE,
   type WitRequirement,
-} from './wit.js';
+} from './wit';
 
 export type HostInterface = {
   name?: string;

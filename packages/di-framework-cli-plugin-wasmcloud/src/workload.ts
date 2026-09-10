@@ -1,25 +1,25 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
-import { discoverActors } from './actors.js';
-import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
-import { type DiscoveredCronJob, discoverScheduledJobs } from './cron.js';
-import type { WasmcloudDeps } from './deps.js';
-import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface.js';
-import { captureKubectl, runKubectl } from './kubernetes.js';
-import type { WasmcloudProject } from './project.js';
-import { asWitIdentifier } from './project.js';
+import { discoverActors } from './actors';
+import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings';
+import { type DiscoveredCronJob, discoverScheduledJobs } from './cron';
+import type { WasmcloudDeps } from './deps';
+import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface';
+import { captureKubectl, runKubectl } from './kubernetes';
+import type { WasmcloudProject } from './project';
+import { asWitIdentifier } from './project';
 import {
   type DiscoveredQueueHandler,
   discoverQueueHandlers,
   isQueueWorkerProject,
-} from './queues.js';
-import type { ClusterConnection } from './target.js';
+} from './queues';
+import type { ClusterConnection } from './target';
 import {
   defaultProjectRequirements,
   queueProjectRequirements,
   type WitRequirement,
-} from './wit.js';
+} from './wit';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;

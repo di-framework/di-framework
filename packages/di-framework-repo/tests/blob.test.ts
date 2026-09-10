@@ -11,7 +11,7 @@ import {
   InMemoryBlobStorageAdapter,
   S3BlobStorageAdapter,
   uint8ArrayToStream,
-} from '../src/index.js';
+} from '../src/index';
 
 class TestBlobRepository extends BaseBlobRepository {
   constructor(adapter: BlobStorageAdapter) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { ActorRuntime } from '../src/index.js';
+import { ActorRuntime } from '../src/index';
 
 // Plain classes without decorators for explicit unit test registration
 class PlainActorA {

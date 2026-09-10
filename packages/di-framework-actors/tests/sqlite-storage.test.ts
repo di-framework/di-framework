@@ -8,7 +8,7 @@ import {
   ActorMethod,
   ActorRuntime,
   SqliteActorStorage,
-} from '../src/index.js';
+} from '../src/index';
 
 @Actor()
 class BankAccountActor {

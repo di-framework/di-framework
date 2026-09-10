@@ -1,6 +1,6 @@
 import { container as defaultContainer } from '@di-framework/core';
-import { queueRegistry } from './decorators.js';
-import type { Job, JobMetadata } from './types.js';
+import { queueRegistry } from './decorators';
+import type { Job, JobMetadata } from './types';
 
 export interface QueueDispatcher {
   dispatch<T = any, R = any>(queueName: string, job: Job<T>): Promise<R>;

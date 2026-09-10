@@ -1,11 +1,11 @@
-import { gcm } from '@noble/ciphers/aes.js';
-import { p256 } from '@noble/curves/nist.js';
-import { hkdf } from '@noble/hashes/hkdf.js';
-import { hmac } from '@noble/hashes/hmac.js';
-import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { toArrayBuffer, toBytes } from './bytes.js';
-import { digestSync, hashFunction, normalizeHashName } from './crypto-hash.js';
-import { getRandomBytes } from './wasi-random.js';
+import { gcm } from '@noble/ciphers/aes';
+import { p256 } from '@noble/curves/nist';
+import { hkdf } from '@noble/hashes/hkdf';
+import { hmac } from '@noble/hashes/hmac';
+import { sha256, sha384, sha512 } from '@noble/hashes/sha2';
+import { toArrayBuffer, toBytes } from './bytes';
+import { digestSync, hashFunction, normalizeHashName } from './crypto-hash';
+import { getRandomBytes } from './wasi-random';
 
 type AlgorithmIdentifier = string | { name: string; [parameter: string]: unknown };
 type BufferSource = ArrayBufferView | ArrayBuffer;

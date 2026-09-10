@@ -1,12 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { computeSha256 } from './decorator.js';
+import { computeSha256 } from './decorator';
 import type {
   ManifestDiscoveryOptions,
   MigrationDefinition,
   MigrationExecutionContext,
   MigrationManifest,
-} from './types.js';
+} from './types';
 
 export function compareVersions(a: string | number, b: string | number): number {
   const strA = String(a).trim();

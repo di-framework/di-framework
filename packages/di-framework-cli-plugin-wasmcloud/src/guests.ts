@@ -1,4 +1,4 @@
-import type { BindingRecord } from './bindings.js';
+import type { BindingRecord } from './bindings';
 
 
 /** Must match `@di-framework/wasmcloud` `WASMCLOUD_GUESTS_GLOBAL`. */

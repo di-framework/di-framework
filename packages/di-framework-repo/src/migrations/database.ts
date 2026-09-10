@@ -1,4 +1,4 @@
-import type { MigrationDatabase } from './types.js';
+import type { MigrationDatabase } from './types';
 
 export const MIGRATION_DB_BRAND = Symbol.for('di-framework.migration-db');
 

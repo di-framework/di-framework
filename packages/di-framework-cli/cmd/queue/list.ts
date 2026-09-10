@@ -1,6 +1,6 @@
 import type { QueueInfo } from '@di-framework/queues';
-import { CommandFailure, type CliIo, type CommandResult } from '../../command.js';
-import { listQueueStats, openQueueBackend, resolveQueueDbPath } from './options.js';
+import { CommandFailure, type CliIo, type CommandResult } from '../../command';
+import { listQueueStats, openQueueBackend, resolveQueueDbPath } from './options';
 
 export { listQueueStats };
 

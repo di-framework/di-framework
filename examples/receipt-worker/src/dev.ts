@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { SqliteQueueBackend, QueueWorker, queue } from '@di-framework/queues';
-import { dispatcher } from './index.js';
-import { ReceiptProducer } from './ReceiptProducer.js';
+import { dispatcher } from './index';
+import { ReceiptProducer } from './ReceiptProducer';
 
 const dbPath = process.env.QUEUE_DB_PATH ?? join(process.cwd(), '.di-framework', 'queues.db');
 const backend = new SqliteQueueBackend({ path: dbPath });

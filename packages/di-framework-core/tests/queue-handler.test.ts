@@ -3,7 +3,7 @@ import {
   getQueueHandlerMetadata,
   QueueHandler,
   queueRegistry,
-} from '../decorators/QueueHandler.js';
+} from '../decorators/QueueHandler';
 
 test('queue handler metadata and registry share both decorator entrypoints', () => {
   class Handler {}

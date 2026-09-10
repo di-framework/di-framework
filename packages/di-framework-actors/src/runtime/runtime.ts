@@ -1,27 +1,27 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { basename, resolve } from 'node:path';
-import { getOrCreateActorMetadata } from '../decorators/keys.js';
+import { getOrCreateActorMetadata } from '../decorators/keys';
 import {
   type ActorDiscoveryOptions,
   type DiscoveredActor,
   discoverActorClasses,
-} from '../dev/discovery.js';
+} from '../dev/discovery';
 import {
   ActorAuthorizationError,
   ActorDeadlineExceededError,
   ActorNotOwnerError,
-} from '../distributed/errors.js';
+} from '../distributed/errors';
 import type {
   ActorAuthorizationPolicy,
   ActorOwnershipRecord,
   ActorRpcRequest,
   InvokeOptions,
-} from '../distributed/types.js';
-import { runActorMigrations } from '../migrations/runner.js';
-import { InMemoryActorStorage } from '../storage/memory.js';
-import { actorIdentityToPath, parseActorIdentity } from '../storage/path.js';
-import { SqliteActorStorage } from '../storage/sqlite.js';
-import type { ActorStorage } from '../storage/types.js';
+} from '../distributed/types';
+import { runActorMigrations } from '../migrations/runner';
+import { InMemoryActorStorage } from '../storage/memory';
+import { actorIdentityToPath, parseActorIdentity } from '../storage/path';
+import { SqliteActorStorage } from '../storage/sqlite';
+import type { ActorStorage } from '../storage/types';
 import {
   ActorAmbiguityError,
   type ActorDetailedInspection,
@@ -36,10 +36,10 @@ import {
   type ActorResetOptions,
   type ActorResetResult,
   type Constructor,
-} from '../types.js';
-import { ActorContextInstance, actorContextStorage } from './context.js';
-import { ActorMailbox } from './mailbox.js';
-import { createActorReference, type InvocationTarget } from './reference.js';
+} from '../types';
+import { ActorContextInstance, actorContextStorage } from './context';
+import { ActorMailbox } from './mailbox';
+import { createActorReference, type InvocationTarget } from './reference';
 
 export interface ActorRegistration {
   name: string;

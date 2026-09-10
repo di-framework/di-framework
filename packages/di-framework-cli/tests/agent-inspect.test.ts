@@ -295,7 +295,7 @@ describe('agent inspect command', () => {
       ['--workspace', 'one', '--workspace', 'two'],
       ['--source-mode', 'invalid'],
       ['--max-instruction-bytes', '-1'],
-      ['--max-instruction-bytes', 'nope'],
+      ['--max-instruction-bytes', 'noop'],
     ];
     for (const args of invalid) {
       await expect(runAgentInspect(args, operations)).rejects.toMatchObject({

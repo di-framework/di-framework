@@ -1,4 +1,4 @@
-import type { BindingGrant, CallerBindingConfig, ExportedServiceDefinition } from './types.js';
+import type { BindingGrant, CallerBindingConfig, ExportedServiceDefinition } from './types';
 
 export class ServiceBindingRegistry {
   private services = new Map<string, ExportedServiceDefinition>();

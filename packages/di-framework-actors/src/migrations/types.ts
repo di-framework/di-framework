@@ -2,7 +2,7 @@
  * Types and error definitions for actor migrations in @di-framework/actors.
  */
 import type { MigrationDatabase } from '@di-framework/repo';
-import type { ActorStorage } from '../storage/types.js';
+import type { ActorStorage } from '../storage/types';
 
 export interface ActorMigrationContext {
   actorId: string;

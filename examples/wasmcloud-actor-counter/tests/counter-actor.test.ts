@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';
 import { createWasmcloudActorAdapter, type WasmcloudActorAdapter } from '@di-framework/cli-plugin-wasmcloud';
-import { CounterActor } from '../src/counter-actor.js';
+import { CounterActor } from '../src/counter-actor';
 
 describe('wasmCloud CounterActor Example Tests', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wasmcloud-counter-example-'));

@@ -128,7 +128,7 @@ insecure = true
     const path = '/workspace/di-framework.deploy.toml';
     for (const registry of [
       'registry = true',
-      `[targets.local.registry]\npush = "localhost:5000"\npull = "registry:5000"\nextra = "nope"`,
+      `[targets.local.registry]\npush = "localhost:5000"\npull = "registry:5000"\nextra = "noop"`,
       `[targets.local.registry]\npush = "localhost:5000"\npull = "registry:5000"\ninsecure = "yes"`,
     ]) {
       expectFailure(
@@ -147,7 +147,7 @@ insecure = true
   it('rejects apps classifiers, mixed targets, and incomplete external targets', () => {
     const path = '/workspace/di-framework.deploy.toml';
     expectFailure(
-      () => parseDeployManifest(path, `apps = "nope"\n[targets.local]\nplatform = "p"\n`, {}),
+      () => parseDeployManifest(path, `apps = "noop"\n[targets.local]\nplatform = "p"\n`, {}),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',
       2,
     );
@@ -220,7 +220,7 @@ insecure = true
       2,
     );
     expectFailure(
-      () => parseDeployManifest(path, `targets = "nope"\n`, {}),
+      () => parseDeployManifest(path, `targets = "noop"\n`, {}),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',
       2,
     );
@@ -228,7 +228,7 @@ insecure = true
       () =>
         parseDeployManifest(
           path,
-          `extra = "nope"\n[targets.local]\nplatform = "deploy/platform"\n`,
+          `extra = "noop"\n[targets.local]\nplatform = "deploy/platform"\n`,
           {},
         ),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',
@@ -248,14 +248,14 @@ insecure = true
       () =>
         parseDeployManifest(
           path,
-          `[targets.local]\nplatform = "deploy/platform"\nnotes = "nope"\n`,
+          `[targets.local]\nplatform = "deploy/platform"\nnotes = "noop"\n`,
           {},
         ),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',
       2,
     );
     expectFailure(
-      () => parseDeployManifest(path, `[targets]\nlocal = "nope"\n`, {}),
+      () => parseDeployManifest(path, `[targets]\nlocal = "noop"\n`, {}),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',
       2,
     );
@@ -267,7 +267,7 @@ insecure = true
       () =>
         parseDeployManifest(
           path,
-          `discovery = "nope"\n[targets.local]\nplatform = "deploy/platform"\n`,
+          `discovery = "noop"\n[targets.local]\nplatform = "deploy/platform"\n`,
           {},
         ),
       'WASMCLOUD_DEPLOY_MANIFEST_INVALID',

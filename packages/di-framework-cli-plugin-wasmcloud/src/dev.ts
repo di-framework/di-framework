@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
-import { discoverBindings } from './bindings.js';
-import { buildComponent, requirementsForProject } from './build.js';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
-import { resolveDevRunner } from './dev-runner.js';
-import { loadProject } from './project.js';
-import { invalidUsage, readOptionValue, toolFailed } from './support.js';
-import { writeWashDevConfig } from './wash-dev.js';
-import type { WitLock } from './wit.js';
+import { discoverBindings } from './bindings';
+import { buildComponent, requirementsForProject } from './build';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
+import { resolveDevRunner } from './dev-runner';
+import { loadProject } from './project';
+import { invalidUsage, readOptionValue, toolFailed } from './support';
+import { writeWashDevConfig } from './wash-dev';
+import type { WitLock } from './wit';
 
 export type DevOptions = { host: string; port: string };
 

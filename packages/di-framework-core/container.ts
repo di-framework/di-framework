@@ -9,8 +9,8 @@ import {
   formatJobId,
   type MethodCronMetadata,
   normalizeCronExpression,
-} from './cron/index.js';
-import { createServiceBindingClient } from './service-bindings/proxy.js';
+} from './cron/index';
+import { createServiceBindingClient } from './service-bindings/proxy';
 
 /**
  * Dependency Injection Container
@@ -894,7 +894,7 @@ export function useContainer(): Container {
   return container;
 }
 
-export * from './cron/index.js';
+export * from './cron/index';
 export {
   Bean,
   Bootstrap,
@@ -905,7 +905,7 @@ export {
   Subscriber,
   Telemetry,
   TelemetryListener,
-} from './decorators/index.js';
+} from './decorators/index';
 /**
  * Export metadata functions for use in decorators
  * These provide a simple, reflect-metadata-free way to store and access metadata
@@ -914,11 +914,11 @@ export {
   QueueHandler,
   type QueueHandlerMetadata,
   type QueueHandlerOptions,
-} from './decorators/QueueHandler.js';
+} from './decorators/QueueHandler';
 export {
   ExportOperation,
   ExportService,
   ServiceBinding,
   serviceBindingToken,
-} from './service-bindings/index.js';
+} from './service-bindings/index';
 export { defineMetadata, getMetadata, getOwnMetadata, hasMetadata };

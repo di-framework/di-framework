@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { Container } from '../container.js';
+import { Container } from '../container';
 import {
   CronConcurrencyError,
   CronExecutionError,
   CronJobNotFoundError,
   CronRuntime,
-} from '../cron/index.js';
-import { Cron } from '../decorators/Cron.js';
-import { Component, Container as Injectable } from '../decorators/index.js';
+} from '../cron/index';
+import { Cron } from '../decorators/Cron';
+import { Component, Container as Injectable } from '../decorators/index';
 
 describe('Deployment-aware @Cron execution in core', () => {
   let container: Container;

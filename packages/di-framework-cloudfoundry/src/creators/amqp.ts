@@ -1,5 +1,5 @@
-import type { CloudFoundryServiceInfoCreator } from '../spi/creator.js';
-import type { AmqpServiceInfo, RawVcapServiceData } from '../types.js';
+import type { CloudFoundryServiceInfoCreator } from '../spi/creator';
+import type { AmqpServiceInfo, RawVcapServiceData } from '../types';
 
 const AMQP_PATTERNS = ['rabbitmq', 'amqp', 'cloudamqp'];
 

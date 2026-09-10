@@ -1,4 +1,4 @@
-import { defineMetadata, getMetadata } from '../container.js';
+import { defineMetadata, getMetadata } from '../container';
 
 export type BeanToken<T = unknown> = string | (new (...args: any[]) => T);
 

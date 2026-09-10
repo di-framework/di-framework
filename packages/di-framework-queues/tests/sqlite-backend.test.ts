@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqliteQueueBackend } from '../src/backend/sqlite.js';
+import { SqliteQueueBackend } from '../src/backend/sqlite';
 
 describe('SqliteQueueBackend', () => {
   it('enqueues, dequeues, and completes jobs with SQLite storage', async () => {

@@ -1,4 +1,4 @@
-import { defineMetadata, getOwnMetadata, QUEUE_HANDLER_METADATA_KEY } from '../container.js';
+import { defineMetadata, getOwnMetadata, QUEUE_HANDLER_METADATA_KEY } from '../container';
 
 export { QUEUE_HANDLER_METADATA_KEY };
 

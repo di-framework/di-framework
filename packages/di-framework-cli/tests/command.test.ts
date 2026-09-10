@@ -114,8 +114,8 @@ describe('shared command execution', () => {
     expect(missing.stderr.join('')).toContain('inspect');
 
     const unknown = captureIo();
-    expect(await executeCommand(fixture(), ['tools', 'nope'], unknown.io)).toBe(2);
-    expect(unknown.stderr.join('')).toContain('Unknown command: tools nope');
+    expect(await executeCommand(fixture(), ['tools', 'noop'], unknown.io)).toBe(2);
+    expect(unknown.stderr.join('')).toContain('Unknown command: tools noop');
     expect(unknown.stderr.join('')).toContain('inspect');
   });
 

@@ -1,12 +1,12 @@
 import type { CommandNode } from '@di-framework/cli-extension';
-import { runWasmcloudBuild } from './build.js';
-import { runWasmcloudDeploy } from './deploy.js';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
-import { runWasmcloudDestroy } from './destroy.js';
-import { runWasmcloudDev } from './dev.js';
-import { runWasmcloudDoctor } from './doctor.js';
-import { runWasmcloudPlatformDeploy, runWasmcloudPlatformDestroy } from './platform.js';
-import { runWasmcloudPlatformInit } from './platform-init.js';
+import { runWasmcloudBuild } from './build';
+import { runWasmcloudDeploy } from './deploy';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
+import { runWasmcloudDestroy } from './destroy';
+import { runWasmcloudDev } from './dev';
+import { runWasmcloudDoctor } from './doctor';
+import { runWasmcloudPlatformDeploy, runWasmcloudPlatformDestroy } from './platform';
+import { runWasmcloudPlatformInit } from './platform-init';
 
 export function createWasmcloudCommand(deps: WasmcloudDeps = DEFAULT_DEPS): CommandNode {
   return {

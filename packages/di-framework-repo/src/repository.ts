@@ -1,6 +1,6 @@
-import type { StorageAdapter } from './adapter.js';
-import { withDerivedQueries } from './query-derivation.js';
-import type { EntityId, PaginatedResult } from './types.js';
+import type { StorageAdapter } from './adapter';
+import { withDerivedQueries } from './query-derivation';
+import type { EntityId, PaginatedResult } from './types';
 
 export abstract class BaseRepository<E, ID = EntityId> {
   /**
