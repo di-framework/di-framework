@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import { relative } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
-import { discoverBindings } from './bindings.js';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
-import { resolveDevRunner } from './dev-runner.js';
-import { loadProject } from './project.js';
-import { invalidUsage } from './support.js';
+import { discoverBindings } from './bindings';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
+import { resolveDevRunner } from './dev-runner';
+import { loadProject } from './project';
+import { invalidUsage } from './support';
 
 export type DoctorCheck = { name: string; ok: boolean; detail?: string };
 

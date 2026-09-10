@@ -1,3 +1,3 @@
-export * from './open.js';
-export * from './sql-database.js';
-export * from './wasm.js';
+export * from './open';
+export * from './sql-database';
+export * from './wasm';

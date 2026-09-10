@@ -1,7 +1,7 @@
 import { Connector } from 'wasi:tls/client@0.3.0-draft';
-import { createPushStream, Socket } from './net.js';
-import { clearTimeout, setTimeout, type Timeout } from './timers.js';
-import { asAsyncIterable, toBytes } from './wasi-sockets.js';
+import { createPushStream, Socket } from './net';
+import { clearTimeout, setTimeout, type Timeout } from './timers';
+import { asAsyncIterable, toBytes } from './wasi-sockets';
 
 export type ConnectionOptions = {
   host?: string;

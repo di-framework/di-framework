@@ -1,5 +1,5 @@
-import type { ActorOptions, Constructor } from '../types.js';
-import { getOrCreateActorMetadata, registerDecoratedActorClass } from './keys.js';
+import type { ActorOptions, Constructor } from '../types';
+import { getOrCreateActorMetadata, registerDecoratedActorClass } from './keys';
 
 /**
  * Marks a class as an Actor in di-framework.

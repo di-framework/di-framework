@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { useContainer } from '../container.js';
-import { Container as InjectableContainer } from '../decorators/Container.js';
-import {
-  ExportService,
-  ServiceBinding,
-  serviceBindingToken,
-} from '../decorators/ServiceBinding.js';
+import { useContainer } from '../container';
+import { Container as InjectableContainer } from '../decorators/Container';
+import { ExportService, ServiceBinding, serviceBindingToken } from '../decorators/ServiceBinding';
 import {
   IncompatibleContractError,
   LocalServiceDevManager,
@@ -14,7 +10,7 @@ import {
   TargetUnavailableError,
   UnauthorizedOperationError,
   UnboundCallerError,
-} from '../service-bindings/index.js';
+} from '../service-bindings/index';
 
 describe('Private Service-to-Service Bindings', () => {
   beforeEach(() => {
@@ -347,7 +343,7 @@ describe('Service binding review regressions', () => {
 
 it('supports binding proxy introspection, development mocks, and service removal', async () => {
   const { createServiceBindingClient, useServiceBindingRuntime } = await import(
-    '../service-bindings/index.js'
+    '../service-bindings/index'
   );
   const runtime = useServiceBindingRuntime();
   runtime.registry.clear();
@@ -379,8 +375,8 @@ it('supports binding proxy introspection, development mocks, and service removal
 });
 
 it('supports operation metadata and property binding fallback without container registration', async () => {
-  const { ExportOperation } = await import('../decorators/ServiceBinding.js');
-  const { getOwnMetadata } = await import('../container.js');
+  const { ExportOperation } = await import('../decorators/ServiceBinding');
+  const { getOwnMetadata } = await import('../container');
   class Target {
     read() {
       return 1;

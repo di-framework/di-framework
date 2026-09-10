@@ -1,13 +1,13 @@
 /**
  * Authoritative RPC dispatcher for remote actor invocations.
  */
-import { ActorRuntime } from '../runtime/runtime.js';
+import { ActorRuntime } from '../runtime/runtime';
 import {
   ActorAuthorizationError,
   ActorDeadlineExceededError,
   StaleOwnerWriteError,
-} from './errors.js';
-import type { ActorAuthorizationPolicy, ActorRpcRequest, ActorRpcResponse } from './types.js';
+} from './errors';
+import type { ActorAuthorizationPolicy, ActorRpcRequest, ActorRpcResponse } from './types';
 
 export interface ActorRpcDispatcherOptions {
   runtime: ActorRuntime;

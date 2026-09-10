@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';
-import { CounterActor } from './counter.actor.js';
+import { CounterActor } from './counter.actor';
 
 describe('Counter Actor Example Application', () => {
   let tmpDir: string;

@@ -2,12 +2,12 @@ import { afterAll, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ActorRuntime, SqliteActorStorage } from '../src/index.js';
+import { ActorRuntime, SqliteActorStorage } from '../src/index';
 import {
   ContractCounterActor,
   ContractFailingMigrationActor,
   defineActorContractSuite,
-} from '../src/testing/index.js';
+} from '../src/testing/index';
 
 describe('Local Actor Contract Tests', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-contract-local-'));

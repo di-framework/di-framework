@@ -1,9 +1,9 @@
-import { Container } from './container.js';
+import { Container } from './container';
 import {
   type BeanDefinition,
   type BeanToken,
   getBeanDefinitions,
-} from './decorators/Configuration.js';
+} from './decorators/Configuration';
 
 type ConfigurationSource = object | (new (...args: any[]) => object);
 type BootstrapToken = string | (new (...args: any[]) => any);

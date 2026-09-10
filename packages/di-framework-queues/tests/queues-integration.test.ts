@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { container as globalContainer } from '@di-framework/core';
 import { Component, Container } from '@di-framework/core/decorators';
-import { InMemoryQueueBackend } from '../src/backend/memory.js';
-import { SqliteQueueBackend } from '../src/backend/sqlite.js';
-import { QueueHandler } from '../src/decorators.js';
-import { ContainerQueueDispatcher } from '../src/dispatcher.js';
-import { QueueManager } from '../src/producer.js';
-import type { JobMetadata } from '../src/types.js';
-import { QueueWorker } from '../src/worker.js';
+import { InMemoryQueueBackend } from '../src/backend/memory';
+import { SqliteQueueBackend } from '../src/backend/sqlite';
+import { QueueHandler } from '../src/decorators';
+import { ContainerQueueDispatcher } from '../src/dispatcher';
+import { QueueManager } from '../src/producer';
+import type { JobMetadata } from '../src/types';
+import { QueueWorker } from '../src/worker';
 
 describe('Queues Integration', () => {
   it('resolves owning service through DI, processes job, and acknowledges only after async completion', async () => {

@@ -153,6 +153,13 @@ describe('build command', () => {
       const fromStdout = buildFailure('packages/demo', { stdout: Buffer.from('compiled? no\n') });
       expect(fromStdout.details).toMatchObject({ cause: 'compiled? no' });
 
+      const fromBoth = buildFailure('packages/demo', {
+        stderr: '$ tsc -p tsconfig.dist.json\n',
+        stdout: Buffer.from("src/app.ts: error TS2307: Cannot find module '@noble/hashes/sha2'\n"),
+      });
+      expect(fromBoth.message).toContain('$ tsc -p tsconfig.dist.json');
+      expect(fromBoth.message).toContain("error TS2307: Cannot find module '@noble/hashes/sha2'");
+
       const fromError = buildFailure('packages/demo', new Error('boom'));
       expect(fromError.details).toMatchObject({ cause: 'boom' });
 

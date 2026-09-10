@@ -1,5 +1,5 @@
 import { ActorRuntime, SqliteActorStorage } from '@di-framework/actors';
-import { CounterActor } from './counter.actor.js';
+import { CounterActor } from './counter.actor';
 
 export async function runExample(): Promise<void> {
   console.log('=== Counter Actor Example ===');

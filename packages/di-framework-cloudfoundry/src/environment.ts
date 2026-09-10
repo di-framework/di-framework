@@ -1,10 +1,10 @@
-import { parseVcapApplication } from './application-info.js';
-import { CloudFoundryDetector } from './detector.js';
+import { parseVcapApplication } from './application-info';
+import { CloudFoundryDetector } from './detector';
 import {
   getDefaultRegistry,
   parseVcapServices,
   type ServiceInfoCreatorRegistry,
-} from './spi/registry.js';
+} from './spi/registry';
 import type {
   AmqpServiceInfo,
   BlobStorageServiceInfo,
@@ -15,7 +15,7 @@ import type {
   RelationalServiceInfo,
   ServiceFilter,
   UserProvidedServiceInfo,
-} from './types.js';
+} from './types';
 
 export interface CloudFoundryEnvironmentOptions {
   /** Custom environment dictionary (defaults to process.env) */

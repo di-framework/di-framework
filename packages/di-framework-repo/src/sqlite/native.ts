@@ -3,14 +3,14 @@
  * entry; the portable entry leaves these unregistered so Wasm bundles never
  * reference `bun:sqlite` or `node:sqlite`.
  */
-import { registerSqliteOpener } from './open.js';
+import { registerSqliteOpener } from './open';
 import {
   type BunSqliteLike,
   type NodeSqliteLike,
   type SqlDatabase,
   wrapBunSqliteDatabase,
   wrapNodeSqliteDatabase,
-} from './sql-database.js';
+} from './sql-database';
 
 /** Opens `path` with `bun:sqlite` and adapts it to `SqlDatabase`. */
 export async function openBunSqliteDatabase(path: string): Promise<SqlDatabase> {

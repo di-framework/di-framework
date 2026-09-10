@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { Actor, ActorContext, ActorMethod, ActorRuntime } from '../src/index.js';
+import { Actor, ActorContext, ActorMethod, ActorRuntime } from '../src/index';
 
 // Test variations of @Actor decorator syntax
 @Actor

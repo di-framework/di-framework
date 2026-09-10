@@ -12,13 +12,13 @@ import {
   MigrationExecutionError,
   MigrationRunner,
 } from '@di-framework/repo';
-import type { ActorStorage } from '../storage/types.js';
-import { getRegisteredActorMigrations } from './decorator.js';
+import type { ActorStorage } from '../storage/types';
+import { getRegisteredActorMigrations } from './decorator';
 import {
   type ActorMigrationContext,
   type ActorMigrationDefinition,
   ActorMigrationError,
-} from './types.js';
+} from './types';
 
 export interface RunActorMigrationsOptions {
   actorType: string;

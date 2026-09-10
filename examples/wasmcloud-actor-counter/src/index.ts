@@ -1,1 +1,1 @@
-export { CounterActor } from './counter-actor.js';
+export { CounterActor } from './counter-actor';

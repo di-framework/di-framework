@@ -1,9 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  getQueueHandlerMetadata,
-  QueueHandler,
-  queueRegistry,
-} from '../decorators/QueueHandler.js';
+import { getQueueHandlerMetadata, QueueHandler, queueRegistry } from '../decorators/QueueHandler';
 
 test('queue handler metadata and registry share both decorator entrypoints', () => {
   class Handler {}

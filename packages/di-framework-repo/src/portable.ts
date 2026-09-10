@@ -3,15 +3,15 @@
  * full repository/migration surface but registers only the Wasm SQLite opener,
  * so bundles never reference `bun:sqlite` or `node:sqlite`.
  */
-export * from './adapter.js';
-export * from './adapters/bun-sqlite.js';
-export * from './adapters/d1.js';
-export * from './adapters/sql.js';
-export * from './blob/index.js';
-export * from './decorators.js';
-export * from './in-memory.js';
-export * from './migrations/index.js';
-export * from './query-derivation.js';
-export * from './repository.js';
-export * from './sqlite/index.js';
-export * from './types.js';
+export * from './adapter';
+export * from './adapters/bun-sqlite';
+export * from './adapters/d1';
+export * from './adapters/sql';
+export * from './blob/index';
+export * from './decorators';
+export * from './in-memory';
+export * from './migrations/index';
+export * from './query-derivation';
+export * from './repository';
+export * from './sqlite/index';
+export * from './types';

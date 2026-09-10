@@ -1,6 +1,6 @@
-import type { QueueBackend } from './backend/contract.js';
-import { InMemoryQueueBackend } from './backend/memory.js';
-import type { EnqueueOptions, Job, ListJobsFilter } from './types.js';
+import type { QueueBackend } from './backend/contract';
+import { InMemoryQueueBackend } from './backend/memory';
+import type { EnqueueOptions, Job, ListJobsFilter } from './types';
 
 export class QueueProducer<T = any> {
   constructor(

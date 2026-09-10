@@ -1,6 +1,6 @@
-import type { WasmcloudDeps } from './deps.js';
-import { toolFailed } from './support.js';
-import type { ClusterConnection } from './target.js';
+import type { WasmcloudDeps } from './deps';
+import { toolFailed } from './support';
+import type { ClusterConnection } from './target';
 
 export function kubectlArgs(connection: ClusterConnection, args: readonly string[]): string[] {
   const flags = ['--kubeconfig', connection.kubeconfig, '--namespace', connection.namespace];

@@ -2,8 +2,8 @@
  * ActorDevManager provides local development management, inspection,
  * discovery, hot reload, and reset capabilities for virtual actors.
  */
-import { ActorRuntime } from '../runtime/runtime.js';
-import { SqliteActorStorage } from '../storage/sqlite.js';
+import { ActorRuntime } from '../runtime/runtime';
+import { SqliteActorStorage } from '../storage/sqlite';
 import type {
   ActorDetailedInspection,
   ActorInspectionInfo,
@@ -12,12 +12,12 @@ import type {
   ActorResetOptions,
   ActorResetResult,
   Constructor,
-} from '../types.js';
+} from '../types';
 import {
   type ActorDiscoveryOptions,
   type DiscoveredActor,
   discoverActorClasses,
-} from './discovery.js';
+} from './discovery';
 
 export interface ActorDevManagerOptions {
   runtime?: ActorRuntime;

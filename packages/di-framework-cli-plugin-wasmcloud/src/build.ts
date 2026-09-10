@@ -11,16 +11,16 @@ import {
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
-import { discoverActors, renderActorsModule } from './actors.js';
-import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings.js';
-import { discoverScheduledJobs, renderCronAdapterModule, renderCronInvokerModule } from './cron.js';
-import { DEFAULT_DEPS, type WasmcloudDeps } from './deps.js';
-import { renderGuestsModule } from './guests.js';
-import { OCI_ARTIFACT_PLATFORM } from './oci.js';
-import { loadProject, type WasmcloudProject } from './project.js';
-import { discoverQueueHandlers, isQueueWorkerProject } from './queues.js';
-import { renderQueuesModule } from './queues-module.js';
-import { invalidUsage, requireNodeBinary, toolFailed } from './support.js';
+import { discoverActors, renderActorsModule } from './actors';
+import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings';
+import { discoverScheduledJobs, renderCronAdapterModule, renderCronInvokerModule } from './cron';
+import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
+import { renderGuestsModule } from './guests';
+import { OCI_ARTIFACT_PLATFORM } from './oci';
+import { loadProject, type WasmcloudProject } from './project';
+import { discoverQueueHandlers, isQueueWorkerProject } from './queues';
+import { renderQueuesModule } from './queues-module';
+import { invalidUsage, requireNodeBinary, toolFailed } from './support';
 import {
   buildWitLock,
   COMPONENT_MODEL,
@@ -34,7 +34,7 @@ import {
   WASI_HTTP_VERSION,
   type WitLock,
   type WitRequirement,
-} from './wit.js';
+} from './wit';
 
 export { COMPONENT_MODEL, WASI_HTTP_INTERFACE, WASI_HTTP_VERSION };
 export const BUILD_PROFILE_NAME = 'wasmcloud-http';

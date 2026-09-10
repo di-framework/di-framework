@@ -1,7 +1,7 @@
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { md5, sha1 } from '@noble/hashes/legacy.js';
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { toBytes, toNodeBuffer } from './bytes.js';
+import { toBytes, toNodeBuffer } from './bytes';
 
 type HashFn = {
   create(): HashState;

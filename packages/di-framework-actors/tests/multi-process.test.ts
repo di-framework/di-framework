@@ -7,9 +7,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { RemoteActorClient } from '../src/distributed/client.js';
-import { spawnTestWorker, type TestWorkerNode } from './harness/cluster.js';
-import { CounterActor } from './harness/worker.js';
+import { RemoteActorClient } from '../src/distributed/client';
+import { spawnTestWorker, type TestWorkerNode } from './harness/cluster';
+import { CounterActor } from './harness/worker';
 
 describe('Multi-Process Distributed Actors Integration Harness', () => {
   let tempDir: string;

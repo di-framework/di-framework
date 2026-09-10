@@ -1,8 +1,8 @@
 /**
  * Authorization policies and binding boundaries for distributed actors.
  */
-import { ActorAuthorizationError } from './errors.js';
-import type { ActorAuthorizationPolicy, ActorBindingRules, ActorRpcRequest } from './types.js';
+import { ActorAuthorizationError } from './errors';
+import type { ActorAuthorizationPolicy, ActorBindingRules, ActorRpcRequest } from './types';
 
 export class RuleBasedActorAuthorizationPolicy implements ActorAuthorizationPolicy {
   private readonly rules: ActorBindingRules;

@@ -1,4 +1,4 @@
-import { authorizeControlRequest, unauthorizedResponse } from './auth.js';
+import { authorizeControlRequest, unauthorizedResponse } from './auth';
 
 /** Structural queue backend surface used by the authenticated control HTTP API. */
 export interface QueueControlBackend {

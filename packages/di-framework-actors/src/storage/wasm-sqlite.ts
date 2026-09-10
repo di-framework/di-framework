@@ -16,10 +16,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SqlDatabase } from '@di-framework/repo';
 import { createWasmSqliteDatabase } from '@di-framework/repo';
-import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors.js';
-import type { ActorOwnershipRecord } from '../distributed/types.js';
-import { actorIdentityToPath } from './path.js';
-import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types.js';
+import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors';
+import type { ActorOwnershipRecord } from '../distributed/types';
+import { actorIdentityToPath } from './path';
+import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
 
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;

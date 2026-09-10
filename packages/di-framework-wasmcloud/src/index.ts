@@ -1,28 +1,28 @@
-export { Blobstore, type BlobstoreGuest } from './bindings/blobstore.js';
-export { Config, type ConfigGuest } from './bindings/config.js';
-export { KeyValue, type KeyValueGuest } from './bindings/keyvalue.js';
-export { Messaging, type MessagingGuest } from './bindings/messaging.js';
-export { OutgoingHttp, type OutgoingHttpGuest } from './bindings/outgoing-http.js';
-export { Postgres, type PostgresGuest } from './bindings/postgres.js';
-export { Secrets, type SecretsGuest } from './bindings/secrets.js';
+export { Blobstore, type BlobstoreGuest } from './bindings/blobstore';
+export { Config, type ConfigGuest } from './bindings/config';
+export { KeyValue, type KeyValueGuest } from './bindings/keyvalue';
+export { Messaging, type MessagingGuest } from './bindings/messaging';
+export { OutgoingHttp, type OutgoingHttpGuest } from './bindings/outgoing-http';
+export { Postgres, type PostgresGuest } from './bindings/postgres';
+export { Secrets, type SecretsGuest } from './bindings/secrets';
 export {
   BINDING_CATALOG,
   BINDING_KINDS,
   type BindingKind,
   type CatalogEntry,
   isBindingKind,
-} from './catalog.js';
-export { WasmCloudBinding, type WasmCloudBindingOptions } from './decorator.js';
+} from './catalog';
+export { WasmCloudBinding, type WasmCloudBindingOptions } from './decorator';
 export {
   type GuestModules,
   resetGuests,
   setGuests,
   tryGetGuest,
   WASMCLOUD_GUESTS_GLOBAL,
-} from './guests.js';
+} from './guests';
 export {
   getBindingMetadata,
   isWitIdentifier,
   WASMCLOUD_BINDING_KEY,
   type WasmCloudBindingMetadata,
-} from './metadata.js';
+} from './metadata';

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { CliIo, CommandResult } from '../../command';
 import { CommandFailure } from '../../command';
+import { fixEsmImports } from '../../scripts/fix-esm-imports';
 
 function isErrno(err: unknown, code: string): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
@@ -19,11 +20,8 @@ export function buildFailure(pkgDir: string, err: unknown): CommandFailure {
     typeof err === 'object' && err !== null && 'stderr' in err ? shellText(err.stderr) : '';
   const stdout =
     typeof err === 'object' && err !== null && 'stdout' in err ? shellText(err.stdout) : '';
-  const detail = (
-    stderr.trim() ||
-    stdout.trim() ||
-    (err instanceof Error ? err.message : String(err))
-  ).trim();
+  const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n');
+  const detail = (output || (err instanceof Error ? err.message : String(err))).trim();
   return new CommandFailure('BUILD_FAILED', `Build failed for ${pkgDir}\n${detail}`, 1, {
     package: pkgDir,
     cause: detail,
@@ -126,6 +124,7 @@ export async function build(
       throw buildFailure(pkgDir, err);
     }
 
+    fixEsmImports(join(fullPath, 'dist'));
     io.stdout.write(`  ✅ Finished building ${pkgDir}\n`);
   }
 

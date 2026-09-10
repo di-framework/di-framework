@@ -1,9 +1,9 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { queueRegistry } from '../decorators.js';
-import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types.js';
-import type { QueueBackend } from './contract.js';
+import { queueRegistry } from '../decorators';
+import type { EnqueueOptions, Job, JobStatus, ListJobsFilter, QueueInfo } from '../types';
+import type { QueueBackend } from './contract';
 
 export interface SqliteQueueBackendOptions {
   path?: string;

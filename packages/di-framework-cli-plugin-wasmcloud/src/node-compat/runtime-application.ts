@@ -1,5 +1,5 @@
 import { getEnvironment } from 'wasi:cli/environment@0.3.0';
-import { env } from './process.js';
+import { env } from './process';
 
 let environmentReady = false;
 let initialized: Promise<typeof import('virtual:di-framework-application')> | undefined;
