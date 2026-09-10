@@ -279,7 +279,9 @@ describe('WasmSqliteActorStorage', () => {
     await tx.set('beta', 2);
     expect((await tx.keys()).sort()).toEqual(['alpha', 'beta']);
     await tx.commit();
-    expect(await storage.getIdempotencyRecord(id, 'req-tx')).toMatchObject({ response: { from: 'tx' } });
+    expect(await storage.getIdempotencyRecord(id, 'req-tx')).toMatchObject({
+      response: { from: 'tx' },
+    });
     await storage.close();
   });
 
@@ -318,7 +320,7 @@ describe('WasmSqliteActorStorage', () => {
     await tx.set('obj', { nested: { n: 1 } });
     const read = await tx.get<{ nested: { n: number } }>('obj');
     read!.nested.n = 99;
-    expect((await storage.get(id, 'obj'))).toBeUndefined();
+    expect(await storage.get(id, 'obj')).toBeUndefined();
     await tx.rollback();
 
     const tx2 = await storage.beginTransaction(id);

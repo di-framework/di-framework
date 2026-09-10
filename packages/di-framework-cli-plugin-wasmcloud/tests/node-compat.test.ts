@@ -18,8 +18,9 @@ import {
   createReadStream,
   existsSync,
   fstatSync,
-  lstatSync,
   mkdirSync as guestMkdirSync,
+  writeFileSync as guestWriteFileSync,
+  lstatSync,
   openSync,
   readdirSync,
   readFileSync,
@@ -28,7 +29,6 @@ import {
   rmSync,
   statSync,
   unlinkSync,
-  writeFileSync as guestWriteFileSync,
   writeSync,
 } from '../src/node-compat/fs';
 import { builtinModules, createRequire } from '../src/node-compat/module';
