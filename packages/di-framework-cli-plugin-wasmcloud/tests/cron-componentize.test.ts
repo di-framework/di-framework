@@ -53,9 +53,9 @@ export default { container };
     );
     expect(inspected.exitCode).toBe(0);
     expect(inspected.stdout).toContain('export wasi:http/handler@0.3.0');
-    expect(readFileSync(join(project.projectRoot, '.di-framework/cron-invoker.js'), 'utf8')).toContain(
-      'regression-job',
-    );
+    expect(
+      readFileSync(join(project.projectRoot, '.di-framework/cron-invoker.js'), 'utf8'),
+    ).toContain('regression-job');
     return project;
   })();
   return built;

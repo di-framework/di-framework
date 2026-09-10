@@ -1,10 +1,10 @@
-export { authorizeControlRequest, unauthorizedResponse, type ControlIdentity } from './auth.js';
+export { authorizeControlRequest, type ControlIdentity, unauthorizedResponse } from './auth.js';
 export {
   CRON_INVOKE_PATH_PREFIX,
+  type CronInvoker,
   cronJobIdFromRequest,
   handleCronInvokeRequest,
   isCronInvokeRequest,
-  type CronInvoker,
 } from './cron.js';
 export {
   handleQueueControlRequest,

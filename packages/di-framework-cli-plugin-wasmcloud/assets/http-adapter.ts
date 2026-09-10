@@ -13,17 +13,14 @@ import 'virtual:di-framework-wasmcloud-guests';
 import 'virtual:di-framework-wasmcloud-actors';
 
 import application from 'virtual:di-framework-application';
-import {
-  dispatchActorInvocation,
-  getActorRuntime,
-} from 'virtual:di-framework-wasmcloud-actors';
+import { dispatchActorInvocation, getActorRuntime } from 'virtual:di-framework-wasmcloud-actors';
 import { invokeJob as cronInvokeJob } from 'virtual:di-framework-wasmcloud-cron';
+import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import {
   ensureQueueWorkers,
   getQueueBackend,
   pumpQueueWorkers,
 } from 'virtual:di-framework-wasmcloud-queues';
-import { guests as wasmcloudGuests } from 'virtual:di-framework-wasmcloud-guests';
 import { ensureWasiEnvironment } from 'virtual:di-framework-wasmcloud-runtime';
 import { Fields, Request as WasiRequest, Response as WasiResponse } from 'wasi:http/types@0.3.0';
 import { collectBytes } from './fetch-runtime.ts';
@@ -217,10 +214,7 @@ export const handler = {
       }
       if (isQueueControlRequest(request)) {
         await ensureQueueWorkers();
-        const controlResponse = await handleQueueControlRequest(
-          request,
-          getQueueBackend() as any,
-        );
+        const controlResponse = await handleQueueControlRequest(request, getQueueBackend() as any);
         try {
           await pumpQueueWorkers();
         } catch (error) {

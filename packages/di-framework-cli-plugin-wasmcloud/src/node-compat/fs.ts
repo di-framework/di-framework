@@ -183,7 +183,11 @@ export function openSync(path: string, flags: string | number = 'r', _mode?: num
     nodeCompatSeed.files[normalized] = '';
   }
   const fd = nextFd++;
-  openHandles.set(fd, { path: normalized, position: flag.includes('a') ? Number.MAX_SAFE_INTEGER : 0, flags: flag });
+  openHandles.set(fd, {
+    path: normalized,
+    position: flag.includes('a') ? Number.MAX_SAFE_INTEGER : 0,
+    flags: flag,
+  });
   return fd;
 }
 
@@ -217,9 +221,17 @@ export function writeSync(
 ): number {
   const handle = openHandles.get(fd);
   if (handle === undefined) throw errno('EBADF', 'write', String(fd), -9);
-  const bytes = asBytes(data).subarray(offset ?? 0, (offset ?? 0) + (length ?? asBytes(data).byteLength));
+  const bytes = asBytes(data).subarray(
+    offset ?? 0,
+    (offset ?? 0) + (length ?? asBytes(data).byteLength),
+  );
   const existing = asBytes(nodeCompatSeed.files[handle.path] ?? '');
-  const start = position == null ? (handle.flags.includes('a') ? existing.byteLength : handle.position) : position;
+  const start =
+    position == null
+      ? handle.flags.includes('a')
+        ? existing.byteLength
+        : handle.position
+      : position;
   const next = new Uint8Array(Math.max(existing.byteLength, start + bytes.byteLength));
   next.set(existing, 0);
   next.set(bytes, start);
@@ -262,10 +274,7 @@ export function createReadStream(path: string): {
   return stream;
 }
 
-export function rmSync(
-  path: string,
-  options?: { recursive?: boolean; force?: boolean },
-): void {
+export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void {
   const normalized = normalizeFsPath(String(path));
   const prefix = normalized === '/' ? '/' : `${normalized}/`;
   const keys = Object.keys(nodeCompatSeed.files).filter(
