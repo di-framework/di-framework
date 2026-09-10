@@ -8,7 +8,7 @@
 #   make wit            print the WIT recovered from the built component
 #   make check          cargo check for the wasm target (still compiles sqlite3.c via build.rs)
 #   make compose APP=path/to/app.wasm OUT=path/to/composed.wasm
-#   make publish-asset  copy dist/ artifacts into ../di-framework-cli-plugin-wasmcloud/assets/sqlite/
+#   make publish-asset  copy dist/ artifacts into ../di-framework-cli-plugin-wasmcloud/dist/assets/sqlite/
 #   make clean          remove target/ and dist/
 #   make distclean      ...and .tools/
 #
@@ -22,7 +22,7 @@ PKG_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR ?= $(PKG_DIR)/.tools
 export DF_SQLITE_TOOLS_DIR := $(TOOLS_DIR)
 
-PLUGIN_ASSET_DIR ?= $(PKG_DIR)/../di-framework-cli-plugin-wasmcloud/assets/sqlite
+PLUGIN_ASSET_DIR ?= $(PKG_DIR)/../di-framework-cli-plugin-wasmcloud/dist/assets/sqlite
 
 .PHONY: tools tools-rust build debug smoke wit check compose publish-asset versions clean distclean
 

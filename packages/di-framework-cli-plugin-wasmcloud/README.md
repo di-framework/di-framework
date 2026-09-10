@@ -314,3 +314,20 @@ The wasmCloud plugin natively integrates virtual actors from `@di-framework/acto
 - **Single-Host vs. Distributed**: Single-host wasmCloud actor deployment is designed for standalone, resilient edge or single-node deployments. Distributed actor clustering, key partitioning, and remote consensus across wasmCloud nodes are part of distributed actor capabilities.
 
 Actor HTTP dispatch is restricted to the reserved `/_actors/` path. Actor headers on other paths do not intercept application requests. Error responses expose stable error names and generic messages; they omit internal exception details and migration objects.
+
+## Building from source
+
+The package build compiles the SQLite provider from
+`../di-framework-sqlite-component` using its pinned Rust, WASI SDK, and wasm-tools
+versions. Install that toolchain from the repository root before `bun install`
+(the root postinstall builds the workspace):
+
+```sh
+bash packages/di-framework-sqlite-component/scripts/install-tools.sh --rust
+bun install --frozen-lockfile
+```
+
+Subsequent `bun run build` runs rebuild the provider through Cargo's incremental
+build cache and stage its WASM, WIT, metadata, and checksums under
+`dist/assets/sqlite`. Generated artifacts are ignored by Git and included in the
+published npm package; npm consumers do not need the Rust build toolchain.

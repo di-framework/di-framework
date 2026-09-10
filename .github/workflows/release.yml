@@ -18,6 +18,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      - name: Install SQLite build toolchain
+        run: |
+          bash packages/di-framework-sqlite-component/scripts/install-tools.sh --rust
+          echo "$GITHUB_WORKSPACE/packages/di-framework-sqlite-component/.tools/bin" >> "$GITHUB_PATH"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
