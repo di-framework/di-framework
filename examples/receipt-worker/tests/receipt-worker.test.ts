@@ -229,14 +229,14 @@ describe('Receipt Worker Example', () => {
       handlers,
     );
 
-    expect(manifest).not.toContain('kind: Service');
+    // Cluster Service exposes the queue control HTTP API (no public ingress required).
+    expect(manifest).toContain('kind: Service');
     expect(manifest).toContain('kind: WorkloadDeployment');
     expect(manifest).toContain('name: receipt-worker');
-    expect(manifest).toContain('queueConsumers:');
-    expect(manifest).toContain('- queue: "receipts"');
-    expect(manifest).toContain('concurrency: 2');
-    expect(manifest).toContain('maxRetries: 3');
-    expect(manifest).toContain('backoffMs: 100');
-    expect(manifest).toContain('timeoutMs: 5000');
+    expect(manifest).toContain('DI_QUEUE_RECEIPTS_CONCURRENCY: "2"');
+    expect(manifest).toContain('DI_QUEUE_RECEIPTS_MAX_RETRIES: "3"');
+    expect(manifest).toContain('DI_QUEUE_RECEIPTS_BACKOFF_MS: "100"');
+    expect(manifest).toContain('DI_QUEUE_RECEIPTS_TIMEOUT_MS: "5000"');
+    expect(manifest).not.toContain('queueConsumers:');
   });
 });

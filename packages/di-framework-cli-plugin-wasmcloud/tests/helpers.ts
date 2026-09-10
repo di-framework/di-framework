@@ -137,12 +137,25 @@ export function fakeDeps(options: {
         );
       }
     }
+    if (args[0] === 'plug') {
+      const outputFlag = args.includes('-o') ? '-o' : '--output';
+      const outputPath = args[args.indexOf(outputFlag) + 1];
+      if (outputPath !== undefined) {
+        mkdirSync(dirname(outputPath), { recursive: true });
+        writeFileSync(outputPath, 'composed-sqlite-component');
+      }
+    }
     const key = invocationKey(command, args);
+    const kubectlLabelQuery = args.find((arg) => typeof arg === 'string' && arg.startsWith('di-framework.dev/application!='));
     return {
       exitCode: options.exitCodes?.[key] ?? (command === 'oras' && args[0] === 'manifest' ? 1 : 0),
       stdout:
         options.capturedStdout?.[key] ??
-        (command === 'kubectl' && args.includes('get') ? READY_WORKLOAD_JSON : ''),
+        (command === 'kubectl' && args.includes('get') && kubectlLabelQuery
+          ? (options.capturedStdout?.['kubectl ownership'] ?? '{"items":[]}')
+          : command === 'kubectl' && args.includes('get')
+            ? READY_WORKLOAD_JSON
+            : ''),
       stderr: '',
     };
   };

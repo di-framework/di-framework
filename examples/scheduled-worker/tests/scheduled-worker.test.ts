@@ -189,9 +189,9 @@ describe('Scheduled Worker Example (@Cron in wasmCloud)', () => {
       jobs,
     );
 
-    // Verifies: Method runs without exposed endpoint
-    expect(manifest).not.toContain('kind: Service');
-    expect(manifest).not.toContain('targetPort: 80');
+    // Control HTTP Service is required for external cron invokers even without public ingress.
+    expect(manifest).toContain('kind: Service');
+    expect(manifest).toContain('targetPort: 80');
 
     // Verifies: WorkloadDeployment suppresses in-component timers in external mode
     expect(manifest).toContain('kind: WorkloadDeployment');

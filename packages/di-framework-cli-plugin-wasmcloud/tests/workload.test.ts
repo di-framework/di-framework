@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadProject } from '../src/project';
 import {
   applyWorkload,
@@ -7,7 +10,13 @@ import {
   WORKLOAD_REPLICA_SET_RESOURCE,
   waitForReady,
 } from '../src/workload';
-import { captureIo, fakeDeps, makeWorkspace, type RunnerInvocation } from './helpers';
+import {
+  captureIo,
+  fakeDeps,
+  makeWorkspace,
+  READY_WORKLOAD_JSON,
+  type RunnerInvocation,
+} from './helpers';
 
 const REGISTRY = {
   push: 'registry.example.com/team',
@@ -219,6 +228,238 @@ describe('workload manifests', () => {
       invocations.some((invocation) => invocation.args.includes(WORKLOAD_REPLICA_SET_RESOURCE)),
     ).toBe(true);
     expect(invocations.some((invocation) => invocation.args.includes('logs'))).toBe(true);
+  });
+
+  it('renders control secrets, storage mounts, and injected control HTTP exports', () => {
+    const { greeter } = makeWorkspace();
+    const project = { ...loadProject(greeter), ingress: false, applicationType: 'worker' as const };
+    const yaml = renderWorkloadManifest(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/greeter:local',
+      [],
+      [],
+      {
+        controlSecretName: 'greeter-control',
+        hasPersistentStorage: true,
+        environment: { EXTRA: '1' },
+      },
+      [],
+      [
+        {
+          className: 'Worker',
+          methodName: 'run',
+          queueName: 'jobs',
+          filePath: 'src/worker.ts',
+          options: {},
+        },
+      ],
+    );
+    expect(yaml).toContain('secretFrom:');
+    expect(yaml).toContain('name: greeter-control');
+    expect(yaml).toContain('EXTRA: "1"');
+    expect(yaml).toContain('volumeMounts:');
+    expect(yaml).toContain('hostgroup: storage');
+    expect(yaml).toContain('package: http');
+  });
+
+  it('applyWorkload discovers queue handlers and persistent storage flags', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-queue-'));
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'src', 'worker.ts'),
+      `
+import { QueueHandler } from '@di-framework/queues';
+export class Worker {
+  @QueueHandler('jobs')
+  async run() {}
+}
+`,
+    );
+    writeFileSync(join(root, 'src', 'index.ts'), 'export * from "./worker";');
+    writeFileSync(
+      join(root, 'di-framework.config.json'),
+      `${JSON.stringify({ name: 'Queue App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
+    );
+    writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
+    const project = loadProject(root);
+    const invocations: RunnerInvocation[] = [];
+    const path = await applyWorkload(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/queue-app:local',
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        invocations,
+        capturedStdout: { 'kubectl get': READY_WORKLOAD_JSON },
+      }),
+    );
+    expect(path).toContain('workload.yaml');
+    expect(invocations.some((entry) => entry.args.includes('apply'))).toBe(true);
+  });
+
+  it('rejects apply when another deployment already owns the storage host path', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-conflict-'));
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'src', 'worker.ts'),
+      `
+import { QueueHandler } from '@di-framework/queues';
+export class Worker {
+  @QueueHandler('jobs')
+  async run() {}
+}
+`,
+    );
+    writeFileSync(join(root, 'src', 'index.ts'), 'export * from "./worker";');
+    writeFileSync(
+      join(root, 'di-framework.config.json'),
+      `${JSON.stringify({ name: 'Queue App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
+    );
+    writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
+    const project = loadProject(root);
+    await expect(
+      applyWorkload(
+        project,
+        {
+          target: 'development',
+          kubeconfig: '/tmp/kube',
+          namespace: 'wasmcloud',
+          registry: REGISTRY,
+        },
+        'registry.example.com/team/queue-app:local',
+        captureIo().io,
+        fakeDeps({
+          cwd: root,
+          capturedStdout: {
+            'kubectl get': JSON.stringify({
+              items: [
+                {
+                  metadata: { name: 'other-app' },
+                  spec: {
+                    template: {
+                      spec: {
+                        volumes: [
+                          { hostPath: { path: '/var/lib/di-framework/storage/queue-app' } },
+                        ],
+                      },
+                    },
+                  },
+                },
+              ],
+            }),
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT', exitCode: 2 });
+  });
+
+  it('creates localResources solely for allowed IP lookups when no env is configured', () => {
+    const { greeter } = makeWorkspace();
+    const project = loadProject(greeter);
+    const yaml = renderWorkloadManifest(
+      { ...project, allowedIpNameLookups: ['lookup.example.com'] },
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/greeter:lookup',
+    );
+    expect(yaml).toContain('allowedIpNameLookups: ["lookup.example.com"]');
+    expect(yaml).toContain('localResources:');
+  });
+
+  it('uses queue requirements for worker-only apply paths and allowed IP lookups', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-worker-only-'));
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'index.ts'), 'export default () => new Response("ok");');
+    writeFileSync(
+      join(root, 'di-framework.config.json'),
+      `${JSON.stringify({ name: 'Worker Only', entry: 'src/index.ts', applicationType: 'worker', ingress: false })}\n`,
+    );
+    writeFileSync(join(root, 'package.json'), '{ "name": "worker-only", "version": "1.0.0" }\n');
+    const project = loadProject(root);
+    await applyWorkload(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/worker-only:local',
+      captureIo().io,
+      fakeDeps({ cwd: root, capturedStdout: { 'kubectl get': READY_WORKLOAD_JSON } }),
+    );
+
+    const yaml = renderWorkloadManifest(
+      { ...project, allowedIpNameLookups: ['echo.example.com'] },
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/worker-only:local',
+      [],
+      [],
+      undefined,
+      [],
+      [],
+    );
+    expect(yaml).toContain('allowedIpNameLookups: ["echo.example.com"]');
+  });
+
+  it('ignores malformed ownership diagnostics when kubectl returns non-JSON', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-bad-json-'));
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'src', 'worker.ts'),
+      `
+import { QueueHandler } from '@di-framework/queues';
+export class Worker {
+  @QueueHandler('jobs')
+  async run() {}
+}
+`,
+    );
+    writeFileSync(join(root, 'src', 'index.ts'), 'export * from "./worker";');
+    writeFileSync(
+      join(root, 'di-framework.config.json'),
+      `${JSON.stringify({ name: 'Queue App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
+    );
+    writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
+    const project = loadProject(root);
+    await applyWorkload(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/queue-app:local',
+      captureIo().io,
+      fakeDeps({
+        cwd: root,
+        capturedStdout: {
+          'kubectl ownership': 'not-json',
+        },
+      }),
+    );
   });
 
   it('applies the generated manifest through kubectl', async () => {

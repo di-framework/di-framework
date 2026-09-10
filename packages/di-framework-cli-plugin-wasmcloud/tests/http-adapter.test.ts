@@ -53,10 +53,27 @@ mock.module('virtual:di-framework-wasmcloud-cron', () => ({
   invokeJob: async () => ({ completed: true }),
 }));
 
+const queueState = {
+  backend: undefined as
+    | {
+        listQueues(): Promise<Array<{ name: string }>>;
+      }
+    | undefined,
+  ensureCalls: 0,
+  pumpCalls: 0,
+  pumpError: false,
+};
+
 mock.module('virtual:di-framework-wasmcloud-queues', () => ({
-  getQueueBackend: () => undefined,
-  ensureQueueWorkers: async () => undefined,
-  pumpQueueWorkers: async () => 0,
+  getQueueBackend: () => queueState.backend,
+  ensureQueueWorkers: async () => {
+    queueState.ensureCalls += 1;
+  },
+  pumpQueueWorkers: async () => {
+    queueState.pumpCalls += 1;
+    if (queueState.pumpError) throw new Error('pump failed');
+    return 2;
+  },
 }));
 
 mock.module('virtual:di-framework-wasmcloud-runtime', () => ({
@@ -129,6 +146,10 @@ afterEach(() => {
   wasiState.newResponse = (headers, contents, trailers) =>
     defaultOutgoing(headers, contents, trailers);
   delete (globalThis as { wit?: unknown }).wit;
+  queueState.backend = undefined;
+  queueState.ensureCalls = 0;
+  queueState.pumpCalls = 0;
+  queueState.pumpError = false;
 });
 
 describe('http adapter', () => {
@@ -362,6 +383,41 @@ describe('http adapter', () => {
       { type: 'void-type', value: { tag: 'ok', val: undefined } },
       { type: 'trailers-type', value: { tag: 'ok', val: null } },
     ]);
+  });
+
+  it('routes cron and queue control requests through control handlers', async () => {
+    queueState.backend = {
+      async listQueues() {
+        return [{ name: 'receipts' }];
+      },
+    };
+    const cronOutgoing = (await handler.handle(
+      incoming({ method: { tag: 'post' }, path: '/_di/cron/nightly/invoke' }),
+    )) as Outgoing;
+    expect(cronOutgoing.statusCode).toBe(200);
+
+    const queueOutgoing = (await handler.handle(
+      incoming({ method: { tag: 'get' }, path: '/_di/queues/' }),
+    )) as Outgoing;
+    expect(queueOutgoing.statusCode).toBe(200);
+    expect(queueState.ensureCalls).toBe(1);
+    expect(queueState.pumpCalls).toBe(1);
+
+    queueState.pumpError = true;
+    const errorLog: unknown[] = [];
+    const originalError = console.error;
+    console.error = (...args) => {
+      errorLog.push(args);
+    };
+    try {
+      const pumpFailure = (await handler.handle(
+        incoming({ method: { tag: 'get' }, path: '/_di/queues/' }),
+      )) as Outgoing;
+      expect(pumpFailure.statusCode).toBe(200);
+      expect(errorLog.join(' ')).toContain('Queue worker pump failed');
+    } finally {
+      console.error = originalError;
+    }
   });
 
   it('rejects a missing guests object', () => {

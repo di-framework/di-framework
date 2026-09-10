@@ -102,6 +102,38 @@ test('worker honors explicit queues, discovers shared decorators, and processes 
   await backend.close();
 });
 
+test('pump drains jobs without background timers and ignores recovery failures', async () => {
+  class Handler {
+    seen: unknown[] = [];
+    run(payload: unknown) {
+      this.seen.push(payload);
+      return payload;
+    }
+  }
+  QueueHandler('review-pump')(Handler.prototype, 'run');
+  const backend = new InMemoryQueueBackend();
+  const handler = new Handler();
+  const dispatcher = {
+    dispatch: async (_queueName: string, job: { payload: unknown }) => handler.run(job.payload),
+  };
+  const worker = new QueueWorker(backend, dispatcher as any, { pollIntervalMs: 5 });
+  await backend.enqueue('review-pump', { n: 1 });
+  await backend.enqueue('review-pump', { n: 2 });
+  expect(await worker.pump(1)).toBe(1);
+  expect(await worker.pump()).toBe(1);
+  expect(handler.seen).toEqual([{ n: 1 }, { n: 2 }]);
+
+  const flaky = new InMemoryQueueBackend();
+  flaky.recoverUnacknowledged = async () => {
+    throw new Error('recovery unavailable');
+  };
+  await flaky.enqueue('review-pump', { n: 3 });
+  const recovered = new QueueWorker(flaky, dispatcher as any);
+  expect(await recovered.pump(2)).toBe(1);
+  await backend.close();
+  await flaky.close();
+});
+
 test('shutdown waits for in-flight work and late timeout rejections remain observed', async () => {
   const backend = new InMemoryQueueBackend();
   let release!: () => void;
