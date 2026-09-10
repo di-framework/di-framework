@@ -439,9 +439,9 @@ describe('SqlDatabase wrappers and backend registry', () => {
   });
 
   test('detects node without Bun and reports empty opener maps', async () => {
-    expect(detectSqliteBackend({ bunGlobal: undefined, hasOpener: (backend) => backend === 'node' })).toBe(
-      'node',
-    );
+    expect(
+      detectSqliteBackend({ bunGlobal: undefined, hasOpener: (backend) => backend === 'node' }),
+    ).toBe('node');
     expect(detectSqliteBackend({ bunGlobal: undefined, hasOpener: () => false })).toBe('wasm');
     await expect(
       openSqliteDatabase(':memory:', 'wasm', { getOpener: () => undefined }),

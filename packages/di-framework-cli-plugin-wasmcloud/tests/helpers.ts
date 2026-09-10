@@ -146,7 +146,9 @@ export function fakeDeps(options: {
       }
     }
     const key = invocationKey(command, args);
-    const kubectlLabelQuery = args.find((arg) => typeof arg === 'string' && arg.startsWith('di-framework.dev/application!='));
+    const kubectlLabelQuery = args.find(
+      (arg) => typeof arg === 'string' && arg.startsWith('di-framework.dev/application!='),
+    );
     return {
       exitCode: options.exitCodes?.[key] ?? (command === 'oras' && args[0] === 'manifest' ? 1 : 0),
       stdout:

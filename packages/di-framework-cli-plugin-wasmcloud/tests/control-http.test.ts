@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import {
-  authorizeControlRequest,
-  unauthorizedResponse,
-} from '../src/control/auth.js';
+import { authorizeControlRequest, unauthorizedResponse } from '../src/control/auth.js';
 import {
   cronJobIdFromRequest,
   handleCronInvokeRequest,
@@ -50,12 +47,15 @@ describe('control auth', () => {
     );
     expect(header.ok).toBe(true);
     expect(
-      authorizeControlRequest(new Request('http://local/', { headers: { authorization: 'Bearer nope' } })),
+      authorizeControlRequest(
+        new Request('http://local/', { headers: { authorization: 'Bearer nope' } }),
+      ),
     ).toMatchObject({ ok: false, status: 403 });
     expect(
-      authorizeControlRequest(new Request('http://local/', { headers: { authorization: `Bearer ${TOKEN}` } }), [
-        'admin',
-      ]),
+      authorizeControlRequest(
+        new Request('http://local/', { headers: { authorization: `Bearer ${TOKEN}` } }),
+        ['admin'],
+      ),
     ).toMatchObject({ ok: false, status: 403, error: 'Insufficient control privileges' });
     const admin = authorizeControlRequest(
       new Request('http://local/', { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } }),
@@ -81,7 +81,8 @@ describe('control auth', () => {
     delete process.env.DI_CONTROL_TOKEN;
     process.env.token = TOKEN;
     expect(
-      authorizeControlRequest(new Request('http://local/', { headers: { authorization: TOKEN } })).ok,
+      authorizeControlRequest(new Request('http://local/', { headers: { authorization: TOKEN } }))
+        .ok,
     ).toBe(true);
   });
 });
@@ -89,12 +90,12 @@ describe('control auth', () => {
 describe('cron control HTTP', () => {
   it('detects cron invoke requests and extracts job ids', () => {
     expect(isCronInvokeRequest({ url: 'bad' } as Request)).toBe(false);
-    expect(isCronInvokeRequest(new Request('http://local/_di/cron/job/invoke', { method: 'GET' }))).toBe(
-      false,
-    );
-    expect(isCronInvokeRequest(new Request('http://local/_di/cron/job/invoke', { method: 'POST' }))).toBe(
-      true,
-    );
+    expect(
+      isCronInvokeRequest(new Request('http://local/_di/cron/job/invoke', { method: 'GET' })),
+    ).toBe(false);
+    expect(
+      isCronInvokeRequest(new Request('http://local/_di/cron/job/invoke', { method: 'POST' })),
+    ).toBe(true);
     expect(cronJobIdFromRequest(new Request('http://local/other'))).toBeUndefined();
     expect(cronJobIdFromRequest(new Request('http://local/_di/cron/nightly%2Djob/invoke'))).toBe(
       'nightly-job',
@@ -179,9 +180,15 @@ describe('queue control HTTP', () => {
       new Request('http://local/_di/queues/'),
       backend,
     );
-    expect(await listed.json()).toEqual({ success: true, queues: [{ name: 'receipts' }, { name: 'alerts' }] });
+    expect(await listed.json()).toEqual({
+      success: true,
+      queues: [{ name: 'receipts' }, { name: 'alerts' }],
+    });
 
-    const missingBackend = await handleQueueControlRequest(new Request('http://local/_di/queues/'), undefined);
+    const missingBackend = await handleQueueControlRequest(
+      new Request('http://local/_di/queues/'),
+      undefined,
+    );
     expect(missingBackend.status).toBe(404);
 
     const needsName = await handleQueueControlRequest(
@@ -256,6 +263,9 @@ describe('queue control HTTP', () => {
       }),
       backend,
     );
-    expect(await retried.json()).toMatchObject({ success: true, jobs: [{ queueName: 'receipts' }] });
+    expect(await retried.json()).toMatchObject({
+      success: true,
+      jobs: [{ queueName: 'receipts' }],
+    });
   });
 });
