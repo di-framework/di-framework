@@ -17,7 +17,9 @@ function configuredIdentities(): ControlIdentity[] {
       const parsed = JSON.parse(raw) as Array<{ id: string; token: string; roles?: string[] }>;
       if (Array.isArray(parsed)) {
         return parsed
-          .filter((entry) => entry && typeof entry.id === 'string' && typeof entry.token === 'string')
+          .filter(
+            (entry) => entry && typeof entry.id === 'string' && typeof entry.token === 'string',
+          )
           .map((entry) => ({
             id: entry.id,
             token: entry.token,
@@ -30,7 +32,9 @@ function configuredIdentities(): ControlIdentity[] {
   }
   const token = process.env.DI_CONTROL_TOKEN ?? process.env.token;
   if (typeof token === 'string' && token.length > 0) {
-    return [{ id: process.env.DI_CONTROL_IDENTITY ?? 'default', token, roles: ['invoke', 'admin'] }];
+    return [
+      { id: process.env.DI_CONTROL_IDENTITY ?? 'default', token, roles: ['invoke', 'admin'] },
+    ];
   }
   return [];
 }
@@ -60,7 +64,11 @@ export function authorizeControlRequest(
   if (!identity) {
     return { ok: false, status: 403, error: 'Unauthorized control credentials' };
   }
-  if (requiredRoles.some((role) => !identity.roles.includes(role) && !identity.roles.includes('admin'))) {
+  if (
+    requiredRoles.some(
+      (role) => !identity.roles.includes(role) && !identity.roles.includes('admin'),
+    )
+  ) {
     return { ok: false, status: 403, error: 'Insufficient control privileges' };
   }
   return { ok: true, identity };

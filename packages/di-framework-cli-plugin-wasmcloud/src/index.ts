@@ -21,8 +21,8 @@ export {
   handleActorInvocationRequest,
   isActorInvocationRequest,
   renderActorsModule,
-  type WasmcloudActorAdapter,
   WASMCLOUD_ACTORS_GLOBAL,
+  type WasmcloudActorAdapter,
 } from './actors.js';
 export { parseAppCommandArgs, parsePlatformCommandArgs, parsePlatformInitArgs } from './args.js';
 export {

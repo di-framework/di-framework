@@ -1,5 +1,13 @@
 import { createHash, type Hash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
@@ -11,6 +19,7 @@ import { renderGuestsModule } from './guests.js';
 import { OCI_ARTIFACT_PLATFORM } from './oci.js';
 import { loadProject, type WasmcloudProject } from './project.js';
 import { discoverQueueHandlers, isQueueWorkerProject } from './queues.js';
+import { renderQueuesModule } from './queues-module.js';
 import { invalidUsage, requireNodeBinary, toolFailed } from './support.js';
 import {
   buildWitLock,
@@ -26,7 +35,6 @@ import {
   type WitLock,
   type WitRequirement,
 } from './wit.js';
-import { renderQueuesModule } from './queues-module.js';
 
 export { COMPONENT_MODEL, WASI_HTTP_INTERFACE, WASI_HTTP_VERSION };
 export const BUILD_PROFILE_NAME = 'wasmcloud-http';
@@ -146,7 +154,14 @@ async function composeSqliteProvider(
     );
   }
   const composed = `${project.outputPath}.composed`;
-  const toolsDir = join(deps.assetsDirectory(), '..', '..', 'di-framework-sqlite-component', '.tools', 'bin');
+  const toolsDir = join(
+    deps.assetsDirectory(),
+    '..',
+    '..',
+    'di-framework-sqlite-component',
+    '.tools',
+    'bin',
+  );
   const envPath = [
     join(
       dirname(fileURLToPath(import.meta.url)),

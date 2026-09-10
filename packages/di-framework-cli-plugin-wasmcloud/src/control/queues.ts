@@ -2,11 +2,7 @@ import { authorizeControlRequest, unauthorizedResponse } from './auth.js';
 
 /** Structural queue backend surface used by the authenticated control HTTP API. */
 export interface QueueControlBackend {
-  enqueue(
-    queueName: string,
-    payload: unknown,
-    options?: Record<string, unknown>,
-  ): Promise<unknown>;
+  enqueue(queueName: string, payload: unknown, options?: Record<string, unknown>): Promise<unknown>;
   listQueues(): Promise<Array<{ name: string }>>;
   listJobs(queueName: string, filter?: Record<string, unknown>): Promise<unknown[]>;
   getJob(jobId: string): Promise<{ queueName: string } | null>;
