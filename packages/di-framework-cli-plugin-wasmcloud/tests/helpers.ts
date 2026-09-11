@@ -78,7 +78,12 @@ export function invocationKey(command: string, args: readonly string[]): string 
     return args.includes('output') ? 'pulumi stack output' : `pulumi ${args[0]}`;
   }
   if (command === 'kubectl') {
-    const verb = args.find((token) => ['apply', 'delete', 'get', 'wait'].includes(token));
+    const verb = args.find((token) =>
+      ['apply', 'delete', 'get', 'wait', 'create', 'label'].includes(token),
+    );
+    if (verb === 'get' && args.includes('secret')) return 'kubectl get secret';
+    if (verb === 'create' && args.includes('secret')) return 'kubectl create secret';
+    if (verb === 'label' && args.includes('secret')) return 'kubectl label secret';
     return verb === undefined ? 'kubectl' : `kubectl ${verb}`;
   }
   if (command === 'oras') return args[0] === 'push' ? 'oras push' : 'oras manifest fetch';
@@ -149,8 +154,11 @@ export function fakeDeps(options: {
     const kubectlLabelQuery = args.find(
       (arg) => typeof arg === 'string' && arg.startsWith('di-framework.dev/application!='),
     );
+    const defaultExit =
+      options.exitCodes?.[key] ??
+      (key === 'kubectl get secret' ? 1 : command === 'oras' && args[0] === 'manifest' ? 1 : 0);
     return {
-      exitCode: options.exitCodes?.[key] ?? (command === 'oras' && args[0] === 'manifest' ? 1 : 0),
+      exitCode: defaultExit,
       stdout:
         options.capturedStdout?.[key] ??
         (command === 'kubectl' && args.includes('get') && kubectlLabelQuery

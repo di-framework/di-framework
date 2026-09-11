@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
@@ -38,6 +39,11 @@ export function generatedManifestPath(project: WasmcloudProject): string {
 
 export function hostStoragePath(applicationName: string): string {
   return `${HOST_STORAGE_ROOT}/${asWitIdentifier(applicationName)}`;
+}
+
+/** Kubernetes Secret that holds DI_CONTROL_TOKEN for a workload. */
+export function controlSecretResourceName(workloadName: string): string {
+  return `${workloadName}-control`;
 }
 
 export interface WorkloadManifestOptions {
@@ -115,6 +121,9 @@ export function renderWorkloadManifest(
     environment.QUEUE_DB_PATH = `${mountPath}/queue.db`;
     environment.MIGRATION_DB_PATH = `${mountPath}/migrations.db`;
   }
+  const controlSecretName =
+    opts.controlSecretName ?? (hasHttp ? controlSecretResourceName(name) : undefined);
+
   if (cronJobs.length > 0) environment.DI_CRON_MODE = 'external';
   if (hasQueues) {
     environment.DI_QUEUE_MODE = 'sqlite';
@@ -156,7 +165,7 @@ spec:
 
   const localResourcesLines: string[] = [];
   const envKeys = Object.keys(environment).sort();
-  if (envKeys.length > 0 || opts.controlSecretName !== undefined) {
+  if (envKeys.length > 0 || controlSecretName !== undefined) {
     localResourcesLines.push('          localResources:');
     localResourcesLines.push('            environment:');
     if (envKeys.length > 0) {
@@ -165,9 +174,9 @@ spec:
         localResourcesLines.push(`                ${key}: ${yamlQuote(environment[key]!)}`);
       }
     }
-    if (opts.controlSecretName !== undefined) {
+    if (controlSecretName !== undefined) {
       localResourcesLines.push('              secretFrom:');
-      localResourcesLines.push(`                - name: ${opts.controlSecretName}`);
+      localResourcesLines.push(`                - name: ${controlSecretName}`);
     }
   } else if (project.allowedIpNameLookups !== undefined) {
     localResourcesLines.push('          localResources:');
@@ -285,22 +294,17 @@ ${labels.replace(/^/gm, '        ')}
                 - name: DI_CONTROL_TOKEN
                   valueFrom:
                     secretKeyRef:
-                      name: ${name}-control
-                      key: token
-                      optional: true
+                      name: ${controlSecretName ?? `${name}-control`}
+                      key: DI_CONTROL_TOKEN
               command:
                 - /bin/sh
                 - -ec
                 - |
                   set -eu
-                  auth_header=""
-                  if [ -n "\${DI_CONTROL_TOKEN:-}" ]; then
-                    auth_header="Authorization: Bearer \${DI_CONTROL_TOKEN}"
-                  fi
                   response="$(curl -sS -f -X POST \\
                     -H "Host: ${name}" \\
                     -H "content-type: application/json" \\
-                    \${auth_header:+-H "$auth_header"} \\
+                    -H "Authorization: Bearer \${DI_CONTROL_TOKEN}" \\
                     --max-time ${timeoutSeconds} \\
                     -d '{}' \\
                     "$DI_CRON_INVOKE_URL")"
@@ -309,6 +313,51 @@ ${labels.replace(/^/gm, '        ')}
   }
 
   return sections.join('\n---\n') + '\n';
+}
+
+async function ensureControlSecret(
+  project: WasmcloudProject,
+  connection: ClusterConnection,
+  deps: WasmcloudDeps,
+): Promise<string> {
+  const name = deploymentResourceName(project);
+  const secretName = controlSecretResourceName(name);
+  const existing = await captureKubectl(
+    deps,
+    connection,
+    ['get', 'secret', secretName],
+    project.projectRoot,
+  );
+  if (existing.exitCode !== 0) {
+    const token = randomBytes(32).toString('base64url');
+    await runKubectl(
+      deps,
+      connection,
+      [
+        'create',
+        'secret',
+        'generic',
+        secretName,
+        `--from-literal=DI_CONTROL_TOKEN=${token}`,
+        `--from-literal=DI_CONTROL_IDENTITY=${name}`,
+      ],
+      project.projectRoot,
+    );
+  }
+  await runKubectl(
+    deps,
+    connection,
+    [
+      'label',
+      'secret',
+      secretName,
+      `app.kubernetes.io/managed-by=${MANAGED_BY_LABEL}`,
+      `app.kubernetes.io/name=${name}`,
+      '--overwrite',
+    ],
+    project.projectRoot,
+  );
+  return secretName;
 }
 
 export async function applyWorkload(
@@ -342,13 +391,16 @@ export async function applyWorkload(
     hasQueues: queueHandlers.length > 0,
     hasPersistentStorage,
   });
+  const controlSecretName = needsHttp
+    ? await ensureControlSecret(project, connection, deps)
+    : undefined;
   const manifest = renderWorkloadManifest(
     project,
     connection,
     image,
     requirements,
     bindings,
-    { hasActors, hasPersistentStorage },
+    { hasActors, hasPersistentStorage, controlSecretName },
     cronJobs,
     queueHandlers,
   );
@@ -425,7 +477,7 @@ export async function deleteWorkload(
     connection,
     [
       'delete',
-      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
+      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob,secret`,
       '-l',
       `app.kubernetes.io/name=${name}`,
       '--ignore-not-found',

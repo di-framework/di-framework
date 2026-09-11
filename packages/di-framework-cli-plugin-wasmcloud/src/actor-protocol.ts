@@ -50,7 +50,7 @@ export async function handleActorInvocationRequest(
     let requestId = randomRequestId();
     let deadline: number | undefined;
     let namespace: string | undefined;
-    let callerId = auth.identity.id;
+    const callerId = auth.identity.id;
     let expectedGeneration: number | undefined;
 
     const url = new URL(request.url);
@@ -68,7 +68,6 @@ export async function handleActorInvocationRequest(
       if (typeof body.requestId === 'string' && body.requestId) requestId = body.requestId;
       if (typeof body.deadline === 'number') deadline = body.deadline;
       if (typeof body.namespace === 'string') namespace = body.namespace;
-      if (typeof body.callerId === 'string') callerId = body.callerId;
       if (typeof body.expectedGeneration === 'number') expectedGeneration = body.expectedGeneration;
     } else {
       actorType = request.headers.get('x-actor-type') ?? pathParts[0];
@@ -86,7 +85,6 @@ export async function handleActorInvocationRequest(
       const headerDeadline = request.headers.get('x-actor-deadline');
       if (headerDeadline) deadline = Number(headerDeadline);
       namespace = request.headers.get('x-actor-namespace') ?? undefined;
-      callerId = request.headers.get('x-actor-caller') ?? callerId;
     }
 
     if (

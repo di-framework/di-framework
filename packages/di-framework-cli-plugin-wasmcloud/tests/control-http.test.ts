@@ -22,11 +22,16 @@ afterEach(() => {
 });
 
 describe('control auth', () => {
-  it('allows anonymous invoke when no credentials are configured', () => {
+  it('allows anonymous invoke without admin when no credentials are configured', () => {
     const result = authorizeControlRequest(new Request('http://local/'));
     expect(result).toEqual({
       ok: true,
-      identity: { id: 'anonymous', token: '', roles: ['invoke', 'admin'] },
+      identity: { id: 'anonymous', token: '', roles: ['invoke'] },
+    });
+    expect(authorizeControlRequest(new Request('http://local/'), ['admin'])).toMatchObject({
+      ok: false,
+      status: 403,
+      error: 'Insufficient control privileges',
     });
   });
 
@@ -69,7 +74,7 @@ describe('control auth', () => {
     expect(await body.json()).toEqual({ success: false, error: 'Missing control credentials' });
   });
 
-  it('falls back to DI_CONTROL_TOKEN and legacy token env vars', () => {
+  it('falls back to DI_CONTROL_TOKEN and ignores unrelated token env vars', () => {
     process.env.DI_CONTROL_IDENTITIES = '{not json';
     process.env.DI_CONTROL_TOKEN = TOKEN;
     process.env.DI_CONTROL_IDENTITY = 'ops';
@@ -81,9 +86,16 @@ describe('control auth', () => {
     delete process.env.DI_CONTROL_TOKEN;
     process.env.token = TOKEN;
     expect(
-      authorizeControlRequest(new Request('http://local/', { headers: { authorization: TOKEN } }))
-        .ok,
-    ).toBe(true);
+      authorizeControlRequest(new Request('http://local/', { headers: { authorization: TOKEN } })),
+    ).toMatchObject({ ok: false, status: 401, error: 'Missing control credentials' });
+  });
+
+  it('fails closed when identities are configured but empty', () => {
+    process.env.DI_CONTROL_IDENTITIES = '[]';
+    expect(authorizeControlRequest(new Request('http://local/'))).toMatchObject({
+      ok: false,
+      status: 401,
+    });
   });
 });
 
@@ -241,6 +253,14 @@ describe('queue control HTTP', () => {
       backend,
     );
     expect(unknown.status).toBe(404);
+  });
+
+  it('denies anonymous retry even when invoke is open', async () => {
+    const denied = await handleQueueControlRequest(
+      new Request('http://local/_di/queues/receipts/retry/job-1', { method: 'POST' }),
+      backend,
+    );
+    expect(denied.status).toBe(403);
   });
 
   it('requires admin role for retry operations when credentials are configured', async () => {
