@@ -145,6 +145,7 @@ export {
 export {
   applyWorkload,
   CRON_INVOKER_IMAGE,
+  controlSecretResourceName,
   DEFAULT_STORAGE_MOUNT,
   deleteWorkload,
   HOST_STORAGE_ROOT,

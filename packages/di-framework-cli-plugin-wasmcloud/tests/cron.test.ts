@@ -173,6 +173,10 @@ export class NotificationService {
     expect(manifest).toContain('cron-invoker');
     expect(manifest).toContain('/_di/cron/daily-backup/invoke');
     expect(manifest).toContain('curlimages/curl:');
+    expect(manifest).toContain('name: batch-worker-control');
+    expect(manifest).toContain('key: DI_CONTROL_TOKEN');
+    expect(manifest).toMatch(/Authorization: Bearer \$\{DI_CONTROL_TOKEN\}/);
+    expect(manifest).not.toContain('optional: true');
   });
 
   it('retains HTTP Service when ingress is enabled along with scheduled jobs', () => {

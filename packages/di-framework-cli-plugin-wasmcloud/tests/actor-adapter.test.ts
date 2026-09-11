@@ -234,6 +234,53 @@ it('treats non-object JSON and invalid identity fields as bad requests', async (
   expect(calls).toBe(1);
 });
 
+it('binds callerId to the authenticated control identity', async () => {
+  const TOKEN = 'viewer-token';
+  process.env.DI_CONTROL_IDENTITIES = JSON.stringify([
+    { id: 'viewer', token: TOKEN, roles: ['invoke'] },
+  ]);
+  const { handleActorInvocationRequest } = await import('../src/actor-protocol');
+  const { ActorRpcDispatcher } = await import('@di-framework/actors/portable');
+  const runtime = { invoke: async () => 1 } as unknown as ActorRuntime;
+  const original = ActorRpcDispatcher.prototype.dispatch;
+  const seen: unknown[] = [];
+  try {
+    ActorRpcDispatcher.prototype.dispatch = async function dispatch(request) {
+      seen.push(request);
+      return { requestId: request.requestId, success: true, result: 1 };
+    };
+    const body = await handleActorInvocationRequest(
+      new Request('http://localhost/_actors/Counter/key/read', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          actorType: 'Counter',
+          actorKey: 'k',
+          method: 'read',
+          callerId: 'trusted-gateway',
+        }),
+      }),
+      runtime,
+    );
+    expect(body.status).toBe(200);
+    expect(seen[0]).toMatchObject({ callerId: 'viewer' });
+    const header = await handleActorInvocationRequest(
+      new Request('http://localhost/_actors/Counter/key/read', {
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          'x-actor-caller': 'trusted-gateway',
+        },
+      }),
+      runtime,
+    );
+    expect(header.status).toBe(200);
+    expect(seen[1]).toMatchObject({ callerId: 'viewer' });
+  } finally {
+    ActorRpcDispatcher.prototype.dispatch = original;
+    delete process.env.DI_CONTROL_IDENTITIES;
+  }
+});
+
 it('maps ActorRpcDispatcher error names to HTTP status codes', async () => {
   const { handleActorInvocationRequest } = await import('../src/actor-protocol');
   const { ActorRpcDispatcher } = await import('@di-framework/actors/portable');

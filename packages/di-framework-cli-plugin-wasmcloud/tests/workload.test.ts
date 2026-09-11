@@ -49,9 +49,8 @@ describe('workload manifests', () => {
       },
       'registry.example.com/probe:local',
     );
-    expect(permitted).toContain(
-      'localResources:\n            allowedIpNameLookups: ["echo.example.com"]',
-    );
+    expect(permitted).toContain('allowedIpNameLookups: ["echo.example.com"]');
+    expect(permitted).toContain('localResources:');
     expect(yaml).toContain('kind: Service');
     expect(yaml).toContain('kind: WorkloadDeployment');
     expect(yaml).toContain('name: greeter');
@@ -61,6 +60,8 @@ describe('workload manifests', () => {
     expect(yaml).toContain('version: "0.3.0"');
     expect(yaml).toContain('- handler');
     expect(yaml).toContain('"host": "greeter"');
+    expect(yaml).toContain('secretFrom:');
+    expect(yaml).toContain('name: greeter-control');
     expect(yaml).not.toContain('incoming-handler');
     expect(yaml).not.toContain('Pulumi');
   });
@@ -365,7 +366,7 @@ export class Worker {
     ).rejects.toMatchObject({ code: 'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT', exitCode: 2 });
   });
 
-  it('creates localResources solely for allowed IP lookups when no env is configured', () => {
+  it('creates localResources for control secrets and allowed IP lookups when no env is configured', () => {
     const { greeter } = makeWorkspace();
     const project = loadProject(greeter);
     const yaml = renderWorkloadManifest(
@@ -380,6 +381,8 @@ export class Worker {
     );
     expect(yaml).toContain('allowedIpNameLookups: ["lookup.example.com"]');
     expect(yaml).toContain('localResources:');
+    expect(yaml).toContain('secretFrom:');
+    expect(yaml).toContain('name: greeter-control');
   });
 
   it('uses queue requirements for worker-only apply paths and allowed IP lookups', async () => {
@@ -485,6 +488,55 @@ export class Worker {
           invocation.command === 'kubectl' &&
           invocation.args.includes('get') &&
           invocation.args.includes(WORKLOAD_DEPLOYMENT_RESOURCE),
+      ),
+    ).toBe(true);
+    expect(
+      invocations.some(
+        (invocation) =>
+          invocation.command === 'kubectl' &&
+          invocation.args.includes('create') &&
+          invocation.args.includes('secret') &&
+          invocation.args.includes('greeter-control'),
+      ),
+    ).toBe(true);
+    expect(
+      invocations.some(
+        (invocation) =>
+          invocation.command === 'kubectl' &&
+          invocation.args.includes('label') &&
+          invocation.args.includes('secret') &&
+          invocation.args.includes('greeter-control'),
+      ),
+    ).toBe(true);
+  });
+
+  it('reuses an existing control secret instead of recreating it', async () => {
+    const { greeter } = makeWorkspace();
+    const project = loadProject(greeter);
+    const invocations: RunnerInvocation[] = [];
+    await applyWorkload(
+      project,
+      {
+        target: 'development',
+        kubeconfig: '/tmp/kube',
+        namespace: 'wasmcloud',
+        registry: REGISTRY,
+      },
+      'registry.example.com/team/greeter:sha256-abc',
+      captureIo().io,
+      fakeDeps({ cwd: greeter, invocations, exitCodes: { 'kubectl get secret': 0 } }),
+    );
+    expect(
+      invocations.some(
+        (invocation) => invocation.command === 'kubectl' && invocation.args.includes('create'),
+      ),
+    ).toBe(false);
+    expect(
+      invocations.some(
+        (invocation) =>
+          invocation.command === 'kubectl' &&
+          invocation.args.includes('label') &&
+          invocation.args.includes('greeter-control'),
       ),
     ).toBe(true);
   });

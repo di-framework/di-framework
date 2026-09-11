@@ -20,7 +20,7 @@ describe('runWasmcloudDestroy', () => {
     expect(kubectl[0]?.args).toEqual(
       expect.arrayContaining([
         'delete',
-        `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
+        `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob,secret`,
         '-l',
         'app.kubernetes.io/name=greeter',
         '--ignore-not-found',
@@ -46,7 +46,7 @@ describe('runWasmcloudDestroy', () => {
     );
     expect(invocations[0]?.args).toEqual(
       expect.arrayContaining([
-        `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob`,
+        `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob,secret`,
         '-l',
         'app.kubernetes.io/name=echo',
       ]),
