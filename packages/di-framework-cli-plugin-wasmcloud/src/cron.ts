@@ -223,25 +223,13 @@ export const scheduledJobs = ${JSON.stringify(jobs, null, 2)};
  * awaiting execution, and returning a structured result.
  */
 export async function invokeJob(jobId, context) {
-  try {
-    const application = await loadApplication();
-    const container = application.default?.container ?? application.container ?? application.default;
-    if (typeof container?.invokeCronJob !== 'function') {
-      throw new TypeError('Scheduled application must export its registered container');
-    }
-    container.setCronMode('external');
-    return await container.invokeCronJob(jobId, context);
-  } catch (error) {
-    return {
-      jobId,
-      status: 'failure',
-      success: false,
-      startedAt: new Date(),
-      completedAt: new Date(),
-      durationMs: 0,
-      error: error instanceof Error ? error.message : String(error),
-    };
+  const application = await loadApplication();
+  const container = application.default?.container ?? application.container ?? application.default;
+  if (typeof container?.invokeCronJob !== 'function') {
+    throw new TypeError('Scheduled application must export its registered container');
   }
+  container.setCronMode('external');
+  return await container.invokeCronJob(jobId, context);
 }
 
 export function listJobs() {

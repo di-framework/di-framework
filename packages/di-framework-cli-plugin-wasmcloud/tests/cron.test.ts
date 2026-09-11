@@ -97,6 +97,8 @@ export class NotificationService {
     expect(invokerModule).toContain("container.setCronMode('external')");
     expect(invokerModule).toContain('export async function invokeJob(jobId, context)');
     expect(invokerModule).toContain('container.invokeCronJob(jobId, context)');
+    expect(invokerModule).not.toContain('error.message');
+    expect(invokerModule).not.toContain("status: 'failure'");
     expect(invokerModule).toContain('nightly-reindex');
 
     const adapterModule = renderCronAdapterModule(mockJobs);
