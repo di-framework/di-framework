@@ -19,6 +19,41 @@ export interface ActorIdentity {
 }
 
 /**
+ * Thrown when two distinct actor identities resolve to the same database file,
+ * or when an existing database's stored identity does not match the opener.
+ */
+export class ActorIdentityCollisionError extends Error {
+  readonly requestedId: string;
+  readonly storedId: string;
+  readonly filePath: string;
+
+  constructor(requestedId: string, storedId: string, filePath: string) {
+    super(
+      `Actor identity collision: database at '${filePath}' belongs to '${storedId}', not '${requestedId}'.`,
+    );
+    this.name = 'ActorIdentityCollisionError';
+    this.requestedId = requestedId;
+    this.storedId = storedId;
+    this.filePath = filePath;
+  }
+}
+
+/** Stable fingerprint of an identity; NUL-separated so fields cannot alias. */
+export function canonicalActorIdentity(identity: ActorIdentity): string {
+  return `${identity.namespace ?? ''}\0${identity.actorName}\0${identity.actorKey}`;
+}
+
+export function assertStoredActorIdentity(
+  storedId: string | null | undefined,
+  requestedId: string,
+  filePath: string,
+): void {
+  if (storedId != null && storedId !== requestedId) {
+    throw new ActorIdentityCollisionError(requestedId, storedId, filePath);
+  }
+}
+
+/**
  * Parses a composite string ID or ActorIdentity object into structured ActorIdentity.
  */
 export function parseActorIdentity(input: string | ActorIdentity): ActorIdentity {
@@ -77,12 +112,15 @@ export function actorIdentityToPath(
   const safeActorName =
     trimUnderscores(identity.actorName.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'actor';
 
-  // Hash the actor key using SHA-256 to ensure bounded length and total collision/traversal safety
-  const keyHash = createHash('sha256').update(identity.actorKey).digest('hex');
+  // Hash the full identity so sanitized namespace/name collisions cannot share a file.
+  const identityHash = createHash('sha256')
+    .update(canonicalActorIdentity(identity))
+    .digest('hex');
+  const hashPrefix = identityHash.slice(0, 32);
 
   // In-memory mode: return a dedicated shared memory URI
   if (inMemory) {
-    return `file:actor_${safeNamespace}_${safeActorName}_${keyHash.slice(0, 16)}?mode=memory&cache=shared`;
+    return `file:actor_${safeNamespace}_${safeActorName}_${hashPrefix}?mode=memory&cache=shared`;
   }
 
   const baseDir = options.baseDir ?? '.actors';
@@ -90,9 +128,7 @@ export function actorIdentityToPath(
 
   // Human-readable sanitized prefix (up to 32 chars) for ease of disk inspection
   const safePrefix = identity.actorKey.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
-  const fileName = safePrefix
-    ? `${safePrefix}_${keyHash.slice(0, 16)}.db`
-    : `${keyHash.slice(0, 16)}.db`;
+  const fileName = safePrefix ? `${safePrefix}_${hashPrefix}.db` : `${hashPrefix}.db`;
 
   const targetPath = path.resolve(resolvedBase, safeNamespace, safeActorName, fileName);
 

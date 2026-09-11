@@ -6,7 +6,10 @@ import {
   Actor,
   ActorLockError,
   ActorMethod,
+  ActorIdentityCollisionError,
   actorIdentityToPath,
+  assertStoredActorIdentity,
+  canonicalActorIdentity,
   parseActorIdentity,
   SqliteActorStorage,
 } from '../src/index';
@@ -94,6 +97,27 @@ describe('Safe Identity Mapping and File Locking', () => {
       expect(weirdPath).not.toContain('>');
     });
 
+    it('maps distinct identities to distinct files when sanitization would collide', () => {
+      const baseDir = '/tmp/actors_collision';
+      const dotted = actorIdentityToPath(
+        { namespace: 'foo.bar', actorName: 'Actor', actorKey: 'k' },
+        { baseDir },
+      );
+      const underscored = actorIdentityToPath(
+        { namespace: 'foo_bar', actorName: 'Actor', actorKey: 'k' },
+        { baseDir },
+      );
+      expect(dotted).not.toEqual(underscored);
+      expect(canonicalActorIdentity(parseActorIdentity('foo.bar:Actor:k'))).toBe(
+        'foo.bar\0Actor\0k',
+      );
+      expect(() =>
+        assertStoredActorIdentity('Actor:a', 'Actor:b', dotted),
+      ).toThrow(ActorIdentityCollisionError);
+      expect(() => assertStoredActorIdentity(null, 'Actor:b', dotted)).not.toThrow();
+      expect(() => assertStoredActorIdentity('Actor:b', 'Actor:b', dotted)).not.toThrow();
+    });
+
     it('returns dedicated memory URIs in inMemory mode', () => {
       const uri1 = actorIdentityToPath(
         { actorName: 'MemActor', actorKey: 'key1' },
@@ -111,6 +135,28 @@ describe('Safe Identity Mapping and File Locking', () => {
   });
 
   describe('File Locking and Single-Writer Ownership', () => {
+    it('rejects opening a database file that already belongs to another actor', async () => {
+      const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-identity-collision-'));
+      cleanupDirs.push(baseDir);
+      const first = new SqliteActorStorage({ baseDir });
+      try {
+        await first.set('Counter:a', 'n', 1);
+        await first.closeActor('Counter:a');
+        const pathA = actorIdentityToPath('Counter:a', { baseDir });
+        const pathB = actorIdentityToPath('Counter:b', { baseDir });
+        fs.mkdirSync(path.dirname(pathB), { recursive: true });
+        fs.copyFileSync(pathA, pathB);
+        for (const suffix of ['-wal', '-shm']) {
+          if (fs.existsSync(pathA + suffix)) {
+            fs.copyFileSync(pathA + suffix, pathB + suffix);
+          }
+        }
+        await expect(first.set('Counter:b', 'n', 2)).rejects.toThrow(ActorIdentityCollisionError);
+      } finally {
+        await first.close();
+      }
+    });
+
     it('prevents concurrent database ownership within the same process and releases on close', async () => {
       const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'actor-lock-test-'));
       cleanupDirs.push(baseDir);

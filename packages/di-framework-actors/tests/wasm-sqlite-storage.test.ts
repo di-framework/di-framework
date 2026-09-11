@@ -7,13 +7,16 @@ import type { SqlDatabase } from '@di-framework/repo';
 import {
   Actor,
   ActorContext,
+  ActorIdentityCollisionError,
   ActorMethod,
+  actorIdentityToPath,
   ActorOwnershipConflictError,
   ActorRuntime,
   StaleOwnerWriteError,
   WasmSqliteActorStorage,
   type WasmSqliteDatabaseFactory,
 } from '../src/index';
+import * as actorPath from '../src/storage/path';
 import * as portable from '../src/portable';
 
 /**
@@ -373,6 +376,94 @@ describe('WasmSqliteActorStorage', () => {
     await fragileTx.set('k', 'v');
     await expect(fragileTx.commit()).rejects.toThrow('commit failed');
     await fragile.close();
+    await storage.close();
+  });
+
+  it('rejects stored-identity mismatches and dual writers on one file', async () => {
+    const baseDir = makeTempDir();
+    const fake = createFakeWasmSqlite();
+    const storage = new WasmSqliteActorStorage({ baseDir, openDatabase: fake.factory });
+    await storage.set('Counter:a', 'n', 1);
+    await storage.closeActor('Counter:a');
+    const pathA = actorIdentityToPath('Counter:a', { baseDir });
+    const pathB = actorIdentityToPath('Counter:b', { baseDir });
+    fs.mkdirSync(path.dirname(pathB), { recursive: true });
+    fs.copyFileSync(pathA, pathB);
+    await expect(storage.set('Counter:b', 'n', 2)).rejects.toThrow(ActorIdentityCollisionError);
+    await storage.close();
+
+    const { spyOn } = await import('bun:test');
+    const dualDir = makeTempDir();
+    const dualFake = createFakeWasmSqlite();
+    const shared = actorIdentityToPath('Shared:1', { baseDir: dualDir });
+    const pathSpy = spyOn(actorPath, 'actorIdentityToPath').mockImplementation(() => shared);
+    const dual = new WasmSqliteActorStorage({
+      baseDir: dualDir,
+      openDatabase: dualFake.factory,
+    });
+    try {
+      await dual.set('Shared:1', 'n', 1);
+      await expect(dual.set('Other:1', 'n', 2)).rejects.toThrow(ActorIdentityCollisionError);
+    } finally {
+      await dual.close();
+      pathSpy.mockRestore();
+    }
+
+    const pendingDir = makeTempDir();
+    const pendingFake = createFakeWasmSqlite();
+    const pendingShared = actorIdentityToPath('PendingA:1', { baseDir: pendingDir });
+    const pendingSpy = spyOn(actorPath, 'actorIdentityToPath').mockImplementation(() => pendingShared);
+    let releaseOpen!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseOpen = resolve;
+    });
+    const delayed = new WasmSqliteActorStorage({
+      baseDir: pendingDir,
+      openDatabase: async (filePath) => {
+        await gate;
+        return pendingFake.factory(filePath);
+      },
+    });
+    try {
+      const first = delayed.getConnection('PendingA:1');
+      const second = delayed.getConnection('PendingB:1');
+      releaseOpen();
+      const settled = await Promise.allSettled([first, second]);
+      expect(settled.some((result) => result.status === 'fulfilled')).toBe(true);
+      expect(
+        settled.some(
+          (result) =>
+            result.status === 'rejected' && result.reason instanceof ActorIdentityCollisionError,
+        ),
+      ).toBe(true);
+    } finally {
+      await delayed.close();
+      pendingSpy.mockRestore();
+    }
+  });
+
+  it('allowlists journal and synchronous modes', async () => {
+    expect(
+      () =>
+        new WasmSqliteActorStorage({
+          journalMode: 'wal' as WasmSqliteActorStorage['journalMode'],
+        }),
+    ).toThrow(/journalMode/);
+    expect(
+      () =>
+        new WasmSqliteActorStorage({
+          synchronous: 'extra' as WasmSqliteActorStorage['synchronous'],
+        }),
+    ).toThrow(/synchronous/);
+    const storage = new WasmSqliteActorStorage({
+      baseDir: makeTempDir(),
+      journalMode: 'truncate',
+      synchronous: 'off',
+      openDatabase: createFakeWasmSqlite().factory,
+    });
+    await storage.set('Pragma:1', 'n', 1);
+    expect(storage.journalMode).toBe('truncate');
+    expect(storage.synchronous).toBe('off');
     await storage.close();
   });
 
