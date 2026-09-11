@@ -27,7 +27,9 @@ import {
   type WasmSqliteOpenOptions,
   type WasmSqlRow,
   type WasmSqlValue,
+  wasmSqliteJournalModeSql,
   wasmSqlitePragmas,
+  wasmSqliteSyncModeSql,
   wrapBunSqliteDatabase,
 } from '../src/index';
 
@@ -126,6 +128,24 @@ describe('sql-value conversion', () => {
       'PRAGMA busy_timeout = 10;',
       'PRAGMA foreign_keys = ON;',
     ]);
+    expect(wasmSqlitePragmas({ foreignKeys: false })).toEqual([
+      'PRAGMA journal_mode = DELETE;',
+      'PRAGMA synchronous = FULL;',
+      'PRAGMA foreign_keys = OFF;',
+    ]);
+    expect(wasmSqliteJournalModeSql()).toBe('DELETE');
+    expect(wasmSqliteJournalModeSql('PERSIST')).toBe('PERSIST');
+    expect(wasmSqliteSyncModeSql()).toBe('FULL');
+    expect(wasmSqliteSyncModeSql('Normal')).toBe('NORMAL');
+    expect(() => wasmSqliteJournalModeSql('delete; DROP TABLE t')).toThrow(/journalMode/);
+    expect(() => wasmSqliteJournalModeSql(1)).toThrow(/journalMode/);
+    expect(() => wasmSqliteSyncModeSql('full; SELECT 1')).toThrow(/synchronous/);
+    expect(() =>
+      wasmSqlitePragmas({ journalMode: 'wal' as WasmSqliteOpenOptions['journalMode'] }),
+    ).toThrow(/journalMode/);
+    expect(() =>
+      wasmSqlitePragmas({ synchronous: 'extra' as WasmSqliteOpenOptions['synchronous'] }),
+    ).toThrow(/synchronous/);
   });
 });
 
@@ -362,6 +382,20 @@ describe('Wasm SQLite adapter', () => {
       'PRAGMA foreign_keys = ON;',
     ]);
     await db.close?.();
+
+    await expect(
+      createWasmSqliteDatabase(':memory:', {
+        module,
+        journalMode: 'delete; ATTACH' as WasmSqliteOpenOptions['journalMode'],
+      }),
+    ).rejects.toThrow(/journalMode/);
+    await expect(
+      createWasmSqliteDatabase(':memory:', {
+        module,
+        synchronous: 'full; ATTACH' as WasmSqliteOpenOptions['synchronous'],
+      }),
+    ).rejects.toThrow(/synchronous/);
+    expect(opened).toHaveLength(1);
 
     const quiet = mockWasmSqlite(false);
     const silent = await createWasmSqliteDatabase(':memory:', {

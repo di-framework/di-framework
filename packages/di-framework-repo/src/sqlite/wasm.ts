@@ -20,6 +20,54 @@ export type WasmSqliteSyncMode = 'off' | 'normal' | 'full';
 export const WASM_SQLITE_DEFAULT_JOURNAL_MODE: WasmSqliteJournalMode = 'delete';
 export const WASM_SQLITE_DEFAULT_SYNC_MODE: WasmSqliteSyncMode = 'full';
 
+/** Runtime allowlist: never interpolate caller strings into `PRAGMA` SQL. */
+export const WASM_SQLITE_JOURNAL_MODE_SQL = {
+  delete: 'DELETE',
+  persist: 'PERSIST',
+  memory: 'MEMORY',
+} as const satisfies Record<WasmSqliteJournalMode, string>;
+
+export const WASM_SQLITE_SYNC_MODE_SQL = {
+  off: 'OFF',
+  normal: 'NORMAL',
+  full: 'FULL',
+} as const satisfies Record<WasmSqliteSyncMode, string>;
+
+function allowlistedSql(
+  kind: string,
+  value: unknown,
+  allowed: Record<string, string>,
+): string {
+  const key = typeof value === 'string' ? value.toLowerCase() : '';
+  const sql = allowed[key];
+  if (!sql) {
+    throw new TypeError(
+      `Invalid SQLite ${kind} ${JSON.stringify(value)}; allowed: ${Object.keys(allowed).join(', ')}`,
+    );
+  }
+  return sql;
+}
+
+/** Maps a journal mode to the SQL token, or throws if it is not allowlisted. */
+export function wasmSqliteJournalModeSql(value: unknown = WASM_SQLITE_DEFAULT_JOURNAL_MODE): string {
+  return allowlistedSql('journalMode', value, WASM_SQLITE_JOURNAL_MODE_SQL);
+}
+
+/** Maps a synchronous mode to the SQL token, or throws if it is not allowlisted. */
+export function wasmSqliteSyncModeSql(value: unknown = WASM_SQLITE_DEFAULT_SYNC_MODE): string {
+  return allowlistedSql('synchronous', value, WASM_SQLITE_SYNC_MODE_SQL);
+}
+
+function resolvedWasmSqliteJournalMode(value: unknown): WasmSqliteJournalMode {
+  wasmSqliteJournalModeSql(value);
+  return String(value).toLowerCase() as WasmSqliteJournalMode;
+}
+
+function resolvedWasmSqliteSyncMode(value: unknown): WasmSqliteSyncMode {
+  wasmSqliteSyncModeSql(value);
+  return String(value).toLowerCase() as WasmSqliteSyncMode;
+}
+
 export type WasmSqlValue =
   | { tag: 'null'; val?: undefined }
   | { tag: 'integer'; val: bigint | number }
@@ -287,14 +335,16 @@ export function loadWasmSqliteModule(): Promise<WasmSqliteModule> {
 
 /** Statements that enforce the WIT durability contract on an open connection. */
 export function wasmSqlitePragmas(options: WasmSqliteOpenOptions = {}): string[] {
-  const journalMode = options.journalMode ?? WASM_SQLITE_DEFAULT_JOURNAL_MODE;
-  const synchronous = options.synchronous ?? WASM_SQLITE_DEFAULT_SYNC_MODE;
+  const journalMode = wasmSqliteJournalModeSql(
+    options.journalMode ?? WASM_SQLITE_DEFAULT_JOURNAL_MODE,
+  );
+  const synchronous = wasmSqliteSyncModeSql(options.synchronous ?? WASM_SQLITE_DEFAULT_SYNC_MODE);
   const pragmas = [
-    `PRAGMA journal_mode = ${journalMode.toUpperCase()};`,
-    `PRAGMA synchronous = ${synchronous.toUpperCase()};`,
+    `PRAGMA journal_mode = ${journalMode};`,
+    `PRAGMA synchronous = ${synchronous};`,
   ];
   if (options.busyTimeoutMs !== undefined) {
-    pragmas.push(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(options.busyTimeoutMs))};`);
+    pragmas.push(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(Number(options.busyTimeoutMs)))};`);
   }
   if (options.foreignKeys !== undefined) {
     pragmas.push(`PRAGMA foreign_keys = ${options.foreignKeys ? 'ON' : 'OFF'};`);
@@ -315,8 +365,12 @@ export async function createWasmSqliteDatabase(
   const resolvedOpenOptions: WasmSqliteOpenOptions = {
     create: openOptions.create ?? true,
     readOnly: openOptions.readOnly ?? false,
-    synchronous: openOptions.synchronous ?? WASM_SQLITE_DEFAULT_SYNC_MODE,
-    journalMode: openOptions.journalMode ?? WASM_SQLITE_DEFAULT_JOURNAL_MODE,
+    synchronous: resolvedWasmSqliteSyncMode(
+      openOptions.synchronous ?? WASM_SQLITE_DEFAULT_SYNC_MODE,
+    ),
+    journalMode: resolvedWasmSqliteJournalMode(
+      openOptions.journalMode ?? WASM_SQLITE_DEFAULT_JOURNAL_MODE,
+    ),
     ...(openOptions.busyTimeoutMs !== undefined
       ? { busyTimeoutMs: openOptions.busyTimeoutMs }
       : {}),
