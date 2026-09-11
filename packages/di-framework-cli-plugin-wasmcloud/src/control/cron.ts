@@ -25,6 +25,34 @@ export function cronJobIdFromRequest(request: Request): string | undefined {
   }
 }
 
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
+function cronFailureResponse(jobId: string): Response {
+  return new Response(
+    JSON.stringify({
+      success: false,
+      completed: false,
+      ok: false,
+      jobId,
+      error: { name: 'CronInvocationError', message: 'Cron job failed' },
+    }),
+    { status: 500, headers: JSON_HEADERS },
+  );
+}
+
+/** CronExecutionResult-shaped failures must not be reported as HTTP success. */
+export function isFailedCronResult(result: unknown): boolean {
+  if (result === null || typeof result !== 'object') return false;
+  const record = result as {
+    success?: unknown;
+    ok?: unknown;
+    completed?: unknown;
+    status?: unknown;
+  };
+  if (record.success === false || record.ok === false || record.completed === false) return true;
+  return record.status === 'failure' || record.status === 'skipped';
+}
+
 export async function handleCronInvokeRequest(
   request: Request,
   invoke: CronInvoker | undefined,
@@ -58,32 +86,18 @@ export async function handleCronInvokeRequest(
 
   try {
     const result = await invoke(jobId, { ...body, caller: auth.identity.id });
-    const completed =
-      result !== null &&
-      typeof result === 'object' &&
-      ((result as { completed?: unknown }).completed === true ||
-        (result as { ok?: unknown }).ok === true);
+    if (isFailedCronResult(result)) return cronFailureResponse(jobId);
     return new Response(
       JSON.stringify({
         success: true,
-        completed: completed || result !== undefined,
+        completed: true,
         ok: true,
         jobId,
         result,
       }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
+      { status: 200, headers: JSON_HEADERS },
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        completed: false,
-        ok: false,
-        jobId,
-        error: { name: error instanceof Error ? error.name : 'Error', message },
-      }),
-      { status: 500, headers: { 'content-type': 'application/json' } },
-    );
+  } catch {
+    return cronFailureResponse(jobId);
   }
 }

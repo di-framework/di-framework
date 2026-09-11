@@ -4,6 +4,7 @@ import {
   cronJobIdFromRequest,
   handleCronInvokeRequest,
   isCronInvokeRequest,
+  isFailedCronResult,
 } from '../src/control/cron';
 import { allowControlSurface } from '../src/control/network';
 import {
@@ -204,17 +205,67 @@ describe('cron control HTTP', () => {
       },
     );
     expect(failed.status).toBe(500);
-    expect(await failed.json()).toMatchObject({
+    const failedBody = await failed.json();
+    expect(failedBody).toMatchObject({
       success: false,
+      completed: false,
+      ok: false,
       jobId: 'nightly',
-      error: { message: 'cron exploded' },
+      error: { name: 'CronInvocationError', message: 'Cron job failed' },
     });
+    expect(JSON.stringify(failedBody)).not.toContain('cron exploded');
+
+    const thrownString = await handleCronInvokeRequest(
+      new Request('http://local/_di/cron/nightly/invoke', { method: 'POST', body: '{}' }),
+      async () => {
+        throw 'secret stack';
+      },
+    );
+    expect(thrownString.status).toBe(500);
+    expect(JSON.stringify(await thrownString.json())).not.toContain('secret stack');
+
+    const failedShape = await handleCronInvokeRequest(
+      new Request('http://local/_di/cron/nightly/invoke', { method: 'POST', body: '{}' }),
+      async () => ({
+        success: false,
+        status: 'failure',
+        error: 'internal schema detail',
+      }),
+    );
+    expect(failedShape.status).toBe(500);
+    const failedShapeBody = await failedShape.json();
+    expect(failedShapeBody.ok).toBe(false);
+    expect(JSON.stringify(failedShapeBody)).not.toContain('internal schema detail');
+
+    const skipped = await handleCronInvokeRequest(
+      new Request('http://local/_di/cron/nightly/invoke', { method: 'POST', body: '{}' }),
+      async () => ({ status: 'skipped', success: false }),
+    );
+    expect(skipped.status).toBe(500);
 
     const okFlag = await handleCronInvokeRequest(
       new Request('http://local/_di/cron/sync/invoke', { method: 'POST', body: '{}' }),
       async () => ({ ok: true }),
     );
     expect((await okFlag.json()).completed).toBe(true);
+
+    const successStatus = await handleCronInvokeRequest(
+      new Request('http://local/_di/cron/sync/invoke', { method: 'POST', body: '{}' }),
+      async () => ({ status: 'success', success: true }),
+    );
+    expect(successStatus.status).toBe(200);
+
+    const bareValue = await handleCronInvokeRequest(
+      new Request('http://local/_di/cron/sync/invoke', { method: 'POST', body: '{}' }),
+      async () => 1,
+    );
+    expect(bareValue.status).toBe(200);
+    expect(isFailedCronResult(null)).toBe(false);
+    expect(isFailedCronResult('ok')).toBe(false);
+    expect(isFailedCronResult({ ok: false })).toBe(true);
+    expect(isFailedCronResult({ completed: false })).toBe(true);
+    expect(isFailedCronResult({ status: 'failure' })).toBe(true);
+    expect(isFailedCronResult({ status: 'skipped' })).toBe(true);
   });
 });
 

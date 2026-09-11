@@ -5,6 +5,7 @@ export {
   cronJobIdFromRequest,
   handleCronInvokeRequest,
   isCronInvokeRequest,
+  isFailedCronResult,
 } from './cron';
 export {
   allowControlSurface,
