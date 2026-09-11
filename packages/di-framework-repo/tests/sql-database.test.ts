@@ -270,6 +270,26 @@ async function exerciseSqlDatabase(db: SqlDatabase) {
   ]);
   expect(order).toEqual(['a:start', 'a:end', 'b:start', 'b:end']);
 
+  // Concurrent outer statements wait for an open transaction; they must not
+  // join it (or they would roll back with it).
+  let releaseOuter!: () => void;
+  const holdOuter = new Promise<void>((resolve) => {
+    releaseOuter = resolve;
+  });
+  const innerTx = db.transaction(async (tx) => {
+    await tx.run('INSERT INTO t (id, name) VALUES (20, ?)', ['inside']);
+    await holdOuter;
+    throw new Error('drop inner');
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const outerInsert = db.run('INSERT INTO t (id, name) VALUES (21, ?)', ['outside']);
+  releaseOuter();
+  await expect(innerTx).rejects.toThrow('drop inner');
+  await outerInsert;
+  expect(
+    (await db.query<{ id: number }>('SELECT id FROM t ORDER BY id')).map((row) => row.id),
+  ).toEqual([1, 2, 3, 10, 11, 21]);
+
   await expect(db.run('INSERT INTO t (id) VALUES (1)')).rejects.toThrow(/UNIQUE|constraint/i);
   await expect(db.exec('SELEC nonsense')).rejects.toThrow();
 }
@@ -292,9 +312,9 @@ describe('Wasm SQLite adapter', () => {
         'PRAGMA synchronous = FULL;',
       ]);
       await exerciseSqlDatabase(db);
-      expect(log.filter((sql) => sql === 'BEGIN IMMEDIATE')).toHaveLength(4);
+      expect(log.filter((sql) => sql === 'BEGIN IMMEDIATE')).toHaveLength(5);
       expect(log.filter((sql) => sql === 'COMMIT')).toHaveLength(3);
-      expect(log.filter((sql) => sql === 'ROLLBACK')).toHaveLength(1);
+      expect(log.filter((sql) => sql === 'ROLLBACK')).toHaveLength(2);
       await db.close?.();
       expect(log.at(-1)).toBe('<close>');
     });

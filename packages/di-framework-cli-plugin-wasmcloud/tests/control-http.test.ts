@@ -5,6 +5,7 @@ import {
   handleCronInvokeRequest,
   isCronInvokeRequest,
 } from '../src/control/cron';
+import { allowControlSurface } from '../src/control/network';
 import {
   handleQueueControlRequest,
   isQueueControlRequest,
@@ -19,6 +20,8 @@ afterEach(() => {
   delete process.env.DI_CONTROL_TOKEN;
   delete process.env.token;
   delete process.env.DI_CONTROL_IDENTITY;
+  delete process.env.DI_CONTROL_REJECT_FORWARDED;
+  delete process.env.DI_CONTROL_HTTP_HOST;
 });
 
 describe('control auth', () => {
@@ -96,6 +99,58 @@ describe('control auth', () => {
       ok: false,
       status: 401,
     });
+  });
+});
+
+describe('control surface network gate', () => {
+  it('allows local/dev when no cluster restriction is configured', () => {
+    expect(allowControlSurface(new Request('http://local/_di/queues/'))).toBe(true);
+    expect(
+      allowControlSurface(
+        new Request('http://local/_di/queues/', { headers: { 'x-forwarded-for': '1.2.3.4' } }),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects forwarded control requests when deployed', () => {
+    process.env.DI_CONTROL_REJECT_FORWARDED = '1';
+    expect(allowControlSurface(new Request('http://greeter/_di/cron/job/invoke'))).toBe(true);
+    expect(
+      allowControlSurface(
+        new Request('http://greeter/_di/cron/job/invoke', {
+          headers: { 'x-forwarded-for': '10.0.0.1' },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      allowControlSurface(
+        new Request('http://greeter/_actors/invoke', {
+          headers: { 'x-forwarded-host': 'greeter.example.com' },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('requires the cluster control host when DI_CONTROL_HTTP_HOST is set', () => {
+    process.env.DI_CONTROL_HTTP_HOST = 'greeter,greeter.wasmcloud.svc.cluster.local';
+    expect(
+      allowControlSurface(
+        new Request('http://greeter/_di/queues/', { headers: { host: 'greeter' } }),
+      ),
+    ).toBe(true);
+    expect(
+      allowControlSurface(
+        new Request('http://other/_di/queues/', { headers: { host: 'other.example.com' } }),
+      ),
+    ).toBe(false);
+    process.env.DI_CONTROL_REJECT_FORWARDED = '1';
+    expect(
+      allowControlSurface(
+        new Request('http://greeter/_di/queues/', {
+          headers: { host: 'greeter', 'x-forwarded-proto': 'https' },
+        }),
+      ),
+    ).toBe(false);
   });
 });
 

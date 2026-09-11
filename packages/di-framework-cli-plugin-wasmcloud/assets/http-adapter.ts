@@ -3,6 +3,8 @@ import {
   isActorInvocationRequest as isActorInvocation,
 } from '../src/actor-protocol';
 import {
+  allowControlSurface,
+  controlSurfaceNotFound,
   handleCronInvokeRequest,
   handleQueueControlRequest,
   isCronInvokeRequest,
@@ -209,6 +211,13 @@ export const handler = {
     try {
       ensureWasiEnvironment();
       const request = await toWebRequest(incoming);
+      const isControlPath =
+        isCronInvokeRequest(request) ||
+        isQueueControlRequest(request) ||
+        isActorInvocation(request);
+      if (isControlPath && !allowControlSurface(request)) {
+        return await fromWebResponse(controlSurfaceNotFound());
+      }
       if (isCronInvokeRequest(request)) {
         return await fromWebResponse(await handleCronInvokeRequest(request, cronInvokeJob as any));
       }

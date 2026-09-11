@@ -82,10 +82,10 @@ export function renderWorkloadManifest(
     opts.hasPersistentStorage ??
     (hasActors || hasQueues || isWorker || project.persistentStorage === true);
   const needsControlHttp = hasActors || cronJobs.length > 0 || hasQueues || isWorker;
+  const publicIngress = project.ingress !== false && !isWorker;
   // Cluster Service is required for cron invokers and queue/actor control even when
   // public ingress is disabled.
-  const hasHttp =
-    (project.ingress !== false && !isWorker) || needsControlHttp || needsPersistentStorage;
+  const hasHttp = publicIngress || needsControlHttp || needsPersistentStorage;
 
   if (needsPersistentStorage) {
     if (opts.replicas !== undefined && opts.replicas !== 1) {
@@ -123,7 +123,13 @@ export function renderWorkloadManifest(
   }
   const controlSecretName =
     opts.controlSecretName ?? (hasHttp ? controlSecretResourceName(name) : undefined);
+  const clusterHttpHost = `${name}.${connection.namespace}.svc.cluster.local`;
+  const advertisedHttpHost = publicIngress ? project.applicationName : clusterHttpHost;
 
+  if (hasHttp) {
+    environment.DI_CONTROL_REJECT_FORWARDED = '1';
+    environment.DI_CONTROL_HTTP_HOST = [name, clusterHttpHost].join(',');
+  }
   if (cronJobs.length > 0) environment.DI_CRON_MODE = 'external';
   if (hasQueues) {
     environment.DI_QUEUE_MODE = 'sqlite';
@@ -208,7 +214,7 @@ spec:
             },
           ]
         : requirements,
-      hasHttp ? { httpHost: project.applicationName } : {},
+      hasHttp ? { httpHost: advertisedHttpHost } : {},
       bindings.map((binding) => ({
         name: binding.name,
         className: binding.className,
@@ -302,7 +308,7 @@ ${labels.replace(/^/gm, '        ')}
                 - |
                   set -eu
                   response="$(curl -sS -f -X POST \\
-                    -H "Host: ${name}" \\
+                    -H "Host: ${advertisedHttpHost}" \\
                     -H "content-type: application/json" \\
                     -H "Authorization: Bearer \${DI_CONTROL_TOKEN}" \\
                     --max-time ${timeoutSeconds} \\

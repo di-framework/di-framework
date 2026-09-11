@@ -139,6 +139,8 @@ function incoming(
 }
 
 afterEach(() => {
+  delete process.env.DI_CONTROL_REJECT_FORWARDED;
+  delete process.env.DI_CONTROL_HTTP_HOST;
   applicationState.current = () => new Response('ok');
   wasiState.consumeBody = () => {
     throw new Error('consumeBody was not stubbed');
@@ -418,6 +420,31 @@ describe('http adapter', () => {
     } finally {
       console.error = originalError;
     }
+  });
+
+  it('hides control paths that arrive through forwarded ingress', async () => {
+    process.env.DI_CONTROL_REJECT_FORWARDED = '1';
+    process.env.DI_CONTROL_HTTP_HOST = 'greeter,greeter.wasmcloud.svc.cluster.local';
+    const encoder = new TextEncoder();
+    const forwarded = (await handler.handle(
+      incoming({
+        method: { tag: 'post' },
+        authority: 'greeter',
+        path: '/_di/cron/nightly/invoke',
+        headers: [['x-forwarded-for', encoder.encode('203.0.113.1')]],
+      }),
+    )) as Outgoing;
+    expect(forwarded.statusCode).toBe(404);
+
+    const cluster = (await handler.handle(
+      incoming({
+        method: { tag: 'post' },
+        authority: 'greeter',
+        path: '/_di/cron/nightly/invoke',
+        headers: [['host', encoder.encode('greeter')]],
+      }),
+    )) as Outgoing;
+    expect(cluster.statusCode).toBe(200);
   });
 
   it('rejects a missing guests object', () => {
