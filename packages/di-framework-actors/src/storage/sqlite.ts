@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors';
 import type { ActorOwnershipRecord } from '../distributed/types';
 import { acquireActorLock } from './lock';
-import { actorIdentityToPath, trimUnderscores } from './path';
+import { actorIdentityToPath, assertStoredActorIdentity, trimUnderscores } from './path';
 import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
 
 function cloneValue<T>(value: T): T {
@@ -441,6 +441,10 @@ export class SqliteActorStorage implements ActorStorage {
         db.query('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);').run(
           actorId,
         );
+        const identityRow = db
+          .query('SELECT actor_id FROM "_actor_identity" WHERE id = 1;')
+          .get() as { actor_id: string } | null;
+        assertStoredActorIdentity(identityRow?.actor_id, actorId, filePath);
         break;
       } catch (err: any) {
         initAttempts++;

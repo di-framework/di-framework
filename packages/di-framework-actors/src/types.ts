@@ -276,3 +276,4 @@ export * from './distributed/errors';
 export * from './distributed/types';
 export { ActorMigrationError } from './migrations/types';
 export { ActorLockError } from './storage/lock';
+export { ActorIdentityCollisionError } from './storage/path';

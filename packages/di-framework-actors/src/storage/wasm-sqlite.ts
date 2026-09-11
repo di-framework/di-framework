@@ -18,7 +18,11 @@ import type { SqlDatabase } from '@di-framework/repo';
 import { createWasmSqliteDatabase } from '@di-framework/repo';
 import { ActorOwnershipConflictError, StaleOwnerWriteError } from '../distributed/errors';
 import type { ActorOwnershipRecord } from '../distributed/types';
-import { actorIdentityToPath } from './path';
+import {
+  ActorIdentityCollisionError,
+  actorIdentityToPath,
+  assertStoredActorIdentity,
+} from './path';
 import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
 
 function cloneValue<T>(value: T): T {
@@ -141,6 +145,27 @@ export interface WasmSqliteActorStorageOptions {
    * @di-framework/repo. Primarily useful for tests and alternative SqlDatabase hosts.
    */
   openDatabase?: WasmSqliteDatabaseFactory;
+}
+
+const ACTOR_JOURNAL_SQL = {
+  delete: 'DELETE',
+  persist: 'PERSIST',
+  memory: 'MEMORY',
+  truncate: 'TRUNCATE',
+} as const;
+
+const ACTOR_SYNC_SQL = {
+  full: 'FULL',
+  normal: 'NORMAL',
+  off: 'OFF',
+} as const;
+
+function actorPragmaSql(kind: string, value: string, allowed: Record<string, string>): string {
+  const sql = allowed[value];
+  if (!sql) {
+    throw new TypeError(`Invalid SQLite ${kind} ${JSON.stringify(value)}`);
+  }
+  return sql;
 }
 
 interface ActorConnection {
@@ -343,19 +368,26 @@ export class WasmSqliteActorStorage implements ActorStorage {
   readonly inMemory: boolean;
   readonly journalMode: 'delete' | 'persist' | 'memory' | 'truncate';
   readonly synchronous: 'full' | 'normal' | 'off';
+  private readonly journalSql: string;
+  private readonly syncSql: string;
   /** Always false: the Wasm adapter never takes file locks. */
   readonly fileLocking = false as const;
 
   private readonly openDatabase: WasmSqliteDatabaseFactory;
   private readonly connections = new Map<string, ActorConnection>();
   private readonly pending = new Map<string, Promise<ActorConnection>>();
+  private readonly pendingByPath = new Map<string, Promise<ActorConnection>>();
   private closed = false;
 
   constructor(options: WasmSqliteActorStorageOptions = {}) {
     this.inMemory = options.inMemory === true || options.baseDir === ':memory:';
     this.baseDir = options.baseDir ?? (this.inMemory ? ':memory:' : '.actors');
-    this.journalMode = options.journalMode ?? 'delete';
-    this.synchronous = options.synchronous ?? 'full';
+    const journalMode = options.journalMode ?? 'delete';
+    const synchronous = options.synchronous ?? 'full';
+    this.journalSql = actorPragmaSql('journalMode', journalMode, ACTOR_JOURNAL_SQL);
+    this.syncSql = actorPragmaSql('synchronous', synchronous, ACTOR_SYNC_SQL);
+    this.journalMode = journalMode;
+    this.synchronous = synchronous;
     this.openDatabase = options.openDatabase ?? ((filePath) => createWasmSqliteDatabase(filePath));
   }
 
@@ -374,22 +406,41 @@ export class WasmSqliteActorStorage implements ActorStorage {
     const existing = this.connections.get(actorId);
     if (existing) return existing;
 
-    const inflight = this.pending.get(actorId);
-    if (inflight) return inflight;
-
-    const opening = this.openConnection(actorId).finally(() => {
-      this.pending.delete(actorId);
-    });
-    this.pending.set(actorId, opening);
-    return opening;
-  }
-
-  private async openConnection(actorId: string): Promise<ActorConnection> {
     const filePath = actorIdentityToPath(actorId, {
       baseDir: this.baseDir,
       inMemory: this.inMemory,
     });
+    const owner = this.connectionForPath(filePath);
+    if (owner && owner.actorId !== actorId) {
+      throw new ActorIdentityCollisionError(actorId, owner.actorId, filePath);
+    }
 
+    const inflight = this.pending.get(actorId) ?? this.pendingByPath.get(filePath);
+    if (inflight) {
+      const conn = await inflight;
+      if (conn.actorId !== actorId) {
+        throw new ActorIdentityCollisionError(actorId, conn.actorId, filePath);
+      }
+      return conn;
+    }
+
+    const opening = this.openConnection(actorId, filePath).finally(() => {
+      this.pending.delete(actorId);
+      this.pendingByPath.delete(filePath);
+    });
+    this.pending.set(actorId, opening);
+    this.pendingByPath.set(filePath, opening);
+    return opening;
+  }
+
+  private connectionForPath(filePath: string): ActorConnection | undefined {
+    for (const conn of this.connections.values()) {
+      if (conn.filePath === filePath) return conn;
+    }
+    return undefined;
+  }
+
+  private async openConnection(actorId: string, filePath: string): Promise<ActorConnection> {
     if (!this.inMemory) {
       // Best effort: the sqlite provider is expected to create parent directories
       // itself on WASI hosts, but create them when a real filesystem is available.
@@ -401,13 +452,16 @@ export class WasmSqliteActorStorage implements ActorStorage {
     const db = await this.openDatabase(this.inMemory ? ':memory:' : filePath);
 
     try {
-      // Durable single-writer settings for WASI: rollback journal + fsync on every commit.
-      await db.exec(`PRAGMA journal_mode = ${this.journalMode.toUpperCase()};`);
-      await db.exec(`PRAGMA synchronous = ${this.synchronous.toUpperCase()};`);
+      await db.exec(`PRAGMA journal_mode = ${this.journalSql};`);
+      await db.exec(`PRAGMA synchronous = ${this.syncSql};`);
       await db.exec(SCHEMA_SQL);
-      await db.run('INSERT OR IGNORE INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);', [
-        actorId,
-      ]);
+      const stored = await db.first<{ actor_id: string }>(
+        'SELECT actor_id FROM "_actor_identity" WHERE id = 1;',
+      );
+      assertStoredActorIdentity(stored?.actor_id, actorId, filePath);
+      if (!stored) {
+        await db.run('INSERT INTO "_actor_identity" ("id", "actor_id") VALUES (1, ?);', [actorId]);
+      }
     } catch (err) {
       try {
         await db.close?.();
