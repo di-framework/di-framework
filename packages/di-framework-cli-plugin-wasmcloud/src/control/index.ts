@@ -7,6 +7,13 @@ export {
   isCronInvokeRequest,
 } from './cron';
 export {
+  allowControlSurface,
+  controlHttpHostList,
+  controlSurfaceNotFound,
+  isForwardedRequest,
+  requestHostname,
+} from './network';
+export {
   handleQueueControlRequest,
   isQueueControlRequest,
   QUEUE_CONTROL_PATH_PREFIX,

@@ -13,10 +13,10 @@ export interface SqlDatabase {
   exec(sql: string): Promise<void>;
   /**
    * Runs `fn` inside `BEGIN IMMEDIATE … COMMIT`, rolling back when it throws.
-   * Transactions on one handle are serialized; `fn` receives a view of the
-   * same connection whose nested `transaction()` calls join the outer one.
-   * Statements issued through the outer handle while a transaction is open are
-   * not blocked: they execute inside that transaction on the shared connection.
+   * All statements on one handle are serialized, including `run`/`query`/`exec`
+   * issued outside a transaction. Nested `transaction()` calls on the callback
+   * view join the outer one. Same-context statements on the outer handle while
+   * a transaction is open still join it; concurrent tasks wait for the lock.
    */
   transaction<T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T>;
   close?(): Promise<void> | void;
@@ -100,6 +100,7 @@ export function createSqlDatabase(
 ): SqlDatabase {
   const begin = options.beginStatement ?? 'BEGIN IMMEDIATE';
   const mutex = new AsyncMutex();
+  const mutexHeld = new AsyncLocalStorage<true>();
   const activeTransaction = new AsyncLocalStorage<SqlDatabase>();
 
   const run = async (sql: string, params: unknown[] = []) =>
@@ -117,6 +118,11 @@ export function createSqlDatabase(
     await driver.exec(sql);
   };
 
+  const locked = async <T>(fn: () => Promise<T>): Promise<T> => {
+    if (mutexHeld.getStore() === true) return fn();
+    return mutex.run(() => mutexHeld.run(true, fn));
+  };
+
   const transactionView: SqlDatabase = {
     [SQL_DATABASE_BRAND]: true,
     run,
@@ -128,15 +134,15 @@ export function createSqlDatabase(
 
   const database: SqlDatabase = {
     [SQL_DATABASE_BRAND]: true,
-    run,
-    query,
-    first,
-    exec,
+    run: (sql, params = []) => locked(() => run(sql, params)),
+    query: (sql, params = []) => locked(() => query(sql, params)),
+    first: (sql, params = []) => locked(() => first(sql, params)),
+    exec: (sql) => locked(() => exec(sql)),
     transaction: async <T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T> => {
       if (activeTransaction.getStore() === transactionView) {
         return fn(transactionView);
       }
-      return mutex.run(async () => {
+      return locked(async () => {
         await exec(begin);
         try {
           const result = await activeTransaction.run(transactionView, () => fn(transactionView));
@@ -150,7 +156,7 @@ export function createSqlDatabase(
         }
       });
     },
-    close: () => driver.close?.(),
+    close: () => locked(async () => driver.close?.()),
   } as SqlDatabase;
 
   return database;

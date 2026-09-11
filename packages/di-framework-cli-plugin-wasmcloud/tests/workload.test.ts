@@ -267,6 +267,9 @@ describe('workload manifests', () => {
     expect(yaml).toContain('volumeMounts:');
     expect(yaml).toContain('hostgroup: storage');
     expect(yaml).toContain('package: http');
+    expect(yaml).toContain('"host": "greeter.wasmcloud.svc.cluster.local"');
+    expect(yaml).toContain('DI_CONTROL_REJECT_FORWARDED: "1"');
+    expect(yaml).toContain('DI_CONTROL_HTTP_HOST: "greeter,greeter.wasmcloud.svc.cluster.local"');
   });
 
   it('applyWorkload discovers queue handlers and persistent storage flags', async () => {

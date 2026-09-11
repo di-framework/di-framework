@@ -172,6 +172,9 @@ export class NotificationService {
     expect(manifest).toContain('value: "daily-backup"');
     expect(manifest).toContain('cron-invoker');
     expect(manifest).toContain('/_di/cron/daily-backup/invoke');
+    expect(manifest).toContain('Host: batch-worker.production.svc.cluster.local');
+    expect(manifest).toContain('"host": "batch-worker.production.svc.cluster.local"');
+    expect(manifest).toContain('DI_CONTROL_REJECT_FORWARDED: "1"');
     expect(manifest).toContain('curlimages/curl:');
     expect(manifest).toContain('name: batch-worker-control');
     expect(manifest).toContain('key: DI_CONTROL_TOKEN');
@@ -251,6 +254,8 @@ export class NotificationService {
       expect(spec.volumes[0].hostPath.path).toBe('/var/lib/di-framework/storage/hybrid-app');
       expect(spec.components[0].localResources.environment.config).toEqual({
         ACTOR_STORAGE_DIR: '/data/actors',
+        DI_CONTROL_HTTP_HOST: 'hybrid-app,hybrid-app.default.svc.cluster.local',
+        DI_CONTROL_REJECT_FORWARDED: '1',
         DI_CRON_MODE: 'external',
         DI_SQLITE_BACKEND: 'wasm',
         DI_STORAGE_DIR: '/data/actors',
