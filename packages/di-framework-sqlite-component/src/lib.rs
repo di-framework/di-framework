@@ -52,16 +52,19 @@ impl Guest for Component {
         let create = opts.create.unwrap_or(true) && !read_only;
 
         // Create parent directories before opening — SQLite never does this itself,
-        // and WASI hosts only preopen the volume root.
+        // and WASI hosts only preopen the volume root. Parse URI filenames first so
+        // `file:/data/x.db?mode=rwc` does not mkdir a path that includes `?query`.
         if create && !is_in_memory(&path) {
-            if let Some(parent) = std::path::Path::new(&path).parent() {
-                if !parent.as_os_str().is_empty() {
-                    std::fs::create_dir_all(parent).map_err(|e| {
-                        Error::OpenFailed(format!(
-                            "{path}: create parent directory {}: {e}",
-                            parent.display()
-                        ))
-                    })?;
+            if let Some(fs_path) = sqlite_uri_filesystem_path(&path) {
+                if let Some(parent) = std::path::Path::new(fs_path).parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent).map_err(|e| {
+                            Error::OpenFailed(format!(
+                                "{path}: create parent directory {}: {e}",
+                                parent.display()
+                            ))
+                        })?;
+                    }
                 }
             }
         }
@@ -297,6 +300,61 @@ impl GuestConnection for SqliteConnection {
 
 fn is_in_memory(path: &str) -> bool {
     path == ":memory:" || path.starts_with("file::memory:") || path.contains("mode=memory")
+}
+
+/// Filesystem path SQLite will use, with URI scheme and query string stripped.
+/// Returns `None` for empty / in-memory names that have no parent directory.
+fn sqlite_uri_filesystem_path(path: &str) -> Option<&str> {
+    if path.is_empty() || path == ":memory:" {
+        return None;
+    }
+    if let Some(rest) = path.strip_prefix("file:") {
+        let rest = rest.split_once('?').map(|(p, _)| p).unwrap_or(rest);
+        if rest.is_empty() || rest == ":memory:" || rest.starts_with(":memory:") {
+            return None;
+        }
+        if let Some(after_authority) = rest.strip_prefix("//") {
+            return after_authority
+                .find('/')
+                .map(|idx| &after_authority[idx..])
+                .filter(|p| !p.is_empty());
+        }
+        return Some(rest);
+    }
+    Some(path)
+}
+
+#[cfg(test)]
+mod sqlite_uri_filesystem_path_tests {
+    use super::sqlite_uri_filesystem_path;
+
+    #[test]
+    fn strips_uri_scheme_and_query() {
+        assert_eq!(sqlite_uri_filesystem_path(""), None);
+        assert_eq!(sqlite_uri_filesystem_path(":memory:"), None);
+        assert_eq!(sqlite_uri_filesystem_path("file::memory:"), None);
+        assert_eq!(sqlite_uri_filesystem_path("file::memory:?cache=shared"), None);
+        assert_eq!(sqlite_uri_filesystem_path("file:?mode=memory"), None);
+        assert_eq!(sqlite_uri_filesystem_path("file:foo.db"), Some("foo.db"));
+        assert_eq!(
+            sqlite_uri_filesystem_path("file:nested/foo.db?mode=rwc"),
+            Some("nested/foo.db")
+        );
+        assert_eq!(
+            sqlite_uri_filesystem_path("file:/data/nested/foo.db?cache=shared"),
+            Some("/data/nested/foo.db")
+        );
+        assert_eq!(
+            sqlite_uri_filesystem_path("file:///data/nested/foo.db"),
+            Some("/data/nested/foo.db")
+        );
+        assert_eq!(
+            sqlite_uri_filesystem_path("file://localhost/data/nested/foo.db"),
+            Some("/data/nested/foo.db")
+        );
+        assert_eq!(sqlite_uri_filesystem_path("file://memory"), None);
+        assert_eq!(sqlite_uri_filesystem_path("/data/foo.db"), Some("/data/foo.db"));
+    }
 }
 
 fn column_names(stmt: &rusqlite::Statement<'_>) -> Vec<String> {

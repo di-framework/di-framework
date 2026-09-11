@@ -174,6 +174,16 @@ fn main() {
         Err(Error::OpenFailed(_)) => {}
         other => panic!("unexpected open result for nested path, got {other:?}"),
     }
+    match open("file:/data/uri-nested/x.sqlite?mode=rwc", None) {
+        Ok(_) => {}
+        Err(Error::OpenFailed(_)) => {}
+        other => panic!("unexpected open result for SQLite URI nested path, got {other:?}"),
+    }
+    let bogus_query_dir = std::path::Path::new("/data/uri-nested/x.sqlite?mode=rwc");
+    assert!(
+        !bogus_query_dir.exists(),
+        "create_dir_all must use the URI filesystem path, not the raw string including ?query"
+    );
     match open("/not-preopened/x.sqlite", None) {
         Err(Error::OpenFailed(_)) => {}
         other => panic!("expected open-failed outside preopen, got {other:?}"),
