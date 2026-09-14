@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
-import { type Api, ApiError, Controller, collection } from '../assets/platform/tenancy/controller';
+import { type Api, ApiError, Controller, collection } from '../src/tenancy/controller';
 import {
   type ControllerConfig,
   FINALIZER,
@@ -13,7 +13,7 @@ import {
   type User,
   userResources,
   VERSION,
-} from '../assets/platform/tenancy/resources';
+} from '../src/tenancy/resources';
 
 const cfg: ControllerConfig = {
   installation: 'test',

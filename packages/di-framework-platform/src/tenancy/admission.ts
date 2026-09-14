@@ -1,4 +1,4 @@
-import { INSTALLATION, TENANT, type Resource } from './resources';
+import { INSTALLATION, type Resource, TENANT } from './resources';
 
 /** The controller's runtime credentials must never become guest capabilities. */
 export function admissionResources(installation: string, namespace: string): Resource[] {

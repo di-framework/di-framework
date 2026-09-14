@@ -2,21 +2,21 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout } from 'node:timers/promises';
 import {
-  VERSION,
-  INSTALLATION,
-  OWNER,
-  TENANT,
-  FINALIZER,
-  names,
-  validName,
-  resource,
-  tenantResources,
-  userResources,
-  type Resource,
-  type Tenant,
-  type User,
-  type ControllerConfig,
   type Condition,
+  type ControllerConfig,
+  FINALIZER,
+  INSTALLATION,
+  names,
+  OWNER,
+  type Resource,
+  resource,
+  TENANT,
+  type Tenant,
+  tenantResources,
+  type User,
+  userResources,
+  VERSION,
+  validName,
 } from './resources';
 
 const plurals: Record<string, string> = {
@@ -402,7 +402,9 @@ export async function main(
     throw new Error('Missing PLATFORM_CONFIG');
   const controller = new Controller(api, cfg);
   let stopped = false;
-  const stop = () => { stopped = true; };
+  const stop = () => {
+    stopped = true;
+  };
   process.on('SIGTERM', stop);
   try {
     while (!stopped) {
@@ -417,7 +419,10 @@ export async function main(
     process.off('SIGTERM', stop);
   }
 }
-export function reportFatal(error: Error, status: { exitCode?: string | number | null } = process): void {
+export function reportFatal(
+  error: Error,
+  status: { exitCode?: string | number | null } = process,
+): void {
   console.error(error.message);
   status.exitCode = 1;
 }

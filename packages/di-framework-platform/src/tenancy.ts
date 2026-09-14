@@ -1,21 +1,20 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import * as ts from 'typescript';
 import * as k8s from '@pulumi/kubernetes';
-import * as pulumi from '@pulumi/pulumi';
+import type * as pulumi from '@pulumi/pulumi';
+import { admissionResources } from './tenancy/admission';
 import {
   crds,
-  VERSION,
   INSTALLATION,
-  TENANT,
   names,
-  validName,
+  type Resource,
+  TENANT,
   type TenantSpec,
   type UserSpec,
-  type Resource,
+  VERSION,
+  validName,
 } from './tenancy/resources';
-import { admissionResources } from './tenancy/admission';
 
 export interface TenantDeclaration extends TenantSpec {
   name: string;
@@ -84,6 +83,8 @@ export function installTenancy(args: {
   users: UserDeclaration[];
   hostImage: string;
   hostImagePullPolicy: string;
+  insecureRegistry?: boolean;
+  storageRoot?: string;
 }): { tenants: k8s.apiextensions.CustomResource[]; users: k8s.apiextensions.CustomResource[] } {
   const { installation, namespace, provider } = args;
   function createCustom(
@@ -123,13 +124,7 @@ export function installTenancy(args: {
   const script = Object.fromEntries(
     ['resources', 'controller'].map((name) => [
       `${name}.js`,
-      ts.transpileModule(readFileSync(path.join(__dirname, 'tenancy', `${name}.ts`), 'utf8'), {
-        compilerOptions: {
-          target: ts.ScriptTarget.ES2022,
-          module: ts.ModuleKind.CommonJS,
-          esModuleInterop: true,
-        },
-      }).outputText,
+      readFileSync(path.join(__dirname, 'tenancy', `${name}.js`), 'utf8'),
     ]),
   );
   const scriptHash = createHash('sha256').update(JSON.stringify(script)).digest('hex');
@@ -220,6 +215,18 @@ export function installTenancy(args: {
         {
           from: [
             {
+              namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': namespace } },
+              podSelector: {
+                matchExpressions: [
+                  {
+                    key: 'wasmcloud.com/name',
+                    operator: 'In',
+                    values: ['hostgroup', 'runtime-operator'],
+                  },
+                ],
+              },
+            },
+            {
               namespaceSelector: {
                 matchLabels: { [INSTALLATION]: installation },
                 matchExpressions: [{ key: TENANT, operator: 'Exists' }],
@@ -267,7 +274,8 @@ export function installTenancy(args: {
                       hostImage: args.hostImage,
                       hostImagePullPolicy: args.hostImagePullPolicy,
                       schedulerNatsUrl: `nats://nats.${namespace}.svc.cluster.local:4222`,
-                      insecureRegistry: true,
+                      insecureRegistry: args.insecureRegistry ?? false,
+                      storageRoot: args.storageRoot,
                     }),
                   },
                 ],

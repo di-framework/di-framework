@@ -74,6 +74,7 @@ jobs:
           packages/di-framework-cloudfoundry \
           packages/di-framework-wasmcloud \
           packages/di-framework-cli-extension \
+          packages/di-framework-platform \
           packages/di-framework-cli-plugin-wasmcloud \
           packages/di-framework-cli \
           packages/di-framework-tsc; do

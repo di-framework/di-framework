@@ -49,7 +49,8 @@
     "unenv": "2.0.0-rc.24",
     "@babel/core": "7.29.7",
     "@babel/plugin-transform-async-to-generator": "7.29.7",
-    "@di-framework/actors": "^5"
+    "@di-framework/actors": "^5",
+    "@di-framework/platform": "^5"
   },
   "peerDependencies": {
     "typescript": "^5"

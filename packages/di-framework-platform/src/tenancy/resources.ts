@@ -50,6 +50,7 @@ export interface ControllerConfig {
   hostImagePullPolicy?: string;
   schedulerNatsUrl: string;
   insecureRegistry: boolean;
+  storageRoot?: string;
 }
 const GROUP = 'platform.di-framework.dev';
 const VERSION = `${GROUP}/v1alpha1`;
@@ -339,7 +340,11 @@ function tenantResources(
                   namespaceSelector: {
                     matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' },
                   },
-                  podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } },
+                  podSelector: {
+                    matchExpressions: [
+                      { key: 'k8s-app', operator: 'In', values: ['kube-dns', 'coredns'] },
+                    ],
+                  },
                 },
               ],
               ports: [
@@ -418,7 +423,7 @@ function tenantResources(
                 {
                   name: 'data',
                   hostPath: {
-                    path: `/var/lib/k0s/di-tenants/${tenant.metadata.uid}/${name}`,
+                    path: `${cfg.storageRoot ?? '/var/lib/k0s'}/di-tenants/${tenant.metadata.uid}/${name}`,
                     type: 'DirectoryOrCreate',
                   },
                 },
@@ -576,18 +581,19 @@ function userResources(user: User, tenants: Tenant[], cfg: ControllerConfig): Re
   }
   return result;
 }
+
 export {
-  GROUP,
-  VERSION,
-  INSTALLATION,
-  OWNER,
-  TENANT,
-  USER,
-  FINALIZER,
   crds,
+  FINALIZER,
+  GROUP,
+  INSTALLATION,
   names,
-  validName,
+  OWNER,
   resource,
+  TENANT,
   tenantResources,
+  USER,
   userResources,
+  VERSION,
+  validName,
 };
