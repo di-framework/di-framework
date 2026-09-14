@@ -44,6 +44,22 @@ stack = "dev"
 });
 
 describe('runWasmcloudPlatformDeploy', () => {
+  it('rejects an invalid namespace returned by Pulumi', async () => {
+    const { root, kubeconfig } = makeWorkspace();
+    const outputs = JSON.parse(platformOutputJson(kubeconfig));
+    outputs.namespace = '../tenant';
+    await expect(
+      runWasmcloudPlatformDeploy(
+        ['local', '--yes'],
+        captureIo().io,
+        fakeDeps({
+          cwd: root,
+          capturedStdout: { 'pulumi stack output': JSON.stringify(outputs) },
+        }),
+      ),
+    ).rejects.toThrow('Kubernetes namespace');
+  });
+
   it('runs pulumi up for a managed target and reads the output contract', async () => {
     const { root, kubeconfig } = makeWorkspace();
     const invocations: RunnerInvocation[] = [];

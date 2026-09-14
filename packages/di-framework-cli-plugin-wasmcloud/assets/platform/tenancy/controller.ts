@@ -393,26 +393,32 @@ export class Controller {
     }
   }
 }
-async function main(): Promise<void> {
+export async function main(
+  api: Api = new KubernetesApi(),
+  pause: (milliseconds: number) => Promise<unknown> = setTimeout,
+): Promise<void> {
   const cfg = JSON.parse(process.env.PLATFORM_CONFIG ?? '{}') as ControllerConfig;
   if (!cfg.installation || !cfg.namespace || !cfg.hostImage || !cfg.schedulerNatsUrl)
     throw new Error('Missing PLATFORM_CONFIG');
-  const controller = new Controller(new KubernetesApi(), cfg);
+  const controller = new Controller(api, cfg);
   let stopped = false;
-  process.on('SIGTERM', () => {
-    stopped = true;
-  });
-  while (!stopped) {
-    try {
-      await controller.tick();
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : 'API unavailable');
+  const stop = () => { stopped = true; };
+  process.on('SIGTERM', stop);
+  try {
+    while (!stopped) {
+      try {
+        await controller.tick();
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : 'API unavailable');
+      }
+      if (!stopped) await pause(3_000);
     }
-    if (!stopped) await setTimeout(3_000);
+  } finally {
+    process.off('SIGTERM', stop);
   }
 }
-if (require.main === module)
-  main().catch((error) => {
-    console.error(error.message);
-    process.exitCode = 1;
-  });
+export function reportFatal(error: Error): void {
+  console.error(error.message);
+  process.exitCode = 1;
+}
+if (require.main === module) main().catch(reportFatal);

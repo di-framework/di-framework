@@ -2,10 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildComponent, requirementsForProject } from '../src/build';
+import { runWasmcloudDeploy } from '../src/deploy';
 import { hostInterfacesFromRequirements } from '../src/host-interface';
 import { loadProject } from '../src/project';
 import { writeWorkloadManifest } from '../src/workload-members';
-import { captureIo, fakeDeps, makeAssets, makeProject } from './helpers';
+import { captureIo, fakeDeps, makeAssets, makeProject, makeWorkspace } from './helpers';
 
 function member(name: string, declaration: string) {
   const root = makeProject({ name, entry: 'src/app.ts', workload: 'warehouse' });
@@ -17,6 +18,59 @@ function member(name: string, declaration: string) {
 }
 
 describe('implicit workloads', () => {
+  it('deploys a discovered messaging member and writes its workload manifest', async () => {
+    const { root, greeter } = makeWorkspace();
+    writeFileSync(
+      join(greeter, 'di-framework.config.json'),
+      JSON.stringify({ name: 'greeter', entry: 'src/app.ts', workload: 'warehouse' }),
+    );
+    writeFileSync(
+      join(greeter, 'src/app.ts'),
+      `import { WorkloadService } from '@di-framework/wasmcloud';
+export const sync = WorkloadService({ path: '/sync', subscriptions: ['warehouse.stock'] })(async () => {});`,
+    );
+    const assets = makeAssets();
+    cpSync(
+      new URL('../assets/wit/deps/wasmcloud-messaging', import.meta.url),
+      join(assets, 'wit/deps/wasmcloud-messaging'),
+      { recursive: true },
+    );
+    await runWasmcloudDeploy(
+      ['greeter', '--target', 'development'],
+      captureIo().io,
+      fakeDeps({ cwd: root, assets }),
+    );
+    const manifest = JSON.parse(
+      readFileSync(join(root, '.di-framework/workloads/warehouse.json'), 'utf8'),
+    );
+    expect(manifest.members).toHaveLength(1);
+    expect(manifest.paths).toEqual({ '/sync': 'greeter' });
+    const yaml = readFileSync(join(greeter, '.di-framework/deploy/workload.yaml'), 'utf8');
+    expect(yaml).toContain('warehouse.stock');
+    expect(yaml).toContain('handler');
+    expect(yaml).not.toContain('kind: Service');
+  });
+
+  it('builds a run service without messaging or HTTP exports', async () => {
+    const project = member(
+      'run',
+      "export const run = WorkloadService({ path: '/run' })(async () => {});",
+    );
+    const assets = makeAssets();
+    cpSync(
+      new URL('../assets/wit/deps/wasi-cli', import.meta.url),
+      join(assets, 'wit/deps/wasi-cli'),
+      { recursive: true },
+    );
+    await buildComponent(project, captureIo().io, fakeDeps({ cwd: project.projectRoot, assets }));
+    const adapter = readFileSync(
+      join(project.projectRoot, '.di-framework/cron-adapter.js'),
+      'utf8',
+    );
+    expect(adapter).toContain('export const run');
+    expect(adapter).not.toContain('handleMessage');
+  });
+
   it('derives membership and routes without executing members', () => {
     const take = member(
       'take',

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { type Api, ApiError, Controller, collection } from '../assets/platform/tenancy/controller';
 import {
   type ControllerConfig,
@@ -134,6 +134,44 @@ function prepare(): { api: MemoryApi; controller: Controller; t: Tenant; u: User
 }
 
 describe('tenant and user resource reconciliation', () => {
+  it('polls both resource kinds and isolates reconciliation failures', async () => {
+    const { api, controller, t, u } = prepare();
+    api.seed({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: names('alpha').namespace } });
+    const log = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await controller.tick();
+      expect(api.objects.get(key(t))?.status).toMatchObject({
+        conditions: [expect.objectContaining({ reason: 'ReconcileError', status: 'False' })],
+      });
+      expect(api.objects.get(key(u))?.status).toBeDefined();
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Refusing to adopt'));
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('continues polling when reporting a reconciliation error also fails', async () => {
+    const { controller } = prepare();
+    const reconcile = spyOn(controller, 'reconcileTenant').mockRejectedValue('conflict');
+    const log = spyOn(console, 'error').mockImplementation(() => {});
+    // A failed status update must not prevent the user from being reconciled.
+    const status = spyOn(
+      controller as unknown as { status: () => Promise<void> },
+      'status',
+    ).mockRejectedValue(new Error('resourceVersion conflict'));
+    const userReconcile = spyOn(controller, 'reconcileUser').mockResolvedValue();
+    try {
+      await controller.tick();
+      expect(log).toHaveBeenCalledWith('Tenant/alpha: Reconciliation failed');
+      expect(userReconcile).toHaveBeenCalledTimes(1);
+    } finally {
+      reconcile.mockRestore();
+      status.mockRestore();
+      userReconcile.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it('separates runtime credentials and data backends from the workload namespace', () => {
     const resources = tenantResources(tenant(), cfg, { data: { 'tls.key': 'private' } });
     expect(

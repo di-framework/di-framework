@@ -45,6 +45,19 @@ function expectScope(invocations: RunnerInvocation[], root: string, user: string
 }
 
 describe('tenant deployment targets', () => {
+  it('rejects invalid tenant hostgroup selectors', () => {
+    const { root, manifest } = tenantWorkspace();
+    for (const field of ['hostgroup', 'storage-hostgroup']) {
+      const invalid = manifest.replace(
+        field === 'hostgroup' ? 'hostgroup = "alice"' : 'storage-hostgroup = "alice-storage"',
+        `${field} = "../other"`,
+      );
+      expect(() =>
+        parseDeployManifest(join(root, 'di-framework.deploy.toml'), invalid, {}),
+      ).toThrow('DNS label');
+    }
+  });
+
   it('deploys the same application separately with each target’s credentials, namespace, environment and registry', async () => {
     const { root, greeter } = tenantWorkspace();
     for (const user of ['alice', 'bob']) {
