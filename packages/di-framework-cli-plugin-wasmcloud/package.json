@@ -38,13 +38,13 @@
     }
   },
   "dependencies": {
-    "@bytecodealliance/jco": "1.32.1",
+    "@bytecodealliance/jco": "1.33.0",
     "@di-framework/cli-extension": "^5",
     "@di-framework/componentize-qjs": "0.4.4-di.2",
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
-    "rolldown": "1.2.7",
+    "rolldown": "1.2.8",
     "typescript": "^5",
     "unenv": "2.0.0-rc.24",
     "@babel/core": "7.29.7",

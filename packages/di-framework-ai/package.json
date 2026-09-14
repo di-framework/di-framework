@@ -52,7 +52,7 @@
     "@di-framework/auth": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5",
-    "zod": "^4.4.3"
+    "zod": "^4.6.2"
   },
   "peerDependencies": {
     "@di-framework/auth": "^5",
@@ -63,6 +63,6 @@
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "optionalDependencies": {
-    "wasm-similarity": "^1.0.10"
+    "wasm-similarity": "^1.0.16"
   }
 }
