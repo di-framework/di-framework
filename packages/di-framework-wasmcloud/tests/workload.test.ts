@@ -16,7 +16,7 @@ describe('workload membership', () => {
 
     expect(getWorkload(fetch)).toEqual({ name: 'warehouse' });
     expect(getWorkloadComponent(fetch)).toEqual({ workload: 'warehouse' });
-    expect(await (await fetch(new Request('http://warehouse/'))).text()).toBe('ok');
+    expect(await (await fetch()).text()).toBe('ok');
   });
 
   it('records component membership and an optional HTTP route', async () => {

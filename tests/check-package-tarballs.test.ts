@@ -57,3 +57,49 @@ describe('parseNpmPackJson', () => {
     });
   });
 });
+
+it('skips private applications while enforcing published package contents', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join, resolve } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'private-pack-audit-'));
+  const audit = resolve(import.meta.dir, '../scripts/check-package-tarballs.ts');
+  try {
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'workspace', version: '5.3.3', private: true }),
+    );
+    const dir = join(root, 'packages', 'private-app');
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    const manifest = {
+      name: '@di-framework/private-app',
+      version: '5.3.3',
+      private: true,
+      exports: './src/index.ts',
+      dependencies: { '@di-framework/core': 'workspace:*' },
+    };
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest));
+    writeFileSync(join(dir, 'src/index.ts'), 'export const app = true;');
+    const run = async () => {
+      const process = Bun.spawn([Bun.which('bun')!, audit], {
+        cwd: root,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+        process.exited,
+      ]);
+      return { output: stdout + stderr, exitCode };
+    };
+    expect((await run()).exitCode).toBe(0);
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ ...manifest, private: false }));
+    const published = await run();
+    expect(published.exitCode).toBe(1);
+    expect(published.output).toContain('unresolved protocol "workspace:*"');
+    expect(published.output).toContain('forbidden raw TypeScript source file');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

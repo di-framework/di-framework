@@ -237,7 +237,7 @@ export function checkPackageTarballs(): boolean {
   const packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'di-pack-audit-'));
 
   console.log(
-    `📦 Auditing packaging tarballs for all ${workspacePackages.length} published packages...\n`,
+    `📦 Auditing packaging tarballs for all ${workspacePackages.length} workspace packages (private packages are skipped)...\n`,
   );
   console.log(
     `📌 Release version ${releaseVersion} (internal @di-framework/* ranges must accept it, typically ${expectedInternalRange})\n`,
@@ -260,6 +260,9 @@ export function checkPackageTarballs(): boolean {
         string,
         unknown
       >;
+      // Private workspace applications are deployed as components, never npm tarballs.
+      if (sourcePkgJson.private === true) continue;
+
       const pkgName: string = (sourcePkgJson.name as string) || pkg.name;
 
       console.log(`Checking ${pkgName} (${pkg.dirName})...`);
@@ -381,9 +384,7 @@ export function checkPackageTarballs(): boolean {
     return false;
   }
 
-  console.log(
-    `\n✨ Packaging audit completed successfully! All ${workspacePackages.length} packages verified.`,
-  );
+  console.log(`\n✨ Packaging audit completed successfully! All publishable packages verified.`);
   return true;
 }
 

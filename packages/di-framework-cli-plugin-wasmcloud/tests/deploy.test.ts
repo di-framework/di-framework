@@ -32,7 +32,7 @@ describe('runWasmcloudDeploy', () => {
       application: 'greeter',
       target: 'development',
       namespace: 'wasmcloud',
-      image: `registry.example.com/team/greeter:sha256-${deploymentDigest}`,
+      image: `registry.example.com/team/greeter@sha256:${'a'.repeat(64)}`,
       publishedImage: `registry.example.com/team/greeter:sha256-${deploymentDigest}`,
       digest: artifactDigest,
       service: 'greeter',
@@ -137,11 +137,9 @@ insecure = true
     expect(oras?.args).toContain(result.data.publishedImage as string);
     expect(result.data.publishedImage).toStartWith('127.0.0.1:25000/greeter:sha256-');
     expect(result.data.image).toStartWith(
-      'di-framework-registry.wasmcloud.svc.cluster.local:5000/greeter:sha256-',
+      'di-framework-registry.wasmcloud.svc.cluster.local:5000/greeter@sha256:',
     );
-    expect(String(result.data.publishedImage).split('/greeter:')[1]).toBe(
-      String(result.data.image).split('/greeter:')[1],
-    );
+    expect(result.data.image).toEndWith(`@sha256:${'a'.repeat(64)}`);
     const yaml = readFileSync(join(greeter, '.di-framework/deploy/workload.yaml'), 'utf8');
     expect(yaml).toContain(result.data.image as string);
     expect(yaml).not.toContain(result.data.publishedImage as string);
@@ -190,9 +188,8 @@ insecure = true
     const pushes = invocations.filter(
       (invocation) => invocation.command === 'oras' && invocation.args[0] === 'push',
     );
-    expect(pushes[0]?.args.find((arg) => arg.includes('/greeter:sha256-'))).toBe(
-      pushes[1]?.args.find((arg) => arg.includes('/greeter:sha256-')),
-    );
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]?.args).toContain(first.data.publishedImage as string);
   });
 
   it('does not replace an existing canonical-input tag', async () => {
@@ -297,4 +294,24 @@ it('builds and reports scheduled-only deployments without an HTTP service', asyn
   const yaml = readFileSync(join(generated, 'deploy', 'workload.yaml'), 'utf8');
   expect(yaml).toContain('kind: CronJob');
   expect(yaml).toContain('kind: Service');
+});
+
+it('does not submit a deploy intent when the registry descriptor is invalid or unavailable', async () => {
+  const { greeter } = makeWorkspace();
+  for (const descriptor of ['{}', '{"digest":"sha256:short"}']) {
+    await expect(
+      runWasmcloudDeploy(
+        ['--target', 'development'],
+        captureIo().io,
+        fakeDeps({ cwd: greeter, capturedStdout: { 'oras manifest fetch': descriptor } }),
+      ),
+    ).rejects.toThrow(/manifest descriptor/);
+  }
+  await expect(
+    runWasmcloudDeploy(
+      ['--target', 'development'],
+      captureIo().io,
+      fakeDeps({ cwd: greeter, exitCodes: { 'oras manifest fetch': 1 } }),
+    ),
+  ).rejects.toMatchObject({ code: 'WASMCLOUD_TOOL_FAILED' });
 });

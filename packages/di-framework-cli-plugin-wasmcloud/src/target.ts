@@ -65,11 +65,6 @@ async function resolveManagedConnection(
 ): Promise<ClusterConnection> {
   const platformRoot = resolvePlatformDirectory(target, workspaceRoot, manifestPath);
   const outputs = await loadPlatformOutputs(deps, platformRoot, target.stack, target.name);
-  const controller =
-    outputs.controller ??
-    (outputs.endpoints?.http !== undefined
-      ? { url: outputs.endpoints.http, host: CONTROLLER_HOST }
-      : undefined);
   return {
     target: target.name,
     kubeconfig: outputs.kubeconfig,
@@ -77,7 +72,7 @@ async function resolveManagedConnection(
     registry: outputs.registry,
     context: outputs.context,
     endpoints: outputs.endpoints,
-    controller,
+    controller: outputs.controller,
     platformRoot,
     stack: target.stack,
   };

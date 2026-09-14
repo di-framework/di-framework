@@ -114,13 +114,14 @@ export function fakeDeps(options: {
   washBinaryPath?: string | null;
   /** Patched componentize-qjs CLI; undefined uses jco. */
   componentizeQjsPath?: string;
-  fetch?: typeof fetch;
+  fetch?: WasmcloudDeps['fetch'];
   credentialsPath?: string;
   openUrl?: (url: string) => Promise<void>;
   listenLoopback?: WasmcloudDeps['listenLoopback'];
 }): WasmcloudDeps {
   const invocations = options.invocations ?? [];
   let componentBuilds = 0;
+  let pushed = false;
   const run = async (
     command: string,
     args: readonly string[],
@@ -154,22 +155,29 @@ export function fakeDeps(options: {
         writeFileSync(outputPath, 'composed-sqlite-component');
       }
     }
+    if (command === 'oras' && args[0] === 'push') pushed = true;
     const key = invocationKey(command, args);
     const kubectlLabelQuery = args.find(
       (arg) => typeof arg === 'string' && arg.startsWith('di-framework.dev/application!='),
     );
     const defaultExit =
       options.exitCodes?.[key] ??
-      (key === 'kubectl get secret' ? 1 : command === 'oras' && args[0] === 'manifest' ? 1 : 0);
+      (key === 'kubectl get secret'
+        ? 1
+        : command === 'oras' && args[0] === 'manifest' && !pushed
+          ? 1
+          : 0);
     return {
       exitCode: defaultExit,
       stdout:
         options.capturedStdout?.[key] ??
-        (command === 'kubectl' && args.includes('get') && kubectlLabelQuery
-          ? (options.capturedStdout?.['kubectl ownership'] ?? '{"items":[]}')
-          : command === 'kubectl' && args.includes('get')
-            ? READY_WORKLOAD_JSON
-            : ''),
+        (command === 'oras'
+          ? JSON.stringify({ digest: `sha256:${'a'.repeat(64)}` })
+          : command === 'kubectl' && args.includes('get') && kubectlLabelQuery
+            ? (options.capturedStdout?.['kubectl ownership'] ?? '{"items":[]}')
+            : command === 'kubectl' && args.includes('get')
+              ? READY_WORKLOAD_JSON
+              : ''),
       stderr: '',
     };
   };
@@ -206,17 +214,22 @@ export function fakeDeps(options: {
         const url = String(input);
         const method = (init?.method ?? 'GET').toUpperCase();
         if (url.includes('/health')) {
-          return new Response(JSON.stringify({ ok: true, namespace: 'wasmcloud' }), { status: 200 });
+          return new Response(JSON.stringify({ ok: true, namespace: 'wasmcloud' }), {
+            status: 200,
+          });
         }
         if (method === 'DELETE') {
-          return new Response(JSON.stringify({ deleted: true, namespace: 'wasmcloud' }), { status: 200 });
+          return new Response(JSON.stringify({ deleted: true, namespace: 'wasmcloud' }), {
+            status: 200,
+          });
         }
         return new Response(
           JSON.stringify({ ready: true, namespace: 'wasmcloud', name: 'greeter' }),
           { status: 200 },
         );
       }),
-    credentialsPath: () => options.credentialsPath ?? join(options.cwd, '.di-framework-credentials.json'),
+    credentialsPath: () =>
+      options.credentialsPath ?? join(options.cwd, '.di-framework-credentials.json'),
     openUrl: options.openUrl ?? (async () => undefined),
     listenLoopback:
       options.listenLoopback ??

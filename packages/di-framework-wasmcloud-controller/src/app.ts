@@ -1,12 +1,12 @@
 import {
   bearerTokenStrategy,
   createPrincipal,
+  type KeyService,
   keyService,
   memoryKeyStore,
+  type Principal,
   randomToken,
   timingSafeEqualString,
-  type KeyService,
-  type Principal,
 } from '@di-framework/auth';
 import { getPrincipal, withAuthErrors, withAuthRoutes } from '@di-framework/auth/http';
 import {
@@ -32,26 +32,16 @@ import {
 import { IntentError, parseDeployIntent } from './intent';
 import {
   BATCH_API,
-  CORE_API,
   type ClusterSettings,
+  CORE_API,
   KubeError,
   kubeJson,
   namespacedPath,
   WD_API,
 } from './kube';
-import {
-  type MembershipTable,
-  mapSubject,
-  parseMembers,
-  resolveMembership,
-} from './membership';
+import { type MembershipTable, mapSubject, parseMembers, resolveMembership } from './membership';
 import { APPLICATION_POLICY_DOCUMENT, type ApplicationResource } from './policy';
-import {
-  decodeSession,
-  encodeSession,
-  readSessionCookie,
-  sessionCookieHeader,
-} from './session';
+import { decodeSession, encodeSession, readSessionCookie, sessionCookieHeader } from './session';
 
 export const CLI_CLIENT_ID = 'di-framework-cli';
 export const CONTROLLER_HOST = 'deploy';
@@ -116,7 +106,9 @@ async function trySecret(key: string): Promise<string | undefined> {
   return undefined;
 }
 
-export function createApp(options: ControllerOptions = {}): { fetch: (request: Request) => Promise<Response> } {
+export function createApp(options: ControllerOptions = {}): {
+  fetch: (request: Request) => Promise<Response>;
+} {
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
   const keys = options.keyService ?? keyService({ store: memoryKeyStore({ silent: true }), now });
   const kube = new Kube(options.kube);
@@ -140,51 +132,44 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
     namespace: options.namespace ?? 'wasmcloud',
     kubeApi: options.kubeApi ?? 'https://kubernetes.default.svc',
     kubeToken: options.kubeToken ?? '',
-    members:
-      options.members ?? {
-        [options.bootstrapUser ?? 'admin']: { org: 'local', team: 'platform', roles: ['org-admin'] },
-      },
+    members: options.members ?? {
+      [options.bootstrapUser ?? 'admin']: { org: 'local', team: 'platform', roles: ['org-admin'] },
+    },
     bootstrapUser: options.bootstrapUser ?? 'admin',
     bootstrapPassword: options.bootstrapPassword ?? 'local-admin',
     sessionSecret: options.sessionSecret ?? 'local-session',
   };
 
-  let hydrated = !options.useBindings;
-  async function hydrate(): Promise<Resolved> {
-    if (hydrated) return resolved;
-    hydrated = true;
-    resolved.issuer = (await tryConfig('issuer')) ?? resolved.issuer;
-    resolved.namespace = (await tryConfig('namespace')) ?? resolved.namespace;
-    resolved.kubeApi = (await tryConfig('kubeApi')) ?? resolved.kubeApi;
-    resolved.kubeToken = (await trySecret('kubeToken')) ?? resolved.kubeToken;
-    const rawMembers = await tryConfig('members');
-    if (rawMembers !== undefined) resolved.members = parseMembers(rawMembers);
-    if (Object.keys(resolved.members).length === 0) {
-      resolved.members = {
-        [resolved.bootstrapUser]: { org: 'local', team: 'platform', roles: ['org-admin'] },
-      };
-    }
-    resolved.bootstrapUser = (await tryConfig('bootstrapUser')) ?? resolved.bootstrapUser;
-    resolved.bootstrapPassword = (await trySecret('bootstrapPassword')) ?? resolved.bootstrapPassword;
-    resolved.sessionSecret = (await trySecret('sessionSecret')) ?? resolved.sessionSecret;
-    return resolved;
+  let hydration: Promise<Resolved> | undefined;
+  function hydrate(): Promise<Resolved> {
+    if (!options.useBindings) return Promise.resolve(resolved);
+    hydration ??= (async () => {
+      resolved.issuer = (await tryConfig('issuer')) ?? resolved.issuer;
+      resolved.namespace = (await tryConfig('namespace')) ?? resolved.namespace;
+      resolved.kubeApi = (await tryConfig('kubeApi')) ?? resolved.kubeApi;
+      resolved.kubeToken = (await trySecret('kubeToken')) ?? resolved.kubeToken;
+      const rawMembers = await tryConfig('members');
+      if (rawMembers !== undefined) resolved.members = parseMembers(rawMembers);
+      if (Object.keys(resolved.members).length === 0) {
+        resolved.members = {
+          [resolved.bootstrapUser]: { org: 'local', team: 'platform', roles: ['org-admin'] },
+        };
+      }
+      resolved.bootstrapUser = (await tryConfig('bootstrapUser')) ?? resolved.bootstrapUser;
+      resolved.bootstrapPassword =
+        (await trySecret('bootstrapPassword')) ?? resolved.bootstrapPassword;
+      resolved.sessionSecret = (await trySecret('sessionSecret')) ?? resolved.sessionSecret;
+      return resolved;
+    })();
+    return hydration;
   }
-
-  const server = createAuthorizationServer({
-    issuer: resolved.issuer,
-    keyService: keys,
-    clientStore: clients,
-    authCodeStore: authCodes,
-    consentStore: consents,
-    tokenStore: tokens,
-    now,
-  });
 
   const manager = policyAuthorizationManager({
     policies: APPLICATION_POLICY_DOCUMENT,
     providers: {
       application: {
-        load: async (id, context) => loadResource(id, context.action, context.principal as Principal),
+        load: async (id, context) =>
+          loadResource(id, context.action, context.principal as Principal),
       },
     },
     mapSubject: (principal) => mapSubject(principal, resolved.members),
@@ -201,7 +186,10 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
   async function getWorkload(name: string) {
     return kubeJson<{
       metadata?: { labels?: Record<string, string> };
-      spec?: { replicas?: number; template?: { spec?: { volumes?: Array<{ hostPath?: { path?: string } }> } } };
+      spec?: {
+        replicas?: number;
+        template?: { spec?: { volumes?: Array<{ hostPath?: { path?: string } }> } };
+      };
       status?: {
         readyReplicas?: number;
         replicas?: { ready?: number };
@@ -255,7 +243,10 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
     return principal;
   }
 
-  async function assertStorageOwnership(application: string, witName: string): Promise<Response | undefined> {
+  async function assertStorageOwnership(
+    application: string,
+    witName: string,
+  ): Promise<Response | undefined> {
     const listed = await kubeJson<{
       items?: Array<{
         metadata?: { name?: string };
@@ -288,17 +279,31 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
   async function applyIntent(intent: ReturnType<typeof parseDeployIntent>, stamp: PrincipalStamp) {
     const secret = await kubeJson<{ data?: Record<string, string> }>(kube, cluster(), {
       method: 'GET',
-      path: namespacedPath(CORE_API, resolved.namespace, 'secrets', controlSecretName(intent.witName)),
+      path: namespacedPath(
+        CORE_API,
+        resolved.namespace,
+        'secrets',
+        controlSecretName(intent.witName),
+      ),
     });
     const controlToken = secret.status === 200 ? undefined : randomToken(32);
-    const documents = workloadDocuments(intent, { namespace: resolved.namespace }, stamp, controlToken);
+    const documents = workloadDocuments(
+      intent,
+      { namespace: resolved.namespace },
+      stamp,
+      controlToken,
+    );
     for (const document of documents) {
       const { api, resource } = kindApi(document.kind);
       const itemPath = namespacedPath(api, resolved.namespace, resource, document.metadata.name);
-      const existing = await kubeJson<{ metadata?: { resourceVersion?: string } }>(kube, cluster(), {
-        method: 'GET',
-        path: itemPath,
-      });
+      const existing = await kubeJson<{ metadata?: { resourceVersion?: string } }>(
+        kube,
+        cluster(),
+        {
+          method: 'GET',
+          path: itemPath,
+        },
+      );
       if (document.kind === 'Secret' && existing.status === 200) continue;
       if (existing.status === 404) {
         const created = await kubeJson(kube, cluster(), {
@@ -307,12 +312,18 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
           body: document,
         });
         if (created.status >= 300) {
-          throw new KubeError(`creating ${document.kind} ${document.metadata.name} failed`, created.status);
+          throw new KubeError(
+            `creating ${document.kind} ${document.metadata.name} failed`,
+            created.status,
+          );
         }
         continue;
       }
       if (existing.status >= 300) {
-        throw new KubeError(`reading ${document.kind} ${document.metadata.name} failed`, existing.status);
+        throw new KubeError(
+          `reading ${document.kind} ${document.metadata.name} failed`,
+          existing.status,
+        );
       }
       const updated = await kubeJson(kube, cluster(), {
         method: 'PUT',
@@ -326,7 +337,10 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
         },
       });
       if (updated.status >= 300) {
-        throw new KubeError(`updating ${document.kind} ${document.metadata.name} failed`, updated.status);
+        throw new KubeError(
+          `updating ${document.kind} ${document.metadata.name} failed`,
+          updated.status,
+        );
       }
     }
   }
@@ -350,7 +364,11 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
     if (membership === undefined) {
       return Response.json({ error: 'forbidden', reason: 'no-org' }, { status: 403 });
     }
-    if (action === 'create' && membership.team === undefined && !membership.roles.includes('org-admin')) {
+    if (
+      action === 'create' &&
+      membership.team === undefined &&
+      !membership.roles.includes('org-admin')
+    ) {
       return Response.json({ error: 'forbidden', reason: 'no-team' }, { status: 403 });
     }
     if (intent.persistentStorage || intent.hasActors || intent.queueHandlers.length > 0) {
@@ -408,10 +426,14 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
         path: namespacedPath(entry.api, resolved.namespace, entry.resource, entry.item),
       });
     }
-    const cron = await kubeJson<{ items?: Array<{ metadata?: { name?: string } }> }>(kube, cluster(), {
-      method: 'GET',
-      path: `${namespacedPath(BATCH_API, resolved.namespace, 'cronjobs')}?labelSelector=${encodeURIComponent(`app.kubernetes.io/name=${name}`)}`,
-    });
+    const cron = await kubeJson<{ items?: Array<{ metadata?: { name?: string } }> }>(
+      kube,
+      cluster(),
+      {
+        method: 'GET',
+        path: `${namespacedPath(BATCH_API, resolved.namespace, 'cronjobs')}?labelSelector=${encodeURIComponent(`app.kubernetes.io/name=${name}`)}`,
+      },
+    );
     for (const item of cron.value?.items ?? []) {
       if (item.metadata?.name === undefined) continue;
       await kubeJson(kube, cluster(), {
@@ -422,41 +444,72 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
     return json({ name, namespace: resolved.namespace, deleted: true });
   }
 
-  const router = TypedRouter({ catch: withAuthErrors() });
-  const strategy = bearerTokenStrategy({
-    algorithms: ['ES256', 'RS256'],
-    key: (header) => keys.verificationKey(header),
-    issuer: resolved.issuer,
-    audience: CLI_CLIENT_ID,
-    toPrincipal: (claims) =>
-      createPrincipal({
-        sub: String(claims.sub ?? ''),
-        method: 'bearer',
-        issuer: typeof claims.iss === 'string' ? claims.iss : resolved.issuer,
-        claims,
-        ...(typeof claims.scope === 'string'
-          ? { scope: claims.scope.split(' ').filter(Boolean) }
-          : {}),
+  let runtime: ReturnType<typeof createRuntime> | undefined;
+  function createRuntime() {
+    const server = createAuthorizationServer({
+      issuer: resolved.issuer,
+      keyService: keys,
+      clientStore: clients,
+      authCodeStore: authCodes,
+      consentStore: consents,
+      tokenStore: tokens,
+      now,
+    });
+    const router = TypedRouter({
+      catch: withAuthErrors({
+        fallback: (error) => {
+          throw error;
+        },
       }),
-  });
-  const secure = withAuthRoutes(router, { strategy });
+    });
+    const strategy = bearerTokenStrategy({
+      algorithms: ['ES256', 'RS256'],
+      key: (header) => keys.verificationKey(header),
+      issuer: resolved.issuer,
+      audience: CLI_CLIENT_ID,
+      toPrincipal: (claims) =>
+        createPrincipal({
+          sub: String(claims.sub ?? ''),
+          method: 'bearer',
+          issuer: typeof claims.iss === 'string' ? claims.iss : resolved.issuer,
+          claims,
+          ...(typeof claims.scope === 'string'
+            ? { scope: claims.scope.split(' ').filter(Boolean) }
+            : {}),
+        }),
+    });
+    const secure = withAuthRoutes(router, { strategy });
 
-  @Controller()
-  class Applications {
-    static create = secure.post('/applications/:name', (request) =>
-      upsert(request as unknown as Request, (request as unknown as { params: { name: string } }).params.name),
-    );
-    static update = secure.put('/applications/:name', (request) =>
-      upsert(request as unknown as Request, (request as unknown as { params: { name: string } }).params.name),
-    );
-    static read = secure.get('/applications/:name', (request) =>
-      read(request as unknown as Request, (request as unknown as { params: { name: string } }).params.name),
-    );
-    static remove = secure.delete('/applications/:name', (request) =>
-      remove(request as unknown as Request, (request as unknown as { params: { name: string } }).params.name),
-    );
+    @Controller()
+    class Applications {
+      static create = secure.post('/applications/:name', (request) =>
+        upsert(
+          request as unknown as Request,
+          (request as unknown as { params: { name: string } }).params.name,
+        ),
+      );
+      static update = secure.put('/applications/:name', (request) =>
+        upsert(
+          request as unknown as Request,
+          (request as unknown as { params: { name: string } }).params.name,
+        ),
+      );
+      static read = secure.get('/applications/:name', (request) =>
+        read(
+          request as unknown as Request,
+          (request as unknown as { params: { name: string } }).params.name,
+        ),
+      );
+      static remove = secure.delete('/applications/:name', (request) =>
+        remove(
+          request as unknown as Request,
+          (request as unknown as { params: { name: string } }).params.name,
+        ),
+      );
+    }
+    void Applications;
+    return { server, router };
   }
-  void Applications;
 
   async function subjectResolver(request: Request): Promise<string | undefined> {
     const cookie = readSessionCookie(request);
@@ -509,6 +562,8 @@ export function createApp(options: ControllerOptions = {}): { fetch: (request: R
 
   async function fetch(request: Request): Promise<Response> {
     await hydrate();
+    runtime ??= createRuntime();
+    const { server, router } = runtime;
     const url = new URL(request.url);
     try {
       if (request.method === 'GET' && url.pathname === '/health') {

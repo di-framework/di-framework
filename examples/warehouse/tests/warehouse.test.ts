@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { getWorkloadComponent, resetGuests, setGuests } from '@di-framework/wasmcloud';
 import receiveFetch, { fetch as receiveNamed } from '@examples/warehouse-receive';
-import { applyRemote } from '@examples/warehouse-sync';
+import { applyRemote, publishPeer, run, subscribe } from '@examples/warehouse-sync';
 import takeFetch, { fetch as takeNamed } from '@examples/warehouse-take';
+import { Sync } from '../packages/sync/src/bindings';
 
 function memoryStock(initial: Record<string, string>) {
   const data = new Map<string, string>(Object.entries(initial));
@@ -40,6 +41,8 @@ describe('warehouse namespace (independently deployed components)', () => {
     stock = memoryStock({ 'pallet-a': '12', 'pallet-b': '4' });
     setGuests({ stock: stock.guest });
   });
+
+  afterEach(() => resetGuests());
 
   it('takes and receives through separate packages against the same plugin', async () => {
     const taken = await takeFetch(
@@ -88,5 +91,46 @@ describe('warehouse namespace (independently deployed components)', () => {
   it('applies peer stock through the service without calling a component', async () => {
     await applyRemote({ sku: 'pallet-a', qty: 99 });
     expect(stock.data.get('pallet-a')).toBe('99');
+  });
+  it('queues peer events and closes subscriptions', async () => {
+    const stream = subscribe(new Sync(), 'warehouse.stock')[Symbol.asyncIterator]();
+    const first = stream.next();
+    publishPeer({ sku: 'pallet-a', qty: 20 });
+    publishPeer({ sku: 'pallet-b', qty: 30 });
+    expect(await first).toEqual({ done: false, value: { sku: 'pallet-a', qty: 20 } });
+    expect(await stream.next()).toEqual({ done: false, value: { sku: 'pallet-b', qty: 30 } });
+    await stream.return?.();
+    publishPeer({ sku: 'pallet-a', qty: 99 });
+    expect((await stream.next()).done).toBe(true);
+  });
+
+  it('runs the sync service and closes its subscription on a storage failure', async () => {
+    const applied = Promise.withResolvers<void>();
+    setGuests({
+      stock: {
+        open: async () => ({
+          set: async (sku: string, qty: string) => {
+            if (sku === 'unavailable') throw new Error('stock unavailable');
+            stock.data.set(sku, qty);
+            applied.resolve();
+          },
+        }),
+      },
+    });
+    const running = run().catch((error: unknown) => error);
+    publishPeer({ sku: 'pallet-a', qty: 42 });
+    await applied.promise;
+    expect(stock.data.get('pallet-a')).toBe('42');
+    publishPeer({ sku: 'unavailable', qty: 1 });
+    expect(await running).toMatchObject({ message: 'stock unavailable' });
+  });
+
+  it('finishes when the peer event stream ends and applies updates in order', async () => {
+    async function* events() {
+      yield { sku: 'pallet-a', qty: 20 };
+      yield { sku: 'pallet-a', qty: 30 };
+    }
+    await run(events());
+    expect(stock.data.get('pallet-a')).toBe('30');
   });
 });

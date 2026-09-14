@@ -1,13 +1,13 @@
-import { CommandFailure, type CliIo, type CommandResult } from '@di-framework/cli-extension';
+import { randomToken } from '@di-framework/auth';
 import { generatePkce } from '@di-framework/auth/oauth';
+import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
 import { parseAppCommandArgs } from './args';
 import { requireController } from './controller-client';
-import { CONTROLLER_HOST, resolveConnection, resolveTarget } from './target';
 import { storeCredential } from './credentials';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
 import { loadDeployManifest } from './manifest';
 import { invalidUsage } from './support';
-
+import { CONTROLLER_HOST, resolveConnection, resolveTarget } from './target';
 
 export const CLI_OAUTH_CLIENT_ID = 'di-framework-cli';
 
@@ -22,13 +22,16 @@ export async function runWasmcloudLogin(
 ): Promise<CommandResult> {
   const options = parseAppCommandArgs(args, 'wasmcloud login');
   if (options.name !== undefined) {
-    invalidUsage(`Unexpected argument: ${options.name}`, options.name, { command: 'wasmcloud login' });
+    invalidUsage(`Unexpected argument: ${options.name}`, options.name, {
+      command: 'wasmcloud login',
+    });
   }
   const manifest = loadDeployManifest(deps.cwd(), deps.env);
   const target = resolveTarget(manifest, options.target);
   const connection = await resolveConnection(target, manifest.workspaceRoot, manifest.path, deps);
   const controller = requireController(connection);
 
+  const state = randomToken(32);
   let settle: (code: string) => void;
   let fail: (error: Error) => void;
   const gotCode = new Promise<string>((resolve, reject) => {
@@ -38,10 +41,16 @@ export async function runWasmcloudLogin(
 
   const loopback = await deps.listenLoopback(async (request) => {
     const url = new URL(request.url);
+    if (url.searchParams.get('state') !== state) {
+      return new Response('Invalid OAuth state', { status: 400 });
+    }
     const error = url.searchParams.get('error');
     if (error !== null) {
       fail(new Error(error));
-      return new Response(`Login failed: ${error}`, { status: 400, headers: { 'content-type': 'text/plain' } });
+      return new Response(`Login failed: ${error}`, {
+        status: 400,
+        headers: { 'content-type': 'text/plain' },
+      });
     }
     const code = url.searchParams.get('code');
     if (code === null || code === '') {
@@ -63,7 +72,7 @@ export async function runWasmcloudLogin(
     authorize.searchParams.set('scope', 'openid profile offline_access');
     authorize.searchParams.set('code_challenge', pkce.codeChallenge);
     authorize.searchParams.set('code_challenge_method', 'S256');
-    authorize.searchParams.set('state', 'cli');
+    authorize.searchParams.set('state', state);
     io.stdout.write(`Opening browser for wasmcloud login (${authorize.toString()})\n`);
     await deps.openUrl(authorize.toString());
     const code = await gotCode;
@@ -98,15 +107,22 @@ export async function runWasmcloudLogin(
       token_type?: string;
     };
     if (typeof grant.access_token !== 'string' || grant.access_token === '') {
-      throw new CommandFailure('WASMCLOUD_LOGIN_FAILED', 'Token response did not include access_token', 3, {
-        target: connection.target,
-      });
+      throw new CommandFailure(
+        'WASMCLOUD_LOGIN_FAILED',
+        'Token response did not include access_token',
+        3,
+        {
+          target: connection.target,
+        },
+      );
     }
     storeCredential(deps.credentialsPath(), connection.target, {
       accessToken: grant.access_token,
       refreshToken: grant.refresh_token,
       expiresAt:
-        typeof grant.expires_in === 'number' ? Math.floor(Date.now() / 1000) + grant.expires_in : undefined,
+        typeof grant.expires_in === 'number'
+          ? Math.floor(Date.now() / 1000) + grant.expires_in
+          : undefined,
       tokenType: grant.token_type,
       controller,
     });

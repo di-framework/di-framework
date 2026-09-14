@@ -2,20 +2,22 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
 import { type BindingRecord, requirementsFromBindings } from './bindings';
-import {
-  deleteApplication,
-  putApplication,
-  waitForApplication,
-} from './controller-client';
-import { type DiscoveredCronJob } from './cron';
+import { deleteApplication, putApplication, waitForApplication } from './controller-client';
+import type { DiscoveredCronJob } from './cron';
 import type { WasmcloudDeps } from './deps';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface';
-import { APPLICATION_LABEL, createDeployIntent, ORG_LABEL, OWNER_LABEL, TEAM_LABEL } from './intent';
+import {
+  APPLICATION_LABEL,
+  createDeployIntent,
+  ORG_LABEL,
+  OWNER_LABEL,
+  TEAM_LABEL,
+} from './intent';
 import type { WasmcloudProject } from './project';
 import { asWitIdentifier } from './project';
-import { type DiscoveredQueueHandler } from './queues';
+import type { DiscoveredQueueHandler } from './queues';
 import type { ClusterConnection } from './target';
-import { defaultProjectRequirements, queueProjectRequirements, type WitRequirement } from './wit';
+import { defaultProjectRequirements, type WitRequirement } from './wit';
 
 export const MANAGED_BY_LABEL = 'di-framework';
 export const WAIT_ATTEMPTS = 30;
@@ -83,7 +85,8 @@ export function renderWorkloadManifest(
     typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
   const hasActors = opts.hasActors ?? false;
   const resolvedHandlers = queueHandlers;
-  const isWorker = opts.worker ?? (resolvedHandlers.length > 0 && project.applicationType === 'worker');
+  const isWorker =
+    opts.worker ?? (resolvedHandlers.length > 0 && project.applicationType === 'worker');
   const hasQueues = resolvedHandlers.length > 0;
   const needsPersistentStorage =
     opts.hasPersistentStorage ??
@@ -355,12 +358,13 @@ export async function applyWorkload(
     configFrom: binding.configFrom,
     config: binding.config,
   }));
-  const needsHttp = intent.ingress !== false || intent.hasActors || intent.cronJobs.length > 0 || intent.queueHandlers.length > 0 || intent.persistentStorage;
-  const baseRequirements = needsHttp
-    ? defaultProjectRequirements()
-    : intent.worker
-      ? queueProjectRequirements()
-      : [];
+  const needsHttp =
+    intent.ingress !== false ||
+    intent.hasActors ||
+    intent.cronJobs.length > 0 ||
+    intent.queueHandlers.length > 0 ||
+    intent.persistentStorage;
+  const baseRequirements = needsHttp ? defaultProjectRequirements() : [];
   const manifest = renderWorkloadManifest(
     project,
     connection,
@@ -378,7 +382,10 @@ export async function applyWorkload(
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);
-  writeFileSync(join(project.projectRoot, '.di-framework', 'deploy', 'intent.json'), `${JSON.stringify(intent, null, 2)}\n`);
+  writeFileSync(
+    join(project.projectRoot, '.di-framework', 'deploy', 'intent.json'),
+    `${JSON.stringify(intent, null, 2)}\n`,
+  );
   await putApplication(connection, intent, io, deps);
   await waitForApplication(connection, intent.witName, deps, io);
   return path;

@@ -98,7 +98,7 @@ export function parseDeployIntent(body: unknown): DeployIntent {
     }
   }
   const image = requiredString(body.image, 'image');
-  if (!image.includes('sha256')) {
+  if (!/^\S+@sha256:[0-9a-f]{64}$/.test(image)) {
     throw new IntentError('image must be digest-pinned (sha256)');
   }
   const bindings = Array.isArray(body.bindings) ? body.bindings.map(parseBinding) : [];
@@ -141,7 +141,9 @@ function parseBinding(value: unknown): DeployBinding {
     configFrom: typeof value.configFrom === 'string' ? value.configFrom : undefined,
     config: isRecord(value.config)
       ? Object.fromEntries(
-          Object.entries(value.config).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+          Object.entries(value.config).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string',
+          ),
         )
       : undefined,
   };

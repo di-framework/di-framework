@@ -247,9 +247,10 @@ di-framework wasmcloud platform destroy local --yes
 
 Application `destroy` never runs `pulumi destroy`.
 
-The generated local target publishes through its loopback registry NodePort and puts the equivalent
-in-cluster registry address in the WorkloadDeployment. Both references use the same repository and
-stable canonical-input tag. An `http://` push URL or `insecure = true` adds ORAS `--plain-http` only
+The generated local target publishes through its loopback registry NodePort using a stable
+canonical-input tag. It resolves that tag to the registry's manifest digest and pins the
+WorkloadDeployment to `<in-cluster-registry>/<wit-name>@sha256:<manifest-digest>`.
+An `http://` push URL or `insecure = true` adds ORAS `--plain-http` only
 for that target; TLS remains the default everywhere else.
 
 ### Existing cluster
@@ -272,9 +273,10 @@ For the selected project the extension:
    canonical-input reference (`<registry>/<wit-name>:sha256-<deployment-digest>`). The actual
    component-byte digest is calculated and reported separately because ComponentizeJS snapshots may
    vary byte-for-byte for identical inputs.
-3. Derives a wasmCloud `WorkloadDeployment` and Kubernetes `Service` (written under `.di-framework/deploy/`, not checked in).
-4. Configures `wasi:http/handler@0.3.0` with the project name as its host, applies the resources,
-   and waits for current `Ready=True` or compatible older readiness schemas.
+3. Resolves the published tag to its OCI manifest digest and submits a digest-pinned deployment
+   intent to the controller. A local preview is written under `.di-framework/deploy/`.
+4. The controller authorizes the request, configures `wasi:http/handler@0.3.0` with the project name
+   as its host, and applies the resources. The CLI waits for the controller to report readiness.
 
 For the generated local platform the result reports the HTTP URL and required Host header. It is
 directly reachable without `kubectl port-forward`, for example:

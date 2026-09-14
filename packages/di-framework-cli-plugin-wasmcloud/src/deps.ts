@@ -90,7 +90,7 @@ export type WasmcloudDeps = {
   resolveFromProject(projectRoot: string, specifier: string): string | undefined;
   env: Record<string, string | undefined>;
   cwd(): string;
-  fetch: typeof fetch;
+  fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   credentialsPath(): string;
   openUrl(url: string): Promise<void>;
   listenLoopback(
@@ -445,7 +445,8 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
   fetch: globalThis.fetch.bind(globalThis),
   credentialsPath: () => join(homedir(), '.di-framework', 'credentials.json'),
   openUrl: async (url) => {
-    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+    const command =
+      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
     const args = process.platform === 'win32' ? ['/c', 'start', url] : [url];
     await DEFAULT_DEPS.runner(command, args, { cwd: process.cwd() });
   },
