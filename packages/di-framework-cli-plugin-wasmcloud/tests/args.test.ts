@@ -65,5 +65,15 @@ describe('parsePlatformCommandArgs', () => {
       'INVALID_USAGE',
       2,
     );
+    expectFailure(
+      () => parsePlatformCommandArgs(['local', '--unknown'], 'wasmcloud platform deploy'),
+      'INVALID_USAGE',
+      2,
+    );
+    expectFailure(
+      () => parsePlatformCommandArgs(['local', '--yes', '--yes'], 'wasmcloud platform deploy'),
+      'INVALID_USAGE',
+      2,
+    );
   });
 });
