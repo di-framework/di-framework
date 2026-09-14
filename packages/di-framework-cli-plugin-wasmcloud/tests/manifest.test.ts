@@ -15,11 +15,19 @@ describe('extension manifest', () => {
       'destroy',
       'platform',
       'doctor',
+      'service',
     ]);
     expect(Object.keys(manifest.command.children?.platform?.children ?? {})).toEqual([
       'init',
       'deploy',
       'destroy',
+    ]);
+    expect(Object.keys(manifest.command.children?.service?.children ?? {})).toEqual([
+      'create',
+      'list',
+      'get',
+      'delete',
+      'classes',
     ]);
   });
 
@@ -43,6 +51,11 @@ describe('extension manifest', () => {
       'platform deploy',
       'platform destroy',
       'doctor',
+      'service create',
+      'service list',
+      'service get',
+      'service delete',
+      'service classes',
     ]);
     for (const leaf of leaves) {
       await expect(
