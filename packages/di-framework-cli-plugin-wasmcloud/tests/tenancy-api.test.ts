@@ -12,11 +12,9 @@ import {
 } from '../assets/platform/tenancy/controller';
 
 const originalConfig = process.env.PLATFORM_CONFIG;
-const originalExitCode = process.exitCode;
 afterEach(() => {
   if (originalConfig === undefined) delete process.env.PLATFORM_CONFIG;
   else process.env.PLATFORM_CONFIG = originalConfig;
-  process.exitCode = originalExitCode ?? 0;
 });
 
 function transport(status: number, response: string, failure?: 'timeout' | 'network') {
@@ -155,9 +153,10 @@ describe('controller process lifecycle', () => {
     await expect(main()).rejects.toThrow('Missing PLATFORM_CONFIG');
     const log = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      reportFatal(new Error('invalid configuration'));
+      const status = { exitCode: 0 };
+      reportFatal(new Error('invalid configuration'), status);
       expect(log).toHaveBeenCalledWith('invalid configuration');
-      expect(process.exitCode).toBe(1);
+      expect(status.exitCode).toBe(1);
     } finally {
       log.mockRestore();
     }

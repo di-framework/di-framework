@@ -417,8 +417,8 @@ export async function main(
     process.off('SIGTERM', stop);
   }
 }
-export function reportFatal(error: Error): void {
+export function reportFatal(error: Error, status: { exitCode?: string | number | null } = process): void {
   console.error(error.message);
-  process.exitCode = 1;
+  status.exitCode = 1;
 }
 if (require.main === module) main().catch(reportFatal);
