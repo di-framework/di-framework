@@ -69,7 +69,7 @@ describe('Receipt Worker Example', () => {
     expect(audit.getRecords()).toHaveLength(1);
     expect(audit.getRecords()[0].action).toBe('receipt.processed');
 
-    const fetched = await memory.getJob(job.id);
+    const fetched = await memory.getJob('receipts', job.id);
     expect(fetched?.status).toBe('completed');
   });
 
@@ -118,7 +118,7 @@ describe('Receipt Worker Example', () => {
 
     // Attempt 1 fails -> scheduled for retry
     await memory.step('receipts', async (j) => dispatcher.dispatch(j));
-    let current = await memory.getJob(job.id);
+    let current = await memory.getJob('receipts', job.id);
     expect(current?.status).toBe('pending');
     expect(current?.attempts).toBe(1);
 
@@ -126,7 +126,7 @@ describe('Receipt Worker Example', () => {
     memory.advanceTime(200);
     // Attempt 2 fails
     await memory.step('receipts', async (j) => dispatcher.dispatch(j));
-    current = await memory.getJob(job.id);
+    current = await memory.getJob('receipts', job.id);
     expect(current?.status).toBe('pending');
     expect(current?.attempts).toBe(2);
 
@@ -134,7 +134,7 @@ describe('Receipt Worker Example', () => {
     memory.advanceTime(300);
     // Attempt 3 fails -> dead lettered (maxRetries = 3)
     await memory.step('receipts', async (j) => dispatcher.dispatch(j));
-    current = await memory.getJob(job.id);
+    current = await memory.getJob('receipts', job.id);
     expect(current?.status).toBe('dead-letter');
     expect(current?.errorMessage).toContain('Invalid receipt data');
   });

@@ -95,17 +95,22 @@ export class InMemoryQueueBackend implements QueueBackend {
     return { ...chosen };
   }
 
-  async complete(jobId: string): Promise<void> {
+  async complete(queueName: string, jobId: string): Promise<void> {
     const job = this.jobs.get(jobId);
-    if (!job) return;
+    if (!job || job.queueName !== queueName) return;
     job.status = 'completed';
     job.completedAt = this.now();
     job.leaseExpiresAt = undefined;
   }
 
-  async fail(jobId: string, error: Error | string, retryAfterMs?: number): Promise<void> {
+  async fail(
+    queueName: string,
+    jobId: string,
+    error: Error | string,
+    retryAfterMs?: number,
+  ): Promise<void> {
     const job = this.jobs.get(jobId);
-    if (!job) return;
+    if (!job || job.queueName !== queueName) return;
 
     job.failedAt = this.now();
     job.errorMessage = error instanceof Error ? error.message : String(error);
@@ -149,9 +154,9 @@ export class InMemoryQueueBackend implements QueueBackend {
     return recovered;
   }
 
-  async getJob(jobId: string): Promise<Job<any> | null> {
+  async getJob(queueName: string, jobId: string): Promise<Job<any> | null> {
     const job = this.jobs.get(jobId);
-    return job ? { ...job } : null;
+    return job && job.queueName === queueName ? { ...job } : null;
   }
 
   async listJobs(queueName: string, filter?: ListJobsFilter): Promise<Job<any>[]> {
@@ -244,9 +249,9 @@ export class InMemoryQueueBackend implements QueueBackend {
       if (job) {
         try {
           await exec(job);
-          await this.complete(job.id);
+          await this.complete(job.queueName, job.id);
         } catch (err: any) {
-          await this.fail(job.id, err);
+          await this.fail(job.queueName, job.id, err);
         }
         return true;
       }

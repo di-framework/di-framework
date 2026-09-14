@@ -17,8 +17,8 @@ describe('InMemoryQueueBackend', () => {
     expect(dequeued!.status).toBe('processing');
     expect(dequeued!.attempts).toBe(1);
 
-    await backend.complete(job.id);
-    const completed = await backend.getJob(job.id);
+    await backend.complete('orders', job.id);
+    const completed = await backend.getJob('orders', job.id);
     expect(completed!.status).toBe('completed');
     expect(completed!.completedAt).toBe(1000);
   });
@@ -92,9 +92,9 @@ describe('InMemoryQueueBackend', () => {
     // Attempt 1
     const d1 = await backend.dequeue('flaky');
     expect(d1!.attempts).toBe(1);
-    await backend.fail(d1!.id, new Error('Attempt 1 failed'));
+    await backend.fail('flaky', d1!.id, new Error('Attempt 1 failed'));
 
-    let checked = await backend.getJob(job.id);
+    let checked = await backend.getJob('flaky', job.id);
     expect(checked!.status).toBe('pending');
     expect(checked!.availableAt).toBe(1000 + 500); // backoff 500ms
 
@@ -105,10 +105,10 @@ describe('InMemoryQueueBackend', () => {
     backend.advanceTime(600);
     const d2 = await backend.dequeue('flaky');
     expect(d2!.attempts).toBe(2);
-    await backend.fail(d2!.id, new Error('Attempt 2 failed'));
+    await backend.fail('flaky', d2!.id, new Error('Attempt 2 failed'));
 
     // Reached maxRetries (2), moves to dead-letter
-    checked = await backend.getJob(job.id);
+    checked = await backend.getJob('flaky', job.id);
     expect(checked!.status).toBe('dead-letter');
     expect(checked!.errorMessage).toBe('Attempt 2 failed');
 
@@ -140,7 +140,7 @@ describe('InMemoryQueueBackend', () => {
     recovered = await backend.recoverUnacknowledged('work');
     expect(recovered).toBe(1);
 
-    const check = await backend.getJob(job.id);
+    const check = await backend.getJob('work', job.id);
     expect(check!.status).toBe('pending');
 
     // Can be dequeued again
@@ -159,9 +159,9 @@ describe('InMemoryQueueBackend', () => {
 
     await backend.dequeue('q1'); // p1 is processing
     const dj2 = await backend.dequeue('q1');
-    await backend.complete(dj2!.id); // p2 completed
+    await backend.complete('q1', dj2!.id); // p2 completed
     const dj3 = await backend.dequeue('q1');
-    await backend.fail(dj3!.id, 'error'); // p3 dead-letter
+    await backend.fail('q1', dj3!.id, 'error'); // p3 dead-letter
 
     const queues = await backend.listQueues();
     const q1 = queues.find((q) => q.name === 'q1');
