@@ -178,6 +178,10 @@ The same package provides the Kubernetes platform used by `di-framework-kube`.
 Configure this project through Pulumi configuration; infrastructure implementation
 changes belong in the shared package rather than copied tenancy files.
 
+Backing-service CRD contracts (`BackingServiceClass`, `BackingService`,
+`ServiceBinding`), authorization boundaries, and runtime feasibility notes live in
+the `@di-framework/platform` package README.
+
 For projects generated before this extraction, preserve the existing project name,
 backend, stack, and configuration when updating the import/dependency. Review
 `pulumi preview` before applying. The shared local entrypoint preserves existing
