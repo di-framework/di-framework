@@ -312,7 +312,7 @@ function backingServiceResources(
     replicas,
     sizing,
   });
-  // Connection material for future ServiceBinding projection (#451). Status never mirrors secrets.
+  // Connection material for ServiceBinding projection (#451). Status never mirrors secrets.
   resources.push(
     makeBackingResource(
       service,
