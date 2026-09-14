@@ -41,12 +41,10 @@ export async function applyRemote(event: StockEvent): Promise<void> {
   await store.set(event.sku, String(event.qty));
 }
 
-export const run = WorkloadService({ workload: 'warehouse' })(
-  async function run(
-    events: AsyncIterable<StockEvent> = subscribe(new Sync(), 'warehouse.stock'),
-  ): Promise<void> {
-    for await (const event of events) {
-      await applyRemote(event);
-    }
-  },
-);
+export const run = WorkloadService({ workload: 'warehouse' })(async function run(
+  events: AsyncIterable<StockEvent> = subscribe(new Sync(), 'warehouse.stock'),
+): Promise<void> {
+  for await (const event of events) {
+    await applyRemote(event);
+  }
+});
