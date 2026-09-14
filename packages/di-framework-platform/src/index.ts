@@ -1,7 +1,12 @@
 import * as k8s from '@pulumi/kubernetes';
 import * as pulumi from '@pulumi/pulumi';
 import { installNetworkPolicy } from './network-policy';
-import { declarations, installTenancy, seedTenantNamespaces } from './tenancy';
+import {
+  declarations,
+  installTenancy,
+  resolveBackingServiceClasses,
+  seedTenantNamespaces,
+} from './tenancy';
 import { names } from './tenancy/resources';
 import { platformValues } from './values';
 
@@ -198,6 +203,7 @@ export function createPlatform(args: PlatformArgs) {
     storageRoot: args.storageRoot,
     hostImage: config.get('tenantHostImage') ?? 'ghcr.io/wasmcloud/wash:2.8.0',
     hostImagePullPolicy: config.get('tenantHostImagePullPolicy') ?? 'IfNotPresent',
+    backingServiceClasses: resolveBackingServiceClasses(config),
   });
   const tenants = tenancy.tenants.map((t) =>
     t.metadata.name.apply((name) => ({ name, ...names(name) })),
