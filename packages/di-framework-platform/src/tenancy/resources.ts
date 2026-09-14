@@ -23,7 +23,15 @@ export interface TenantSpec {
   suspended?: boolean;
   deletionPolicy?: 'Retain' | 'Delete';
   runtime?: { replicas?: number };
-  resources?: { cpu?: string; memory?: string; workloads?: number };
+  resources?: {
+    cpu?: string;
+    memory?: string;
+    workloads?: number;
+    /** Max concurrent BackingService objects in the tenant namespace (default 10). */
+    backingServices?: number;
+    /** Max concurrent ServiceBinding objects in the tenant namespace (default 40). */
+    serviceBindings?: number;
+  };
 }
 export interface UserSpec {
   suspended?: boolean;
@@ -153,6 +161,8 @@ const crds = [
             cpu: { ...quantity, default: '2' },
             memory: { ...quantity, default: '4Gi' },
             workloads: { type: 'integer', minimum: 1, maximum: 1000, default: 20 },
+            backingServices: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+            serviceBindings: { type: 'integer', minimum: 1, maximum: 400, default: 40 },
           },
         },
       },
@@ -260,6 +270,8 @@ function tenantResources(
       spec: {
         hard: {
           'count/workloaddeployments.runtime.wasmcloud.dev': String(resources.workloads ?? 20),
+          [`count/backingservices.${GROUP}`]: String(resources.backingServices ?? 10),
+          [`count/servicebindings.${GROUP}`]: String(resources.serviceBindings ?? 40),
           'count/secrets': '100',
           'count/configmaps': '100',
           'count/services': '100',
@@ -272,6 +284,9 @@ function tenantResources(
           'limits.cpu': resources.cpu ?? '2',
           'limits.memory': resources.memory ?? '4Gi',
           pods: '20',
+          // Aggregate compute/storage budget for runtime + controller-managed di-bs-* backends.
+          // Per-service sizing still comes from BackingServiceClass parametersSchema (#450).
+          'requests.storage': '50Gi',
         },
       },
     }),
@@ -283,6 +298,11 @@ function tenantResources(
           resources: ['workloaddeployments'],
           verbs: editVerbs,
         },
+        {
+          apiGroups: [GROUP],
+          resources: ['backingservices', 'servicebindings'],
+          verbs: editVerbs,
+        },
         { apiGroups: [''], resources: ['services', 'secrets', 'configmaps'], verbs: editVerbs },
         { apiGroups: [''], resources: ['events'], verbs: readVerbs },
       ],
@@ -290,6 +310,11 @@ function tenantResources(
     make('rbac.authorization.k8s.io/v1', 'Role', 'di-viewer', n.namespace, {
       rules: [
         workloadRead,
+        {
+          apiGroups: [GROUP],
+          resources: ['backingservices', 'servicebindings'],
+          verbs: readVerbs,
+        },
         { apiGroups: [''], resources: ['services', 'configmaps', 'events'], verbs: readVerbs },
       ],
     }),
@@ -321,7 +346,16 @@ function tenantResources(
     result.push(
       make('networking.k8s.io/v1', 'NetworkPolicy', 'di-tenant-network', namespace, {
         spec: {
-          podSelector: {},
+          // Broad tenant↔runtime allow for non-backend pods. Backends use di-bs-backend-network.
+          podSelector: {
+            matchExpressions: [
+              {
+                key: `${GROUP}/component`,
+                operator: 'NotIn',
+                values: ['backing-service'],
+              },
+            ],
+          },
           policyTypes: ['Ingress', 'Egress'],
           ingress: [
             {
@@ -388,6 +422,47 @@ function tenantResources(
         },
       }),
     );
+  // Backend pods (stock Redis/NATS and future di-bs-* from #450) accept ingress only from
+  // the tenant hostgroup. Developers retain pods/portforward on runtime Roles — that is a
+  // deliberate within-tenant caveat, not network-policy isolation from the tenant developer.
+  result.push(
+    make('networking.k8s.io/v1', 'NetworkPolicy', 'di-bs-backend-network', n.runtimeNamespace, {
+      spec: {
+        podSelector: {
+          matchLabels: { [`${GROUP}/component`]: 'backing-service' },
+        },
+        policyTypes: ['Ingress', 'Egress'],
+        ingress: [
+          {
+            from: [
+              {
+                namespaceSelector: {
+                  matchLabels: { 'kubernetes.io/metadata.name': n.runtimeNamespace },
+                },
+                podSelector: { matchLabels: { 'wasmcloud.com/name': 'hostgroup' } },
+              },
+            ],
+          },
+        ],
+        egress: [
+          {
+            to: [
+              {
+                namespaceSelector: {
+                  matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' },
+                },
+                podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } },
+              },
+            ],
+            ports: [
+              { protocol: 'UDP', port: 53 },
+              { protocol: 'TCP', port: 53 },
+            ],
+          },
+        ],
+      },
+    }),
+  );
   for (const [name, image, port, args] of [
     // Runtime-internal data-plane NATS for hostgroup `--data-nats-url`.
     // Lifecycle is Tenant-owned; never created as an application BackingService.
@@ -409,7 +484,9 @@ function tenantResources(
           strategy: { type: 'Recreate' },
           selector: { matchLabels: { app: name } },
           template: {
-            metadata: { labels: { app: name } },
+            metadata: {
+              labels: { app: name, [`${GROUP}/component`]: 'backing-service' },
+            },
             spec: {
               automountServiceAccountToken: false,
               containers: [
