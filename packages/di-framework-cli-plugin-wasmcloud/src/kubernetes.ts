@@ -3,6 +3,9 @@ import { toolFailed } from './support';
 import type { ClusterConnection } from './target';
 
 export function kubectlArgs(connection: ClusterConnection, args: readonly string[]): string[] {
+  if (connection.kubeconfig === undefined) {
+    throw new Error('kubectl requires a kubeconfig; application deploy uses the controller');
+  }
   const flags = ['--kubeconfig', connection.kubeconfig, '--namespace', connection.namespace];
   if (connection.context !== undefined) {
     flags.push('--context', connection.context);

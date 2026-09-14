@@ -44,10 +44,11 @@ describe('runWasmcloudPlatformInit', () => {
     expect(program).toContain('docker exec "$K0S_NAME" k0s kubectl');
     expect(program).not.toContain('kubectl --kubeconfig "$KUBECONFIG_FILE"');
     expect(program).toContain('delete deployment/hostgroup-default');
-    expect(program).not.toContain('workloaddeployments.runtime.wasmcloud.dev');
+    expect(program).toContain("kind: 'WorkloadDeployment'");
+    expect(program).toContain("host: 'deploy'");
+    expect(program).toContain('deploy-controller');
     expect(program).not.toContain('networkInterfaces');
     expect(program).not.toContain('install-operator.sh');
-    expect(program).not.toContain('kind: WorkloadDeployment');
     expect(program).not.toContain('greeter');
     expect(program).not.toContain('di-framework.config.json');
     expect(readFileSync(join(platform, '.gitignore'), 'utf8')).toContain('.kubeconfig-*');

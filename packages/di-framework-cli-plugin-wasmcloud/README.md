@@ -9,6 +9,8 @@ di-framework extensions install wasmcloud
 
 di-framework wasmcloud build                         # bundle + jco componentize → dist/<name>.wasm
 di-framework wasmcloud dev                           # build, then serve locally (wasmtime by default)
+di-framework wasmcloud login                         # PKCE against the deploy controller
+di-framework wasmcloud logout
 di-framework wasmcloud deploy                        # nearest project, default target
 di-framework wasmcloud deploy greeter                # named project anywhere in the workspace
 di-framework wasmcloud deploy greeter --target development
@@ -178,15 +180,19 @@ platform = "deploy/platform"
 stack = "dev"
 
 [targets.development]
-kubeconfig = "${KUBECONFIG}"
-context = "team-development"
-namespace = "wasmcloud"
+controller = "${CONTROLLER_URL}"
 
 [targets.development.registry]
 push = "https://registry.example.com/team"
 pull = "registry.internal.example.com/team"
 insecure = false
 ```
+
+Application `deploy` / `destroy` talk to the in-cluster deploy controller over HTTP after
+`di-framework wasmcloud login` (authorization-code + PKCE). Interactive use has no kubeconfig
+path. Pipelines may set `DI_FRAMEWORK_DEPLOY_TOKEN` to a bearer token issued by that controller.
+External targets declare `controller` and `registry`; `kubeconfig` on an application target is a
+parse error.
 
 - `di-framework wasmcloud deploy` with no name uses the nearest `di-framework.config.json`.
 - `di-framework wasmcloud deploy greeter` recursively discovers projects (skipping `.git`,
@@ -203,6 +209,7 @@ the wasmCloud operator) from templates shipped with this extension:
 ```bash
 di-framework wasmcloud platform init
 di-framework wasmcloud platform deploy local --yes
+di-framework wasmcloud login
 ```
 
 `platform init` writes `deploy/platform` and creates or updates `di-framework.deploy.toml` so
@@ -212,22 +219,24 @@ Platform deploy runs the package-manager-neutral `pulumi install` command automa
 generated project works immediately in a blank consumer workspace without a root workspace entry
 or a manual install inside `deploy/platform`.
 
-The generated Pulumi project provisions only platform concerns. It has workspace- and stack-scoped
-Docker names, a dedicated network, persistent k0s state/log volumes, pinned images and chart,
-readiness checks, and loopback-only high ports. It must not contain application names, component
-builds, application Services, or WorkloadDeployments. The defaults are Kubernetes `26443`, registry
-`25000`, and HTTP `28180`; set `apiPort`, `registryPort`, or `httpPort` with `pulumi config set` in
-`deploy/platform` to choose another distinct port from 1024 through 65535.
+The generated Pulumi project provisions platform concerns plus the deploy-controller
+WorkloadDeployment (HTTP Host `deploy`). It has workspace- and stack-scoped Docker names, a
+dedicated network, persistent k0s state/log volumes, pinned images and chart, readiness checks,
+and loopback-only high ports. It must not contain application project names. The defaults are
+Kubernetes `26443`, registry `25000`, and HTTP `28180`; set `apiPort`, `registryPort`, or
+`httpPort` with `pulumi config set` in `deploy/platform` to choose another distinct port from
+1024 through 65535.
 
 The CLI reads a small output contract from `pulumi stack output --json`:
 
 | Output | Required | Meaning |
 | --- | --- | --- |
-| `kubeconfig` | yes | kubeconfig YAML or a filesystem path |
+| `kubeconfig` | yes | operator kubeconfig YAML or a filesystem path (not used by application deploy) |
 | `namespace` | yes | Kubernetes namespace for workloads |
 | `registry` | yes | legacy string shorthand, or `{ push, pull, insecure }` transport object |
 | `context` | no | kubectl context |
 | `endpoints.http` / `endpoints.kubernetes` / `endpoints.registry` | no | optional URLs |
+| `controller.url` / `controller.host` | no | deploy controller; defaults to `endpoints.http` with Host `deploy` |
 
 Provision and tear down that stack explicitly:
 
@@ -245,11 +254,12 @@ for that target; TLS remains the default everywhere else.
 
 ### Existing cluster
 
-When kubeconfig and a registry are already available, declare an external target with only access
-information (as `development` above) and deploy:
+When a deploy controller and registry are already available, declare an external target with only
+access information (as `development` above) and deploy:
 
 ```bash
-export KUBECONFIG="$HOME/.kube/config"
+export CONTROLLER_URL="https://deploy.example.test"
+di-framework wasmcloud login --target development
 di-framework wasmcloud deploy greeter --target development
 ```
 

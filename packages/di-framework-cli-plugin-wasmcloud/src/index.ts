@@ -72,7 +72,20 @@ export {
   findConfigFiles,
   resolveApplication,
 } from './discovery';
+export { CONTROLLER_HOST, getControllerHealth, putApplication } from './controller-client';
+export { DEPLOY_TOKEN_ENV, loginRequired, resolveAccessToken } from './credentials';
 export { runWasmcloudDoctor } from './doctor';
+export {
+  APPLICATION_LABEL,
+  bindingsToIntent,
+  createDeployIntent,
+  type DeployIntent,
+  ORG_LABEL,
+  OWNER_LABEL,
+  TEAM_LABEL,
+} from './intent';
+export { runWasmcloudLogin } from './login';
+export { runWasmcloudLogout } from './logout';
 export { emptyGuestsModule, renderGuestsModule, WASMCLOUD_GUESTS_GLOBAL } from './guests';
 export { hostInterfacesFromRequirements } from './host-interface';
 export {

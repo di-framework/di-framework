@@ -1,16 +1,19 @@
-import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CliIo, CommandFailure } from '@di-framework/cli-extension';
-import { discoverActors } from './actors';
-import { type BindingRecord, discoverBindings, requirementsFromBindings } from './bindings';
-import { type DiscoveredCronJob, discoverScheduledJobs } from './cron';
+import { type BindingRecord, requirementsFromBindings } from './bindings';
+import {
+  deleteApplication,
+  putApplication,
+  waitForApplication,
+} from './controller-client';
+import { type DiscoveredCronJob } from './cron';
 import type { WasmcloudDeps } from './deps';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface';
-import { captureKubectl, runKubectl } from './kubernetes';
+import { APPLICATION_LABEL, createDeployIntent, ORG_LABEL, OWNER_LABEL, TEAM_LABEL } from './intent';
 import type { WasmcloudProject } from './project';
 import { asWitIdentifier } from './project';
-import { type DiscoveredQueueHandler, discoverQueueHandlers, isQueueWorkerProject } from './queues';
+import { type DiscoveredQueueHandler } from './queues';
 import type { ClusterConnection } from './target';
 import { defaultProjectRequirements, queueProjectRequirements, type WitRequirement } from './wit';
 
@@ -59,6 +62,11 @@ export interface WorkloadManifestOptions {
   controlSecretName?: string;
   /** Explicit environment config values (string map for localResources.environment.config). */
   environment?: Record<string, string>;
+  /** Stamped from the authenticated principal, never from client intent. */
+  org?: string;
+  team?: string;
+  owner?: string;
+  worker?: boolean;
 }
 
 export function renderWorkloadManifest(
@@ -74,9 +82,8 @@ export function renderWorkloadManifest(
   const opts: WorkloadManifestOptions =
     typeof options === 'boolean' ? { hasActors: options } : (options ?? {});
   const hasActors = opts.hasActors ?? false;
-  const resolvedHandlers =
-    queueHandlers.length > 0 ? queueHandlers : discoverQueueHandlers(project);
-  const isWorker = isQueueWorkerProject(project, resolvedHandlers);
+  const resolvedHandlers = queueHandlers;
+  const isWorker = opts.worker ?? (resolvedHandlers.length > 0 && project.applicationType === 'worker');
   const hasQueues = resolvedHandlers.length > 0;
   const needsPersistentStorage =
     opts.hasPersistentStorage ??
@@ -102,7 +109,10 @@ export function renderWorkloadManifest(
   const labels = [
     `    app.kubernetes.io/managed-by: ${MANAGED_BY_LABEL}`,
     `    app.kubernetes.io/name: ${name}`,
-    `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
+    `    ${APPLICATION_LABEL}: ${yamlQuote(project.applicationName)}`,
+    ...(opts.org !== undefined ? [`    ${ORG_LABEL}: ${yamlQuote(opts.org)}`] : []),
+    ...(opts.team !== undefined ? [`    ${TEAM_LABEL}: ${yamlQuote(opts.team)}`] : []),
+    ...(opts.owner !== undefined ? [`    ${OWNER_LABEL}: ${yamlQuote(opts.owner)}`] : []),
   ].join('\n');
 
   const volumeName = opts.storageVolume?.volumeName ?? 'app-storage';
@@ -321,153 +331,57 @@ ${labels.replace(/^/gm, '        ')}
   return sections.join('\n---\n') + '\n';
 }
 
-async function ensureControlSecret(
-  project: WasmcloudProject,
-  connection: ClusterConnection,
-  deps: WasmcloudDeps,
-): Promise<string> {
-  const name = deploymentResourceName(project);
-  const secretName = controlSecretResourceName(name);
-  const existing = await captureKubectl(
-    deps,
-    connection,
-    ['get', 'secret', secretName],
-    project.projectRoot,
-  );
-  if (existing.exitCode !== 0) {
-    const token = randomBytes(32).toString('base64url');
-    await runKubectl(
-      deps,
-      connection,
-      [
-        'create',
-        'secret',
-        'generic',
-        secretName,
-        `--from-literal=DI_CONTROL_TOKEN=${token}`,
-        `--from-literal=DI_CONTROL_IDENTITY=${name}`,
-      ],
-      project.projectRoot,
-    );
-  }
-  await runKubectl(
-    deps,
-    connection,
-    [
-      'label',
-      'secret',
-      secretName,
-      `app.kubernetes.io/managed-by=${MANAGED_BY_LABEL}`,
-      `app.kubernetes.io/name=${name}`,
-      '--overwrite',
-    ],
-    project.projectRoot,
-  );
-  return secretName;
-}
-
 export async function applyWorkload(
   project: WasmcloudProject,
   connection: ClusterConnection,
   image: string,
   io: CliIo,
   deps: WasmcloudDeps,
+  deploymentDigest = image,
 ): Promise<string> {
-  const bindings = discoverBindings(project, deps);
-  const queueHandlers = discoverQueueHandlers(project);
-  const isWorker = isQueueWorkerProject(project, queueHandlers);
-  const hasActors = discoverActors(project).length > 0 || project.actors === true;
-  const cronJobs = discoverScheduledJobs(project.projectRoot);
-  const hasPersistentStorage =
-    hasActors || queueHandlers.length > 0 || project.persistentStorage === true;
-  const needsHttp =
-    (project.ingress !== false && !isWorker) ||
-    hasActors ||
-    cronJobs.length > 0 ||
-    queueHandlers.length > 0 ||
-    hasPersistentStorage;
+  const intent = createDeployIntent(project, deps, image, deploymentDigest);
+  const bindings: BindingRecord[] = intent.bindings.map((binding) => ({
+    className: binding.className,
+    name: binding.name,
+    kind: binding.kind,
+    requirement: {
+      package: binding.package,
+      version: binding.version,
+      interfaces: [...binding.interfaces],
+      direction: 'import',
+      source: binding.className,
+    },
+    secretFrom: binding.secretFrom,
+    configFrom: binding.configFrom,
+    config: binding.config,
+  }));
+  const needsHttp = intent.ingress !== false || intent.hasActors || intent.cronJobs.length > 0 || intent.queueHandlers.length > 0 || intent.persistentStorage;
   const baseRequirements = needsHttp
     ? defaultProjectRequirements()
-    : isWorker
+    : intent.worker
       ? queueProjectRequirements()
       : [];
-  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
-  await assertStorageOwnership(project, connection, deps, {
-    hasActors,
-    hasQueues: queueHandlers.length > 0,
-    hasPersistentStorage,
-  });
-  const controlSecretName = needsHttp
-    ? await ensureControlSecret(project, connection, deps)
-    : undefined;
   const manifest = renderWorkloadManifest(
     project,
     connection,
     image,
-    requirements,
+    [...baseRequirements, ...requirementsFromBindings(bindings)],
     bindings,
-    { hasActors, hasPersistentStorage, controlSecretName },
-    cronJobs,
-    queueHandlers,
+    {
+      hasActors: intent.hasActors,
+      hasPersistentStorage: intent.persistentStorage,
+      worker: intent.worker,
+    },
+    intent.cronJobs,
+    intent.queueHandlers,
   );
   const path = generatedManifestPath(project);
   mkdirSync(join(project.projectRoot, '.di-framework', 'deploy'), { recursive: true });
   writeFileSync(path, manifest);
-  const name = deploymentResourceName(project);
-  io.stdout.write(`Applying WorkloadDeployment ${name} in ${connection.namespace}...\n`);
-  await runKubectl(deps, connection, ['apply', '-f', path], project.projectRoot);
-  await waitForReady(project, connection, deps, io);
+  writeFileSync(join(project.projectRoot, '.di-framework', 'deploy', 'intent.json'), `${JSON.stringify(intent, null, 2)}\n`);
+  await putApplication(connection, intent, io, deps);
+  await waitForApplication(connection, intent.witName, deps, io);
   return path;
-}
-
-async function assertStorageOwnership(
-  project: WasmcloudProject,
-  connection: ClusterConnection,
-  deps: WasmcloudDeps,
-  flags: { hasActors: boolean; hasQueues: boolean; hasPersistentStorage?: boolean },
-): Promise<void> {
-  if (!flags.hasActors && !flags.hasQueues && !flags.hasPersistentStorage) return;
-  const name = deploymentResourceName(project);
-  const hostPath = hostStoragePath(project.applicationName);
-  const result = await captureKubectl(
-    deps,
-    connection,
-    [
-      'get',
-      WORKLOAD_DEPLOYMENT_RESOURCE,
-      '-o',
-      'json',
-      '-l',
-      `di-framework.dev/application!=${project.applicationName}`,
-    ],
-    project.projectRoot,
-  );
-  if (result.exitCode !== 0) return;
-  try {
-    const list = JSON.parse(result.stdout) as {
-      items?: Array<{
-        metadata?: { name?: string };
-        spec?: { template?: { spec?: { volumes?: Array<{ hostPath?: { path?: string } }> } } };
-      }>;
-    };
-    let conflict: CommandFailure | undefined;
-    for (const item of list.items ?? []) {
-      for (const volume of item.spec?.template?.spec?.volumes ?? []) {
-        if (volume.hostPath?.path === hostPath) {
-          conflict = new CommandFailure(
-            'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT',
-            `Storage path ${hostPath} is already claimed by WorkloadDeployment ${item.metadata?.name ?? 'unknown'}`,
-            2,
-            { application: project.applicationName, path: hostPath, owner: item.metadata?.name },
-          );
-        }
-      }
-    }
-    if (conflict) throw conflict;
-  } catch (error) {
-    if (error instanceof CommandFailure) throw error;
-  }
-  void name;
 }
 
 export async function deleteWorkload(
@@ -476,20 +390,7 @@ export async function deleteWorkload(
   io: CliIo,
   deps: WasmcloudDeps,
 ): Promise<void> {
-  const name = deploymentResourceName(project);
-  io.stdout.write(`Removing WorkloadDeployment ${name} from ${connection.namespace}...\n`);
-  await runKubectl(
-    deps,
-    connection,
-    [
-      'delete',
-      `${WORKLOAD_DEPLOYMENT_RESOURCE},service,cronjob,secret`,
-      '-l',
-      `app.kubernetes.io/name=${name}`,
-      '--ignore-not-found',
-    ],
-    project.projectRoot,
-  );
+  await deleteApplication(connection, deploymentResourceName(project), io, deps);
 }
 
 export async function waitForReady(
@@ -498,34 +399,7 @@ export async function waitForReady(
   deps: WasmcloudDeps,
   io?: CliIo,
 ): Promise<void> {
-  const name = deploymentResourceName(project);
-  for (let attempt = 0; attempt < WAIT_ATTEMPTS; attempt++) {
-    const result = await captureKubectl(
-      deps,
-      connection,
-      ['get', WORKLOAD_DEPLOYMENT_RESOURCE, name, '-o', 'json'],
-      project.projectRoot,
-    );
-    if (result.exitCode === 0 && isReady(result.stdout)) return;
-    await deps.wait(WAIT_INTERVAL_MS);
-  }
-  const diagnostics = await deploymentDiagnostics(project, connection, deps);
-  if (io !== undefined) {
-    io.stderr.write(
-      `WorkloadDeployment ${name} did not become ready. Kubernetes diagnostics follow:\n${diagnostics}\n`,
-    );
-  }
-  throw new CommandFailure(
-    'WASMCLOUD_DEPLOYMENT_NOT_READY',
-    `WorkloadDeployment ${name} in ${connection.namespace} did not become ready`,
-    3,
-    {
-      application: project.applicationName,
-      namespace: connection.namespace,
-      name,
-      diagnostics,
-    },
-  );
+  await waitForApplication(connection, deploymentResourceName(project), deps, io);
 }
 
 export function isReady(stdout: string): boolean {
@@ -549,47 +423,6 @@ export function isReady(stdout: string): boolean {
   } catch {
     return false;
   }
-}
-
-async function deploymentDiagnostics(
-  project: WasmcloudProject,
-  connection: ClusterConnection,
-  deps: WasmcloudDeps,
-): Promise<string> {
-  const name = deploymentResourceName(project);
-  const commands: Array<{ title: string; args: string[] }> = [
-    {
-      title: 'WorkloadDeployment',
-      args: ['get', WORKLOAD_DEPLOYMENT_RESOURCE, name, '-o', 'yaml'],
-    },
-    {
-      title: 'WorkloadReplicaSets',
-      args: [
-        'get',
-        WORKLOAD_REPLICA_SET_RESOURCE,
-        '-l',
-        `runtime.wasmcloud.dev/workload-deployment=${name}`,
-        '-o',
-        'wide',
-      ],
-    },
-    {
-      title: 'wasmCloud host pods',
-      args: ['get', 'pods', '-l', 'wasmcloud.com/hostgroup', '-o', 'wide'],
-    },
-    {
-      title: 'wasmCloud storage host logs',
-      args: ['logs', 'deployment/hostgroup-storage', '--tail=100'],
-    },
-  ];
-  const sections: string[] = [];
-  for (const command of commands) {
-    const result = await captureKubectl(deps, connection, command.args, project.projectRoot);
-    const output =
-      result.stdout.trim() || result.stderr.trim() || `(kubectl exited ${result.exitCode})`;
-    sections.push(`--- ${command.title} ---\n${output}`);
-  }
-  return sections.join('\n');
 }
 
 function yamlQuote(value: string): string {

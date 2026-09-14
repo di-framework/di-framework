@@ -26,10 +26,9 @@ export type ManagedTarget = {
 export type ExternalTarget = {
   kind: 'external';
   name: string;
-  kubeconfig: string;
-  namespace: string;
+  controller: string;
   registry: RegistryInput;
-  context?: string;
+  controllerHost?: string;
 };
 
 export type DeployTarget = ManagedTarget | ExternalTarget;
@@ -209,13 +208,28 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
   const kubeconfig = optionalString(value.kubeconfig, `targets.${name}.kubeconfig`, manifestPath);
   const context = optionalString(value.context, `targets.${name}.context`, manifestPath);
   const namespace = optionalString(value.namespace, `targets.${name}.namespace`, manifestPath);
+  const controller = optionalString(value.controller, `targets.${name}.controller`, manifestPath);
+  const controllerHost = optionalString(
+    value['controller-host'],
+    `targets.${name}.controller-host`,
+    manifestPath,
+  );
   const registry = optionalRegistry(value.registry, `targets.${name}.registry`, manifestPath);
 
-  const known = new Set(['platform', 'stack', 'kubeconfig', 'context', 'namespace', 'registry']);
+  const known = new Set([
+    'platform',
+    'stack',
+    'kubeconfig',
+    'context',
+    'namespace',
+    'registry',
+    'controller',
+    'controller-host',
+  ]);
   const unknown = Object.keys(value).filter((key) => !known.has(key));
   if (unknown.length > 0) {
     manifestInvalid(
-      `Target "${name}" has unsupported fields: ${unknown.join(', ')}. Managed targets accept platform and stack; external targets accept kubeconfig, context, namespace, and registry.`,
+      `Target "${name}" has unsupported fields: ${unknown.join(', ')}. Managed targets accept platform and stack; external targets accept controller and registry.`,
       { manifestPath, target: name, fields: unknown },
     );
   }
@@ -224,15 +238,24 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
     (field): field is string => field !== undefined,
   );
   const externalFields = [
+    controller ? 'controller' : undefined,
+    controllerHost ? 'controller-host' : undefined,
+    registry ? 'registry' : undefined,
     kubeconfig ? 'kubeconfig' : undefined,
     context ? 'context' : undefined,
     namespace ? 'namespace' : undefined,
-    registry ? 'registry' : undefined,
   ].filter((field): field is string => field !== undefined);
 
   if (managedFields.length > 0 && externalFields.length > 0) {
     manifestInvalid(
-      `Target "${name}" mixes managed-platform and kubeconfig fields (${[...managedFields, ...externalFields].join(', ')}). Use either platform (and optional stack), or kubeconfig + namespace + registry.`,
+      `Target "${name}" mixes managed-platform and controller fields (${[...managedFields, ...externalFields].join(', ')}). Use either platform (and optional stack), or controller + registry.`,
+      { manifestPath, target: name },
+    );
+  }
+
+  if (kubeconfig !== undefined || context !== undefined || namespace !== undefined) {
+    manifestInvalid(
+      `Target "${name}" sets kubeconfig/namespace/context; application deploy talks to the controller, not kubectl. Use controller and registry, or a managed platform target.`,
       { manifestPath, target: name },
     );
   }
@@ -248,30 +271,28 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
     return { kind: 'managed', name, platform, stack: stack ?? 'dev' };
   }
 
-  if (kubeconfig !== undefined || namespace !== undefined || registry !== undefined) {
+  if (controller !== undefined || registry !== undefined || controllerHost !== undefined) {
     const missing = [
-      kubeconfig === undefined ? 'kubeconfig' : undefined,
-      namespace === undefined ? 'namespace' : undefined,
+      controller === undefined ? 'controller' : undefined,
       registry === undefined ? 'registry' : undefined,
     ].filter((field): field is string => field !== undefined);
     if (missing.length > 0) {
       manifestInvalid(
-        `Target "${name}" is incomplete; external targets require kubeconfig, namespace, and registry. Missing: ${missing.join(', ')}.`,
+        `Target "${name}" is incomplete; external targets require controller and registry. Missing: ${missing.join(', ')}.`,
         { manifestPath, target: name, missing },
       );
     }
     return {
       kind: 'external',
       name,
-      kubeconfig: kubeconfig as string,
-      namespace: namespace as string,
+      controller: controller as string,
       registry: registry as RegistryInput,
-      context,
+      controllerHost,
     };
   }
 
   manifestInvalid(
-    `Target "${name}" is empty. Set platform (and optional stack) for a managed Pulumi platform, or kubeconfig, namespace, and registry for an external cluster.`,
+    `Target "${name}" is empty. Set platform (and optional stack) for a managed Pulumi platform, or controller and registry for an external cluster.`,
     { manifestPath, target: name },
   );
 }

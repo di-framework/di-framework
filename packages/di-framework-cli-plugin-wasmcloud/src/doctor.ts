@@ -2,10 +2,14 @@ import { existsSync } from 'node:fs';
 import { relative } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
 import { type BindingRecord, discoverBindings } from './bindings';
+import { getControllerHealth } from './controller-client';
+import { DEPLOY_TOKEN_ENV, readCredentialsFile } from './credentials';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
 import { requiresWasmCloudHost, resolveDevRunner } from './dev-runner';
+import { findDeployManifest, loadDeployManifest } from './manifest';
 import { loadProject } from './project';
 import { invalidUsage } from './support';
+import { resolveConnection, resolveTarget } from './target';
 
 export type DoctorCheck = { name: string; ok: boolean; detail?: string };
 
@@ -58,6 +62,36 @@ export async function runWasmcloudDoctor(
     runnerDetail = undefined;
   }
   checks.push(check('dev runner', runnerDetail));
+  const ciToken = deps.env[DEPLOY_TOKEN_ENV]?.trim();
+  const stored = readCredentialsFile(deps.credentialsPath());
+  const hasLogin = (ciToken !== undefined && ciToken !== '') || Object.keys(stored.targets).length > 0;
+  const hasManifest = findDeployManifest(project.projectRoot) !== undefined;
+  if (hasManifest) {
+    checks.push(
+      hasLogin
+        ? { name: 'login', ok: true, detail: ciToken ? DEPLOY_TOKEN_ENV : Object.keys(stored.targets).join(', ') }
+        : { name: 'login', ok: false, detail: 'di-framework wasmcloud login' },
+    );
+  }
+  if (hasManifest) {
+    try {
+      const manifest = loadDeployManifest(deps.cwd(), deps.env);
+      const target = resolveTarget(manifest);
+      const connection = await resolveConnection(target, manifest.workspaceRoot, manifest.path, deps);
+      const health = await getControllerHealth(connection, deps);
+      checks.push(
+        health.ok
+          ? { name: 'controller', ok: true, detail: `${connection.controller?.url} ${health.status}` }
+          : { name: 'controller', ok: false, detail: `GET /health failed (${health.status})` },
+      );
+    } catch (error) {
+      checks.push({
+        name: 'controller',
+        ok: false,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   if (discoveredBindings !== undefined) {
     for (const binding of discoveredBindings) {
       const secret =
@@ -83,7 +117,9 @@ export async function runWasmcloudDoctor(
       entry.ok ? `✓ ${entry.name}: ${entry.detail}` : `✗ ${entry.name} is unavailable`,
     ),
     '',
-    `Contract: incoming HTTP → default export in ${relative(project.projectRoot, project.entryPath)}`,
+    `Contract: incoming HTTP → default export in ${relative(project.projectRoot, project.entryPath)}${
+      hasManifest && !hasLogin ? ' · wasmcloud login' : ''
+    }`,
   ];
   return {
     data: {

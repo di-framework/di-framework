@@ -8,6 +8,7 @@ import { loadDeployManifest } from './manifest';
 import { publishComponent } from './publish';
 import type { RegistryLocation } from './registry';
 import { resolveConnection, resolveTarget } from './target';
+import { getApplication } from './controller-client';
 import { applyWorkload, deploymentResourceName } from './workload';
 
 export type WasmcloudDeployData = {
@@ -49,8 +50,9 @@ export async function runWasmcloudDeploy(
 
   io.stdout.write(`Deploying ${project.applicationName} to target ${connection.target}...\n`);
   const image = await publishComponent(project, connection, io, deps, build.deploymentDigest);
-  await applyWorkload(project, connection, image.pullReference, io, deps);
+  await applyWorkload(project, connection, image.pullReference, io, deps, image.digest);
   const service = deploymentResourceName(project);
+  const status = await getApplication(connection, service, deps);
 
   const hasHttp = project.ingress !== false;
   const cronJobs = discoverScheduledJobs(project.projectRoot);
@@ -59,7 +61,7 @@ export async function runWasmcloudDeploy(
     data: {
       application: project.applicationName,
       target: connection.target,
-      namespace: connection.namespace,
+      namespace: status.body.namespace ?? connection.namespace,
       registry: connection.registry,
       image: image.pullReference,
       publishedImage: image.pushReference,
@@ -80,7 +82,7 @@ export async function runWasmcloudDeploy(
           }
         : {}),
     },
-    text: `Deployed ${project.applicationName} to ${connection.target} (namespace ${connection.namespace}, ${image.pullReference}).${
+    text: `Deployed ${project.applicationName} to ${connection.target} (namespace ${status.body.namespace ?? connection.namespace}, ${image.pullReference}).${
       hasHttp && connection.endpoints?.http !== undefined
         ? ` HTTP: ${connection.endpoints.http} with Host: ${project.applicationName}`
         : ''

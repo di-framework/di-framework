@@ -11,9 +11,7 @@ platform = "deploy/platform"
 stack = "dev"
 
 [targets.development]
-kubeconfig = "${KUBECONFIG}"
-context = "team-development"
-namespace = "wasmcloud"
+controller = "${CONTROLLER_URL}"
 
 [targets.development.registry]
 push = "https://registry.example.com/team"

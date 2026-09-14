@@ -4,6 +4,7 @@ import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
 import { resolveApplication } from './discovery';
 import { loadDeployManifest } from './manifest';
 import { resolveConnection, resolveTarget } from './target';
+import { getApplication } from './controller-client';
 import { deleteWorkload, deploymentResourceName } from './workload';
 
 export async function runWasmcloudDestroy(
@@ -21,16 +22,17 @@ export async function runWasmcloudDestroy(
     manifest.discovery,
   );
   const connection = await resolveConnection(target, manifest.workspaceRoot, manifest.path, deps);
-  await deleteWorkload(project, connection, io, deps);
   const service = deploymentResourceName(project);
+  const before = await getApplication(connection, service, deps).catch(() => undefined);
+  await deleteWorkload(project, connection, io, deps);
 
   return {
     data: {
       application: project.applicationName,
       target: connection.target,
-      namespace: connection.namespace,
+      namespace: before?.body.namespace ?? connection.namespace,
       service,
     },
-    text: `Removed ${project.applicationName} from ${connection.target} (namespace ${connection.namespace}).`,
+    text: `Removed ${project.applicationName} from ${connection.target} (namespace ${before?.body.namespace ?? connection.namespace}).`,
   };
 }

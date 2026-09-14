@@ -13,6 +13,8 @@ describe('extension manifest', () => {
       'dev',
       'deploy',
       'destroy',
+      'login',
+      'logout',
       'platform',
       'doctor',
     ]);
@@ -39,6 +41,8 @@ describe('extension manifest', () => {
       'dev',
       'deploy',
       'destroy',
+      'login',
+      'logout',
       'platform init',
       'platform deploy',
       'platform destroy',

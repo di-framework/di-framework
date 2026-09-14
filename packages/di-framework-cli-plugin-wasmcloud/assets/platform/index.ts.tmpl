@@ -1,6 +1,7 @@
 /**
- * Isolated local wasmCloud platform. Application WorkloadDeployments and
- * Services are deliberately owned by the DI Framework CLI, not this program.
+ * Isolated local wasmCloud platform. This program owns the cluster, registry,
+ * wasmCloud operator, and the deploy-controller WorkloadDeployment. Application
+ * WorkloadDeployments are written only by that controller after `wasmcloud login`.
  */
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
@@ -261,6 +262,173 @@ new k8s.core.v1.Service(
   { provider, dependsOn: [runtimeShutdown] },
 );
 
+const controllerImage =
+  config.get('controllerImage') ??
+  `di-framework-registry.${namespaceName}.svc.cluster.local:5000/wasmcloud-controller:local`;
+const bootstrapPassword = config.get('bootstrapPassword') ?? 'local-admin';
+const controllerLabels = {
+  'app.kubernetes.io/managed-by': 'di-framework',
+  'app.kubernetes.io/name': 'deploy',
+  'di-framework.dev/application': 'deploy',
+  'di-framework.dev/org': 'local',
+  'di-framework.dev/team': 'platform',
+  'di-framework.dev/owner': 'admin',
+};
+
+const controllerServiceAccount = new k8s.core.v1.ServiceAccount(
+  'deploy-controller',
+  { metadata: { name: 'deploy-controller', namespace: namespaceName } },
+  { provider, dependsOn: [namespaceResource] },
+);
+
+const controllerRole = new k8s.rbac.v1.Role(
+  'deploy-controller',
+  {
+    metadata: { name: 'deploy-controller', namespace: namespaceName },
+    rules: [
+      {
+        apiGroups: ['runtime.wasmcloud.dev'],
+        resources: ['workloaddeployments'],
+        verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'],
+      },
+      {
+        apiGroups: [''],
+        resources: ['services', 'secrets'],
+        verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'],
+      },
+      {
+        apiGroups: ['batch'],
+        resources: ['cronjobs'],
+        verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'],
+      },
+    ],
+  },
+  { provider, dependsOn: [namespaceResource] },
+);
+
+new k8s.rbac.v1.RoleBinding(
+  'deploy-controller',
+  {
+    metadata: { name: 'deploy-controller', namespace: namespaceName },
+    roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: 'deploy-controller' },
+    subjects: [{ kind: 'ServiceAccount', name: 'deploy-controller', namespace: namespaceName }],
+  },
+  { provider, dependsOn: [controllerRole, controllerServiceAccount] },
+);
+
+const controllerConfig = new k8s.core.v1.ConfigMap(
+  'deploy-controller',
+  {
+    metadata: { name: 'deploy-platform', namespace: namespaceName, labels: controllerLabels },
+    data: {
+      namespace: namespaceName,
+      kubeApi: 'https://kubernetes.default.svc',
+      issuer: `http://127.0.0.1:${httpPort}`,
+      bootstrapUser: 'admin',
+      members: JSON.stringify({ admin: { org: 'local', team: 'platform', roles: ['org-admin'] } }),
+    },
+  },
+  { provider, dependsOn: [namespaceResource] },
+);
+
+const controllerToken = new k8s.core.v1.Secret(
+  'deploy-controller-token',
+  {
+    metadata: {
+      name: 'deploy-controller-token',
+      namespace: namespaceName,
+      annotations: { 'kubernetes.io/service-account.name': 'deploy-controller' },
+      labels: controllerLabels,
+    },
+    type: 'kubernetes.io/service-account-token',
+  },
+  { provider, dependsOn: [controllerServiceAccount] },
+);
+
+const controllerSecrets = new k8s.core.v1.Secret(
+  'deploy-controller-secrets',
+  {
+    metadata: { name: 'deploy-tokens', namespace: namespaceName, labels: controllerLabels },
+    stringData: {
+      bootstrapPassword,
+      kubeToken: '',
+    },
+  },
+  { provider, dependsOn: [namespaceResource] },
+);
+
+const controllerService = new k8s.core.v1.Service(
+  'deploy-controller',
+  {
+    metadata: { name: 'deploy', namespace: namespaceName, labels: controllerLabels },
+    spec: {
+      type: 'ClusterIP',
+      ports: [{ name: 'http', port: 80, targetPort: 80, protocol: 'TCP' }],
+    },
+  },
+  { provider, dependsOn: [namespaceResource] },
+);
+
+new k8s.apiextensions.CustomResource(
+  'deploy-controller',
+  {
+    apiVersion: 'runtime.wasmcloud.dev/v1alpha1',
+    kind: 'WorkloadDeployment',
+    metadata: { name: 'deploy', namespace: namespaceName, labels: controllerLabels },
+    spec: {
+      replicas: 1,
+      template: {
+        spec: {
+          hostSelector: { hostgroup: 'default' },
+          kubernetes: { service: { name: 'deploy' } },
+          components: [
+            {
+              name: 'deploy',
+              image: controllerImage,
+              localResources: {
+                environment: {
+                  config: {
+                    DI_CONTROL_REJECT_FORWARDED: '1',
+                    DI_CONTROL_HTTP_HOST: 'deploy',
+                  },
+                },
+                allowedIpNameLookups: [
+                  'kubernetes.default.svc',
+                  'kubernetes.default.svc.cluster.local',
+                ],
+              },
+              hostInterfaces: [
+                {
+                  namespace: 'wasi',
+                  package: 'http',
+                  version: '0.3.0',
+                  interfaces: ['handler'],
+                  config: { host: 'deploy' },
+                },
+                {
+                  namespace: 'wasi',
+                  package: 'config',
+                  version: '0.2.0-rc.1',
+                  interfaces: ['store'],
+                  configFrom: [{ name: 'deploy-platform' }],
+                },
+                {
+                  namespace: 'wasmcloud',
+                  package: 'secrets',
+                  version: '2.1.0',
+                  interfaces: ['store', 'reveal'],
+                  secretFrom: [{ name: 'deploy-tokens' }, { name: 'deploy-controller-token' }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  },
+  { provider, dependsOn: [wasmcloud, controllerConfig, controllerSecrets, controllerToken, controllerService] },
+);
+
 export const schemaVersion = 2;
 export const kubeconfig = kubeconfigFileCommand.id.apply(() => kubeconfigFile);
 export const namespace = namespaceResource.metadata.name;
@@ -273,6 +441,10 @@ export const endpoints = {
   http: `http://127.0.0.1:${httpPort}`,
   kubernetes: `https://127.0.0.1:${apiPort}`,
   registry: `http://127.0.0.1:${registryPort}`,
+};
+export const controller = {
+  url: `http://127.0.0.1:${httpPort}`,
+  host: 'deploy',
 };
 
 function hostPort(configuration: pulumi.Config, name: string, fallback: number): number {

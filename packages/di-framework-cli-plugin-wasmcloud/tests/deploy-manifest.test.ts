@@ -36,9 +36,7 @@ platform = "deploy/platform"
 stack = "dev"
 
 [targets.development]
-kubeconfig = "/tmp/kubeconfig"
-context = "team-development"
-namespace = "wasmcloud"
+controller = "https://deploy.example.test"
 registry = "registry.example.com/team"
 `,
       {},
@@ -54,8 +52,7 @@ registry = "registry.example.com/team"
     expect(manifest.targets.development).toMatchObject({
       kind: 'external',
       name: 'development',
-      kubeconfig: '/tmp/kubeconfig',
-      context: 'team-development',
+      controller: 'https://deploy.example.test',
     });
   });
 
@@ -72,16 +69,15 @@ registry = "registry.example.com/team"
 
   it('interpolates environment variables and fails when they are unset', () => {
     const source = `[targets.development]
-kubeconfig = "\${KUBECONFIG}"
-namespace = "wasmcloud"
+controller = "\${CONTROLLER_URL}"
 registry = "registry.example.com/\${TEAM}"
 `;
     const manifest = parseDeployManifest('/workspace/di-framework.deploy.toml', source, {
-      KUBECONFIG: '/home/me/.kube/config',
+      CONTROLLER_URL: 'https://deploy.example.test',
       TEAM: 'platform',
     });
     expect(manifest.targets.development).toMatchObject({
-      kubeconfig: '/home/me/.kube/config',
+      controller: 'https://deploy.example.test',
       registry: 'registry.example.com/platform',
     });
 
@@ -93,7 +89,7 @@ registry = "registry.example.com/\${TEAM}"
     expectFailure(
       () =>
         parseDeployManifest('/workspace/di-framework.deploy.toml', source, {
-          KUBECONFIG: '',
+          CONTROLLER_URL: '',
           TEAM: 'x',
         }),
       'WASMCLOUD_ENV_UNSET',
@@ -105,8 +101,7 @@ registry = "registry.example.com/\${TEAM}"
     const manifest = parseDeployManifest(
       '/workspace/di-framework.deploy.toml',
       `[targets.local]
-kubeconfig = "/tmp/kubeconfig"
-namespace = "wasmcloud"
+controller = "https://deploy.example.test"
 
 [targets.local.registry]
 push = "http://127.0.0.1:25000"

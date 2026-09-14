@@ -17,6 +17,11 @@ export type PlatformEndpoints = {
   registry?: string;
 };
 
+export type PlatformController = {
+  url: string;
+  host: string;
+};
+
 export type PlatformOutputs = {
   schemaVersion: typeof PLATFORM_OUTPUT_SCHEMA_VERSION;
   kubeconfig: string;
@@ -24,6 +29,7 @@ export type PlatformOutputs = {
   registry: RegistryLocation;
   context?: string;
   endpoints?: PlatformEndpoints;
+  controller?: PlatformController;
 };
 
 export async function runWasmcloudPlatformDeploy(
@@ -180,6 +186,7 @@ function materializeOutputs(
   const context =
     raw.context === undefined ? undefined : requiredString(raw.context, 'context', targetName);
   const endpoints = parseEndpoints(raw.endpoints, targetName);
+  const controller = parseController(raw.controller, endpoints, targetName);
 
   let kubeconfigPath = kubeconfig;
   if (kubeconfig.includes('\n') || kubeconfig.includes('apiVersion:')) {
@@ -201,6 +208,7 @@ function materializeOutputs(
     registry,
     context,
     endpoints,
+    controller,
   };
 }
 
@@ -244,6 +252,34 @@ function parseEndpoints(value: unknown, targetName: string): PlatformEndpoints |
       ? undefined
       : requiredString(value.registry, 'endpoints.registry', targetName);
   return { http, kubernetes, registry };
+}
+
+function parseController(
+  value: unknown,
+  endpoints: PlatformEndpoints | undefined,
+  targetName: string,
+): PlatformController | undefined {
+  if (value === undefined) {
+    return endpoints?.http !== undefined ? { url: endpoints.http, host: 'deploy' } : undefined;
+  }
+  if (typeof value === 'string') {
+    return { url: requiredString(value, 'controller', targetName), host: 'deploy' };
+  }
+  if (!isRecord(value)) {
+    throw invalidOutputs(targetName, 'controller must be a URL string or { url, host }');
+  }
+  const url =
+    value.url !== undefined
+      ? requiredString(value.url, 'controller.url', targetName)
+      : value.http !== undefined
+        ? requiredString(value.http, 'controller.http', targetName)
+        : undefined;
+  if (url === undefined) {
+    throw invalidOutputs(targetName, 'controller requires url (or http)');
+  }
+  const host =
+    value.host === undefined ? 'deploy' : requiredString(value.host, 'controller.host', targetName);
+  return { url, host };
 }
 
 function requiredString(value: unknown, field: string, targetName: string): string {

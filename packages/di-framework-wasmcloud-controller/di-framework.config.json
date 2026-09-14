@@ -1,0 +1,5 @@
+{
+  "name": "deploy",
+  "entry": "src/index.ts",
+  "allowedIpNameLookups": ["kubernetes.default.svc", "kubernetes.default.svc.cluster.local"]
+}

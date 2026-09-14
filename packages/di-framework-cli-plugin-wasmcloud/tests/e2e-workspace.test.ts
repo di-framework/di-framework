@@ -17,7 +17,7 @@ const EXAMPLE_WORKSPACE = join(
 describe('example workspace fixture', () => {
   it('deploys and destroys greeter from an arbitrary layout without pulumi destroy', async () => {
     const manifest = loadDeployManifest(EXAMPLE_WORKSPACE, {
-      KUBECONFIG: join(EXAMPLE_WORKSPACE, 'kubeconfig.yaml'),
+      CONTROLLER_URL: 'https://deploy.example.test',
     });
     expect(manifest.defaultTarget).toBe('local');
     expect(Object.keys(manifest.targets).sort()).toEqual(['development', 'local']);
@@ -30,7 +30,7 @@ describe('example workspace fixture', () => {
       fakeDeps({
         cwd: EXAMPLE_WORKSPACE,
         invocations,
-        env: { KUBECONFIG: join(EXAMPLE_WORKSPACE, 'kubeconfig.yaml') },
+        env: { CONTROLLER_URL: 'https://deploy.example.test' },
       }),
     );
     expect(deployed.data).toMatchObject({ application: 'greeter', target: 'development' });
@@ -41,7 +41,7 @@ describe('example workspace fixture', () => {
       captureIo().io,
       fakeDeps({
         cwd: join(EXAMPLE_WORKSPACE, 'services', 'greeter'),
-        env: { KUBECONFIG: join(EXAMPLE_WORKSPACE, 'kubeconfig.yaml') },
+        env: { CONTROLLER_URL: 'https://deploy.example.test' },
       }),
     );
     expect(destroyed.data).toMatchObject({ application: 'greeter' });

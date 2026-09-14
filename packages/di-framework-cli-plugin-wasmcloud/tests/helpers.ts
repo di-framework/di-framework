@@ -114,6 +114,10 @@ export function fakeDeps(options: {
   washBinaryPath?: string | null;
   /** Patched componentize-qjs CLI; undefined uses jco. */
   componentizeQjsPath?: string;
+  fetch?: typeof fetch;
+  credentialsPath?: string;
+  openUrl?: (url: string) => Promise<void>;
+  listenLoopback?: WasmcloudDeps['listenLoopback'];
 }): WasmcloudDeps {
   const invocations = options.invocations ?? [];
   let componentBuilds = 0;
@@ -194,8 +198,32 @@ export function fakeDeps(options: {
       options.washBinaryPath === null ? undefined : (options.washBinaryPath ?? undefined),
     assetsDirectory: () => options.assets ?? makeAssets(),
     resolveFromProject: (_projectRoot, specifier) => options.resolutions?.[specifier],
-    env: options.env ?? {},
+    env: { DI_FRAMEWORK_DEPLOY_TOKEN: 'test-token', ...options.env },
     cwd: () => options.cwd,
+    fetch:
+      options.fetch ??
+      (async (input, init) => {
+        const url = String(input);
+        const method = (init?.method ?? 'GET').toUpperCase();
+        if (url.includes('/health')) {
+          return new Response(JSON.stringify({ ok: true, namespace: 'wasmcloud' }), { status: 200 });
+        }
+        if (method === 'DELETE') {
+          return new Response(JSON.stringify({ deleted: true, namespace: 'wasmcloud' }), { status: 200 });
+        }
+        return new Response(
+          JSON.stringify({ ready: true, namespace: 'wasmcloud', name: 'greeter' }),
+          { status: 200 },
+        );
+      }),
+    credentialsPath: () => options.credentialsPath ?? join(options.cwd, '.di-framework-credentials.json'),
+    openUrl: options.openUrl ?? (async () => undefined),
+    listenLoopback:
+      options.listenLoopback ??
+      (async () => ({
+        redirectUri: 'http://127.0.0.1:8765/callback',
+        close: async () => undefined,
+      })),
   };
 }
 
@@ -221,9 +249,7 @@ platform = "deploy/platform"
 stack = "dev"
 
 [targets.development]
-kubeconfig = "${kubeconfig}"
-context = "team-development"
-namespace = "wasmcloud"
+controller = "https://deploy.example.test"
 registry = "registry.example.com/team"
 `,
   );
@@ -265,6 +291,7 @@ export function platformOutputJson(kubeconfig: string): string {
       insecure: true,
     },
     endpoints: { http: 'http://127.0.0.1:28180' },
+    controller: { url: 'http://127.0.0.1:28180', host: 'deploy' },
   })}\n`;
 }
 

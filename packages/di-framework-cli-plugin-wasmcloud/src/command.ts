@@ -5,6 +5,8 @@ import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
 import { runWasmcloudDestroy } from './destroy';
 import { runWasmcloudDev } from './dev';
 import { runWasmcloudDoctor } from './doctor';
+import { runWasmcloudLogin } from './login';
+import { runWasmcloudLogout } from './logout';
 import { runWasmcloudPlatformDeploy, runWasmcloudPlatformDestroy } from './platform';
 import { runWasmcloudPlatformInit } from './platform-init';
 
@@ -45,6 +47,22 @@ export function createWasmcloudCommand(deps: WasmcloudDeps = DEFAULT_DEPS): Comm
           '--yes  Accepted for compatibility; application destroy does not prompt',
         ],
         run: ({ args, io }) => runWasmcloudDestroy(args, io, deps),
+      },
+      login: {
+        description: 'Authenticate to the deploy controller with authorization-code + PKCE',
+        usage: 'di-framework wasmcloud login [--target <name>]',
+        options: [
+          '--target <name>  Deployment target from di-framework.deploy.toml (default: default-target)',
+        ],
+        run: ({ args, io }) => runWasmcloudLogin(args, io, deps),
+      },
+      logout: {
+        description: 'Delete stored deploy-controller credentials for a target',
+        usage: 'di-framework wasmcloud logout [--target <name>]',
+        options: [
+          '--target <name>  Deployment target from di-framework.deploy.toml (default: default-target)',
+        ],
+        run: ({ args, io }) => runWasmcloudLogout(args, io, deps),
       },
       platform: {
         description: 'Initialize, provision, or tear down a managed wasmCloud platform target',

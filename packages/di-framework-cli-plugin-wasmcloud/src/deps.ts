@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transformAsync } from '@babel/core';
@@ -89,6 +90,12 @@ export type WasmcloudDeps = {
   resolveFromProject(projectRoot: string, specifier: string): string | undefined;
   env: Record<string, string | undefined>;
   cwd(): string;
+  fetch: typeof fetch;
+  credentialsPath(): string;
+  openUrl(url: string): Promise<void>;
+  listenLoopback(
+    handler: (request: Request) => Promise<Response>,
+  ): Promise<{ redirectUri: string; close: () => Promise<void> }>;
 };
 
 const NODE_COMPAT_SEED_RESOLVED = `\0${NODE_COMPAT_SEED_ID}`;
@@ -435,4 +442,24 @@ export const DEFAULT_DEPS: WasmcloudDeps = {
   },
   env: process.env,
   cwd: () => process.cwd(),
+  fetch: globalThis.fetch.bind(globalThis),
+  credentialsPath: () => join(homedir(), '.di-framework', 'credentials.json'),
+  openUrl: async (url) => {
+    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+    const args = process.platform === 'win32' ? ['/c', 'start', url] : [url];
+    await DEFAULT_DEPS.runner(command, args, { cwd: process.cwd() });
+  },
+  listenLoopback: async (handler) => {
+    const server = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: handler,
+    });
+    return {
+      redirectUri: `http://127.0.0.1:${server.port}/callback`,
+      close: async () => {
+        await server.stop(true);
+      },
+    };
+  },
 };

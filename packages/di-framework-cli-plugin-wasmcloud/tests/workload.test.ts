@@ -3,18 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadProject } from '../src/project';
-import {
-  applyWorkload,
-  renderWorkloadManifest,
-  WORKLOAD_DEPLOYMENT_RESOURCE,
-  WORKLOAD_REPLICA_SET_RESOURCE,
-  waitForReady,
-} from '../src/workload';
+import { applyWorkload, isReady, renderWorkloadManifest, waitForReady } from '../src/workload';
 import {
   captureIo,
   fakeDeps,
   makeWorkspace,
-  READY_WORKLOAD_JSON,
   type RunnerInvocation,
 } from './helpers';
 
@@ -119,116 +112,42 @@ describe('workload manifests', () => {
     expect(yaml).toContain('name: "orders-user-database"');
   });
 
-  it('treats unparseable kubectl output as not ready and times out', async () => {
-    const { greeter } = makeWorkspace();
-    const project = loadProject(greeter);
-    await expect(
-      waitForReady(
-        project,
-        {
-          target: 'development',
-          kubeconfig: '/tmp/kube',
-          namespace: 'wasmcloud',
-          registry: REGISTRY,
-        },
-        fakeDeps({
-          cwd: greeter,
-          capturedStdout: { 'kubectl get': 'not-json' },
-        }),
-      ),
-    ).rejects.toMatchObject({ code: 'WASMCLOUD_DEPLOYMENT_NOT_READY', exitCode: 3 });
+  it('treats unparseable status JSON as not ready', () => {
+    expect(isReady('not-json')).toBe(false);
   });
 
-  it('accepts the Available condition when readyReplicas is absent', async () => {
-    const { greeter } = makeWorkspace();
-    const project = loadProject(greeter);
-    await waitForReady(
-      project,
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      fakeDeps({
-        cwd: greeter,
-        capturedStdout: {
-          'kubectl get': JSON.stringify({
-            status: { conditions: [{ type: 'Available', status: 'True' }] },
-          }),
-        },
-      }),
+  it('accepts Available, Ready, and readyReplicas status shapes', () => {
+    expect(
+      isReady(JSON.stringify({ status: { conditions: [{ type: 'Available', status: 'True' }] } })),
+    ).toBe(true);
+    expect(
+      isReady(JSON.stringify({ status: { conditions: [{ type: 'Ready', status: 'True' }] } })),
+    ).toBe(true);
+    expect(isReady(JSON.stringify({ spec: { replicas: 2 }, status: { readyReplicas: 2 } }))).toBe(
+      true,
     );
   });
 
-  it('accepts the runtime operator Ready condition', async () => {
-    const { greeter } = makeWorkspace();
-    await waitForReady(
-      loadProject(greeter),
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      fakeDeps({
-        cwd: greeter,
-        capturedStdout: {
-          'kubectl get': JSON.stringify({
-            status: { conditions: [{ type: 'Ready', status: 'True' }] },
-          }),
-        },
-      }),
-    );
-  });
-
-  it('accepts legacy readyReplicas without readiness conditions', async () => {
-    const { greeter } = makeWorkspace();
-    await waitForReady(
-      loadProject(greeter),
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      fakeDeps({
-        cwd: greeter,
-        capturedStdout: {
-          'kubectl get': JSON.stringify({ spec: { replicas: 2 }, status: { readyReplicas: 2 } }),
-        },
-      }),
-    );
-  });
-
-  it('times out with WASMCLOUD_DEPLOYMENT_NOT_READY when the workload never becomes ready', async () => {
+  it('times out with WASMCLOUD_DEPLOYMENT_NOT_READY when the controller never reports ready', async () => {
     const { greeter } = makeWorkspace();
     const output = captureIo();
-    const invocations: RunnerInvocation[] = [];
-    const project = loadProject(greeter);
     await expect(
       waitForReady(
-        project,
+        loadProject(greeter),
         {
           target: 'development',
-          kubeconfig: '/tmp/kube',
           namespace: 'wasmcloud',
           registry: REGISTRY,
+          controller: { url: 'https://deploy.example.test', host: 'deploy' },
         },
         fakeDeps({
           cwd: greeter,
-          invocations,
-          capturedStdout: { 'kubectl get': '{}' },
+          fetch: async () => new Response(JSON.stringify({ ready: false }), { status: 200 }),
         }),
         output.io,
       ),
     ).rejects.toMatchObject({ code: 'WASMCLOUD_DEPLOYMENT_NOT_READY', exitCode: 3 });
     expect(output.stderr.join('')).toContain('WorkloadDeployment');
-    expect(output.stderr.join('')).toContain('WorkloadReplicaSets');
-    expect(
-      invocations.some((invocation) => invocation.args.includes(WORKLOAD_REPLICA_SET_RESOURCE)),
-    ).toBe(true);
-    expect(invocations.some((invocation) => invocation.args.includes('logs'))).toBe(true);
   });
 
   it('renders control secrets, storage mounts, and injected control HTTP exports', () => {
@@ -272,7 +191,7 @@ describe('workload manifests', () => {
     expect(yaml).toContain('DI_CONTROL_HTTP_HOST: "greeter,greeter.wasmcloud.svc.cluster.local"');
   });
 
-  it('applyWorkload discovers queue handlers and persistent storage flags', async () => {
+  it('applyWorkload posts intent to the controller and never invokes kubectl', async () => {
     const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-queue-'));
     mkdirSync(join(root, 'src'), { recursive: true });
     writeFileSync(
@@ -293,77 +212,40 @@ export class Worker {
     writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
     const project = loadProject(root);
     const invocations: RunnerInvocation[] = [];
+    const connection = {
+      target: 'development',
+      namespace: 'wasmcloud',
+      registry: REGISTRY,
+      controller: { url: 'https://deploy.example.test', host: 'deploy' as const },
+    };
     const path = await applyWorkload(
       project,
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      'registry.example.com/team/queue-app:local',
+      connection,
+      'registry.example.com/team/queue-app:sha256-abc',
       captureIo().io,
-      fakeDeps({
-        cwd: root,
-        invocations,
-        capturedStdout: { 'kubectl get': READY_WORKLOAD_JSON },
-      }),
+      fakeDeps({ cwd: root, invocations }),
     );
     expect(path).toContain('workload.yaml');
-    expect(invocations.some((entry) => entry.args.includes('apply'))).toBe(true);
+    expect(invocations.some((entry) => entry.command === 'kubectl')).toBe(false);
   });
 
-  it('rejects apply when another deployment already owns the storage host path', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-conflict-'));
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(
-      join(root, 'src', 'worker.ts'),
-      `
-import { QueueHandler } from '@di-framework/queues';
-export class Worker {
-  @QueueHandler('jobs')
-  async run() {}
-}
-`,
-    );
-    writeFileSync(join(root, 'src', 'index.ts'), 'export * from "./worker";');
-    writeFileSync(
-      join(root, 'di-framework.config.json'),
-      `${JSON.stringify({ name: 'Queue App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
-    );
-    writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
-    const project = loadProject(root);
+  it('maps controller storage conflicts', async () => {
+    const { greeter } = makeWorkspace();
     await expect(
       applyWorkload(
-        project,
+        loadProject(greeter),
         {
           target: 'development',
-          kubeconfig: '/tmp/kube',
           namespace: 'wasmcloud',
           registry: REGISTRY,
+          controller: { url: 'https://deploy.example.test', host: 'deploy' },
         },
-        'registry.example.com/team/queue-app:local',
+        'registry.example.com/team/greeter:sha256-abc',
         captureIo().io,
         fakeDeps({
-          cwd: root,
-          capturedStdout: {
-            'kubectl get': JSON.stringify({
-              items: [
-                {
-                  metadata: { name: 'other-app' },
-                  spec: {
-                    template: {
-                      spec: {
-                        volumes: [
-                          { hostPath: { path: '/var/lib/di-framework/storage/queue-app' } },
-                        ],
-                      },
-                    },
-                  },
-                },
-              ],
-            }),
-          },
+          cwd: greeter,
+          fetch: async () =>
+            new Response(JSON.stringify({ error: 'storage-conflict' }), { status: 409 }),
         }),
       ),
     ).rejects.toMatchObject({ code: 'WASMCLOUD_STORAGE_OWNERSHIP_CONFLICT', exitCode: 2 });
@@ -388,159 +270,33 @@ export class Worker {
     expect(yaml).toContain('name: greeter-control');
   });
 
-  it('uses queue requirements for worker-only apply paths and allowed IP lookups', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-worker-only-'));
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(join(root, 'src', 'index.ts'), 'export default () => new Response("ok");');
-    writeFileSync(
-      join(root, 'di-framework.config.json'),
-      `${JSON.stringify({ name: 'Worker Only', entry: 'src/index.ts', applicationType: 'worker', ingress: false })}\n`,
-    );
-    writeFileSync(join(root, 'package.json'), '{ "name": "worker-only", "version": "1.0.0" }\n');
-    const project = loadProject(root);
-    await applyWorkload(
-      project,
+  it('applies through the controller HTTP API', async () => {
+    const { greeter } = makeWorkspace();
+    const invocations: RunnerInvocation[] = [];
+    const posted: string[] = [];
+    const path = await applyWorkload(
+      loadProject(greeter),
       {
         target: 'development',
-        kubeconfig: '/tmp/kube',
         namespace: 'wasmcloud',
         registry: REGISTRY,
+        controller: { url: 'https://deploy.example.test', host: 'deploy' },
       },
-      'registry.example.com/team/worker-only:local',
-      captureIo().io,
-      fakeDeps({ cwd: root, capturedStdout: { 'kubectl get': READY_WORKLOAD_JSON } }),
-    );
-
-    const yaml = renderWorkloadManifest(
-      { ...project, allowedIpNameLookups: ['echo.example.com'] },
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      'registry.example.com/team/worker-only:local',
-      [],
-      [],
-      undefined,
-      [],
-      [],
-    );
-    expect(yaml).toContain('allowedIpNameLookups: ["echo.example.com"]');
-  });
-
-  it('ignores malformed ownership diagnostics when kubectl returns non-JSON', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'wasmcloud-apply-bad-json-'));
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(
-      join(root, 'src', 'worker.ts'),
-      `
-import { QueueHandler } from '@di-framework/queues';
-export class Worker {
-  @QueueHandler('jobs')
-  async run() {}
-}
-`,
-    );
-    writeFileSync(join(root, 'src', 'index.ts'), 'export * from "./worker";');
-    writeFileSync(
-      join(root, 'di-framework.config.json'),
-      `${JSON.stringify({ name: 'Queue App', entry: 'src/index.ts', applicationType: 'worker' })}\n`,
-    );
-    writeFileSync(join(root, 'package.json'), '{ "name": "queue-app", "version": "1.0.0" }\n');
-    const project = loadProject(root);
-    await applyWorkload(
-      project,
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      'registry.example.com/team/queue-app:local',
+      'registry.example.com/team/greeter:sha256-abc',
       captureIo().io,
       fakeDeps({
-        cwd: root,
-        capturedStdout: {
-          'kubectl ownership': 'not-json',
+        cwd: greeter,
+        invocations,
+        fetch: async (input, init) => {
+          if (init?.body !== undefined) posted.push(String(init.body));
+          return new Response(JSON.stringify({ ready: true, namespace: 'wasmcloud' }), {
+            status: 200,
+          });
         },
       }),
     );
-  });
-
-  it('applies the generated manifest through kubectl', async () => {
-    const { greeter } = makeWorkspace();
-    const project = loadProject(greeter);
-    const invocations: RunnerInvocation[] = [];
-    const path = await applyWorkload(
-      project,
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      'registry.example.com/team/greeter:sha256-abc',
-      captureIo().io,
-      fakeDeps({ cwd: greeter, invocations }),
-    );
     expect(path).toContain('.di-framework');
-    expect(
-      invocations.some(
-        (invocation) =>
-          invocation.command === 'kubectl' &&
-          invocation.args.includes('get') &&
-          invocation.args.includes(WORKLOAD_DEPLOYMENT_RESOURCE),
-      ),
-    ).toBe(true);
-    expect(
-      invocations.some(
-        (invocation) =>
-          invocation.command === 'kubectl' &&
-          invocation.args.includes('create') &&
-          invocation.args.includes('secret') &&
-          invocation.args.includes('greeter-control'),
-      ),
-    ).toBe(true);
-    expect(
-      invocations.some(
-        (invocation) =>
-          invocation.command === 'kubectl' &&
-          invocation.args.includes('label') &&
-          invocation.args.includes('secret') &&
-          invocation.args.includes('greeter-control'),
-      ),
-    ).toBe(true);
-  });
-
-  it('reuses an existing control secret instead of recreating it', async () => {
-    const { greeter } = makeWorkspace();
-    const project = loadProject(greeter);
-    const invocations: RunnerInvocation[] = [];
-    await applyWorkload(
-      project,
-      {
-        target: 'development',
-        kubeconfig: '/tmp/kube',
-        namespace: 'wasmcloud',
-        registry: REGISTRY,
-      },
-      'registry.example.com/team/greeter:sha256-abc',
-      captureIo().io,
-      fakeDeps({ cwd: greeter, invocations, exitCodes: { 'kubectl get secret': 0 } }),
-    );
-    expect(
-      invocations.some(
-        (invocation) => invocation.command === 'kubectl' && invocation.args.includes('create'),
-      ),
-    ).toBe(false);
-    expect(
-      invocations.some(
-        (invocation) =>
-          invocation.command === 'kubectl' &&
-          invocation.args.includes('label') &&
-          invocation.args.includes('greeter-control'),
-      ),
-    ).toBe(true);
+    expect(invocations.some((invocation) => invocation.command === 'kubectl')).toBe(false);
+    expect(posted.some((body) => body.includes('"application":"greeter"'))).toBe(true);
   });
 });

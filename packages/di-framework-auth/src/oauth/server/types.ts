@@ -9,6 +9,11 @@ export interface OAuthClientConfig {
   allowedGrantTypes: string[];
   allowedScopes: string[];
   isPublic?: boolean;
+  /**
+   * Native CLI / public clients (RFC 8252): allow `http://127.0.0.1:<port>/callback`
+   * and `http://localhost:<port>/callback` in addition to `redirectUris`.
+   */
+  allowLoopbackRedirects?: boolean;
 }
 
 export interface OAuthAuthorizationCode {

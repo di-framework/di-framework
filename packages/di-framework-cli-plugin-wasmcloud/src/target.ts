@@ -4,11 +4,19 @@ import type { DeployManifest, DeployTarget, ExternalTarget, ManagedTarget } from
 import { loadPlatformOutputs, type PlatformOutputs, resolvePlatformDirectory } from './platform';
 import { materializeRegistry, type RegistryLocation } from './registry';
 
+export const CONTROLLER_HOST = 'deploy';
+
+export type ControllerEndpoint = {
+  url: string;
+  host: string;
+};
+
 export type ClusterConnection = {
   target: string;
-  kubeconfig: string;
   namespace: string;
   registry: RegistryLocation;
+  controller?: ControllerEndpoint;
+  kubeconfig?: string;
   context?: string;
   endpoints?: PlatformOutputs['endpoints'];
   platformRoot?: string;
@@ -57,6 +65,11 @@ async function resolveManagedConnection(
 ): Promise<ClusterConnection> {
   const platformRoot = resolvePlatformDirectory(target, workspaceRoot, manifestPath);
   const outputs = await loadPlatformOutputs(deps, platformRoot, target.stack, target.name);
+  const controller =
+    outputs.controller ??
+    (outputs.endpoints?.http !== undefined
+      ? { url: outputs.endpoints.http, host: CONTROLLER_HOST }
+      : undefined);
   return {
     target: target.name,
     kubeconfig: outputs.kubeconfig,
@@ -64,6 +77,7 @@ async function resolveManagedConnection(
     registry: outputs.registry,
     context: outputs.context,
     endpoints: outputs.endpoints,
+    controller,
     platformRoot,
     stack: target.stack,
   };
@@ -72,9 +86,8 @@ async function resolveManagedConnection(
 function resolveExternalConnection(target: ExternalTarget): ClusterConnection {
   return {
     target: target.name,
-    kubeconfig: target.kubeconfig,
-    namespace: target.namespace,
+    namespace: '',
     registry: materializeRegistry(target.registry),
-    context: target.context,
+    controller: { url: target.controller, host: target.controllerHost ?? CONTROLLER_HOST },
   };
 }

@@ -466,6 +466,7 @@
         "@babel/plugin-transform-async-to-generator": "7.29.7",
         "@bytecodealliance/jco": "1.33.0",
         "@di-framework/actors": "^5",
+        "@di-framework/auth": "workspace:*",
         "@di-framework/cli-extension": "^5",
         "@di-framework/componentize-qjs": "0.4.4-di.2",
         "@noble/ciphers": "2.4.0",
@@ -665,6 +666,21 @@
       "version": "5.2.6",
       "peerDependencies": {
         "@di-framework/core": "^5",
+        "typescript": "^5",
+      },
+    },
+    "packages/di-framework-wasmcloud-controller": {
+      "name": "@di-framework/wasmcloud-controller",
+      "version": "5.2.6",
+      "dependencies": {
+        "@di-framework/auth": "workspace:*",
+        "@di-framework/authz": "workspace:*",
+        "@di-framework/core": "workspace:*",
+        "@di-framework/http": "workspace:*",
+        "@di-framework/wasmcloud": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
         "typescript": "^5",
       },
     },
@@ -879,6 +895,8 @@
     "@di-framework/tsc": ["@di-framework/tsc@workspace:packages/di-framework-tsc"],
 
     "@di-framework/wasmcloud": ["@di-framework/wasmcloud@workspace:packages/di-framework-wasmcloud"],
+
+    "@di-framework/wasmcloud-controller": ["@di-framework/wasmcloud-controller@workspace:packages/di-framework-wasmcloud-controller"],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 

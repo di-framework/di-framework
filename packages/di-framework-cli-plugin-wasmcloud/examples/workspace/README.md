@@ -18,16 +18,18 @@ nested/deep/echo/         another project, nested wherever it fits
 ```bash
 di-framework wasmcloud platform init
 di-framework wasmcloud platform deploy local --yes
+di-framework wasmcloud login
 di-framework wasmcloud deploy greeter
 # Then request http://127.0.0.1:28180 with `Host: greeter`.
 di-framework wasmcloud destroy greeter
 di-framework wasmcloud platform destroy local --yes
 ```
 
-## Existing cluster (kubeconfig + registry only)
+## Existing cluster (controller + registry)
 
 ```bash
-export KUBECONFIG="$HOME/.kube/config"
+export CONTROLLER_URL="https://deploy.example.test"
+di-framework wasmcloud login --target development
 di-framework wasmcloud deploy greeter --target development
 di-framework wasmcloud deploy echo --target development
 ```

@@ -8,8 +8,9 @@ This generated Pulumi project provisions platform resources only:
 - wasmCloud runtime operator 2.8.0 and its default HTTP host group;
 - a generic loopback HTTP entrypoint.
 
-Application components, Services, and WorkloadDeployments remain owned by
-`di-framework wasmcloud deploy`. No application name is stored here.
+This program also installs the deploy-controller WorkloadDeployment (Host
+`deploy`). Application `WorkloadDeployment`s are written only by that
+controller after `di-framework wasmcloud login`.
 
 `di-framework wasmcloud platform deploy local --yes` runs `pulumi install`
 before selecting the stack, so this directory does not need a manual package
@@ -50,6 +51,8 @@ registry content.
 | `endpoints.kubernetes` | loopback API server URL |
 | `endpoints.registry` | loopback registry URL |
 | `endpoints.http` | loopback HTTP URL |
+| `controller.url` | deploy-controller HTTP URL (same loopback entrypoint) |
+| `controller.host` | HTTP `Host` header (`deploy`) |
 
 ## Lifecycle
 
@@ -57,12 +60,15 @@ From the workspace root:
 
 ```sh
 di-framework wasmcloud platform deploy local --yes
+di-framework wasmcloud login
 di-framework wasmcloud deploy <configured-project-name>
 di-framework wasmcloud destroy <configured-project-name>
 di-framework wasmcloud platform destroy local --yes
 ```
 
-Send the configured project name as the HTTP `Host` header, for example:
+Local bootstrap login is `admin` / `local-admin` (override with Pulumi
+`bootstrapPassword`). Send the configured project name as the HTTP `Host`
+header, for example:
 
 ```sh
 curl -H 'Host: greeter' http://127.0.0.1:28180/

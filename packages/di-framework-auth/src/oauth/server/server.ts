@@ -11,6 +11,7 @@ import type {
   ConsentStore,
   OAuthAuthorizationCode,
   OAuthAuthorizationServerOptions,
+  OAuthClientConfig,
   OAuthConsent,
   OAuthRefreshTokenRecord,
   OAuthTokenGrant,
@@ -68,8 +69,8 @@ export class AuthorizationServer {
       });
     }
 
-    // Exact redirect URI validation (fail closed)
-    if (!request.redirectUri || !client.redirectUris.includes(request.redirectUri)) {
+    // Exact redirect URI validation (fail closed). Loopback is opt-in per client.
+    if (!request.redirectUri || !redirectUriAllowed(client, request.redirectUri)) {
       throw new AuthError(
         `Invalid redirect_uri '${request.redirectUri}' for client '${request.clientId}'`,
         { status: 400, code: 'invalid_request' },
@@ -475,4 +476,29 @@ export function createAuthorizationServer(
   options: OAuthAuthorizationServerOptions,
 ): AuthorizationServer {
   return new AuthorizationServer(options);
+}
+
+/** RFC 8252 loopback redirect used by native CLI clients. */
+export function isLoopbackRedirectUri(uri: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:') return false;
+  if (parsed.username !== '' || parsed.password !== '') return false;
+  if (
+    parsed.hostname !== '127.0.0.1' &&
+    parsed.hostname !== 'localhost' &&
+    parsed.hostname !== '[::1]'
+  ) {
+    return false;
+  }
+  return parsed.pathname === '/callback';
+}
+
+export function redirectUriAllowed(client: OAuthClientConfig, uri: string): boolean {
+  if (client.redirectUris.includes(uri)) return true;
+  return client.allowLoopbackRedirects === true && isLoopbackRedirectUri(uri);
 }

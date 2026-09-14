@@ -117,6 +117,46 @@ describe('OAuth2 / OIDC Authorization Server', () => {
     ).rejects.toThrow('Unknown client_id');
   });
 
+  it('allows RFC 8252 loopback redirects only when the client opts in', async () => {
+    const pkce = await generatePkce();
+    clientStore.registerClient({
+      clientId: 'native-cli',
+      clientName: 'CLI',
+      redirectUris: [],
+      allowedGrantTypes: ['authorization_code'],
+      allowedScopes: ['openid'],
+      isPublic: true,
+      allowLoopbackRedirects: true,
+    });
+    await consentStore.saveConsent({
+      clientId: 'native-cli',
+      subjectId: 'alice',
+      scopes: ['openid'],
+      grantedAt: Math.floor(Date.now() / 1000),
+    });
+    const allowed = await server.authorize(
+      {
+        responseType: 'code',
+        clientId: 'native-cli',
+        redirectUri: 'http://127.0.0.1:8765/callback',
+        scope: 'openid',
+        codeChallenge: pkce.codeChallenge,
+        codeChallengeMethod: 'S256',
+      },
+      'alice',
+    );
+    expect(allowed.type).toBe('redirect');
+
+    await expect(
+      server.authorize({
+        responseType: 'code',
+        clientId: 'test-app',
+        redirectUri: 'http://127.0.0.1:8765/callback',
+        codeChallenge: pkce.codeChallenge,
+      }),
+    ).rejects.toThrow('Invalid redirect_uri');
+  });
+
   it('enforces exact redirect_uri matching and PKCE requirement', async () => {
     await expect(
       server.authorize({

@@ -13,7 +13,7 @@ import {
 } from './helpers';
 
 describe('runWasmcloudDeploy', () => {
-  it('deploys the nearest project to a kubeconfig-only target', async () => {
+  it('deploys the nearest project to a controller target', async () => {
     const { root, greeter, kubeconfig } = makeWorkspace();
     const invocations: RunnerInvocation[] = [];
     const result = await runWasmcloudDeploy(
@@ -24,7 +24,7 @@ describe('runWasmcloudDeploy', () => {
 
     expect(invocations.some((invocation) => invocation.command === 'pulumi')).toBe(false);
     expect(invocations.some((invocation) => invocation.command === 'oras')).toBe(true);
-    expect(invocations.some((invocation) => invocation.args.includes('apply'))).toBe(true);
+    expect(invocations.some((invocation) => invocation.command === 'kubectl')).toBe(false);
     const wasm = join(greeter, 'dist', 'greeter.wasm');
     const artifactDigest = contentDigest(wasm);
     const deploymentDigest = String(result.data.deploymentDigest);
@@ -115,8 +115,7 @@ describe('runWasmcloudDeploy', () => {
       `default-target = "split"
 
 [targets.split]
-kubeconfig = "${kubeconfig}"
-namespace = "wasmcloud"
+controller = "https://deploy.example.test"
 
 [targets.split.registry]
 push = "http://127.0.0.1:25000"
@@ -153,8 +152,7 @@ insecure = true
     writeFileSync(
       join(root, 'di-framework.deploy.toml'),
       `[targets.insecure]
-kubeconfig = "${kubeconfig}"
-namespace = "wasmcloud"
+controller = "https://deploy.example.test"
 [targets.insecure.registry]
 push = "localhost:25000"
 pull = "registry.wasmcloud.svc.cluster.local:5000"
@@ -222,7 +220,7 @@ insecure = true
     ).toBe(true);
   });
 
-  it('maps oras and kubectl failures to WASMCLOUD_TOOL_FAILED', async () => {
+  it('maps oras failures to WASMCLOUD_TOOL_FAILED and missing login to WASMCLOUD_LOGIN_REQUIRED', async () => {
     const { greeter } = makeWorkspace();
     await expect(
       runWasmcloudDeploy(
@@ -236,9 +234,9 @@ insecure = true
       runWasmcloudDeploy(
         ['--target', 'development'],
         captureIo().io,
-        fakeDeps({ cwd: greeter, exitCodes: { 'kubectl apply': 1 } }),
+        fakeDeps({ cwd: greeter, env: { DI_FRAMEWORK_DEPLOY_TOKEN: '' } }),
       ),
-    ).rejects.toMatchObject({ code: 'WASMCLOUD_TOOL_FAILED', exitCode: 3 });
+    ).rejects.toMatchObject({ code: 'WASMCLOUD_LOGIN_REQUIRED', exitCode: 2 });
   });
 
   it('derives an immutable digest from component bytes', () => {
