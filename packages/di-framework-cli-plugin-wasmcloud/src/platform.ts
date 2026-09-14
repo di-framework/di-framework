@@ -5,6 +5,7 @@ import { CommandFailure } from '@di-framework/cli-extension';
 import { parsePlatformCommandArgs } from './args';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
 import { loadDeployManifest, type ManagedTarget } from './manifest';
+import { isNamespace } from './namespace';
 import { resolveInsideRoot } from './paths';
 import { pulumiEnvironment, runPulumi } from './pulumi';
 import { materializeRegistry, type RegistryInput, type RegistryLocation } from './registry';
@@ -176,6 +177,11 @@ function materializeOutputs(
 
   const kubeconfig = requiredString(raw.kubeconfig, 'kubeconfig', targetName);
   const namespace = requiredString(raw.namespace, 'namespace', targetName);
+  if (!isNamespace(namespace))
+    throw invalidOutputs(
+      targetName,
+      'namespace must be a Kubernetes namespace (a DNS label of at most 63 characters)',
+    );
   const registry = parseRegistry(raw.registry, targetName);
   const context =
     raw.context === undefined ? undefined : requiredString(raw.context, 'context', targetName);

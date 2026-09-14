@@ -3,12 +3,13 @@ import { parseAppCommandArgs } from './args';
 import { buildComponent } from './build';
 import { discoverScheduledJobs } from './cron';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { resolveApplication } from './discovery';
+import { discoverProjects, resolveApplication } from './discovery';
 import { loadDeployManifest } from './manifest';
 import { publishComponent } from './publish';
 import type { RegistryLocation } from './registry';
 import { resolveConnection, resolveTarget } from './target';
 import { applyWorkload, deploymentResourceName } from './workload';
+import { writeWorkloadManifest } from './workload-members';
 
 export type WasmcloudDeployData = {
   cronJobs?: Array<{ jobId: string; schedule: string | number; cronExpression: string }>;
@@ -44,6 +45,14 @@ export async function runWasmcloudDeploy(
     manifest.workspaceRoot,
     manifest.discovery,
   );
+  if (project.workload) {
+    const path = writeWorkloadManifest(
+      manifest.workspaceRoot,
+      project.workload,
+      discoverProjects(manifest.workspaceRoot, manifest.discovery).values(),
+    );
+    io.stdout.write(`Generated workload manifest ${path}\n`);
+  }
   const build = await buildComponent(project, io, deps);
   const connection = await resolveConnection(target, manifest.workspaceRoot, manifest.path, deps);
 

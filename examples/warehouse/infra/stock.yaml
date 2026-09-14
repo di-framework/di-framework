@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: di-tenant-stock
+data:
+  backend: redis
+  url: redis://warehouse-redis:6379
+  prefix: 'warehouse:pallets:'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warehouse-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: warehouse-redis }
+  template:
+    metadata:
+      labels: { app: warehouse-redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4.5-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: [redis-cli, ping] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warehouse-redis
+spec:
+  selector: { app: warehouse-redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

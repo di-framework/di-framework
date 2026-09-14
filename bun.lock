@@ -281,6 +281,42 @@
         "@types/bun": "latest",
       },
     },
+    "examples/warehouse": {
+      "name": "@examples/warehouse",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/wasmcloud": "workspace:*",
+        "@examples/warehouse-receive": "workspace:*",
+        "@examples/warehouse-sync": "workspace:*",
+        "@examples/warehouse-take": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "examples/warehouse/packages/receive": {
+      "name": "@examples/warehouse-receive",
+      "version": "0.1.0",
+      "dependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/wasmcloud": "workspace:*",
+      },
+    },
+    "examples/warehouse/packages/sync": {
+      "name": "@examples/warehouse-sync",
+      "version": "0.1.0",
+      "dependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/wasmcloud": "workspace:*",
+      },
+    },
+    "examples/warehouse/packages/take": {
+      "name": "@examples/warehouse-take",
+      "version": "0.1.0",
+      "dependencies": {
+        "@di-framework/core": "workspace:*",
+        "@di-framework/wasmcloud": "workspace:*",
+      },
+    },
     "examples/wasmcloud-actor-counter": {
       "name": "wasmcloud-actor-counter",
       "version": "0.1.0",
@@ -907,6 +943,14 @@
     "@examples/receipt-worker": ["@examples/receipt-worker@workspace:examples/receipt-worker"],
 
     "@examples/scheduled-worker": ["@examples/scheduled-worker@workspace:examples/scheduled-worker"],
+
+    "@examples/warehouse": ["@examples/warehouse@workspace:examples/warehouse"],
+
+    "@examples/warehouse-receive": ["@examples/warehouse-receive@workspace:examples/warehouse/packages/receive"],
+
+    "@examples/warehouse-sync": ["@examples/warehouse-sync@workspace:examples/warehouse/packages/sync"],
+
+    "@examples/warehouse-take": ["@examples/warehouse-take@workspace:examples/warehouse/packages/take"],
 
     "@hono/node-server": ["@hono/node-server@2.0.12", "", { "peerDependencies": { "hono": "^4" } }, "sha512-eWpQYr67tqJLeaSUl0Q+TquuYfUdTibpOJlUMV2FfUP7+KqCC5TufnwnlXL6mobZBJbGAYRd7ZvEBDCbLInjhg=="],
 

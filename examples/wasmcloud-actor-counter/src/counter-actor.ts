@@ -1,5 +1,5 @@
-import { Actor, ActorContext, ActorMethod } from '@di-framework/actors';
 import type { ActorContext as ActorContextType } from '@di-framework/actors';
+import { Actor, ActorContext, ActorMethod } from '@di-framework/actors';
 
 @Actor({
   name: 'Counter',

@@ -103,6 +103,7 @@ export function renderWorkloadManifest(
     `    app.kubernetes.io/managed-by: ${MANAGED_BY_LABEL}`,
     `    app.kubernetes.io/name: ${name}`,
     `    di-framework.dev/application: ${yamlQuote(project.applicationName)}`,
+    ...(project.workload ? [`    di-framework.dev/workload: ${yamlQuote(project.workload)}`] : []),
   ].join('\n');
 
   const volumeName = opts.storageVolume?.volumeName ?? 'app-storage';
@@ -214,7 +215,10 @@ spec:
             },
           ]
         : requirements,
-      hasHttp ? { httpHost: advertisedHttpHost } : {},
+      {
+        ...(hasHttp ? { httpHost: advertisedHttpHost } : {}),
+        subscriptions: project.workloadEntry?.subscriptions,
+      },
       bindings.map((binding) => ({
         name: binding.name,
         className: binding.className,
@@ -236,8 +240,9 @@ spec:
   replicas: 1
 ${needsPersistentStorage ? '  deployPolicy: Recreate\n' : ''}  template:
     spec:
+      environment: ${yamlQuote(connection.namespace)}
       hostSelector:
-        hostgroup: ${needsPersistentStorage ? STORAGE_HOSTGROUP : 'default'}
+        hostgroup: ${needsPersistentStorage ? (connection.storageHostgroup ?? STORAGE_HOSTGROUP) : (connection.hostgroup ?? 'default')}
 ${
   needsPersistentStorage
     ? `      volumes:
@@ -391,7 +396,18 @@ export async function applyWorkload(
     : isWorker
       ? queueProjectRequirements()
       : [];
-  const requirements = [...baseRequirements, ...requirementsFromBindings(bindings)];
+  const requirements: WitRequirement[] = [
+    ...baseRequirements,
+    ...requirementsFromBindings(bindings),
+  ];
+  if (project.workloadEntry?.subscriptions)
+    requirements.push({
+      package: 'wasmcloud:messaging',
+      version: '0.3.0',
+      interfaces: ['handler'],
+      direction: 'export',
+      source: 'workload-service',
+    });
   await assertStorageOwnership(project, connection, deps, {
     hasActors,
     hasQueues: queueHandlers.length > 0,
@@ -579,7 +595,11 @@ async function deploymentDiagnostics(
     },
     {
       title: 'wasmCloud storage host logs',
-      args: ['logs', 'deployment/hostgroup-storage', '--tail=100'],
+      args: [
+        'logs',
+        `deployment/hostgroup-${connection.storageHostgroup ?? STORAGE_HOSTGROUP}`,
+        '--tail=100',
+      ],
     },
   ];
   const sections: string[] = [];

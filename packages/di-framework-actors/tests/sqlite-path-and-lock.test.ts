@@ -4,9 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   Actor,
+  ActorIdentityCollisionError,
   ActorLockError,
   ActorMethod,
-  ActorIdentityCollisionError,
   actorIdentityToPath,
   assertStoredActorIdentity,
   canonicalActorIdentity,
@@ -111,9 +111,9 @@ describe('Safe Identity Mapping and File Locking', () => {
       expect(canonicalActorIdentity(parseActorIdentity('foo.bar:Actor:k'))).toBe(
         'foo.bar\0Actor\0k',
       );
-      expect(() =>
-        assertStoredActorIdentity('Actor:a', 'Actor:b', dotted),
-      ).toThrow(ActorIdentityCollisionError);
+      expect(() => assertStoredActorIdentity('Actor:a', 'Actor:b', dotted)).toThrow(
+        ActorIdentityCollisionError,
+      );
       expect(() => assertStoredActorIdentity(null, 'Actor:b', dotted)).not.toThrow();
       expect(() => assertStoredActorIdentity('Actor:b', 'Actor:b', dotted)).not.toThrow();
     });

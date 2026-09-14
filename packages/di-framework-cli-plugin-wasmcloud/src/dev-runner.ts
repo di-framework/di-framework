@@ -18,6 +18,16 @@ export type ResolvedDevRunner = {
   args(target: DevServeTarget): string[];
 };
 
+export type DevRunnerOptions = {
+  /** Prefer wash: wasmtime and jco cannot host `wasmcloud:*` imports. */
+  wasmCloudHost?: boolean;
+};
+
+/** True when the guest imports a wasmCloud host interface, not only WASI. */
+export function requiresWasmCloudHost(requirements: readonly { package: string }[]): boolean {
+  return requirements.some((requirement) => requirement.package.startsWith('wasmcloud:'));
+}
+
 const KINDS: readonly DevRunnerKind[] = ['wasmtime', 'wash', 'jco'];
 
 function binaryFor(kind: DevRunnerKind, deps: WasmcloudDeps): string | undefined {
@@ -70,7 +80,10 @@ function argsFor(kind: DevRunnerKind, deps: WasmcloudDeps, target: DevServeTarge
   }
 }
 
-export function resolveDevRunner(deps: WasmcloudDeps): ResolvedDevRunner {
+export function resolveDevRunner(
+  deps: WasmcloudDeps,
+  options: DevRunnerOptions = {},
+): ResolvedDevRunner {
   const requested = deps.env[DEV_RUNNER_ENV]?.trim();
   if (requested !== undefined && requested !== '') {
     if (!KINDS.includes(requested as DevRunnerKind)) {
@@ -92,6 +105,19 @@ export function resolveDevRunner(deps: WasmcloudDeps): ResolvedDevRunner {
       );
     }
     return { kind, command, args: (target) => argsFor(kind, deps, target) };
+  }
+
+  if (options.wasmCloudHost === true) {
+    const command = binaryFor('wash', deps);
+    if (command === undefined) {
+      throw new CommandFailure(
+        'WASMCLOUD_DEV_RUNNER_REQUIRED',
+        'wash is required to serve a component that imports wasmCloud host interfaces; install wash or set DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER',
+        3,
+        { tool: 'wash' },
+      );
+    }
+    return { kind: 'wash', command, args: (target) => argsFor('wash', deps, target) };
   }
 
   for (const kind of KINDS) {

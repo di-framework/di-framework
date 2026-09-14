@@ -113,9 +113,7 @@ export function actorIdentityToPath(
     trimUnderscores(identity.actorName.replace(/[^a-zA-Z0-9_-]/g, '_')) || 'actor';
 
   // Hash the full identity so sanitized namespace/name collisions cannot share a file.
-  const identityHash = createHash('sha256')
-    .update(canonicalActorIdentity(identity))
-    .digest('hex');
+  const identityHash = createHash('sha256').update(canonicalActorIdentity(identity)).digest('hex');
   const hashPrefix = identityHash.slice(0, 32);
 
   // In-memory mode: return a dedicated shared memory URI

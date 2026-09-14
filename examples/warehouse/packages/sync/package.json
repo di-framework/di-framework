@@ -1,0 +1,13 @@
+{
+  "name": "@examples/warehouse-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/wasmcloud": "workspace:*"
+  }
+}

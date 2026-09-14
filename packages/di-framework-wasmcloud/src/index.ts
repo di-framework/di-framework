@@ -26,3 +26,19 @@ export {
   WASMCLOUD_BINDING_KEY,
   type WasmCloudBindingMetadata,
 } from './metadata';
+export {
+  getWorkload,
+  getWorkloadComponent,
+  getWorkloadService,
+  WORKLOAD_COMPONENT_KEY,
+  WORKLOAD_KEY,
+  WORKLOAD_SERVICE_KEY,
+  Workload,
+  WorkloadComponent,
+  type WorkloadComponentOptions,
+  type WorkloadFetchHandler,
+  type WorkloadMetadata,
+  type WorkloadRunHandler,
+  WorkloadService,
+  type WorkloadServiceOptions,
+} from './workload';

@@ -1,0 +1,5 @@
+{
+  "name": "warehouse-take",
+  "entry": "src/index.ts",
+  "workload": "warehouse"
+}

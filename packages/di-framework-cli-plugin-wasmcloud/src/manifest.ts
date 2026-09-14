@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
+import { isNamespace } from './namespace';
 import { findUp } from './project';
 import type { RegistryInput } from './registry';
 import { parseToml, TomlParseError } from './toml';
@@ -30,6 +31,8 @@ export type ExternalTarget = {
   namespace: string;
   registry: RegistryInput;
   context?: string;
+  hostgroup?: string;
+  storageHostgroup?: string;
 };
 
 export type DeployTarget = ManagedTarget | ExternalTarget;
@@ -208,14 +211,45 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
   const stack = optionalString(value.stack, `targets.${name}.stack`, manifestPath);
   const kubeconfig = optionalString(value.kubeconfig, `targets.${name}.kubeconfig`, manifestPath);
   const context = optionalString(value.context, `targets.${name}.context`, manifestPath);
+  const hostgroup = optionalString(value.hostgroup, `targets.${name}.hostgroup`, manifestPath);
+  const storageHostgroup = optionalString(
+    value['storage-hostgroup'],
+    `targets.${name}.storage-hostgroup`,
+    manifestPath,
+  );
+  for (const [field, group] of [
+    ['hostgroup', hostgroup],
+    ['storage-hostgroup', storageHostgroup],
+  ]) {
+    if (group !== undefined && !isNamespace(group))
+      manifestInvalid(`targets.${name}.${field} must be a DNS label of at most 63 characters`, {
+        manifestPath,
+        target: name,
+      });
+  }
   const namespace = optionalString(value.namespace, `targets.${name}.namespace`, manifestPath);
+  if (namespace !== undefined && !isNamespace(namespace)) {
+    manifestInvalid(
+      `targets.${name}.namespace must be a Kubernetes namespace (a DNS label of at most 63 characters)`,
+      { manifestPath, target: name },
+    );
+  }
   const registry = optionalRegistry(value.registry, `targets.${name}.registry`, manifestPath);
 
-  const known = new Set(['platform', 'stack', 'kubeconfig', 'context', 'namespace', 'registry']);
+  const known = new Set([
+    'platform',
+    'stack',
+    'kubeconfig',
+    'context',
+    'namespace',
+    'registry',
+    'hostgroup',
+    'storage-hostgroup',
+  ]);
   const unknown = Object.keys(value).filter((key) => !known.has(key));
   if (unknown.length > 0) {
     manifestInvalid(
-      `Target "${name}" has unsupported fields: ${unknown.join(', ')}. Managed targets accept platform and stack; external targets accept kubeconfig, context, namespace, and registry.`,
+      `Target "${name}" has unsupported fields: ${unknown.join(', ')}. Managed targets accept platform and stack; external targets accept kubeconfig, context, namespace, registry, hostgroup, and storage-hostgroup.`,
       { manifestPath, target: name, fields: unknown },
     );
   }
@@ -226,6 +260,8 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
   const externalFields = [
     kubeconfig ? 'kubeconfig' : undefined,
     context ? 'context' : undefined,
+    hostgroup ? 'hostgroup' : undefined,
+    storageHostgroup ? 'storage-hostgroup' : undefined,
     namespace ? 'namespace' : undefined,
     registry ? 'registry' : undefined,
   ].filter((field): field is string => field !== undefined);
@@ -267,6 +303,8 @@ function parseTarget(name: string, value: unknown, manifestPath: string): Deploy
       namespace: namespace as string,
       registry: registry as RegistryInput,
       context,
+      ...(hostgroup ? { hostgroup } : {}),
+      ...(storageHostgroup ? { storageHostgroup } : {}),
     };
   }
 

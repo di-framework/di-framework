@@ -7,6 +7,8 @@ import * as path from 'node:path';
 import * as command from '@pulumi/command';
 import * as k8s from '@pulumi/kubernetes';
 import * as pulumi from '@pulumi/pulumi';
+import { declarations, seedTenantNamespaces, installTenancy } from './tenancy';
+import { names } from './tenancy/resources';
 
 const K0S_IMAGE = 'docker.io/k0sproject/k0s:v1.36.3-k0s.2';
 const REGISTRY_IMAGE = 'docker.io/library/registry:3.1.1';
@@ -17,6 +19,7 @@ const namespaceName = 'wasmcloud';
 const ownershipLabel = 'di-framework.dev.platform-scope';
 
 const config = new pulumi.Config();
+const declared = declarations(config);
 const apiPort = hostPort(config, 'apiPort', 26443);
 const registryPort = hostPort(config, 'registryPort', 25000);
 const httpPort = hostPort(config, 'httpPort', 28180);
@@ -189,6 +192,8 @@ const registryService = new k8s.core.v1.Service(
   { provider, dependsOn: [registryDeployment] },
 );
 
+const tenantNamespaces = seedTenantNamespaces(declared.tenants, scope, provider);
+
 const wasmcloud = new k8s.helm.v3.Release(
   'wasmcloud',
   {
@@ -202,6 +207,7 @@ const wasmcloud = new k8s.helm.v3.Release(
     timeout: 600,
     values: {
       gateway: { enabled: false },
+      operator: { allowSharedHosts: false, hostNamespaces: [namespaceName, ...declared.tenants.map(t => names(t.name).runtimeNamespace)] },
       runtime: {
         extraArgs: ['--allow-insecure-registries'],
         resources: {
@@ -222,7 +228,7 @@ const wasmcloud = new k8s.helm.v3.Release(
       },
     },
   },
-  { provider, dependsOn: [namespaceResource, registryService] },
+  { provider, dependsOn: [namespaceResource, registryService, ...tenantNamespaces] },
 );
 
 const runtimeShutdown = new command.local.Command(
@@ -260,6 +266,15 @@ new k8s.core.v1.Service(
   },
   { provider, dependsOn: [runtimeShutdown] },
 );
+
+const tenancy = installTenancy({
+  installation: scope, namespace: namespaceName, provider,
+  dependsOn: [runtimeShutdown], ...declared,
+  hostImage: config.get('tenantHostImage') ?? 'ghcr.io/wasmcloud/wash:2.8.0',
+  hostImagePullPolicy: config.get('tenantHostImagePullPolicy') ?? 'IfNotPresent',
+});
+export const tenants = tenancy.tenants.map(t => t.metadata.name.apply(name => ({ name, ...names(name) })));
+export const users = tenancy.users.map(u => u.metadata.name.apply(name => ({ name, serviceAccount: `di-user-${name}`, namespace: namespaceName })));
 
 export const schemaVersion = 2;
 export const kubeconfig = kubeconfigFileCommand.id.apply(() => kubeconfigFile);

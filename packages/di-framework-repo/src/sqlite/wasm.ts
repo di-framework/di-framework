@@ -33,11 +33,7 @@ export const WASM_SQLITE_SYNC_MODE_SQL = {
   full: 'FULL',
 } as const satisfies Record<WasmSqliteSyncMode, string>;
 
-function allowlistedSql(
-  kind: string,
-  value: unknown,
-  allowed: Record<string, string>,
-): string {
+function allowlistedSql(kind: string, value: unknown, allowed: Record<string, string>): string {
   const key = typeof value === 'string' ? value.toLowerCase() : '';
   const sql = allowed[key];
   if (!sql) {
@@ -49,7 +45,9 @@ function allowlistedSql(
 }
 
 /** Maps a journal mode to the SQL token, or throws if it is not allowlisted. */
-export function wasmSqliteJournalModeSql(value: unknown = WASM_SQLITE_DEFAULT_JOURNAL_MODE): string {
+export function wasmSqliteJournalModeSql(
+  value: unknown = WASM_SQLITE_DEFAULT_JOURNAL_MODE,
+): string {
   return allowlistedSql('journalMode', value, WASM_SQLITE_JOURNAL_MODE_SQL);
 }
 
@@ -339,12 +337,11 @@ export function wasmSqlitePragmas(options: WasmSqliteOpenOptions = {}): string[]
     options.journalMode ?? WASM_SQLITE_DEFAULT_JOURNAL_MODE,
   );
   const synchronous = wasmSqliteSyncModeSql(options.synchronous ?? WASM_SQLITE_DEFAULT_SYNC_MODE);
-  const pragmas = [
-    `PRAGMA journal_mode = ${journalMode};`,
-    `PRAGMA synchronous = ${synchronous};`,
-  ];
+  const pragmas = [`PRAGMA journal_mode = ${journalMode};`, `PRAGMA synchronous = ${synchronous};`];
   if (options.busyTimeoutMs !== undefined) {
-    pragmas.push(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(Number(options.busyTimeoutMs)))};`);
+    pragmas.push(
+      `PRAGMA busy_timeout = ${Math.max(0, Math.floor(Number(options.busyTimeoutMs)))};`,
+    );
   }
   if (options.foreignKeys !== undefined) {
     pragmas.push(`PRAGMA foreign_keys = ${options.foreignKeys ? 'ON' : 'OFF'};`);

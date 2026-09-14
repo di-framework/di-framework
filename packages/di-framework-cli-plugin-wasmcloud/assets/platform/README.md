@@ -73,3 +73,100 @@ project/stack scope, along with the generated kubeconfig. It refuses to adopt
 or replace an already-existing Docker resource with the same name. Teardown
 uses the `kubectl` bundled in the scoped k0s container, so no host-side
 `kubectl` installation is needed for platform lifecycle commands.
+
+
+## Users and tenants
+
+Declare tenants and users in the stack's `Pulumi.<stack>.yaml`. Replace the
+`<project>` prefix with the name in `Pulumi.yaml`:
+
+```yaml
+config:
+  <project>:tenants:
+    - name: warehouse
+      deletionPolicy: Retain
+  <project>:users:
+    - name: alice
+      memberships:
+        - tenant: warehouse
+          role: developer
+    - name: reviewer
+      memberships:
+        - tenant: warehouse
+          role: viewer
+```
+
+Run the existing `di-framework wasmcloud platform deploy local --yes` command.
+Pulumi installs the cluster-scoped `Tenant` and `User` CRDs in
+`platform.di-framework.dev/v1alpha1`, admission policies, a TypeScript controller,
+and the declared custom resources. It waits for their `Ready` conditions. There
+are no additional platform CLI subcommands. Controller TypeScript is compiled to
+JavaScript when Pulumi builds its ConfigMap; no custom container build is needed.
+Run `bun run check` in this directory to check all generated TypeScript.
+
+Each tenant gets `di-tenant-<name>` for workloads and `di-runtime-<name>` for its
+host pool, Redis, and NATS. Host environments match the workload namespace, and
+`allowSharedHosts` is false. Runtime certificates remain in the runtime namespace.
+Pulumi seeds these namespaces before Helm so the wasmCloud operator can watch
+host pods there; the controller then manages their resources and lifecycle.
+Add tenants through stack configuration so Helm's `hostNamespaces` stays current.
+A tenant defaults to one runtime, a 2-CPU/4-GiB runtime-namespace quota, and 20
+WorkloadDeployments. Increase `resources.cpu` and `resources.memory` when increasing
+`runtime.replicas`; these quotas cover runtime pods, not individual Wasm invocations.
+
+Users get a ServiceAccount in `wasmcloud` and tenant RoleBindings. Developers
+can manage WorkloadDeployments, ConfigMaps, Secrets, and ClusterIP Services,
+read runtime logs, and port-forward runtime pods. Viewers can read workloads and
+runtime logs. Neither role can manage Kubernetes pods, RBAC, tenant declarations,
+or read runtime Secrets. Missing or suspended tenants receive no grants.
+
+As administrator, use the platform kubeconfig to issue an expiring user token:
+
+```sh
+export KUBECONFIG="$(pulumi stack output kubeconfig)"
+kubectl create token di-user-alice -n wasmcloud --duration=8h
+```
+
+Build the user's kubeconfig with the same cluster server and CA from the admin
+kubeconfig, this token as its **only** credential, and the tenant workload namespace
+as its context namespace. Do not distribute the admin kubeconfig or its client
+certificate/key. Kubernetes may shorten the requested token lifetime. Tokens are
+never stored in User status or Pulumi outputs. The `users` output identifies the
+ServiceAccount; `tenants` identifies the namespaces and host group.
+
+Configure a deployment target with the user's kubeconfig,
+`namespace = "di-tenant-warehouse"` and `hostgroup = "tenant-warehouse"`.
+Port-forward `service/di-http` in `di-runtime-warehouse` to reach its HTTP routes.
+The default platform HTTP entrypoint continues to target the default host group.
+For shared tenant keyvalue storage, reference the controller-managed ConfigMap
+`di-tenant-stock` in the native keyvalue host interface. The warehouse's HTTP,
+Redis, and NATS sync flow has been verified on the stock
+`ghcr.io/wasmcloud/wash:2.8.0` image; native keyvalue needs no custom image.
+The warehouse uses this same ConfigMap reference in its external-cluster setup.
+Messaging uses the tenant's dedicated NATS backend. Tenant admission restricts native interfaces,
+forbids host volumes and guest network capabilities, and reserves the backend
+ConfigMap. Workloads needing additional capabilities require administrator review
+and a corresponding policy change.
+
+Set `suspended: true` on a User to revoke bindings and delete its ServiceAccount;
+previous tokens remain invalid after unsuspension creates a new account. Membership
+changes remove obsolete bindings, including when downgrading developer to viewer.
+Set `suspended: true` on a Tenant to revoke access and stop its runtimes/backends.
+Changes converge through the controller; existing connections are not forcibly
+terminated by RBAC revocation.
+
+Tenant deletion defaults to `Retain`: access is revoked, deployments stop, and
+namespaces/data stay labelled with the original UID. The controller refuses to
+adopt those resources if the name is reused. `deletionPolicy: Delete` removes both
+namespaces. Backend data uses tenant-UID-specific directories on the local k0s
+volume; deleting namespaces does not erase those directories. Destroying the
+entire platform removes that volume and **all** retained data. Back up data before
+platform destruction. This storage layout targets the generated single-node
+local platform, not a multi-node production cluster.
+
+This is a local development platform. Its registry is shared and unauthenticated,
+and its published ports bind to loopback. Remote access, authenticated tenant
+registries, production storage, and stronger resource accounting are separate
+work. Namespace NetworkPolicies require an enforcing CNI (the generated k0s
+cluster uses kube-router). `tenantHostImage` and `tenantHostImagePullPolicy` can
+select a compatible custom wasmCloud runtime image when needed.

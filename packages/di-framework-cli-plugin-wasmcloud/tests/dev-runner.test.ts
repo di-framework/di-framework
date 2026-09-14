@@ -1,8 +1,37 @@
 import { describe, expect, it } from 'bun:test';
-import { DEV_RUNNER_ENV, resolveDevRunner } from '../src/dev-runner';
+import { DEV_RUNNER_ENV, requiresWasmCloudHost, resolveDevRunner } from '../src/dev-runner';
 import { fakeDeps, makeProject } from './helpers';
 
 describe('resolveDevRunner', () => {
+  it('detects wasmCloud host-interface imports', () => {
+    expect(requiresWasmCloudHost([{ package: 'wasi:http' }])).toBe(false);
+    expect(requiresWasmCloudHost([{ package: 'wasmcloud:keyvalue' }])).toBe(true);
+  });
+
+  it('selects wash when the guest needs a wasmCloud host, even if wasmtime is present', () => {
+    const cwd = makeProject();
+    expect(
+      resolveDevRunner(fakeDeps({ cwd, washBinaryPath: '/fake/wash' }), { wasmCloudHost: true })
+        .kind,
+    ).toBe('wash');
+    expect(
+      resolveDevRunner(
+        fakeDeps({ cwd, washBinaryPath: '/fake/wash', env: { [DEV_RUNNER_ENV]: 'wasmtime' } }),
+        { wasmCloudHost: true },
+      ).kind,
+    ).toBe('wasmtime');
+  });
+
+  it('requires wash when the guest needs a wasmCloud host and wash is missing', () => {
+    const cwd = makeProject();
+    try {
+      resolveDevRunner(fakeDeps({ cwd, washBinaryPath: null }), { wasmCloudHost: true });
+      throw new Error('expected CommandFailure');
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'WASMCLOUD_DEV_RUNNER_REQUIRED', exitCode: 3 });
+    }
+  });
+
   it('prefers wasmtime, then wash, then jco', () => {
     const cwd = makeProject();
     expect(resolveDevRunner(fakeDeps({ cwd })).kind).toBe('wasmtime');

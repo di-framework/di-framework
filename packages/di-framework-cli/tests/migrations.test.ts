@@ -289,7 +289,10 @@ describe('Migration CLI diagnostics and loading', () => {
     const { createCliMigrationRunner } = await import('../cmd/migrations/options');
     mkdirSync(join(dir, 'migrations'));
     writeFileSync(join(dir, 'migrations/1_init.sql'), 'CREATE TABLE tenant (id INT)');
-    const runner = await createCliMigrationRunner({ modules: [], db: ':memory:', binding: 'tenant' }, dir);
+    const runner = await createCliMigrationRunner(
+      { modules: [], db: ':memory:', binding: 'tenant' },
+      dir,
+    );
     expect((await runner.execute()).applied[0]?.binding).toBe('tenant');
     await runner.close();
   });

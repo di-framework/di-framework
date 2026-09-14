@@ -98,6 +98,7 @@ export class Users extends Postgres {}
       fakeDeps({
         cwd: root,
         ...HEALTHY,
+        washBinaryPath: '/fake/wash',
         resolutions: {
           ...HEALTHY.resolutions,
           '@di-framework/wasmcloud': catalogPath,
@@ -108,6 +109,7 @@ export class Users extends Postgres {}
     expect(ok.exitCode).toBe(0);
     expect(ok.text).toContain('binding users');
     expect(ok.text).toContain('Users');
+    expect(ok.text).toContain('✓ dev runner: wash');
   });
 
   it('rejects arguments', async () => {
