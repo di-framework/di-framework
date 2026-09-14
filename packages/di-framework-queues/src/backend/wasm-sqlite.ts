@@ -159,19 +159,25 @@ export class WasmSqliteQueueBackend implements QueueBackend {
     });
   }
 
-  async complete(jobId: string): Promise<void> {
+  async complete(queueName: string, jobId: string): Promise<void> {
     await this.ensureReady();
     await this.db.run(
-      `UPDATE di_queue_jobs SET status = 'completed', completed_at = ?, lease_expires_at = NULL WHERE id = ?`,
-      [Date.now(), jobId],
+      `UPDATE di_queue_jobs SET status = 'completed', completed_at = ?, lease_expires_at = NULL
+       WHERE queue_name = ? AND id = ?`,
+      [Date.now(), queueName, jobId],
     );
   }
 
-  async fail(jobId: string, error: Error | string, retryAfterMs?: number): Promise<void> {
+  async fail(
+    queueName: string,
+    jobId: string,
+    error: Error | string,
+    retryAfterMs?: number,
+  ): Promise<void> {
     await this.ensureReady();
     const message = typeof error === 'string' ? error : error.message;
     const stack = typeof error === 'string' ? null : (error.stack ?? null);
-    const job = await this.getJob(jobId);
+    const job = await this.getJob(queueName, jobId);
     if (!job) return;
     if (job.attempts < job.maxRetries) {
       const delay =
@@ -180,15 +186,16 @@ export class WasmSqliteQueueBackend implements QueueBackend {
           : Math.min(job.backoffMs * 2 ** (job.attempts - 1), 60_000);
       await this.db.run(
         `UPDATE di_queue_jobs SET status = 'pending', available_at = ?, failed_at = ?,
-         error_message = ?, error_stack = ?, lease_expires_at = NULL WHERE id = ?`,
-        [Date.now() + delay, Date.now(), message, stack, jobId],
+         error_message = ?, error_stack = ?, lease_expires_at = NULL
+         WHERE queue_name = ? AND id = ?`,
+        [Date.now() + delay, Date.now(), message, stack, queueName, jobId],
       );
       return;
     }
     await this.db.run(
       `UPDATE di_queue_jobs SET status = 'dead-letter', failed_at = ?, error_message = ?,
-       error_stack = ?, lease_expires_at = NULL WHERE id = ?`,
-      [Date.now(), message, stack, jobId],
+       error_stack = ?, lease_expires_at = NULL WHERE queue_name = ? AND id = ?`,
+      [Date.now(), message, stack, queueName, jobId],
     );
   }
 
@@ -223,9 +230,12 @@ export class WasmSqliteQueueBackend implements QueueBackend {
     });
   }
 
-  async getJob(jobId: string): Promise<Job<any> | null> {
+  async getJob(queueName: string, jobId: string): Promise<Job<any> | null> {
     await this.ensureReady();
-    const row = await this.db.first(`SELECT * FROM di_queue_jobs WHERE id = ?`, [jobId]);
+    const row = await this.db.first(`SELECT * FROM di_queue_jobs WHERE queue_name = ? AND id = ?`, [
+      queueName,
+      jobId,
+    ]);
     return row ? this.rowToJob(row) : null;
   }
 

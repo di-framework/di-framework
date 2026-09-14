@@ -54,12 +54,12 @@ describe('Queues Integration', () => {
     // Wait until completed
     const maxWait = Date.now() + 1000;
     while (Date.now() < maxWait) {
-      const current = await backend.getJob(job.id);
+      const current = await backend.getJob('receipts', job.id);
       if (current?.status === 'completed') break;
       await new Promise((r) => setTimeout(r, 10));
     }
 
-    const completed = await backend.getJob(job.id);
+    const completed = await backend.getJob('receipts', job.id);
     expect(completed!.status).toBe('completed');
     expect(asyncCompleted).toBe(true);
     expect(callLog).toEqual(['start:rec-123', 'audit:rec-123', `end:rec-123:${job.id}`]);
@@ -87,12 +87,12 @@ describe('Queues Integration', () => {
 
     const maxWait = Date.now() + 1000;
     while (Date.now() < maxWait) {
-      const current = await backend.getJob(job.id);
+      const current = await backend.getJob('slow-jobs', job.id);
       if (current?.status === 'dead-letter') break;
       await new Promise((r) => setTimeout(r, 10));
     }
 
-    const failed = await backend.getJob(job.id);
+    const failed = await backend.getJob('slow-jobs', job.id);
     expect(failed!.status).toBe('dead-letter');
     expect(failed!.errorMessage).toContain('timed out after 50ms');
 

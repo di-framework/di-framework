@@ -236,26 +236,33 @@ export class SqliteQueueBackend implements QueueBackend {
     return tx.immediate();
   }
 
-  async complete(jobId: string): Promise<void> {
+  async complete(queueName: string, jobId: string): Promise<void> {
     const now = Date.now();
     this.db
       .prepare(
         `UPDATE di_queue_jobs
          SET status = 'completed', completed_at = ?, lease_expires_at = NULL
-         WHERE id = ?`,
+         WHERE queue_name = ? AND id = ?`,
       )
-      .run(now, jobId);
+      .run(now, queueName, jobId);
   }
 
-  async fail(jobId: string, error: Error | string, retryAfterMs?: number): Promise<void> {
+  async fail(
+    queueName: string,
+    jobId: string,
+    error: Error | string,
+    retryAfterMs?: number,
+  ): Promise<void> {
     const now = Date.now();
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? (error.stack ?? null) : null;
 
     const tx = this.db.transaction(() => {
       const job = this.db
-        .prepare('SELECT attempts, max_retries, backoff_ms FROM di_queue_jobs WHERE id = ?')
-        .get(jobId) as any;
+        .prepare(
+          'SELECT attempts, max_retries, backoff_ms FROM di_queue_jobs WHERE queue_name = ? AND id = ?',
+        )
+        .get(queueName, jobId) as any;
       if (!job) return;
 
       if (job.attempts < job.max_retries) {
@@ -274,9 +281,9 @@ export class SqliteQueueBackend implements QueueBackend {
                  error_message = ?,
                  error_stack = ?,
                  lease_expires_at = NULL
-             WHERE id = ?`,
+             WHERE queue_name = ? AND id = ?`,
           )
-          .run(nextAvailable, now, errorMsg, errorStack, jobId);
+          .run(nextAvailable, now, errorMsg, errorStack, queueName, jobId);
       } else {
         this.db
           .prepare(
@@ -286,9 +293,9 @@ export class SqliteQueueBackend implements QueueBackend {
                  error_message = ?,
                  error_stack = ?,
                  lease_expires_at = NULL
-             WHERE id = ?`,
+             WHERE queue_name = ? AND id = ?`,
           )
-          .run(now, errorMsg, errorStack, jobId);
+          .run(now, errorMsg, errorStack, queueName, jobId);
       }
     });
 
@@ -335,8 +342,10 @@ export class SqliteQueueBackend implements QueueBackend {
     return tx();
   }
 
-  async getJob(jobId: string): Promise<Job<any> | null> {
-    const row = this.db.prepare('SELECT * FROM di_queue_jobs WHERE id = ?').get(jobId);
+  async getJob(queueName: string, jobId: string): Promise<Job<any> | null> {
+    const row = this.db
+      .prepare('SELECT * FROM di_queue_jobs WHERE queue_name = ? AND id = ?')
+      .get(queueName, jobId);
     return row ? this.rowToJob(row) : null;
   }
 

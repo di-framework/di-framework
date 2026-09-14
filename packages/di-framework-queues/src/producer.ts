@@ -15,7 +15,7 @@ export class QueueProducer<T = any> {
 
   async getJob(jobId: string): Promise<Job<T> | null> {
     const backend = this.backendProvider();
-    return backend.getJob(jobId);
+    return backend.getJob(this.queueName, jobId);
   }
 
   async listJobs(filter?: ListJobsFilter): Promise<Job<T>[]> {

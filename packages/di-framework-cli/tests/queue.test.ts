@@ -32,7 +32,7 @@ describe('Queue CLI Commands', () => {
       await backend.enqueue('receipts', { id: 'r-1' }, { maxRetries: 1 });
       await backend.enqueue('receipts', { id: 'r-2' }, { maxRetries: 1 });
       const d = await backend.dequeue('receipts');
-      await backend.fail(d!.id, 'Test failure'); // dead-letter
+      await backend.fail('receipts', d!.id, 'Test failure'); // dead-letter
       await backend.enqueue('notifications', { text: 'hi' });
       await backend.close();
 
@@ -71,7 +71,7 @@ describe('Queue CLI Commands', () => {
       await backend.enqueue('orders', { orderId: '101' }, { maxRetries: 1 });
       await backend.enqueue('orders', { orderId: '102' }, { maxRetries: 1 });
       const d = await backend.dequeue('orders');
-      await backend.fail(d!.id, 'Processing error');
+      await backend.fail('orders', d!.id, 'Processing error');
       await backend.close();
 
       // Text table output
@@ -111,7 +111,7 @@ describe('Queue CLI Commands', () => {
         { maxRetries: 1 },
       );
       const d = await backend.dequeue('webhooks');
-      await backend.fail(d!.id, 'HTTP 500');
+      await backend.fail('webhooks', d!.id, 'HTTP 500');
       await backend.close();
 
       const { stdout: textOut, io: textIo } = createCaptureIo();
@@ -121,7 +121,7 @@ describe('Queue CLI Commands', () => {
 
       // Verify it is pending now
       const verifyBackend = new SqliteQueueBackend(dbPath);
-      const job = await verifyBackend.getJob(j.id);
+      const job = await verifyBackend.getJob('webhooks', j.id);
       expect(job!.status).toBe('pending');
       expect(job!.errorMessage).toBeUndefined();
       await verifyBackend.close();

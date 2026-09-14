@@ -7,13 +7,18 @@ export interface QueueBackend {
 
   dequeue(queueName: string, leaseTimeoutMs?: number): Promise<Job<any> | null>;
 
-  complete(jobId: string): Promise<void>;
+  complete(queueName: string, jobId: string): Promise<void>;
 
-  fail(jobId: string, error: Error | string, retryAfterMs?: number): Promise<void>;
+  fail(
+    queueName: string,
+    jobId: string,
+    error: Error | string,
+    retryAfterMs?: number,
+  ): Promise<void>;
 
   recoverUnacknowledged(queueName?: string, leaseTimeoutMs?: number): Promise<number>;
 
-  getJob(jobId: string): Promise<Job<any> | null>;
+  getJob(queueName: string, jobId: string): Promise<Job<any> | null>;
 
   listJobs(queueName: string, filter?: ListJobsFilter): Promise<Job<any>[]>;
 
