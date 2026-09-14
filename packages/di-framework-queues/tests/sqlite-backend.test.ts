@@ -19,8 +19,8 @@ describe('SqliteQueueBackend', () => {
     expect(dequeued!.status).toBe('processing');
     expect(dequeued!.attempts).toBe(1);
 
-    await backend.complete(job.id);
-    const completed = await backend.getJob(job.id);
+    await backend.complete('notifications', job.id);
+    const completed = await backend.getJob('notifications', job.id);
     expect(completed!.status).toBe('completed');
     expect(completed!.completedAt).toBeDefined();
 
@@ -52,9 +52,9 @@ describe('SqliteQueueBackend', () => {
     const job = await backend.enqueue('sync', { ref: '123' }, { maxRetries: 2, backoffMs: 10 });
 
     const d1 = await backend.dequeue('sync');
-    await backend.fail(d1!.id, new Error('Database connection failed'), 10);
+    await backend.fail('sync', d1!.id, new Error('Database connection failed'), 10);
 
-    const check1 = await backend.getJob(job.id);
+    const check1 = await backend.getJob('sync', job.id);
     expect(check1!.status).toBe('pending');
     expect(check1!.attempts).toBe(1);
     expect(check1!.errorMessage).toBe('Database connection failed');
@@ -65,9 +65,9 @@ describe('SqliteQueueBackend', () => {
     const d2 = await backend.dequeue('sync');
     expect(d2).not.toBeNull();
     expect(d2!.attempts).toBe(2);
-    await backend.fail(d2!.id, 'Permanent failure');
+    await backend.fail('sync', d2!.id, 'Permanent failure');
 
-    const check2 = await backend.getJob(job.id);
+    const check2 = await backend.getJob('sync', job.id);
     expect(check2!.status).toBe('dead-letter');
     expect(check2!.errorMessage).toBe('Permanent failure');
 
@@ -119,18 +119,18 @@ describe('SqliteQueueBackend', () => {
       const recovered = await backend2.recoverUnacknowledged('invoices', 10);
       expect(recovered).toBe(1);
 
-      const checkRecovered = await backend2.getJob(inFlightJob.id);
+      const checkRecovered = await backend2.getJob('invoices', inFlightJob.id);
       expect(checkRecovered!.status).toBe('pending');
       expect(checkRecovered!.attempts).toBe(1); // kept the attempt count
 
       // Both jobs can now be dequeued and completed cleanly
       const next1 = await backend2.dequeue('invoices');
       expect(next1).not.toBeNull();
-      await backend2.complete(next1!.id);
+      await backend2.complete('invoices', next1!.id);
 
       const next2 = await backend2.dequeue('invoices');
       expect(next2).not.toBeNull();
-      await backend2.complete(next2!.id);
+      await backend2.complete('invoices', next2!.id);
 
       const stats = await backend2.listQueues();
       expect(stats[0]!.completed).toBe(2);
@@ -157,7 +157,7 @@ describe('SqliteQueueBackend', () => {
         if (!job) break;
         expect(processed.has(job.id)).toBe(false);
         processed.add(job.id);
-        await backend.complete(job.id);
+        await backend.complete('parallel-tasks', job.id);
       }
     };
 

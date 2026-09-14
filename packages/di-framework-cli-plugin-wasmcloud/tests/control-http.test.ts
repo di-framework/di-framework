@@ -280,8 +280,8 @@ describe('queue control HTTP', () => {
     async listJobs(queueName, filter) {
       return [{ queueName, filter }];
     },
-    async getJob(jobId) {
-      return jobId === 'job-1' ? { queueName: 'receipts' } : null;
+    async getJob(queueName, jobId) {
+      return jobId === 'job-1' && queueName === 'receipts' ? { queueName: 'receipts' } : null;
     },
     async retryJob(queueName, jobId) {
       return [{ queueName, jobId }];
@@ -347,6 +347,12 @@ describe('queue control HTTP', () => {
       backend,
     );
     expect(missingJob.status).toBe(404);
+
+    const otherQueue = await handleQueueControlRequest(
+      new Request('http://local/_di/queues/alerts/jobs/job-1'),
+      backend,
+    );
+    expect(otherQueue.status).toBe(404);
 
     const info = await handleQueueControlRequest(
       new Request('http://local/_di/queues/receipts/info'),

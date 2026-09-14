@@ -86,9 +86,9 @@ export class QueueWorker {
   private async executeJob(queueName: string, job: Job<any>): Promise<void> {
     try {
       await this.dispatcher.dispatch(queueName, job);
-      await this.backend.complete(job.id);
+      await this.backend.complete(queueName, job.id);
     } catch (err: any) {
-      await this.backend.fail(job.id, err);
+      await this.backend.fail(queueName, job.id, err);
     }
   }
 

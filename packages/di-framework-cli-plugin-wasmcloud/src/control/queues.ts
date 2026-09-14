@@ -5,7 +5,7 @@ export interface QueueControlBackend {
   enqueue(queueName: string, payload: unknown, options?: Record<string, unknown>): Promise<unknown>;
   listQueues(): Promise<Array<{ name: string }>>;
   listJobs(queueName: string, filter?: Record<string, unknown>): Promise<unknown[]>;
-  getJob(jobId: string): Promise<{ queueName: string } | null>;
+  getJob(queueName: string, jobId: string): Promise<{ queueName: string } | null>;
   retryJob(queueName: string, jobId?: string): Promise<unknown[]>;
 }
 
@@ -81,7 +81,7 @@ export async function handleQueueControlRequest(
   }
 
   if (request.method === 'GET' && (action === 'jobs' || action === 'inspect') && jobId) {
-    const job = await backend.getJob(jobId);
+    const job = await backend.getJob(queueName, jobId);
     if (!job || job.queueName !== queueName) {
       return json(404, { success: false, error: 'Job not found' });
     }

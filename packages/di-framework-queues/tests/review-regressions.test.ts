@@ -92,7 +92,7 @@ test('worker honors explicit queues, discovers shared decorators, and processes 
   expect(await worker.processNext('review-worker')).toBe(false);
   const job = await backend.enqueue('review-worker', {});
   expect(await worker.processNext('review-worker')).toBe(true);
-  expect((await backend.getJob(job.id))?.status).toBe('completed');
+  expect((await backend.getJob('review-worker', job.id))?.status).toBe('completed');
   const discovered = new QueueWorker(backend, undefined, { recoveryIntervalMs: 2 });
   discovered.registerAllDeclaredQueues();
   expect(discovered.getRegisteredQueues()).toContain('review-worker');
@@ -157,7 +157,7 @@ test('shutdown waits for in-flight work and late timeout rejections remain obser
   const stopping = worker.stop(1000);
   release();
   await stopping;
-  expect((await backend.getJob(job.id))?.status).toBe('completed');
+  expect((await backend.getJob('review-held', job.id))?.status).toBe('completed');
   class LateFailure {
     async run() {
       await pause(15);
@@ -170,6 +170,42 @@ test('shutdown waits for in-flight work and late timeout rejections remain obser
   await expect(timed.dispatch(late)).rejects.toThrow('timed out');
   await pause(25);
   await backend.close();
+});
+
+test('complete, fail, and getJob require the owning queue name', async () => {
+  for (const backend of [new InMemoryQueueBackend(), new SqliteQueueBackend()]) {
+    const manager = new QueueManager(backend);
+    const orders = manager.get('orders');
+    const alerts = manager.get('alerts');
+    const job = await orders.enqueue({ n: 1 }, { jobId: 'job-shared', maxRetries: 3 });
+
+    expect(await backend.getJob('alerts', job.id)).toBeNull();
+    expect(await alerts.getJob(job.id)).toBeNull();
+    expect(await orders.getJob(job.id)).toMatchObject({ status: 'pending', id: job.id });
+
+    await backend.complete('alerts', job.id);
+    expect((await backend.getJob('orders', job.id))?.status).toBe('pending');
+
+    const processing = await backend.dequeue('orders');
+    expect(processing?.status).toBe('processing');
+    await backend.fail('alerts', processing!.id, 'cross-queue');
+    const afterWrongFail = await backend.getJob('orders', job.id);
+    expect(afterWrongFail?.status).toBe('processing');
+    expect(afterWrongFail?.errorMessage).toBeUndefined();
+
+    await backend.complete('orders', processing!.id);
+    expect((await backend.getJob('orders', job.id))?.status).toBe('completed');
+    expect(await backend.getJob('alerts', job.id)).toBeNull();
+
+    const other = await backend.enqueue('orders', { n: 2 }, { maxRetries: 3 });
+    await backend.dequeue('orders');
+    await backend.fail('orders', other.id, 'real failure');
+    const retried = await backend.getJob('orders', other.id);
+    expect(retried?.status).toBe('pending');
+    expect(retried?.errorMessage).toBe('real failure');
+    manager.clear();
+    await backend.close();
+  }
 });
 
 test('registry clear resets discovery', () => {
@@ -199,7 +235,7 @@ test('independent SQLite processes claim each job only once', async () => {
         const job = await backend.dequeue('claims');
         if (!job) break;
         ids.push(job.id);
-        await backend.complete(job.id);
+        await backend.complete('claims', job.id);
         await new Promise(r => setTimeout(r, 1));
       }
       console.log(JSON.stringify(ids));
