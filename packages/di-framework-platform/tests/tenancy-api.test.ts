@@ -3,13 +3,7 @@ import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import * as https from 'node:https';
-import {
-  type Api,
-  ApiError,
-  KubernetesApi,
-  main,
-  reportFatal,
-} from '../assets/platform/tenancy/controller';
+import { type Api, ApiError, KubernetesApi, main, reportFatal } from '../src/tenancy/controller';
 
 const originalConfig = process.env.PLATFORM_CONFIG;
 afterEach(() => {

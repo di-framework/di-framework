@@ -170,3 +170,17 @@ registries, production storage, and stronger resource accounting are separate
 work. Namespace NetworkPolicies require an enforcing CNI (the generated k0s
 cluster uses kube-router). `tenantHostImage` and `tenantHostImagePullPolicy` can
 select a compatible custom wasmCloud runtime image when needed.
+
+## Shared implementation
+
+This generated project imports an exact version of `@di-framework/platform/local`.
+The same package provides the Kubernetes platform used by `di-framework-kube`.
+Configure this project through Pulumi configuration; infrastructure implementation
+changes belong in the shared package rather than copied tenancy files.
+
+For projects generated before this extraction, preserve the existing project name,
+backend, stack, and configuration when updating the import/dependency. Review
+`pulumi preview` before applying. The shared local entrypoint preserves existing
+logical resource names. Any old `tenancy.ts` and `tenancy/` copies are unused by the
+new entrypoint; migrate customizations before removing them. Publishing the shared
+package is required before installing its pinned version from npm.

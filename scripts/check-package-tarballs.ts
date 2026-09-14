@@ -37,15 +37,6 @@ const RAW_TS_ALLOWED_PACKAGES = new Set([
   '@di-framework/cli-extension',
 ]);
 
-// Pulumi scaffolding assets are intentionally shipped as editable TypeScript.
-// Keep this exception limited to the generated platform's four source files.
-const PLATFORM_TS_ASSETS = new Set([
-  'dist/assets/platform/tenancy.ts',
-  'dist/assets/platform/tenancy/admission.ts',
-  'dist/assets/platform/tenancy/controller.ts',
-  'dist/assets/platform/tenancy/resources.ts',
-]);
-
 function extractPathsFromExports(exportsObj: unknown): string[] {
   const paths: string[] = [];
   if (!exportsObj) return paths;
@@ -373,14 +364,7 @@ export function checkPackageTarballs(): boolean {
           totalErrors++;
         }
 
-        const isPlatformAsset =
-          pkgName === '@di-framework/cli-plugin-wasmcloud' && PLATFORM_TS_ASSETS.has(file);
-        if (
-          !isRawTsAllowed &&
-          !isPlatformAsset &&
-          file.endsWith('.ts') &&
-          !file.endsWith('.d.ts')
-        ) {
+        if (!isRawTsAllowed && file.endsWith('.ts') && !file.endsWith('.d.ts')) {
           console.error(
             `  ❌ [${pkgName}] Packed file contains forbidden raw TypeScript source file: "${file}"`,
           );

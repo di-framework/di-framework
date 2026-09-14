@@ -11,6 +11,7 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cli-extension';
 import { parsePlatformInitArgs } from './args';
@@ -102,7 +103,14 @@ export function createPlatformProjectName(workspaceRoot: string): string {
 
 function renderTemplate(content: Buffer, platformProject: string): Buffer {
   const source = content.toString('utf8');
-  return Buffer.from(source.replaceAll(PLATFORM_PROJECT_TOKEN, platformProject));
+  const platformVersion = (
+    createRequire(import.meta.url)('@di-framework/platform/package.json') as { version: string }
+  ).version;
+  return Buffer.from(
+    source
+      .replaceAll(PLATFORM_PROJECT_TOKEN, platformProject)
+      .replaceAll('{{DI_FRAMEWORK_PLATFORM_VERSION}}', platformVersion),
+  );
 }
 
 export function resolveWorkspaceRoot(startDirectory: string): string {

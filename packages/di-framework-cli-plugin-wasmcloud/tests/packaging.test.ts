@@ -41,7 +41,7 @@ describe('npm artifact', () => {
       'package/dist/assets/platform/Pulumi.yaml.tmpl',
       'package/dist/assets/platform/README.md',
       'package/dist/assets/platform/index.ts.tmpl',
-      'package/dist/assets/platform/package.json',
+      'package/dist/assets/platform/package.json.tmpl',
       'package/dist/assets/platform/tsconfig.json',
     ]) {
       expect(entries).toContain(asset);

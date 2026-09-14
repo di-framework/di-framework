@@ -29,32 +29,14 @@ describe('runWasmcloudPlatformInit', () => {
     const program = readFileSync(join(platform, 'index.ts'), 'utf8');
     expect(pulumi).toContain(`name: ${createPlatformProjectName(root)}`);
     expect(pulumi).not.toContain('{{DI_FRAMEWORK_PLATFORM_PROJECT}}');
-    expect(program).toContain('k0s');
-    expect(program).toContain('registry');
-    expect(program).toContain('helm.v3.Release');
-    expect(program).toContain('operator: { allowSharedHosts: false, hostNamespaces:');
-    expect(readFileSync(join(platform, 'tenancy', 'controller.ts'), 'utf8')).toContain(
-      'export class Controller',
+    expect(program).toContain("from '@di-framework/platform/local'");
+    const dependencies = JSON.parse(
+      readFileSync(join(platform, 'package.json'), 'utf8'),
+    ).dependencies;
+    expect(dependencies['@di-framework/platform']).toBe(
+      JSON.parse(readFileSync(join(ASSETS, '../../di-framework-platform/package.json'), 'utf8'))
+        .version,
     );
-    expect(readFileSync(join(platform, 'tenancy.ts'), 'utf8')).toContain('installTenancy');
-    expect(program).toContain('new pulumi.Config()');
-    expect(program).toContain('--network');
-    expect(program).toContain('--tmpfs /run');
-    expect(program).toContain('--publish 127.0.0.1:');
-    expect(program).toContain('pull: `di-framework-registry.');
-    expect(program).toContain('delete: \'if [ -n "$KUBECONFIG_FILE"');
-    expect(program.match(/Logging\.None/g)).toHaveLength(2);
-    expect(program).toContain("'pulumi.com/skipAwait': 'true'");
-    expect(program).toContain("'runtime-shutdown'");
-    expect(program).toContain('docker exec "$K0S_NAME" k0s kubectl');
-    expect(program).not.toContain('kubectl --kubeconfig "$KUBECONFIG_FILE"');
-    expect(program).toContain('delete deployment/hostgroup-default');
-    expect(program).not.toContain('workloaddeployments.runtime.wasmcloud.dev');
-    expect(program).not.toContain('networkInterfaces');
-    expect(program).not.toContain('install-operator.sh');
-    expect(program).not.toContain('kind: WorkloadDeployment');
-    expect(program).not.toContain('greeter');
-    expect(program).not.toContain('di-framework.config.json');
     expect(readFileSync(join(platform, '.gitignore'), 'utf8')).toContain('.kubeconfig-*');
     expect(readFileSync(join(root, 'di-framework.deploy.toml'), 'utf8')).toContain(
       'default-target = "local"',
