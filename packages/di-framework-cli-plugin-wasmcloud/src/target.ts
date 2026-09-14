@@ -10,6 +10,8 @@ export type ClusterConnection = {
   namespace: string;
   registry: RegistryLocation;
   context?: string;
+  hostgroup?: string;
+  storageHostgroup?: string;
   endpoints?: PlatformOutputs['endpoints'];
   platformRoot?: string;
   stack?: string;
@@ -76,5 +78,7 @@ function resolveExternalConnection(target: ExternalTarget): ClusterConnection {
     namespace: target.namespace,
     registry: materializeRegistry(target.registry),
     context: target.context,
+    ...(target.hostgroup ? { hostgroup: target.hostgroup } : {}),
+    ...(target.storageHostgroup ? { storageHostgroup: target.storageHostgroup } : {}),
   };
 }

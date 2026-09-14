@@ -35,6 +35,7 @@ import {
   type WitLock,
   type WitRequirement,
 } from './wit';
+import { renderWorkloadServiceAdapter } from './workload-members';
 
 export { COMPONENT_MODEL, WASI_HTTP_INTERFACE, WASI_HTTP_VERSION };
 export const BUILD_PROFILE_NAME = 'wasmcloud-http';
@@ -64,19 +65,30 @@ export function requirementsForProject(
   const needsControlHttp =
     isWorker || cronJobs.length > 0 || queueHandlers.length > 0 || actors.length > 0;
   const hasHttp = (project.ingress !== false && !isWorker) || needsControlHttp;
-  const baseRequirements = isWorker
-    ? queueProjectRequirements()
-    : hasHttp
-      ? defaultProjectRequirements()
-      : [
-          {
-            package: 'wasi:cli',
-            version: '0.3.0',
-            interfaces: ['run'],
-            direction: 'export' as const,
-            source: 'cron-adapter',
-          },
-        ];
+  const service = project.workloadEntry?.kind === 'service' ? project.workloadEntry : undefined;
+  const baseRequirements: WitRequirement[] = service?.subscriptions
+    ? [
+        {
+          package: 'wasmcloud:messaging',
+          version: '0.3.0',
+          interfaces: ['handler'],
+          direction: 'export',
+          source: 'workload-service',
+        },
+      ]
+    : isWorker
+      ? queueProjectRequirements()
+      : hasHttp
+        ? defaultProjectRequirements()
+        : [
+            {
+              package: 'wasi:cli',
+              version: '0.3.0',
+              interfaces: ['run'],
+              direction: 'export' as const,
+              source: 'cron-adapter',
+            },
+          ];
   return [...baseRequirements, ...requirementsFromBindings(bindings)];
 }
 
@@ -255,11 +267,14 @@ export async function buildComponent(
   const queueHandlers = discoverQueueHandlers(project);
   const needsControlHttp = isWorker || cronJobs.length > 0;
   const hasHttp = (project.ingress !== false && !isWorker) || needsControlHttp;
-  const profile = isWorker
-    ? 'wasmcloud-worker'
-    : hasHttp
-      ? BUILD_PROFILE_NAME
-      : CRON_BUILD_PROFILE_NAME;
+  const profile =
+    project.workloadEntry?.kind === 'service'
+      ? 'wasmcloud-service'
+      : isWorker
+        ? 'wasmcloud-worker'
+        : hasHttp
+          ? BUILD_PROFILE_NAME
+          : CRON_BUILD_PROFILE_NAME;
   const actors = discoverActors(project);
   const requirements = requirementsForProject(project, deps);
   if (actors.length > 0) {
@@ -301,7 +316,11 @@ export async function buildComponent(
     writeFileSync(join(generatedDirectory, 'cron-invoker.js'), renderCronInvokerModule(cronJobs));
   }
   if (!hasHttp && !isWorker) {
-    writeFileSync(join(generatedDirectory, 'cron-adapter.js'), renderCronAdapterModule(cronJobs));
+    const service = project.workloadEntry?.kind === 'service' ? project.workloadEntry : undefined;
+    writeFileSync(
+      join(generatedDirectory, 'cron-adapter.js'),
+      service ? renderWorkloadServiceAdapter(service) : renderCronAdapterModule(cronJobs),
+    );
   }
   if (actors.length > 0)
     writeFileSync(join(generatedDirectory, 'actors.js'), renderActorsModule(actors));
@@ -309,13 +328,34 @@ export async function buildComponent(
     writeFileSync(join(generatedDirectory, 'queues.js'), renderQueuesModule(queueHandlers));
   }
 
+  let applicationEntry = project.entryPath;
+  if (project.workloadEntry?.kind === 'component') {
+    applicationEntry = join(generatedDirectory, 'application-entry.js');
+    const entry = project.workloadEntry;
+    writeFileSync(
+      applicationEntry,
+      [
+        `import { ${entry.exportName} as invoke } from ${JSON.stringify(project.entryPath)};`,
+        `export * from ${JSON.stringify(project.entryPath)};`,
+        `export default function fetch(request) {`,
+        ...(entry.path
+          ? [
+              `  if (new URL(request.url).pathname !== ${JSON.stringify(entry.path)}) return new Response(null, { status: 404 });`,
+            ]
+          : []),
+        `  return invoke(request);`,
+        `}`,
+        '',
+      ].join('\n'),
+    );
+  }
   io.stdout.write(`Building ${project.applicationName}...\n`);
   try {
     await deps.bundler({
       adapterPath: hasHttp
         ? join(deps.assetsDirectory(), 'http-adapter.js')
         : join(generatedDirectory, 'cron-adapter.js'),
-      entryPath: project.entryPath,
+      entryPath: applicationEntry,
       outFile: bundledJavaScript,
       guestsPath: bindings.length > 0 ? join(generatedDirectory, 'guests.js') : undefined,
       actorsPath: actors.length > 0 ? join(generatedDirectory, 'actors.js') : undefined,

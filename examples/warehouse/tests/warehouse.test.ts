@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { getWorkloadComponent, resetGuests, setGuests } from '@di-framework/wasmcloud';
 import receiveFetch, { fetch as receiveNamed } from '@examples/warehouse-receive';
-import { applyRemote } from '@examples/warehouse-sync';
+import { applyRemote, handleMessage } from '@examples/warehouse-sync';
 import takeFetch, { fetch as takeNamed } from '@examples/warehouse-take';
 
 function memoryStock(initial: Record<string, string>) {
@@ -10,9 +10,15 @@ function memoryStock(initial: Record<string, string>) {
     data,
     guest: {
       open: async () => ({
-        get: async (key: string) => data.get(key) ?? null,
-        set: async (key: string, value: string) => {
-          data.set(key, value);
+        get: async (key: string) => ({
+          tag: 'ok',
+          val: data.has(key) ? new TextEncoder().encode(data.get(key)) : undefined,
+        }),
+        set: async (key: string, value: Uint8Array, options: undefined) => {
+          expect(value).toBeInstanceOf(Uint8Array);
+          expect(options).toBeUndefined();
+          data.set(key, new TextDecoder().decode(value));
+          return { tag: 'ok', val: undefined };
         },
       }),
     },
@@ -26,7 +32,7 @@ function implicitGateway(
   return async (request: Request) => {
     const path = new URL(request.url).pathname;
     for (const handler of handlers) {
-      if (getWorkloadComponent(handler)?.route === path) return handler(request);
+      if (getWorkloadComponent(handler)?.path === path) return handler(request);
     }
     return new Response(null, { status: 404 });
   };
@@ -54,16 +60,14 @@ describe('warehouse namespace (independently deployed components)', () => {
     expect(await received.json()).toEqual({ ok: true, qty: 13 });
   });
 
-  it('implies HTTP ingress from component route claims', async () => {
+  it('records HTTP routes on component declarations', async () => {
     expect(takeFetch).toBe(takeNamed);
     expect(receiveFetch).toBe(receiveNamed);
     expect(getWorkloadComponent(takeFetch)).toEqual({
-      workload: 'warehouse',
-      route: '/take',
+      path: '/take',
     });
     expect(getWorkloadComponent(receiveFetch)).toEqual({
-      workload: 'warehouse',
-      route: '/receive',
+      path: '/receive',
     });
 
     const gateway = implicitGateway([takeFetch, receiveFetch]);
@@ -88,5 +92,45 @@ describe('warehouse namespace (independently deployed components)', () => {
   it('applies peer stock through the service without calling a component', async () => {
     await applyRemote({ sku: 'pallet-a', qty: 99 });
     expect(stock.data.get('pallet-a')).toBe('99');
+  });
+
+  it('consumes a streamed broker delivery and replies after storing it', async () => {
+    const replies: unknown[] = [];
+    setGuests({
+      stock: stock.guest,
+      sync: {
+        publish: async (message: unknown) => {
+          replies.push(message);
+        },
+      },
+    });
+    async function* body() {
+      yield new TextEncoder().encode('{"sku":"pallet-a","qty":37}');
+    }
+    await handleMessage({ subject: 'warehouse.stock', body: body(), replyTo: 'test.reply' });
+    expect(stock.data.get('pallet-a')).toBe('37');
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({ subject: 'test.reply' });
+  });
+
+  it('rejects malformed peer stock without changing storage', async () => {
+    async function* body() {
+      yield new TextEncoder().encode('{"sku":"pallet-a","qty":-1}');
+    }
+    await expect(handleMessage({ subject: 'warehouse.stock', body: body() })).rejects.toEqual({
+      tag: 'reject',
+    });
+    expect(stock.data.get('pallet-a')).toBe('12');
+  });
+
+  it('propagates storage errors instead of treating them as empty stock', async () => {
+    setGuests({
+      stock: {
+        open: async () => ({ get: async () => ({ tag: 'err', val: 'store-unavailable' }) }),
+      },
+    });
+    await expect(
+      takeFetch(new Request('http://warehouse/take?sku=pallet-a&qty=1')),
+    ).rejects.toThrow('store-unavailable');
   });
 });

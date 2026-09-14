@@ -2,12 +2,15 @@ import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { CommandFailure } from '@di-framework/cli-extension';
+import { discoverWorkloadEntry, type WorkloadEntry } from './workload-members';
 
 export const CONFIG_FILE_NAME = 'di-framework.config.json';
 
 export type WasmcloudProject = {
   /** Display name exactly as configured. */
   applicationName: string;
+  workload?: string;
+  workloadEntry?: WorkloadEntry;
   /** Explicit actor deployment override for programmatically constructed projects. */
   actors?: boolean;
   /** Explicit WASI DNS allowlist, separate from outbound HTTP permissions. */
@@ -166,12 +169,24 @@ export function loadProject(startDirectory: string): WasmcloudProject {
       ? packageJson.version
       : '0.1.0';
 
-  const ingress = config.ingress !== false && config.http !== false;
+  if (
+    config.workload !== undefined &&
+    (typeof config.workload !== 'string' ||
+      !/^[a-z][a-z0-9-]{0,61}[a-z0-9]$|^[a-z]$/.test(config.workload))
+  ) {
+    configInvalid('workload must be a DNS label of at most 63 characters', configPath);
+  }
+  const workload = config.workload as string | undefined;
+  const workloadEntry = workload ? discoverWorkloadEntry(entryPath, workload) : undefined;
+  const ingress = workloadEntry
+    ? workloadEntry.kind === 'component' && workloadEntry.path !== undefined
+    : config.ingress !== false && config.http !== false;
   const cronMode = config.cronMode === 'external' ? 'external' : undefined;
   const persistentStorage = config.persistentStorage === true;
 
   return {
     applicationName: config.name,
+    ...(workload ? { workload, workloadEntry } : {}),
     ingress,
     ...(cronMode ? { cronMode } : {}),
     ...(persistentStorage ? { persistentStorage: true } : {}),

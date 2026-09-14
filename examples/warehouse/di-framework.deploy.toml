@@ -1,0 +1,10 @@
+default-target = "kubesolo"
+
+[targets.kubesolo]
+kubeconfig = "${KUBECONFIG}"
+namespace = "wasmcloud"
+
+[targets.kubesolo.registry]
+push = "http://127.0.0.1:25001/examples"
+pull = "examples-registry.wasmcloud.svc.cluster.local:5000/examples"
+insecure = true

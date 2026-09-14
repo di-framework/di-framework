@@ -5,6 +5,13 @@
   "dependencies": {
     "@pulumi/command": "1.2.1",
     "@pulumi/kubernetes": "4.34.0",
-    "@pulumi/pulumi": "3.261.0"
+    "@pulumi/pulumi": "3.261.0",
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0"
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
   }
 }

@@ -332,3 +332,65 @@ Subsequent `bun run build` runs rebuild the provider through Cargo's incremental
 build cache and stage its WASM, WIT, metadata, and checksums under
 `dist/assets/sqlite`. Generated artifacts are ignored by Git and included in the
 published npm package; npm consumers do not need the Rust build toolchain.
+
+## Implicit workloads
+
+A package can declare `"workload": "warehouse"` in `di-framework.config.json`.
+The CLI discovers other packages with that name and generates
+`.di-framework/workloads/warehouse.json` at the deployment workspace root. No parent
+application or explicit member list is required. Member deployments remain independent
+and carry a `di-framework.dev/workload` Kubernetes label.
+
+In the entry module, export one variable wrapped in `WorkloadComponent({ path: '/take' })`
+or `WorkloadService({ path: '/sync', subscriptions: ['warehouse.stock'] })`, imported from
+`@di-framework/wasmcloud`. The workload name lives in config; source describes behavior.
+The CLI statically reads literal options, rejects conflicting member paths, and selects
+the exported handler without requiring a default export. A service with subscriptions
+exports `wasmcloud:messaging/handler@0.3.0`; a service without subscriptions exports
+`wasi:cli/run@0.3.0`. Both initialize declared host bindings before loading the entrypoint.
+
+The inferred manifest records routes but does not install a shared HTTP router. On the
+current Kubernetes runtime, HTTP members retain their individual Host headers. See the
+[warehouse example](../../examples/warehouse/README.md) for the complete deployment.
+
+## Tenant deployment targets
+
+Each external target selects a user's credentials, namespace, registry, and host groups:
+
+```toml
+[targets.alice]
+kubeconfig = "${ALICE_KUBECONFIG}"
+context = "alice"
+namespace = "tenant-alice"
+hostgroup = "alice"
+storage-hostgroup = "alice-storage"
+
+[targets.alice.registry]
+push = "https://registry.example.com/alice"
+pull = "registry.example.com/alice"
+```
+
+Run `di-framework wasmcloud deploy warehouse-take --target alice`. All Kubernetes calls,
+including deletion and diagnostics, use that target's kubeconfig, context, and namespace.
+The generated WorkloadDeployment also sets `spec.template.spec.environment` to the target
+namespace, so host selection cannot silently fall back to another environment when the
+matching pool is unavailable. `hostgroup` defaults to `default`; `storage-hostgroup` defaults
+to `storage` for actors, queues, and persistent storage. These selectors refer to existing
+host pools; application deployment does not provision them.
+
+Generated managed platforms set `operator.allowSharedHosts: false`. Existing generated
+platforms and external clusters, including di-framework-kube, need their operator Helm
+values updated separately. Application deploy does not reconfigure the operator.
+
+Generated platforms provision namespaces, host pools, isolated Redis/NATS backends,
+network policies, quotas, ServiceAccounts, and RBAC from declarative Tenant/User
+resources. Administrators issue expiring ServiceAccount tokens; no identity provider
+or login service is required. External clusters need equivalent provisioning.
+The local registry remains shared and unauthenticated. Never distribute the platform's
+administrative kubeconfig as a user's deployment credential.
+
+An existing target that intentionally used a host in another environment must now have
+a host in its own namespace environment. Workload names and decorator paths remain local
+to the implicit workload; they do not select user identity or Kubernetes namespaces.
+
+Generated platforms support declarative `tenants` and `users` in their Pulumi stack configuration. See [the generated platform guide](assets/platform/README.md#users-and-tenants) for CRDs, roles, token issuance, and lifecycle behavior.

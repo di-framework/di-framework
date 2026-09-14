@@ -5,5 +5,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": false
   },
-  "include": ["packages/*/src/**/*", "tests/**/*"]
+  "include": ["packages/*/src/**/*", "tests/**/*", "scripts/**/*.ts"]
 }

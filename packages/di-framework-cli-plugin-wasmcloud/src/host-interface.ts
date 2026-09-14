@@ -22,6 +22,7 @@ export type HostInterface = {
 
 export type HostInterfaceOptions = {
   httpHost?: string;
+  subscriptions?: string[];
 };
 
 export type BindingHostOverlay = {
@@ -67,6 +68,9 @@ function hostInterfaceFromRequirement(
   ) {
     entry.config = { host: options.httpHost };
   }
+  if (requirement.package === 'wasmcloud:messaging' && options.subscriptions) {
+    entry.config = { ...entry.config, subscriptions: options.subscriptions.join(',') };
+  }
   return entry;
 }
 
@@ -107,7 +111,9 @@ function mergeHttpHostInterfaces(entries: HostInterface[]): HostInterface[] {
     // Import/export directions belong to the WIT world, but the CRD requires one
     // unnamed host entry per package/version. Preserve overlays from both sides.
     const existing =
-      entry.namespace === 'wasi' && entry.package === 'http' && entry.name === undefined
+      ((entry.namespace === 'wasi' && entry.package === 'http') ||
+        (entry.namespace === 'wasmcloud' && entry.package === 'messaging')) &&
+      entry.name === undefined
         ? merged.find(
             (candidate) =>
               candidate.namespace === entry.namespace &&

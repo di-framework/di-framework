@@ -1,4 +1,5 @@
 {
   "name": "warehouse-receive",
-  "entry": "src/index.ts"
+  "entry": "src/index.ts",
+  "workload": "warehouse"
 }

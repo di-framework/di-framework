@@ -12,13 +12,19 @@ export type WorkloadMetadata = {
 };
 
 export type WorkloadComponentOptions = {
-  workload: string;
-  /** Public HTTP path this component claims. Ingress is the union of routes in the namespace. */
-  route?: string;
+  /** Optional legacy assertion; deployment membership comes from di-framework.config.json. */
+  workload?: string;
+  /** Path identifying this component within its implicit workload. */
+  path: string;
 };
 
 export type WorkloadServiceOptions = {
-  workload: string;
+  /** Path identifying this service within its implicit workload. */
+  path: string;
+  /** Optional legacy assertion; deployment membership comes from di-framework.config.json. */
+  workload?: string;
+  /** Broker subjects delivered to this service by the host. */
+  subscriptions?: string[];
 };
 
 function requireName(kind: string, name: string): string {
@@ -40,22 +46,29 @@ export function Workload(name: string) {
   };
 }
 
-function componentMetadata(options: WorkloadComponentOptions): WorkloadComponentOptions {
-  const workload = requireName('WorkloadComponent', options.workload);
-  const route = options.route?.trim();
-  if (route !== undefined && route !== '' && !route.startsWith('/')) {
-    throw new Error('WorkloadComponent route must start with "/"');
+function requirePath(kind: string, path: string): string {
+  if (
+    typeof path !== 'string' ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    /[\s?#\\]/.test(path)
+  ) {
+    throw new Error(`${kind} path is required and must be an absolute path starting with "/"`);
   }
-  return route ? { workload, route } : { workload };
+  return path;
 }
 
 /**
- * Places an independently deployed component in a named workload namespace.
- * `route` is a public HTTP claim; the platform unions routes into ingress.
- * Omit `route` for components that are only reached by binding, not by URL.
+ * Describes an independently deployed component in an implicit workload.
+ * `path` identifies the member and is its HTTP route in the generated manifest.
  */
 export function WorkloadComponent(options: WorkloadComponentOptions) {
-  const metadata = componentMetadata(options);
+  const metadata: WorkloadComponentOptions = {
+    ...(options.workload === undefined
+      ? {}
+      : { workload: requireName('WorkloadComponent', options.workload) }),
+    path: requirePath('WorkloadComponent', options.path),
+  };
   return <T extends object>(target: T): T => {
     defineMetadata(WORKLOAD_COMPONENT_KEY, metadata, target);
     return target;
@@ -63,12 +76,23 @@ export function WorkloadComponent(options: WorkloadComponentOptions) {
 }
 
 /**
- * Places a long-running service in a named workload. Not coupled to components.
+ * Describes a service in an implicit workload. The host invokes broker subscriptions
+ * when declared; otherwise the service exports a CLI run entrypoint.
  */
 export function WorkloadService(options: WorkloadServiceOptions) {
-  const workload = requireName('WorkloadService', options.workload);
+  const workload =
+    options.workload === undefined ? undefined : requireName('WorkloadService', options.workload);
+  const path = requirePath('WorkloadService', options.path);
   return <T extends object>(target: T): T => {
-    defineMetadata(WORKLOAD_SERVICE_KEY, { workload }, target);
+    defineMetadata(
+      WORKLOAD_SERVICE_KEY,
+      {
+        ...(workload === undefined ? {} : { workload }),
+        path,
+        ...(options.subscriptions ? { subscriptions: [...options.subscriptions] } : {}),
+      },
+      target,
+    );
     return target;
   };
 }

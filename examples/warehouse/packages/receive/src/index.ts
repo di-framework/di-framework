@@ -2,8 +2,7 @@ import { WorkloadComponent } from '@di-framework/wasmcloud';
 import { pallets } from './bindings';
 
 export const fetch = WorkloadComponent({
-  workload: 'warehouse',
-  route: '/receive',
+  path: '/receive',
 })(async function fetch(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const sku = url.searchParams.get('sku') ?? '';
