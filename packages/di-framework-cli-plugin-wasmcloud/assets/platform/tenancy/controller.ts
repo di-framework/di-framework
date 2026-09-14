@@ -2,12 +2,10 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout } from 'node:timers/promises';
 import {
-  GROUP,
   VERSION,
   INSTALLATION,
   OWNER,
   TENANT,
-  USER,
   FINALIZER,
   names,
   validName,
@@ -72,6 +70,8 @@ export class KubernetesApi implements Api {
           port: process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? '443',
           path,
           method,
+          // Trust the cluster CA and authenticate with the projected ServiceAccount token.
+          // These fixed Kubernetes-mounted paths are never selected by tenant input.
           ca: readFileSync(`${this.directory}/ca.crt`),
           headers: {
             Authorization: `Bearer ${readFileSync(`${this.directory}/token`, 'utf8').trim()}`,

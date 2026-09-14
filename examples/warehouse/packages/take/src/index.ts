@@ -7,6 +7,12 @@ export const fetch = WorkloadComponent({ path: '/take' })(async function fetch(
   const url = new URL(request.url);
   const sku = url.searchParams.get('sku') ?? '';
   const qty = Number(url.searchParams.get('qty') ?? 0);
+  if (!Number.isSafeInteger(qty) || qty < 0) {
+    return Response.json(
+      { ok: false, error: 'qty must be a nonnegative safe integer' },
+      { status: 400 },
+    );
+  }
   const store = await pallets();
   const have = Number((await store.get(sku)) ?? 0);
   if (have < qty) return Response.json({ ok: false, have }, { status: 409 });

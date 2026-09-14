@@ -60,6 +60,27 @@ describe('warehouse namespace (independently deployed components)', () => {
     expect(await received.json()).toEqual({ ok: true, qty: 13 });
   });
 
+  for (const [name, handler] of [
+    ['take', takeFetch],
+    ['receive', receiveFetch],
+  ] as const) {
+    it(`${name} rejects invalid quantities without changing stock`, async () => {
+      for (const qty of ['abc', 'NaN', 'Infinity', '-1', '1.5', '9007199254740992']) {
+        const res = await handler(
+          new Request(`http://warehouse/${name}?sku=pallet-a&qty=${qty}`, { method: 'POST' }),
+        );
+        expect(res.status).toBe(400);
+        expect(stock.data.get('pallet-a')).toBe('12');
+      }
+    });
+
+    it(`${name} accepts zero without changing stock`, async () => {
+      const res = await handler(new Request(`http://warehouse/${name}?sku=pallet-a&qty=0`));
+      expect(res.status).toBe(200);
+      expect(stock.data.get('pallet-a')).toBe('12');
+    });
+  }
+
   it('records HTTP routes on component declarations', async () => {
     expect(takeFetch).toBe(takeNamed);
     expect(receiveFetch).toBe(receiveNamed);
