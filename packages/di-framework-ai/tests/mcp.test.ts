@@ -417,11 +417,12 @@ describe('Official SDK InMemory transport + adaptSdkClient', () => {
       {
         description: 'Add two numbers',
         inputSchema: {
-          a: z.number(),
-          b: z.number(),
+          // MCP SDK typings still expect Zod 3; runtime accepts Zod 4.
+          a: z.number() as any,
+          b: z.number() as any,
         },
       },
-      async ({ a, b }) => ({
+      async ({ a, b }: { a: number; b: number }) => ({
         content: [{ type: 'text', text: String(a + b) }],
       }),
     );

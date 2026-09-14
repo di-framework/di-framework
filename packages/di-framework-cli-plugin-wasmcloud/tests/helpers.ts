@@ -84,6 +84,42 @@ export function invocationKey(command: string, args: readonly string[]): string 
     if (verb === 'get' && args.includes('secret')) return 'kubectl get secret';
     if (verb === 'create' && args.includes('secret')) return 'kubectl create secret';
     if (verb === 'label' && args.includes('secret')) return 'kubectl label secret';
+    const backing = args.find(
+      (token) =>
+        typeof token === 'string' &&
+        (token.includes('backingservice') || token.includes('BackingService')),
+    );
+    if (backing !== undefined && verb !== undefined) {
+      if (verb === 'get' && args.includes('-o') && args.includes('name')) {
+        return 'kubectl get backingservice name';
+      }
+      if (
+        verb === 'get' &&
+        args.includes('-o') &&
+        args.includes('json') &&
+        args.some((token) => token.includes('backingserviceclasses'))
+      ) {
+        return 'kubectl get backingserviceclasses';
+      }
+      if (
+        verb === 'get' &&
+        args.includes('-o') &&
+        args.includes('json') &&
+        !args.some(
+          (token, index) =>
+            typeof token === 'string' &&
+            token.includes('backingservice') &&
+            args[index + 1] !== undefined &&
+            !String(args[index + 1]).startsWith('-'),
+        )
+      ) {
+        return 'kubectl get backingservices';
+      }
+      if (verb === 'get') return 'kubectl get backingservice';
+      if (verb === 'create') return 'kubectl create backingservice';
+      if (verb === 'delete') return 'kubectl delete backingservice';
+      return `kubectl ${verb} backingservice`;
+    }
     return verb === undefined ? 'kubectl' : `kubectl ${verb}`;
   }
   if (command === 'oras') return args[0] === 'push' ? 'oras push' : 'oras manifest fetch';
