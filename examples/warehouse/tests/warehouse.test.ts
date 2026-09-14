@@ -3,6 +3,7 @@ import { getWorkloadComponent, resetGuests, setGuests } from '@di-framework/wasm
 import receiveFetch, { fetch as receiveNamed } from '@examples/warehouse-receive';
 import { applyRemote, handleMessage } from '@examples/warehouse-sync';
 import takeFetch, { fetch as takeNamed } from '@examples/warehouse-take';
+import { pallets as syncPallets } from '../packages/sync/src/bindings';
 
 function memoryStock(initial: Record<string, string>) {
   const data = new Map<string, string>(Object.entries(initial));
@@ -120,8 +121,13 @@ describe('warehouse namespace (independently deployed components)', () => {
     setGuests({
       stock: stock.guest,
       sync: {
-        publish: async (message: unknown) => {
-          replies.push(message);
+        publish: async (message: { subject: string; body: AsyncIterable<Uint8Array> }) => {
+          const chunks: number[] = [];
+          for await (const chunk of message.body) chunks.push(...chunk);
+          replies.push({
+            subject: message.subject,
+            body: JSON.parse(new TextDecoder().decode(new Uint8Array(chunks))),
+          });
         },
       },
     });
@@ -131,7 +137,30 @@ describe('warehouse namespace (independently deployed components)', () => {
     await handleMessage({ subject: 'warehouse.stock', body: body(), replyTo: 'test.reply' });
     expect(stock.data.get('pallet-a')).toBe('37');
     expect(replies).toHaveLength(1);
-    expect(replies[0]).toMatchObject({ subject: 'test.reply' });
+    expect(replies[0]).toEqual({
+      subject: 'test.reply',
+      body: { ok: true, sku: 'pallet-a', qty: 37 },
+    });
+  });
+
+  it('reads native keyvalue bytes through the sync binding', async () => {
+    const store = await syncPallets();
+    expect(await store.get('pallet-a')).toBe('12');
+    expect(await store.get('missing')).toBeNull();
+  });
+
+  it('requests retry when acknowledgement publishing fails after the stock write', async () => {
+    setGuests({
+      stock: stock.guest,
+      sync: { publish: async () => ({ tag: 'err', val: 'unavailable' }) },
+    });
+    async function* body() {
+      yield new TextEncoder().encode('{"sku":"pallet-a","qty":9}');
+    }
+    await expect(
+      handleMessage({ subject: 'warehouse.stock', body: body(), replyTo: 'test.reply' }),
+    ).rejects.toEqual({ tag: 'retry' });
+    expect(stock.data.get('pallet-a')).toBe('9');
   });
 
   it('rejects malformed peer stock without changing storage', async () => {
