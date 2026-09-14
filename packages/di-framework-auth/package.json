@@ -92,7 +92,7 @@
     "@di-framework/repo": "workspace:*",
     "@types/bun": "latest",
     "graphql": "^17.0.2",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/core": "^5",
@@ -100,7 +100,7 @@
     "@di-framework/http": "^5",
     "@di-framework/repo": "^5",
     "graphql": "^16.8.0 || ^17.0.0",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependenciesMeta": {
     "@di-framework/graphql": {

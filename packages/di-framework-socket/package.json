@@ -76,10 +76,10 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/ws": "^8.18.1",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/core": "^5",
-    "typescript": "^5"
+    "typescript": "^7"
   }
 }
