@@ -77,7 +77,9 @@ test('published implementation provisions tenancy and isolation for an existing 
   expect(scripts['controller.js']).toContain('class Controller');
   expect(scripts['resources.js']).toContain('tenantResources');
   expect(scripts['backing-services.js']).toContain('BackingServiceClass');
+  expect(scripts['backing-service-reconcile.js']).toContain('di-bs-');
   expect(scripts['resources.js']).toMatch(/require\(["'].\/backing-services["']\)/);
+  expect(scripts['controller.js']).toMatch(/require\(["'].\/backing-service-reconcile["']\)/);
   expect(resources.some((r) => r.name === 'backingserviceclass-keyvalue-redis')).toBe(true);
   expect(resources.some((r) => r.name === 'backingserviceclass-messaging-nats')).toBe(true);
   const role = resources.find((r) => r.name === 'clusterrole-di-test-controller');

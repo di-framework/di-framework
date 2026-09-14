@@ -389,7 +389,12 @@ function tenantResources(
       }),
     );
   for (const [name, image, port, args] of [
+    // Runtime-internal data-plane NATS for hostgroup `--data-nats-url`.
+    // Lifecycle is Tenant-owned; never created as an application BackingService.
+    // Application messaging NATS instances are `di-bs-<name>` via reconcileBackingService.
     ['di-nats', 'nats:2.12.8-alpine', 4222, ['-js', '-sd', '/data']],
+    // Transitional warehouse Redis + di-tenant-stock (#456 migrates to BackingService).
+    // Independent Redis instances are provisioned separately as `di-bs-<name>`.
     [
       'di-redis',
       'redis:7.4.5-alpine',

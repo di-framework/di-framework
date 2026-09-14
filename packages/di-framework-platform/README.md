@@ -33,9 +33,9 @@ Managed Kubesolo enables it by default. This mode preserves the existing CNI and
 service proxy ([upstream guide](https://www.kube-router.io/docs/user-guide/)).
 
 Kubeconfig contents are a secret Pulumi input. The controller's compiled JavaScript
-(`backing-services.js`, `resources.js`, `controller.js`) is loaded from this package
-into a ConfigMap; there is no copied TypeScript implementation in generated projects,
-runtime transpilation, or custom image build.
+(`backing-services.js`, `resources.js`, `backing-service-reconcile.js`, `controller.js`)
+is loaded from this package into a ConfigMap; there is no copied TypeScript
+implementation in generated projects, runtime transpilation, or custom image build.
 
 Tenant storage currently uses local host paths. The caller must select a persistent
 storage root and a cluster that enforces NetworkPolicy and the generated admission
@@ -69,13 +69,15 @@ reviewing any local customization.
 Platform install ships the three backing-service CRDs (`BackingServiceClass`,
 `BackingService`, `ServiceBinding`) with OpenAPI schemas and status subresources,
 seeds the approved default classes, and extends the controller ClusterRole to
-watch those resources. Redis/NATS reconciliation (#450), binding projection (#451),
-tenant RBAC/admission for bindings (#452), retention (#453), and CLI (#454) build
-on this install path; they must not invent a conflicting shape.
+watch those resources. Binding projection (#451), tenant RBAC/admission for
+bindings (#452), retention (#453), and CLI (#454) build on this install and
+reconcile path; they must not invent a conflicting shape.
 
 Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
 platform `crds` export from `src/tenancy/resources.ts`. Class seeding and controller
-script packaging live in `src/tenancy/install.ts`.
+script packaging live in `src/tenancy/install.ts`. Per-tick Redis/NATS provisioning
+for independently requested services lives in `src/tenancy/backing-service-reconcile.ts`
+and is driven from the controller tick loop.
 
 ### Installation ownership and lifecycle
 
@@ -88,12 +90,16 @@ script packaging live in `src/tenancy/install.ts`.
   Override with Pulumi config `backingServiceClasses`, or disable seeding with
   `seedDefaultBackingClasses: false`.
 - **Controller scripts** are TypeScript sources compiled by `tsc` into
-  `dist/tenancy/*.js` (`backing-services`, `resources`, `controller`). Pulumi
-  loads those compiled files into the controller ConfigMap; `resources.js`
-  requires `./backing-services` at runtime. There is no runtime `transpileModule`
-  or PLATFORM_TS_ASSETS allowlist for these modules.
+  `dist/tenancy/*.js` (`backing-services`, `resources`, `backing-service-reconcile`,
+  `controller`). Pulumi loads those compiled files into the controller ConfigMap;
+  `resources.js` requires `./backing-services` at runtime, and `controller.js`
+  requires both `resources.js` and `backing-service-reconcile.js`. There is no
+  runtime `transpileModule` or PLATFORM_TS_ASSETS allowlist for these modules.
 - Scheduler/control-plane NATS remains distinct from application messaging
   `BackingService` instances.
+- Per-tenant **runtime data-plane NATS** (`di-nats`, hostgroup `--data-nats-url`) is
+  Tenant-reconciled infrastructure — not an application `BackingService`. Application
+  messaging instances are named `di-bs-<service-name>` and owned by BackingService UIDs.
 
 ### Contract
 
@@ -205,8 +211,10 @@ rely on unnamed interfaces for multi-service selection (#451).
 
 | Concern | Resource |
 | --- | --- |
-| Application Redis / app NATS | `BackingService` (+ class/binding) |
+| Application Redis / app NATS | `BackingService` → `di-bs-<name>` Deployment/Service in `di-runtime-<tenant>` |
+| Runtime data-plane NATS | Tenant reconcile → fixed `di-nats` (host `--data-nats-url`); not a BackingService |
 | Scheduler NATS, OCI registry, wasmCloud operator, tenant host pool | Platform / tenant runtime provisioning (not `BackingService`) |
+| Transitional warehouse Redis | Tenant reconcile still creates `di-redis` + `di-tenant-stock` until #456 |
 
 Today's tenant controller still provisions per-tenant Redis/NATS deployments and the
 `di-tenant-stock` ConfigMap as a transitional warehouse path. Later issues replace

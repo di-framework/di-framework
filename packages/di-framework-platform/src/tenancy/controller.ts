@@ -2,6 +2,16 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout } from 'node:timers/promises';
 import {
+  backingServiceResources,
+  endpointFor,
+  RUNTIME_DATA_NATS,
+  resolveBackingSizing,
+  resolveClass,
+  tenantNameFromNamespace,
+} from './backing-service-reconcile';
+import {
+  type BackingService,
+  type BackingServiceClass,
   type Condition,
   type ControllerConfig,
   FINALIZER,
@@ -34,13 +44,17 @@ const plurals: Record<string, string> = {
   Tenant: 'tenants',
   User: 'users',
   Host: 'hosts',
+  BackingServiceClass: 'backingserviceclasses',
+  BackingService: 'backingservices',
+  ServiceBinding: 'servicebindings',
 };
 export function collection(apiVersion: string, kind: string, namespace?: string): string {
   const plural = plurals[kind];
   if (!plural) throw new Error(`Unsupported resource kind: ${kind}`);
   return `${apiVersion === 'v1' ? '/api/v1' : `/apis/${apiVersion}`}${namespace ? `/namespaces/${encodeURIComponent(namespace)}` : ''}/${plural}`;
 }
-function location(value: Resource | Tenant | User): string {
+type Owned = Tenant | User | BackingService;
+function location(value: Resource | Owned): string {
   return `${collection(value.apiVersion, value.kind, value.metadata.namespace)}/${encodeURIComponent(value.metadata.name)}`;
 }
 export interface Api {
@@ -179,11 +193,11 @@ export class Controller {
       'application/apply-patch+yaml',
     );
   }
-  private async finalizer(value: Tenant | User, add: boolean): Promise<void> {
+  private async finalizer(value: Owned, add: boolean): Promise<void> {
     const old = value.metadata.finalizers ?? [];
     const finalizers = add ? [...new Set([...old, FINALIZER])] : old.filter((f) => f !== FINALIZER);
     if (JSON.stringify(old) !== JSON.stringify(finalizers)) {
-      const updated = await this.api.call<Tenant | User>(
+      const updated = await this.api.call<Owned>(
         'PATCH',
         location(value),
         { metadata: { resourceVersion: value.metadata.resourceVersion, finalizers } },
@@ -193,7 +207,7 @@ export class Controller {
     }
   }
   private async status(
-    value: Tenant | User,
+    value: Owned,
     ready: boolean,
     reason: string,
     message: string,
@@ -372,11 +386,150 @@ export class Controller {
           },
     );
   }
+  /**
+   * Provision independent Redis/NATS instances for a BackingService CR.
+   * Never touches runtime-internal `${RUNTIME_DATA_NATS}` (hostgroup data plane).
+   */
+  async reconcileBackingService(
+    service: BackingService,
+    tenant: Tenant,
+    classes: BackingServiceClass[],
+  ): Promise<void> {
+    if (!validName(service.metadata.name)) throw new Error('Invalid BackingService name');
+    if (!service.metadata.uid) throw new Error('BackingService is missing metadata.uid');
+    const n = names(tenant.metadata.name);
+    if (service.metadata.namespace !== n.namespace)
+      throw new Error(
+        `BackingService ${service.metadata.name} must live in tenant namespace ${n.namespace}`,
+      );
+    if (!service.metadata.deletionTimestamp) await this.finalizer(service, true);
+
+    const resolved = resolveClass(service, classes, tenant.metadata.name);
+    if ('error' in resolved) {
+      await this.status(service, false, 'Failed', resolved.error, {
+        runtimeNamespace: n.runtimeNamespace,
+      });
+      return;
+    }
+    const { cls } = resolved;
+    const sized = resolveBackingSizing(service, cls, tenant);
+    if ('error' in sized) {
+      await this.status(service, false, 'Failed', sized.error, {
+        runtimeNamespace: n.runtimeNamespace,
+        classRef: {
+          name: cls.metadata.name,
+          uid: cls.metadata.uid,
+          generation: cls.metadata.generation,
+        },
+      });
+      return;
+    }
+
+    const classRef = {
+      name: cls.metadata.name,
+      uid: cls.metadata.uid,
+      generation: cls.metadata.generation,
+    };
+    const endpoint = endpointFor(service, tenant, cls.spec.provider);
+    const statusExtra = {
+      runtimeNamespace: n.runtimeNamespace,
+      classRef,
+      endpoint,
+    };
+
+    if (service.metadata.deletionTimestamp) {
+      const owned = await this.list<Resource>('apps/v1', 'Deployment', {
+        [INSTALLATION]: this.cfg.installation,
+        [OWNER]: service.metadata.uid,
+      });
+      const secrets = await this.list<Resource>('v1', 'Secret', {
+        [INSTALLATION]: this.cfg.installation,
+        [OWNER]: service.metadata.uid,
+      });
+      const services = await this.list<Resource>('v1', 'Service', {
+        [INSTALLATION]: this.cfg.installation,
+        [OWNER]: service.metadata.uid,
+      });
+      if (service.spec.deletionPolicy === 'Delete') {
+        for (const value of [...owned, ...secrets, ...services]) await this.remove(value);
+        await this.finalizer(service, false);
+        return;
+      }
+      // Retain: scale down and release finalizer; hostPath data kept (#453 expands this).
+      let stopped = true;
+      for (const deployment of owned) {
+        // Never scale/delete runtime-internal data NATS via BS ownership (wrong owner).
+        if (deployment.metadata.name === RUNTIME_DATA_NATS) {
+          throw new Error(`Refusing to manage runtime data plane ${RUNTIME_DATA_NATS}`);
+        }
+        const updated = await this.api.call<Resource>(
+          'PATCH',
+          `${location(deployment)}?fieldManager=di-platform-controller`,
+          {
+            metadata: { resourceVersion: deployment.metadata.resourceVersion },
+            spec: { replicas: 0 },
+          },
+          'application/merge-patch+json',
+        );
+        const status = updated.status as
+          | { observedGeneration?: number; replicas?: number }
+          | undefined;
+        stopped &&=
+          status?.observedGeneration === updated.metadata.generation &&
+          (status?.replicas ?? 0) === 0;
+      }
+      await this.status(
+        service,
+        false,
+        'Deleting',
+        'Stopping backing service workloads',
+        statusExtra,
+      );
+      if (stopped) await this.finalizer(service, false);
+      return;
+    }
+
+    const desired = backingServiceResources(service, tenant, cls, this.cfg, sized.sizing);
+    let ready = true;
+    for (const value of desired) {
+      const applied = await this.ensure(value);
+      if (value.kind === 'Deployment') {
+        if (applied.metadata.name === RUNTIME_DATA_NATS)
+          throw new Error(`Refusing to manage runtime data plane ${RUNTIME_DATA_NATS}`);
+        const spec = applied.spec as { replicas: number };
+        const status = applied.status as
+          | { observedGeneration?: number; readyReplicas?: number; replicas?: number }
+          | undefined;
+        ready &&=
+          status?.observedGeneration === applied.metadata.generation &&
+          (status?.readyReplicas ?? 0) === spec.replicas &&
+          (spec.replicas !== 0 || (status?.replicas ?? 0) === 0);
+      }
+    }
+    await this.status(
+      service,
+      ready && !tenant.spec.suspended,
+      tenant.spec.suspended ? 'Suspended' : ready ? 'Ready' : 'Provisioning',
+      tenant.spec.suspended
+        ? 'Tenant suspended; backing service scaled down'
+        : ready
+          ? 'Backing service deployment is ready'
+          : 'Waiting for backing service deployment',
+      statusExtra,
+    );
+  }
   async tick(): Promise<void> {
     const tenants = await this.list<Tenant>(VERSION, 'Tenant', {
       [INSTALLATION]: this.cfg.installation,
     });
     const users = await this.list<User>(VERSION, 'User', { [INSTALLATION]: this.cfg.installation });
+    const classes = await this.list<BackingServiceClass>(VERSION, 'BackingServiceClass', {
+      [INSTALLATION]: this.cfg.installation,
+    });
+    // Cluster-wide list: BackingServices are namespaced under di-tenant-* and may lack
+    // installation labels until the controller owns their infra.
+    const services = await this.list<BackingService>(VERSION, 'BackingService', {});
+    const tenantByName = new Map(tenants.map((t) => [t.metadata.name, t]));
     for (const value of [...tenants, ...users]) {
       try {
         if (value.kind === 'Tenant') await this.reconcileTenant(value as Tenant);
@@ -388,6 +541,26 @@ export class Controller {
           await this.status(value, false, 'ReconcileError', message);
         } catch {
           /* Retry on the next poll, including resourceVersion conflicts. */
+        }
+      }
+    }
+    for (const service of services) {
+      const tenantName = tenantNameFromNamespace(service.metadata.namespace);
+      const tenant = tenantName ? tenantByName.get(tenantName) : undefined;
+      if (!tenant) continue;
+      try {
+        await this.reconcileBackingService(service, tenant, classes);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reconciliation failed';
+        console.error(
+          `BackingService/${service.metadata.namespace}/${service.metadata.name}: ${message}`,
+        );
+        try {
+          await this.status(service, false, 'Failed', message, {
+            runtimeNamespace: names(tenant.metadata.name).runtimeNamespace,
+          });
+        } catch {
+          /* Retry on the next poll. */
         }
       }
     }
