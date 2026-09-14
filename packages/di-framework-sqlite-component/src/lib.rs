@@ -298,8 +298,36 @@ impl GuestConnection for SqliteConnection {
 // helpers
 // ---------------------------------------------------------------------------
 
+/// True when SQLite will open `path` as an in-memory database.
+///
+/// Matches `:memory:`, `file::memory:` URIs, and a URI query parameter
+/// `mode=memory` (last `mode` wins). A substring such as `journal_mode=memory`
+/// or a filesystem path that happens to contain `mode=memory` is not in-memory.
 fn is_in_memory(path: &str) -> bool {
-    path == ":memory:" || path.starts_with("file::memory:") || path.contains("mode=memory")
+    if path == ":memory:" {
+        return true;
+    }
+    let Some(rest) = path.strip_prefix("file:") else {
+        return false;
+    };
+    let rest = rest.split_once('#').map(|(p, _)| p).unwrap_or(rest);
+    let (filename, query) = rest.split_once('?').unwrap_or((rest, ""));
+    filename == ":memory:"
+        || filename.starts_with(":memory:")
+        || sqlite_uri_last_mode_is_memory(query)
+}
+
+fn sqlite_uri_last_mode_is_memory(query: &str) -> bool {
+    let mut last_mode = None;
+    for pair in query.split('&') {
+        let Some((key, value)) = pair.split_once('=') else {
+            continue;
+        };
+        if key.eq_ignore_ascii_case("mode") {
+            last_mode = Some(value);
+        }
+    }
+    last_mode.is_some_and(|value| value.eq_ignore_ascii_case("memory"))
 }
 
 /// Filesystem path SQLite will use, with URI scheme and query string stripped.
@@ -354,6 +382,39 @@ mod sqlite_uri_filesystem_path_tests {
         );
         assert_eq!(sqlite_uri_filesystem_path("file://memory"), None);
         assert_eq!(sqlite_uri_filesystem_path("/data/foo.db"), Some("/data/foo.db"));
+    }
+}
+
+#[cfg(test)]
+mod is_in_memory_tests {
+    use super::is_in_memory;
+
+    #[test]
+    fn recognizes_sqlite_in_memory_names() {
+        assert!(is_in_memory(":memory:"));
+        assert!(is_in_memory("file::memory:"));
+        assert!(is_in_memory("file::memory:?cache=shared"));
+        assert!(is_in_memory("file:?mode=memory"));
+        assert!(is_in_memory("file:foo.db?mode=memory"));
+        assert!(is_in_memory(
+            "file:actor_ns_name_abcd?mode=memory&cache=shared"
+        ));
+        assert!(is_in_memory("file:foo.db?cache=shared&mode=memory"));
+        assert!(is_in_memory("file:foo.db?MODE=MEMORY"));
+        assert!(is_in_memory("file:foo.db?mode=rwc&mode=memory"));
+    }
+
+    #[test]
+    fn does_not_treat_on_disk_paths_as_memory() {
+        assert!(!is_in_memory("/data/foo.db"));
+        assert!(!is_in_memory("file:foo.db"));
+        assert!(!is_in_memory("file:nested/foo.db?mode=rwc"));
+        assert!(!is_in_memory("file:/data/app.db?journal_mode=memory"));
+        assert!(!is_in_memory("/data/mode=memory.db"));
+        assert!(!is_in_memory("file:mode=memory.db"));
+        assert!(!is_in_memory("file:/data/app.db?mode=memory&mode=rwc"));
+        assert!(!is_in_memory("/tmp/foo?mode=memory"));
+        assert!(!is_in_memory(""));
     }
 }
 
