@@ -33,7 +33,9 @@ describe('runWasmcloudPlatformInit', () => {
     expect(program).toContain('registry');
     expect(program).toContain('helm.v3.Release');
     expect(program).toContain('operator: { allowSharedHosts: false, hostNamespaces:');
-    expect(readFileSync(join(platform, 'tenancy', 'controller.ts'), 'utf8')).toContain('export class Controller');
+    expect(readFileSync(join(platform, 'tenancy', 'controller.ts'), 'utf8')).toContain(
+      'export class Controller',
+    );
     expect(readFileSync(join(platform, 'tenancy.ts'), 'utf8')).toContain('installTenancy');
     expect(program).toContain('new pulumi.Config()');
     expect(program).toContain('--network');

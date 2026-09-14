@@ -565,7 +565,7 @@ function userResources(user: User, tenants: Tenant[], cfg: ControllerConfig): Re
     for (const [namespace, role] of [
       [n.namespace, `di-${membership.role}`],
       [n.runtimeNamespace, `di-runtime-${membership.role}`],
-    ]) {
+    ] as const) {
       const binding = make('rbac.authorization.k8s.io/v1', 'RoleBinding', account, namespace, {
         roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: role },
         subjects: [{ kind: 'ServiceAccount', name: account, namespace: cfg.namespace }],

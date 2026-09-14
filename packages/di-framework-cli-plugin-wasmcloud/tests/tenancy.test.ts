@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'bun:test';
-import { ApiError, Controller, collection, type Api } from '../assets/platform/tenancy/controller';
+import { type Api, ApiError, Controller, collection } from '../assets/platform/tenancy/controller';
 import {
-  INSTALLATION,
-  OWNER,
-  TENANT,
-  FINALIZER,
-  VERSION,
-  names,
-  tenantResources,
-  userResources,
   type ControllerConfig,
+  FINALIZER,
+  INSTALLATION,
+  names,
+  OWNER,
   type Resource,
+  TENANT,
   type Tenant,
+  tenantResources,
   type User,
+  userResources,
+  VERSION,
 } from '../assets/platform/tenancy/resources';
 
 const cfg: ControllerConfig = {

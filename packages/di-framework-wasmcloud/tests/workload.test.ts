@@ -11,7 +11,9 @@ import {
 describe('workload membership', () => {
   it('records a colocation namespace name', async () => {
     const fetch = Workload('warehouse')(
-      WorkloadComponent({ workload: 'warehouse', path: '/sync' })(async () => new Response('ok')),
+      WorkloadComponent({ workload: 'warehouse', path: '/sync' })(
+        async (_request: Request) => new Response('ok'),
+      ),
     );
 
     expect(getWorkload(fetch)).toEqual({ name: 'warehouse' });

@@ -9,15 +9,9 @@
     "incremental": false,
     "allowImportingTsExtensions": false,
     "paths": {
-      "@di-framework/core": [
-        "../di-framework-core/dist/container.d.ts"
-      ],
-      "@di-framework/core/*": [
-        "../di-framework-core/dist/*"
-      ]
+      "@di-framework/core": ["../di-framework-core/dist/container.d.ts"],
+      "@di-framework/core/*": ["../di-framework-core/dist/*"]
     }
   },
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src/**/*"]
 }

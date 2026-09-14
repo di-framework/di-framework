@@ -9,15 +9,15 @@ import {
   ActorContext,
   ActorIdentityCollisionError,
   ActorMethod,
-  actorIdentityToPath,
   ActorOwnershipConflictError,
   ActorRuntime,
+  actorIdentityToPath,
   StaleOwnerWriteError,
   WasmSqliteActorStorage,
   type WasmSqliteDatabaseFactory,
 } from '../src/index';
-import * as actorPath from '../src/storage/path';
 import * as portable from '../src/portable';
+import * as actorPath from '../src/storage/path';
 
 /**
  * Test double for `createWasmSqliteDatabase`: the same `SqlDatabase` shape the
@@ -412,7 +412,9 @@ describe('WasmSqliteActorStorage', () => {
     const pendingDir = makeTempDir();
     const pendingFake = createFakeWasmSqlite();
     const pendingShared = actorIdentityToPath('PendingA:1', { baseDir: pendingDir });
-    const pendingSpy = spyOn(actorPath, 'actorIdentityToPath').mockImplementation(() => pendingShared);
+    const pendingSpy = spyOn(actorPath, 'actorIdentityToPath').mockImplementation(
+      () => pendingShared,
+    );
     let releaseOpen!: () => void;
     const gate = new Promise<void>((resolve) => {
       releaseOpen = resolve;

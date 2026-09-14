@@ -595,7 +595,11 @@ async function deploymentDiagnostics(
     },
     {
       title: 'wasmCloud storage host logs',
-      args: ['logs', `deployment/hostgroup-${connection.storageHostgroup ?? STORAGE_HOSTGROUP}`, '--tail=100'],
+      args: [
+        'logs',
+        `deployment/hostgroup-${connection.storageHostgroup ?? STORAGE_HOSTGROUP}`,
+        '--tail=100',
+      ],
     },
   ];
   const sections: string[] = [];
