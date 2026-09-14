@@ -110,15 +110,27 @@ host pool, Redis, and NATS. Host environments match the workload namespace, and
 Pulumi seeds these namespaces before Helm so the wasmCloud operator can watch
 host pods there; the controller then manages their resources and lifecycle.
 Add tenants through stack configuration so Helm's `hostNamespaces` stays current.
-A tenant defaults to one runtime, a 2-CPU/4-GiB runtime-namespace quota, and 20
-WorkloadDeployments. Increase `resources.cpu` and `resources.memory` when increasing
-`runtime.replicas`; these quotas cover runtime pods, not individual Wasm invocations.
+A tenant defaults to one runtime, a 2-CPU/4-GiB runtime-namespace quota, 20
+WorkloadDeployments, 10 `BackingService` objects, and 40 `ServiceBinding`
+objects. Increase `resources.cpu` and `resources.memory` when increasing
+`runtime.replicas`; these quotas cover runtime pods and aggregate
+`requests.storage` (50Gi hard) for stock and future `di-bs-*` backends, not
+individual Wasm invocations. Override concurrent service/binding counts with
+`resources.backingServices` / `resources.serviceBindings`.
 
 Users get a ServiceAccount in `wasmcloud` and tenant RoleBindings. Developers
-can manage WorkloadDeployments, ConfigMaps, Secrets, and ClusterIP Services,
-read runtime logs, and port-forward runtime pods. Viewers can read workloads and
+can manage WorkloadDeployments, `BackingService`, `ServiceBinding`, ConfigMaps,
+Secrets, and ClusterIP Services, read runtime logs, and port-forward runtime pods.
+Viewers can read workloads, `BackingService` / `ServiceBinding` status, and
 runtime logs. Neither role can manage Kubernetes pods, RBAC, tenant declarations,
-or read runtime Secrets. Missing or suspended tenants receive no grants.
+`BackingServiceClass`, or read runtime Secrets. Missing or suspended tenants
+receive no grants.
+
+**Authorization boundary (v1):** tenant-level only — not per-user or per-workload.
+Developers in a tenant can read Secrets and port-forward runtime pods in that
+tenant; the platform does **not** claim finer credential isolation. Admission
+still blocks CLI/API bypass for forged hostInterfaces and mutation of
+controller-managed config (see `@di-framework/platform` README).
 
 As administrator, use the platform kubeconfig to issue an expiring user token:
 
@@ -139,14 +151,17 @@ Configure a deployment target with the user's kubeconfig,
 Port-forward `service/di-http` in `di-runtime-warehouse` to reach its HTTP routes.
 The default platform HTTP entrypoint continues to target the default host group.
 For shared tenant keyvalue storage, reference the controller-managed ConfigMap
-`di-tenant-stock` in the native keyvalue host interface. The warehouse's HTTP,
-Redis, and NATS sync flow has been verified on the stock
-`ghcr.io/wasmcloud/wash:2.8.0` image; native keyvalue needs no custom image.
-The warehouse uses this same ConfigMap reference in its external-cluster setup.
-Messaging uses the tenant's dedicated NATS backend. Tenant admission restricts native interfaces,
-forbids host volumes and guest network capabilities, and reserves the backend
-ConfigMap. Workloads needing additional capabilities require administrator review
-and a corresponding policy change.
+`di-tenant-stock` in the native keyvalue host interface (transitional). Independent
+services use ConfigMaps named `di-bs-*` and binding-projected Secrets/ConfigMaps
+named `di-binding-*` (#450/#451). The warehouse's HTTP, Redis, and NATS sync flow
+has been verified on the stock `ghcr.io/wasmcloud/wash:2.8.0` image; native
+keyvalue needs no custom image. The warehouse uses this same ConfigMap reference
+in its external-cluster setup. Messaging uses the tenant's dedicated NATS backend.
+Tenant admission restricts native interfaces, forbids host volumes and guest
+network capabilities, and reserves `di-tenant-stock`, `di-bs-*`, and
+`di-binding-*` ConfigMaps/Secrets against tenant-user create/update/delete.
+Workloads needing additional capabilities require administrator review and a
+corresponding policy change.
 
 Set `suspended: true` on a User to revoke bindings and delete its ServiceAccount;
 previous tokens remain invalid after unsuspension creates a new account. Membership
@@ -182,7 +197,8 @@ Backing-service CRD contracts (`BackingServiceClass`, `BackingService`,
 `ServiceBinding`), authorization boundaries, and runtime feasibility notes live in
 the `@di-framework/platform` package README. Platform install seeds the approved
 default classes (`keyvalue-redis`, `messaging-nats`), retains CRDs on stack destroy,
-and ships compiled controller scripts including `backing-services.js`.
+ships compiled controller scripts including `backing-services.js`, and enforces
+tenant RBAC / admission / quotas / backend NetworkPolicy isolation (#452).
 
 For projects generated before this extraction, preserve the existing project name,
 backend, stack, and configuration when updating the import/dependency. Review
