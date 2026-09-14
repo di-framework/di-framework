@@ -4,7 +4,7 @@ import { type CliIo, CommandFailure, type CommandResult } from '@di-framework/cl
 import { discoverBindings } from './bindings';
 import { buildComponent, requirementsForProject } from './build';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { resolveDevRunner } from './dev-runner';
+import { requiresWasmCloudHost, resolveDevRunner } from './dev-runner';
 import { loadProject } from './project';
 import { invalidUsage, readOptionValue, toolFailed } from './support';
 import { writeWashDevConfig } from './wash-dev';
@@ -43,9 +43,11 @@ export async function runWasmcloudDev(
   await buildComponent(project, io, deps);
   const lockPath = join(project.projectRoot, '.di-framework', 'wit.lock.json');
   let tls: boolean;
+  let wasmCloudHost: boolean;
   try {
     const lock = JSON.parse(readFileSync(lockPath, 'utf8')) as WitLock;
     tls = lock.requirements.some((requirement) => requirement.package === 'wasi:tls');
+    wasmCloudHost = requiresWasmCloudHost(lock.requirements);
   } catch (error) {
     throw new CommandFailure(
       'WASMCLOUD_WIT_LOCK_INVALID',
@@ -54,7 +56,7 @@ export async function runWasmcloudDev(
       { path: lockPath, cause: String(error) },
     );
   }
-  const runner = resolveDevRunner(deps);
+  const runner = resolveDevRunner(deps, { wasmCloudHost });
   const washConfigPath =
     runner.kind === 'wash'
       ? writeWashDevConfig(

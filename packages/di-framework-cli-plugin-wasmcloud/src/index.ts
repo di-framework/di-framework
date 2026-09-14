@@ -62,7 +62,11 @@ export {
 } from './deps';
 export { runWasmcloudDestroy } from './destroy';
 export { parseDevArgs, runWasmcloudDev } from './dev';
-export { DEV_RUNNER_ENV, resolveDevRunner } from './dev-runner';
+export {
+  DEV_RUNNER_ENV,
+  requiresWasmCloudHost,
+  resolveDevRunner,
+} from './dev-runner';
 export {
   discoverProjects,
   findConfigFiles,

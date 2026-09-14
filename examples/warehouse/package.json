@@ -1,0 +1,20 @@
+{
+  "name": "@examples/warehouse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@di-framework/core": "workspace:*",
+    "@di-framework/wasmcloud": "workspace:*",
+    "@examples/warehouse-receive": "workspace:*",
+    "@examples/warehouse-sync": "workspace:*",
+    "@examples/warehouse-take": "workspace:*",
+    "@types/bun": "latest"
+  }
+}

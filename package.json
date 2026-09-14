@@ -14,7 +14,9 @@
     "examples/checkout-inventory",
     "examples/receipt-worker",
     "examples/scheduled-worker",
-    "examples/wasmcloud-actor-counter"
+    "examples/wasmcloud-actor-counter",
+    "examples/warehouse",
+    "examples/warehouse/packages/*"
   ],
   "scripts": {
     "build": "bun run packages/di-framework-cli/main.ts mx build",

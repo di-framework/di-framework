@@ -153,7 +153,8 @@ Package versions are independent of the component-model preview: a WASI 0.3 gues
 still import `wasmcloud:*` packages at their own versions.
 
 Local `wasmcloud dev` uses `wasmtime serve -S cli -S p3 -S config` when wasmtime 46+ is on
-PATH, then `wash dev`, then `jco serve`. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to
+PATH, then `wash dev`, then `jco serve`. A guest that imports `wasmcloud:*` selects `wash`
+even when wasmtime is present. Set `DI_FRAMEWORK_WASMCLOUD_DEV_RUNNER` to
 `wasmtime`, `wash`, or `jco` to pin one. Wasmtime hosts WASI HTTP and unlabeled
 `wasi:config` locally (`-S config-var=key=value` to seed values). wasmCloud-only imports
 such as `wasmcloud:postgres` still need `wash` or a wasmCloud host.

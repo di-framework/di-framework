@@ -70,6 +70,53 @@ describe('runWasmcloudDev', () => {
     expect(invocations[1]?.args).toContain('tls=y,inherit-network=y,allow-ip-name-lookup=y');
   });
 
+  it('selects wash when the built component imports wasmCloud host interfaces', async () => {
+    const root = makeProject();
+    writeFileSync(
+      join(root, 'src', 'bindings.ts'),
+      `import { KeyValue, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('stock')
+export class Stock extends KeyValue {}
+`,
+    );
+    const catalogPath = join(root, 'catalog.json');
+    writeFileSync(
+      catalogPath,
+      `${JSON.stringify({
+        KeyValue: {
+          kind: 'KeyValue',
+          package: 'wasmcloud:keyvalue',
+          version: '0.2.0',
+          interfaces: ['store', 'atomics', 'cas', 'batch', 'types'],
+          primaryInterface: 'store',
+          namedInstance: true,
+          sharedResources: [],
+          witDep: 'wasmcloud-keyvalue',
+          usesSecret: false,
+          configKeys: [],
+        },
+      })}\n`,
+    );
+    const invocations: RunnerInvocation[] = [];
+    const output = captureIo();
+    const result = await runWasmcloudDev(
+      [],
+      output.io,
+      fakeDeps({
+        cwd: root,
+        invocations,
+        washBinaryPath: '/fake/wash',
+        resolutions: { '@di-framework/wasmcloud/catalog.json': catalogPath },
+      }),
+    );
+    expect(invocations[1]).toMatchObject({
+      command: '/fake/wash',
+      args: ['dev', '--user-config', join(root, '.di-framework', 'wash-dev.yaml')],
+    });
+    expect(output.stdout.join('')).toContain('(wash)');
+    expect(result.data).toMatchObject({ runner: 'wash' });
+  });
+
   it('builds and then serves the component with wasmtime', async () => {
     const root = makeProject();
     const invocations: RunnerInvocation[] = [];

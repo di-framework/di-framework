@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { relative } from 'node:path';
 import type { CliIo, CommandResult } from '@di-framework/cli-extension';
-import { discoverBindings } from './bindings';
+import { type BindingRecord, discoverBindings } from './bindings';
 import { DEFAULT_DEPS, type WasmcloudDeps } from './deps';
-import { resolveDevRunner } from './dev-runner';
+import { requiresWasmCloudHost, resolveDevRunner } from './dev-runner';
 import { loadProject } from './project';
 import { invalidUsage } from './support';
 
@@ -38,32 +38,42 @@ export async function runWasmcloudDoctor(
     check('kubectl', deps.capture('kubectl', ['version', '--client', '--output=yaml'])),
     check('oras', deps.capture('oras', ['version'])),
   ];
+  let discoveredBindings: BindingRecord[] | undefined;
+  let bindingsError: string | undefined;
+  if (existsSync(project.bindingsPath ?? '')) {
+    try {
+      discoveredBindings = discoverBindings(project, deps);
+    } catch (error) {
+      bindingsError = error instanceof Error ? error.message : String(error);
+    }
+  }
   let runnerDetail: string | undefined;
   try {
-    runnerDetail = resolveDevRunner(deps).kind;
+    runnerDetail = resolveDevRunner(deps, {
+      wasmCloudHost: requiresWasmCloudHost(
+        (discoveredBindings ?? []).map((binding) => binding.requirement),
+      ),
+    }).kind;
   } catch {
     runnerDetail = undefined;
   }
   checks.push(check('dev runner', runnerDetail));
-  if (existsSync(project.bindingsPath ?? '')) {
-    try {
-      const bindings = discoverBindings(project, deps);
-      for (const binding of bindings) {
-        const secret =
-          binding.secretFrom === undefined ? 'no secret ref' : `secretFrom ${binding.secretFrom}`;
-        checks.push({
-          name: `binding ${binding.name}`,
-          ok: true,
-          detail: `${binding.className} ${binding.requirement.package}@${binding.requirement.version} (${secret})`,
-        });
-      }
-    } catch (error) {
+  if (discoveredBindings !== undefined) {
+    for (const binding of discoveredBindings) {
+      const secret =
+        binding.secretFrom === undefined ? 'no secret ref' : `secretFrom ${binding.secretFrom}`;
       checks.push({
-        name: 'bindings',
-        ok: false,
-        detail: error instanceof Error ? error.message : String(error),
+        name: `binding ${binding.name}`,
+        ok: true,
+        detail: `${binding.className} ${binding.requirement.package}@${binding.requirement.version} (${secret})`,
       });
     }
+  } else if (bindingsError !== undefined) {
+    checks.push({
+      name: 'bindings',
+      ok: false,
+      detail: bindingsError,
+    });
   }
   const failed = checks.some((entry) => !entry.ok);
   const lines = [
