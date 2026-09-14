@@ -8,7 +8,7 @@ import {
   defaultBackingServiceClasses,
   loadControllerScripts,
   resolveBackingServiceClasses,
-} from '../src/tenancy';
+} from '../src/tenancy/install';
 import { crds, DEFAULT_CLASS_NAMES } from '../src/tenancy/resources';
 
 const root = join(import.meta.dir, '..');
