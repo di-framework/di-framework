@@ -471,6 +471,21 @@ describe('backing service reconciliation', () => {
     expect(stock.metadata.finalizers).not.toContain(FINALIZER);
   });
 
+  it('releases finalizer on deletion even if the BackingServiceClass was deleted', async () => {
+    const { api, controller, t, classes } = prepare();
+    const stock = backingService('stock', 'keyvalue');
+    api.seed(stock);
+    await controller.reconcileBackingService(stock, t, classes);
+    expect(stock.metadata.finalizers).toContain(FINALIZER);
+
+    stock.metadata.deletionTimestamp = new Date().toISOString();
+    stock.spec.deletionPolicy = 'Retain';
+    api.seed(stock);
+    // BackingServiceClass is removed from cluster
+    await controller.reconcileBackingService(stock, t, []);
+    expect(stock.metadata.finalizers).not.toContain(FINALIZER);
+  });
+
   it('deletes owned infra when deletionPolicy is Delete', async () => {
     const { api, controller, t, classes } = prepare();
     const stock = backingService('stock', 'keyvalue');
