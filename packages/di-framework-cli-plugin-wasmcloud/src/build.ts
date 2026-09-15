@@ -155,6 +155,7 @@ async function composeSqliteProvider(
   project: WasmcloudProject,
   deps: WasmcloudDeps,
   io: CliIo,
+  namedImports = false,
 ): Promise<void> {
   const provider = join(deps.assetsDirectory(), 'sqlite', 'di-framework-sqlite.wasm');
   if (!existsSync(provider)) {
@@ -199,15 +200,24 @@ async function composeSqliteProvider(
           'wac',
         );
   io.stdout.write('Composing di-framework:sqlite provider...\n');
+  const compiler = namedImports ? deps.componentizeQjsPath() : undefined;
+  if (namedImports && !compiler)
+    throw new CommandFailure(
+      'WASMCLOUD_COMPILER_REQUIRED',
+      'Managed PostgreSQL requires componentize-qjs 0.4.4-di.3 or newer',
+      3,
+    );
   const result = await deps.runCaptured(
-    wac,
-    ['plug', '--plug', provider, project.outputPath, '-o', composed],
+    compiler ?? wac,
+    compiler
+      ? ['compose', project.outputPath, '--definition', provider, '-o', composed]
+      : ['plug', '--plug', provider, project.outputPath, '-o', composed],
     { cwd: project.projectRoot, env: { ...process.env, PATH: envPath } },
   );
   if (result.exitCode !== 0) {
     throw new CommandFailure(
       'WASMCLOUD_SQLITE_COMPOSE_FAILED',
-      `wac plug failed: ${result.stderr || result.stdout}`,
+      `SQLite composition failed: ${result.stderr || result.stdout}`,
       3,
       { application: project.applicationName, exitCode: result.exitCode },
     );
@@ -395,7 +405,12 @@ export async function buildComponent(
       requirement.package === 'di-framework:sqlite' && requirement.direction === 'import',
   );
   if (needsSqliteCompose) {
-    await composeSqliteProvider(project, deps, io);
+    await composeSqliteProvider(
+      project,
+      deps,
+      io,
+      finalRequirements.some((r) => r.namedImport),
+    );
   }
 
   await inspectComponentImports(

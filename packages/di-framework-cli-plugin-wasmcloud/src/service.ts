@@ -14,12 +14,13 @@ export const BACKING_SERVICE_KIND = 'BackingService';
 export const BACKING_SERVICE_RESOURCE = 'backingservices.platform.di-framework.dev';
 export const BACKING_SERVICE_CLASS_RESOURCE = 'backingserviceclasses.platform.di-framework.dev';
 
-export const SERVICE_TYPES = ['keyvalue', 'messaging'] as const;
+export const SERVICE_TYPES = ['keyvalue', 'messaging', 'postgres'] as const;
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 
 export const DEFAULT_SERVICE_CLASSES = {
   keyvalue: 'keyvalue-redis',
   messaging: 'messaging-nats',
+  postgres: 'postgres-dedicated',
 } as const satisfies Record<ServiceType, string>;
 
 export const DEFAULT_WAIT_TIMEOUT_MS = 120_000;
@@ -111,6 +112,7 @@ export function serviceTypeDiscoveryText(): string {
     'Supported resource types:',
     '  keyvalue    default class keyvalue-redis',
     '  messaging   default class messaging-nats',
+    '  postgres    default class postgres-dedicated',
     '',
     'Usage: di-framework wasmcloud service create <type> --name=<name> [--class=<class>]',
     'Discover classes: di-framework wasmcloud service classes',
@@ -232,8 +234,7 @@ export function parseServiceCreateArgs(args: readonly string[]): ServiceCreateOp
     }
     const timeoutOpt = matchOption(args, position, token, '--timeout');
     if (timeoutOpt) {
-      if (timeoutExplicit)
-        invalidUsage('Option may be provided only once: --timeout', '--timeout');
+      if (timeoutExplicit) invalidUsage('Option may be provided only once: --timeout', '--timeout');
       timeoutExplicit = true;
       const parsed = Number(timeoutOpt.value);
       if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -922,7 +923,7 @@ export async function runWasmcloudServiceClasses(
       : SERVICE_TYPES.map((type) => ({
           name: DEFAULT_SERVICE_CLASSES[type],
           type,
-          provider: type === 'keyvalue' ? 'redis' : 'nats',
+          provider: type === 'postgres' ? 'postgres' : type === 'keyvalue' ? 'redis' : 'nats',
           default: true,
         }));
 

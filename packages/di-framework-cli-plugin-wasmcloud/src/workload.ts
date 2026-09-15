@@ -8,6 +8,7 @@ import { type DiscoveredCronJob, discoverScheduledJobs } from './cron';
 import type { WasmcloudDeps } from './deps';
 import { hostInterfacesFromRequirements, renderHostInterfacesYaml } from './host-interface';
 import { captureKubectl, runKubectl } from './kubernetes';
+import { applyManagedBindings, cleanupManagedBindings } from './managed-bindings';
 import type { WasmcloudProject } from './project';
 import { asWitIdentifier } from './project';
 import { type DiscoveredQueueHandler, discoverQueueHandlers, isQueueWorkerProject } from './queues';
@@ -408,6 +409,7 @@ export async function applyWorkload(
       direction: 'export',
       source: 'workload-service',
     });
+  const associations = await applyManagedBindings(project, connection, bindings, deps);
   await assertStorageOwnership(project, connection, deps, {
     hasActors,
     hasQueues: queueHandlers.length > 0,
@@ -433,6 +435,7 @@ export async function applyWorkload(
   io.stdout.write(`Applying WorkloadDeployment ${name} in ${connection.namespace}...\n`);
   await runKubectl(deps, connection, ['apply', '-f', path], project.projectRoot);
   await waitForReady(project, connection, deps, io);
+  await cleanupManagedBindings(project, connection, associations, deps);
   return path;
 }
 
@@ -503,9 +506,12 @@ export async function deleteWorkload(
       '-l',
       `app.kubernetes.io/name=${name}`,
       '--ignore-not-found',
+      '--wait=true',
+      '--timeout=180s',
     ],
     project.projectRoot,
   );
+  await cleanupManagedBindings(project, connection, new Set(), deps);
 }
 
 export async function waitForReady(

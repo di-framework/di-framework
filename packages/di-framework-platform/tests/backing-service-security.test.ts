@@ -210,7 +210,7 @@ describe('BackingService and ServiceBinding admission helpers', () => {
     expect(
       validateBackingServiceAdmission({
         namespace: 'di-tenant-alpha',
-        type: 'postgres',
+        type: 'unknown',
       }),
     ).toMatch(/type must be/);
     expect(

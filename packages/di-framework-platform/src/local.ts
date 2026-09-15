@@ -8,6 +8,7 @@ import * as command from '@pulumi/command';
 import * as k8s from '@pulumi/kubernetes';
 import * as pulumi from '@pulumi/pulumi';
 import { createPlatform } from './index';
+import { localPathStorageResources } from './local-storage';
 
 const K0S_IMAGE = 'docker.io/k0sproject/k0s:v1.36.3-k0s.2';
 const REGISTRY_NODE_PORT = 30500;
@@ -118,6 +119,8 @@ const provider = new k8s.Provider(
   { kubeconfig: kubeconfigContents, enableServerSideApply: true },
   { dependsOn: [kubeconfigCommand] },
 );
+
+new k8s.yaml.ConfigGroup('local-path-storage', { objs: localPathStorageResources }, { provider });
 
 const platform = createPlatform({
   provider,

@@ -52,7 +52,7 @@ export function ownershipLabelsAllowed(
 
 export function approvedClassName(className: string | undefined, type: string): boolean {
   if (className === undefined || className === '') {
-    return type === 'keyvalue' || type === 'messaging';
+    return type === 'keyvalue' || type === 'messaging' || type === 'postgres';
   }
   return APPROVED_CLASS_NAMES.has(className);
 }
@@ -72,6 +72,7 @@ export interface HostInterfaceLike {
   name?: string;
   namespace?: string;
   package?: string;
+  interfaces?: string[];
   configFrom?: { name: string }[];
   secretFrom?: { name: string }[];
   config?: Record<string, unknown>;
@@ -96,6 +97,21 @@ export function hostInterfaceAllowed(hostInterface: HostInterfaceLike): boolean 
   }
 
   if (namespace !== 'wasmcloud') return false;
+  if (packageName === 'postgres') {
+    if (configKeys.length > 0 || configFrom.length > 0) return false;
+    if (!hasName)
+      return (
+        secretFrom.length === 0 &&
+        hostInterface.interfaces?.length === 1 &&
+        hostInterface.interfaces[0] === 'types'
+      );
+    const iface = hostInterface.interfaces?.length === 1 ? hostInterface.interfaces[0] : undefined;
+    if (iface !== 'query' && iface !== 'prepared') return false;
+    const suffix = `-${iface}`;
+    if (!hostInterface.name?.endsWith(suffix)) return false;
+    const name = hostInterface.name.slice(0, -suffix.length);
+    return !!name && secretFrom.length === 1 && secretFrom[0]?.name === `di-binding-${name}-creds`;
+  }
   if (packageName !== 'keyvalue' && packageName !== 'messaging') return false;
   if (!configFrom.every((reference) => isManagedConfigName(reference.name))) return false;
   if (!secretFrom.every((reference) => isManagedSecretName(reference.name))) return false;
@@ -138,8 +154,8 @@ export function validateBackingServiceAdmission(input: {
 }): string | undefined {
   if (!ownershipLabelsAllowed(input.labels, input.namespace, input.installation))
     return 'BackingService ownership labels must derive from the tenant namespace';
-  if (input.type !== 'keyvalue' && input.type !== 'messaging')
-    return 'BackingService type must be keyvalue or messaging';
+  if (input.type !== 'keyvalue' && input.type !== 'messaging' && input.type !== 'postgres')
+    return 'BackingService type must be keyvalue, messaging or postgres';
   if (!approvedClassName(input.className, input.type))
     return 'BackingService className must be an approved platform default (fail-closed)';
   return undefined;
@@ -156,8 +172,12 @@ export function validateServiceBindingAdmission(input: {
     return 'ServiceBinding ownership labels must derive from the tenant namespace';
   if (!serviceNameSameNamespace(input.serviceName))
     return 'ServiceBinding serviceName must reference a BackingService in the same namespace';
-  if (input.capability !== 'keyvalue' && input.capability !== 'messaging')
-    return 'ServiceBinding capability must be keyvalue or messaging';
+  if (
+    input.capability !== 'keyvalue' &&
+    input.capability !== 'messaging' &&
+    input.capability !== 'postgres'
+  )
+    return 'ServiceBinding capability must be keyvalue, messaging or postgres';
   return undefined;
 }
 
@@ -265,8 +285,17 @@ function hostInterfaceAdmissionExpression(): string {
       h.config.all(k, k in ['subscriptions', 'consumer_group', 'max_in_flight', 'admission_wait'])) &&
     (${defaultMessaging} || ${namedMessaging}))`;
 
+  const postgres = `(h['namespace'] == 'wasmcloud' && h['package'] == 'postgres' &&
+    !${hasInlineConfig} && ${noConfigReferences} && has(h.interfaces) &&
+    ((${unnamed} && h.interfaces == ['types'] && ${noSecretReferences}) ||
+      (${named} && ${hasSecretReferences} && size(h.secretFrom) == 1 &&
+        ((h.interfaces == ['query'] && h.name.endsWith('-query') && size(h.name) > 6 &&
+          h.secretFrom[0].name == '${BINDING_CONFIG_PREFIX}' + h.name.substring(0, size(h.name) - 6) + '-creds') ||
+         (h.interfaces == ['prepared'] && h.name.endsWith('-prepared') && size(h.name) > 9 &&
+          h.secretFrom[0].name == '${BINDING_CONFIG_PREFIX}' + h.name.substring(0, size(h.name) - 9) + '-creds')))))`;
+
   return `!has(variables.w.hostInterfaces) || variables.w.hostInterfaces.all(h,
-    (${wasi} || ${keyvalue} || ${messaging}))`;
+    (${wasi} || ${keyvalue} || ${messaging} || ${postgres}))`;
 }
 
 function workloadPolicy(): AdmissionPolicy {
@@ -308,7 +337,7 @@ function workloadPolicy(): AdmissionPolicy {
       {
         expression: hostInterfaceAdmissionExpression(),
         message:
-          'Only wasi http/config or wasmcloud keyvalue/messaging with controller-managed di-bs-/di-binding- (or transitional di-tenant-stock / default NATS) references are allowed',
+          'Only wasi http/config or wasmcloud keyvalue/messaging/postgres with controller-managed di-bs-/di-binding- (or transitional di-tenant-stock / default NATS) references are allowed',
       },
     ],
   };
@@ -340,10 +369,10 @@ function backendConfigPolicy(namespace: string): AdmissionPolicy {
 
 function ownershipLabelsExpression(installation: string): string {
   return `!has(object.metadata.labels) || (
-    (!has(object.metadata.labels['${OWNER}'])) &&
-    (!has(object.metadata.labels['${TENANT}']) ||
+    (!('${OWNER}' in object.metadata.labels)) &&
+    (!('${TENANT}' in object.metadata.labels) ||
       object.metadata.namespace == 'di-tenant-' + object.metadata.labels['${TENANT}']) &&
-    (!has(object.metadata.labels['${INSTALLATION}']) ||
+    (!('${INSTALLATION}' in object.metadata.labels) ||
       object.metadata.labels['${INSTALLATION}'] == '${installation}')
   )`;
 }
@@ -376,9 +405,9 @@ export function admissionResources(installation: string, namespace: string): Res
           message: 'BackingService ownership labels must derive from the tenant namespace',
         },
         {
-          expression: `object.spec.type in ['keyvalue', 'messaging'] &&
+          expression: `object.spec.type in ['keyvalue', 'messaging', 'postgres'] &&
             (!has(object.spec.className) || object.spec.className == '' ||
-              object.spec.className in ['${DEFAULT_CLASS_NAMES.keyvalue}', '${DEFAULT_CLASS_NAMES.messaging}'])`,
+              object.spec.className in ['${DEFAULT_CLASS_NAMES.keyvalue}', '${DEFAULT_CLASS_NAMES.messaging}', '${DEFAULT_CLASS_NAMES.postgres}'])`,
           message:
             'BackingService className must be an approved platform default (fail-closed for unknown classes)',
         },
@@ -394,11 +423,11 @@ export function admissionResources(installation: string, namespace: string): Res
           message: 'ServiceBinding ownership labels must derive from the tenant namespace',
         },
         {
-          expression: `object.spec.capability in ['keyvalue', 'messaging'] &&
+          expression: `object.spec.capability in ['keyvalue', 'messaging', 'postgres'] &&
             object.spec.serviceName != '' &&
             !object.spec.serviceName.contains('/') && !object.spec.serviceName.contains('.')`,
           message:
-            'ServiceBinding must reference a same-namespace BackingService with capability keyvalue or messaging',
+            'ServiceBinding must reference a same-namespace BackingService with capability keyvalue, messaging or postgres',
         },
       ],
     },

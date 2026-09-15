@@ -35,19 +35,25 @@ describe('backing-service install', () => {
   it('seeds platform-owned Redis keyvalue and NATS messaging default classes', () => {
     const seeds = defaultBackingServiceClasses();
     expect(seeds.map((c) => c.name).sort()).toEqual(
-      [DEFAULT_CLASS_NAMES.keyvalue, DEFAULT_CLASS_NAMES.messaging].sort(),
+      [
+        DEFAULT_CLASS_NAMES.keyvalue,
+        DEFAULT_CLASS_NAMES.messaging,
+        DEFAULT_CLASS_NAMES.postgres,
+      ].sort(),
     );
     for (const seed of seeds) {
       expect(seed.visibility).toBe('AllTenants');
       expect(seed.default).toBe(true);
-      expect(seed.provider).toBe(seed.type === 'keyvalue' ? 'redis' : 'nats');
+      expect(seed.provider).toBe(
+        seed.type === 'postgres' ? 'postgres' : seed.type === 'keyvalue' ? 'redis' : 'nats',
+      );
     }
   });
 
   it('resolves configurable class seeds from Pulumi-like config', () => {
     expect(
       resolveBackingServiceClasses({ getBoolean: () => undefined, getObject: () => undefined }),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       resolveBackingServiceClasses({
         getBoolean: () => false,
@@ -68,7 +74,9 @@ describe('backing-service install', () => {
       ],
     });
     expect(custom.find((c) => c.name === 'keyvalue-redis')?.defaults).toEqual({ memory: '256Mi' });
-    expect(custom.map((c) => c.name).sort()).toEqual(['keyvalue-redis', 'messaging-nats'].sort());
+    expect(custom.map((c) => c.name).sort()).toEqual(
+      ['keyvalue-redis', 'messaging-nats', 'postgres-dedicated'].sort(),
+    );
   });
 
   it('extends controller ClusterRole rules for backing-service resources', () => {
@@ -96,6 +104,7 @@ describe('backing-service install', () => {
       'resources',
       'backing-service-reconcile',
       'service-binding-reconcile',
+      'postgres',
       'controller',
     ]);
     for (const name of CONTROLLER_SCRIPT_MODULES) {
@@ -106,6 +115,7 @@ describe('backing-service install', () => {
       'backing-service-reconcile.js',
       'backing-services.js',
       'controller.js',
+      'postgres.js',
       'resources.js',
       'service-binding-reconcile.js',
     ]);

@@ -212,3 +212,41 @@ export default async (request: Request): Promise<Response> => {
     }
   }, 120_000);
 });
+
+it('preserves two named PostgreSQL interface pairs through real compilation and SQLite composition', async () => {
+  const qjs = patchedComponentizeQjsPath();
+  if (!qjs || !existsSync(join(DIST_ASSETS, 'http-adapter.js'))) return;
+  const root = makeProject();
+  mkdirSync(join(root, 'node_modules', '@di-framework'), { recursive: true });
+  symlinkSync(WASMCLOUD_PKG, join(root, 'node_modules', '@di-framework', 'wasmcloud'), 'dir');
+  writeFileSync(
+    join(root, 'src/bindings.ts'),
+    `import {Postgres,WasmCloudBinding} from '@di-framework/wasmcloud';
+@WasmCloudBinding('orders-db',{serviceName:'orders'}) export class Orders extends Postgres {}
+@WasmCloudBinding('audit-db',{serviceName:'audit'}) export class Audit extends Postgres {}`,
+  );
+  writeFileSync(
+    join(root, 'src/app.ts'),
+    `import {Orders,Audit} from './bindings';
+export default async () => Response.json([await new Orders().query('SELECT 1'), await new Audit().query('SELECT 2')]);`,
+  );
+  const deps = {
+    ...DEFAULT_DEPS,
+    cwd: () => root,
+    componentizeQjsPath: () => qjs,
+    assetsDirectory: () => DIST_ASSETS,
+  };
+  await buildComponent(loadProject(root), captureIo().io, deps);
+  const inspected = await deps.runCaptured(
+    deps.nodeBinaryPath() ?? 'node',
+    [deps.jcoCliPath(), 'wit', join(root, 'dist/demo-app.wasm')],
+    { cwd: root },
+  );
+  expect(inspected.exitCode).toBe(0);
+  for (const name of ['orders-db', 'audit-db'])
+    for (const iface of ['query', 'prepared'])
+      expect(inspected.stdout).toContain(
+        `import ${name}-${iface}: wasmcloud:postgres/${iface}@0.2.0`,
+      );
+  expect(inspected.stdout).not.toContain('import di-framework:sqlite/database');
+}, 60_000);

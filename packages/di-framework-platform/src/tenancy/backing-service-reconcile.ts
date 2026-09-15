@@ -34,6 +34,7 @@ const TRANSITIONAL_REDIS = 'di-redis';
 
 /** Fixed provider images — never tenant-supplied. */
 const PROVIDER_RUNTIME: Record<BackingProvider, { image: string; port: number; args: string[] }> = {
+  postgres: { image: 'postgres:18.3-bookworm', port: 5432, args: [] },
   redis: {
     image: 'redis:7.4.5-alpine',
     port: 6379,
@@ -244,7 +245,7 @@ function backendDeploymentResources(opts: {
         strategy: { type: 'Recreate' },
         selector: { matchLabels: { app } },
         template: {
-          metadata: { labels: { app } },
+          metadata: { labels: { ...opts.labels, app, [`${GROUP}/component`]: 'backing-service' } },
           spec: {
             automountServiceAccountToken: false,
             containers: [
@@ -295,6 +296,8 @@ function backingServiceResources(
   cfg: ControllerConfig,
   sizing: SizingParameters,
 ): Resource[] {
+  if (cls.spec.provider === 'postgres')
+    throw new Error('PostgreSQL requires the dedicated credentials and PVC reconciliation helpers');
   const resourceName = backingServiceResourceName(service.metadata.name);
   if (RESERVED_RUNTIME_NAMES.has(resourceName))
     throw new Error(`Refusing to provision reserved name ${resourceName}`);

@@ -3,6 +3,8 @@ import { defineMetadata, getOwnMetadata } from '@di-framework/core/container';
 export const WASMCLOUD_BINDING_KEY = 'di:wasmcloud-binding';
 
 export type WasmCloudBindingOptions = {
+  /** Same-namespace managed PostgreSQL BackingService. */
+  serviceName?: string;
   interfaces?: string[];
   secretFrom?: string;
   configFrom?: string;

@@ -40,3 +40,19 @@ describe('WasmCloudBinding', () => {
     }).toThrow(/secretFrom/);
   });
 });
+
+it('validates managed PostgreSQL metadata and rejects conflicting configuration', () => {
+  class Database extends Postgres {}
+  WasmCloudBinding('orders-db', { serviceName: 'orders' })(Database);
+  expect(getBindingMetadata(Database)?.options.serviceName).toBe('orders');
+  expect(() => WasmCloudBinding('orders-db', { serviceName: 'bad/name' })(Database)).toThrow(
+    'serviceName',
+  );
+  expect(() =>
+    WasmCloudBinding('orders-db', { serviceName: 'orders', config: {} })(Database),
+  ).toThrow('manual');
+  expect(() => WasmCloudBinding('orders-db', { serviceName: 'orders' })(class {})).toThrow(
+    'only for Postgres',
+  );
+  expect(() => WasmCloudBinding('a'.repeat(55), { serviceName: 'orders' })(Database)).toThrow('54');
+});

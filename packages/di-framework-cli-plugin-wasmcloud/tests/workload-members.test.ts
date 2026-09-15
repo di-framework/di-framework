@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BINDING_CATALOG } from '../../di-framework-wasmcloud/src/catalog';
 import { buildComponent, requirementsForProject } from '../src/build';
 import { runWasmcloudDeploy } from '../src/deploy';
 import { hostInterfacesFromRequirements } from '../src/host-interface';
@@ -233,4 +234,29 @@ export const sync = WorkloadService({ path: '/sync', subscriptions: ['warehouse.
       config: { subscriptions: 'warehouse.stock' },
     });
   });
+});
+
+it('discovers managed PostgreSQL imports for inferred workload members', () => {
+  const project = member(
+    'orders',
+    "export const read = WorkloadComponent({ path: '/orders' })(() => {});",
+  );
+  writeFileSync(
+    join(project.projectRoot, 'src/bindings.ts'),
+    `import { Postgres, WasmCloudBinding } from '@di-framework/wasmcloud';
+@WasmCloudBinding('orders-db', { serviceName: 'orders' }) export class Orders extends Postgres {}`,
+  );
+  const catalog = join(project.projectRoot, 'catalog.json');
+  writeFileSync(catalog, JSON.stringify(BINDING_CATALOG));
+  const requirements = requirementsForProject(
+    project,
+    fakeDeps({
+      cwd: project.projectRoot,
+      resolutions: { '@di-framework/wasmcloud/catalog.json': catalog },
+    }),
+  );
+  expect(requirements.filter((r) => r.namedImport).map((r) => r.instanceName)).toEqual([
+    'orders-db-query',
+    'orders-db-prepared',
+  ]);
 });

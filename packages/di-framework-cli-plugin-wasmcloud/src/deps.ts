@@ -138,7 +138,13 @@ export function nodeCompatibilityPlugin(
   const aliases = wasmcloudNodeEnv().alias;
   return {
     name: 'di-framework-component-runtime',
-    resolveId(source: string) {
+    resolveId(source: string, importer?: string) {
+      if (
+        resolvedGuestsPath &&
+        importer === resolvedGuestsPath &&
+        /^[a-z][a-z0-9-]*-(query|prepared)$/.test(source)
+      )
+        return { id: source, external: true };
       if (source === 'virtual:di-framework-application') return entryPath;
       if (source === 'virtual:di-framework-wasmcloud-runtime') {
         return join(
@@ -193,7 +199,7 @@ export function componentizeQjsPlatformPackageName(): string {
 export function componentizeQjsPlatformPackageVersion(
   platform = process.platform,
   arch = process.arch,
-  wrapperVersion = '0.4.4-di.2',
+  wrapperVersion = '0.4.4-di.3',
 ): string {
   return `${wrapperVersion}-${platform}-${arch}`;
 }

@@ -167,7 +167,7 @@ describe('service argument parsing', () => {
     expect(isBackingServiceName('stock')).toBe(true);
     expect(isBackingServiceName('Stock')).toBe(false);
     expect(isBackingServiceName('a'.repeat(41))).toBe(false);
-    expect(SERVICE_TYPES).toEqual(['keyvalue', 'messaging']);
+    expect(SERVICE_TYPES).toEqual(['keyvalue', 'messaging', 'postgres']);
     expect(DEFAULT_SERVICE_CLASSES.keyvalue).toBe('keyvalue-redis');
   });
 });

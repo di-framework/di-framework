@@ -87,15 +87,15 @@ export function createWasmcloudCommand(deps: WasmcloudDeps = DEFAULT_DEPS): Comm
       },
       service: {
         description:
-          'Create and manage BackingService custom resources (keyvalue/messaging) via the cluster API',
+          'Create and manage BackingService custom resources (keyvalue/messaging/postgres) via the cluster API',
         children: {
           create: {
             description: 'Create a BackingService custom resource for an approved capability type',
             usage:
-              'di-framework wasmcloud service create <keyvalue|messaging> --name=<name> [--class=<class>] [--target <name>] [--namespace <ns>] [--wait]',
+              'di-framework wasmcloud service create <keyvalue|messaging|postgres> --name=<name> [--class=<class>] [--target <name>] [--namespace <ns>] [--wait]',
             options: [
               '--name <name>  Required BackingService metadata.name (DNS label, max 40)',
-              '--class <name>  Optional approved BackingServiceClass (defaults: keyvalue-redis, messaging-nats)',
+              '--class <name>  Optional approved BackingServiceClass (defaults: keyvalue-redis, messaging-nats, postgres-dedicated)',
               '--memory <qty>  Optional sizing parameter (Kubernetes quantity)',
               '--storage <qty>  Optional sizing parameter (Kubernetes quantity)',
               '--cpu <qty>  Optional sizing parameter (Kubernetes quantity)',

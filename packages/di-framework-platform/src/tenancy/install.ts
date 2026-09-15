@@ -17,6 +17,7 @@ export const CONTROLLER_SCRIPT_MODULES = [
   'resources',
   'backing-service-reconcile',
   'service-binding-reconcile',
+  'postgres',
   'controller',
 ] as const;
 
@@ -101,8 +102,15 @@ export function controllerClusterRoleRules(): ControllerClusterRoleRule[] {
         'services',
         'resourcequotas',
         'secrets',
+        'persistentvolumeclaims',
       ],
       verbs: ['get', 'list', 'watch', 'create', 'patch', 'update', 'delete'],
+    },
+    { apiGroups: [''], resources: ['pods'], verbs: ['get', 'list', 'watch'] },
+    {
+      apiGroups: ['storage.k8s.io'],
+      resources: ['storageclasses'],
+      verbs: ['get', 'list', 'watch'],
     },
     {
       apiGroups: ['runtime.wasmcloud.dev'],
