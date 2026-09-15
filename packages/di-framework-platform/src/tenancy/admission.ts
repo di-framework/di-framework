@@ -99,7 +99,13 @@ export function hostInterfaceAllowed(h: HostInterfaceLike): boolean {
 
   if (ns === 'wasmcloud' && (pkg === 'keyvalue' || pkg === 'messaging')) {
     const configFromOk =
-      configFrom.length === 0 || configFrom.every((c) => isManagedConfigName(c.name));
+      pkg === 'keyvalue'
+        ? configFrom.length === 0 || configFrom.every((c) => isManagedConfigName(c.name))
+        : configFrom.length === 0 ||
+          configFrom.every(
+            (c) =>
+              c.name.startsWith(BS_CONFIG_PREFIX) || c.name.startsWith(BINDING_CONFIG_PREFIX),
+          );
     const secretFromOk =
       secretFrom.length === 0 || secretFrom.every((s) => isManagedSecretName(s.name));
     if (!configFromOk || !secretFromOk) return false;
