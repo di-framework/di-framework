@@ -367,6 +367,11 @@ describe('backing service reconciliation', () => {
       status: 'False',
       reason: 'Provisioning',
     });
+    // A pending Deployment must not prevent the remaining resources from being applied.
+    expect(api.objects.has('/api/v1/namespaces/di-runtime-alpha/services/di-bs-stock')).toBe(true);
+    expect(api.objects.has('/api/v1/namespaces/di-runtime-alpha/secrets/di-bs-stock-conn')).toBe(
+      true,
+    );
   });
 
   it('reconciles BackingServices during tick alongside tenants', async () => {
@@ -471,6 +476,35 @@ describe('backing service reconciliation', () => {
     expect(stock.metadata.finalizers).not.toContain(FINALIZER);
   });
 
+  it.each([
+    { observedGeneration: 0, replicas: 0 },
+    { observedGeneration: 1, replicas: 1 },
+  ])('retains the finalizer until scale-down is observed: %j', async (deploymentStatus) => {
+    const { api, controller, t, classes } = prepare();
+    const stock = backingService('stock', 'keyvalue');
+    api.seed(stock);
+    await controller.reconcileBackingService(stock, t, classes);
+    stock.metadata.deletionTimestamp = new Date().toISOString();
+    stock.spec.deletionPolicy = 'Retain';
+    api.seed(stock);
+
+    const original = api.call.bind(api);
+    api.call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
+      const result = await original<T>(method, path, body);
+      if (method === 'PATCH' && path.includes('/deployments/di-bs-stock')) {
+        (result as Resource).status = deploymentStatus;
+      }
+      return result;
+    };
+    await controller.reconcileBackingService(stock, t, classes);
+    expect(stock.metadata.finalizers).toContain(FINALIZER);
+    expect(stock.status?.conditions?.[0]).toMatchObject({ status: 'False', reason: 'Deleting' });
+
+    api.call = original;
+    await controller.reconcileBackingService(stock, t, classes);
+    expect(stock.metadata.finalizers).not.toContain(FINALIZER);
+  });
+
   it('releases finalizer on deletion even if the BackingServiceClass was deleted', async () => {
     const { api, controller, t, classes } = prepare();
     const stock = backingService('stock', 'keyvalue');
@@ -484,6 +518,29 @@ describe('backing service reconciliation', () => {
     // BackingServiceClass is removed from cluster
     await controller.reconcileBackingService(stock, t, []);
     expect(stock.metadata.finalizers).not.toContain(FINALIZER);
+  });
+
+  it('handles deletion reported while adding the finalizer before provisioning resources', async () => {
+    const { api, controller, t, classes } = prepare();
+    const stock = backingService('stock', 'keyvalue');
+    stock.spec.deletionPolicy = 'Delete';
+    api.seed(stock);
+    const original = api.call.bind(api);
+    api.call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
+      const result = await original<T>(method, path, body);
+      if (method === 'PATCH' && path === key(stock)) {
+        (result as BackingService).metadata.deletionTimestamp = '2026-09-15T00:00:00Z';
+      }
+      return result;
+    };
+
+    await controller.reconcileBackingService(stock, t, classes);
+    expect(stock.metadata.finalizers).not.toContain(FINALIZER);
+    expect(
+      api.operations.some(
+        ({ method, path }) => method === 'PATCH' && path.includes('/namespaces/di-runtime-alpha/'),
+      ),
+    ).toBe(false);
   });
 
   it('deletes owned infra when deletionPolicy is Delete', async () => {
