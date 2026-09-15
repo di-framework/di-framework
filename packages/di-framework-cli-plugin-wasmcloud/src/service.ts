@@ -149,6 +149,7 @@ export function parseServiceCreateArgs(args: readonly string[]): ServiceCreateOp
   let context: string | undefined;
   let wait = false;
   let timeoutMs = DEFAULT_WAIT_TIMEOUT_MS;
+  let timeoutExplicit = false;
   const parameters: ServiceSizingParameters = {};
 
   for (let position = 0; position < args.length; position++) {
@@ -231,6 +232,9 @@ export function parseServiceCreateArgs(args: readonly string[]): ServiceCreateOp
     }
     const timeoutOpt = matchOption(args, position, token, '--timeout');
     if (timeoutOpt) {
+      if (timeoutExplicit)
+        invalidUsage('Option may be provided only once: --timeout', '--timeout');
+      timeoutExplicit = true;
       const parsed = Number(timeoutOpt.value);
       if (!Number.isFinite(parsed) || parsed <= 0) {
         invalidUsage('--timeout must be a positive number of seconds', timeoutOpt.value);

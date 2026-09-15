@@ -591,6 +591,9 @@ describe('service edge cases for coverage', () => {
     expect(() =>
       parseServiceCreateArgs(['keyvalue', '--deletion-policy=Retain', '--deletion-policy=Delete']),
     ).toThrow(/only once/);
+    expect(() => parseServiceCreateArgs(['keyvalue', '--timeout=30', '--timeout=60'])).toThrow(
+      /only once/,
+    );
     expect(() => parseServiceNameArgs(['a', 'b'], 'wasmcloud service get')).toThrow(
       /Unexpected argument/,
     );
