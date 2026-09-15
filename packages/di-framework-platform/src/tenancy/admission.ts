@@ -112,6 +112,9 @@ export function hostInterfaceAllowed(hostInterface: HostInterfaceLike): boolean 
     );
   }
 
+  // The transitional stock ConfigMap is reserved for keyvalue.
+  if (configFrom.some((reference) => reference.name === STOCK_CONFIG_NAME)) return false;
+
   // Messaging accepts subscription options, never inline backend URLs.
   const subscriptionOptions = [
     'subscriptions',

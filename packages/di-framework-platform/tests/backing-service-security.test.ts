@@ -278,6 +278,14 @@ describe('hostInterfaceAllowed edge denials', () => {
     expect(
       hostInterfaceAllowed({
         namespace: 'wasmcloud',
+        package: 'messaging',
+        name: 'sync',
+        configFrom: [{ name: STOCK_CONFIG_NAME }],
+      }),
+    ).toBe(false);
+    expect(
+      hostInterfaceAllowed({
+        namespace: 'wasmcloud',
         package: 'keyvalue',
         name: 'stock',
         configFrom: [{ name: STOCK_CONFIG_NAME }],
