@@ -465,6 +465,42 @@ describe('service binding reconciliation', () => {
     expect(receive.metadata.finalizers).not.toContain(FINALIZER);
   });
 
+  it('survives revocation of the elected owner when peers remain', async () => {
+    const { api, controller, t } = prepare();
+    const stock = readyService('stock', 'keyvalue');
+    const receive = binding('receive', {
+      serviceName: 'stock',
+      bindingName: 'stock',
+      capability: 'keyvalue',
+      workloadName: 'receive',
+    });
+    const take = binding('take', {
+      serviceName: 'stock',
+      bindingName: 'stock',
+      capability: 'keyvalue',
+      workloadName: 'take',
+    });
+    api.seed(stock);
+    api.seed(receive);
+    api.seed(take);
+    await controller.reconcileServiceBinding(receive, t, stock, [receive, take]);
+    await controller.reconcileServiceBinding(take, t, stock, [receive, take]);
+
+    // Delete the elected owner 'receive' first
+    receive.metadata.deletionTimestamp = new Date().toISOString();
+    api.seed(receive);
+    await controller.reconcileServiceBinding(receive, t, stock, [receive, take]);
+    expect(api.objects.has('/api/v1/namespaces/di-tenant-alpha/configmaps/di-binding-stock')).toBe(
+      true,
+    );
+
+    // Surviving peer 'take' must reconcile and adopt the projection successfully
+    await controller.reconcileServiceBinding(take, t, stock, [receive, take]);
+    expect(take.status?.conditions?.[0]?.status).toBe('True');
+    const cm = api.objects.get('/api/v1/namespaces/di-tenant-alpha/configmaps/di-binding-stock');
+    expect(cm?.metadata.labels?.[OWNER]).toBe('take-uid');
+  });
+
   it('projects credentials only into a Secret and never into status', async () => {
     const { api, controller, t } = prepare();
     const stock = readyService('stock', 'keyvalue');

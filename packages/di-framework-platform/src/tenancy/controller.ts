@@ -13,6 +13,7 @@ import {
 import {
   type BackingService,
   type BackingServiceClass,
+  BINDING,
   type Condition,
   type ControllerConfig,
   FINALIZER,
@@ -176,14 +177,28 @@ export class Controller {
       if (!(error instanceof ApiError && error.code === 404)) throw error;
     }
   }
-  private async ensure(value: Resource, bootstrap = false): Promise<Resource> {
+  private async ensure(
+    value: Resource,
+    bootstrap = false,
+    adoptSameBinding = false,
+  ): Promise<Resource> {
     const existing = await this.get<Resource>(location(value));
     const labels = existing?.metadata.labels;
+    const sameBinding =
+      adoptSameBinding &&
+      labels?.[INSTALLATION] === this.cfg.installation &&
+      labels?.[TENANT] === value.metadata.labels?.[TENANT] &&
+      labels?.[BINDING] === value.metadata.labels?.[BINDING];
     if (
       existing &&
       (labels?.[INSTALLATION] !== this.cfg.installation ||
         (labels?.[OWNER] !== value.metadata.labels?.[OWNER] &&
-          !(bootstrap && !labels?.[OWNER] && labels?.[TENANT] === value.metadata.labels?.[TENANT])))
+          !(
+            bootstrap &&
+            !labels?.[OWNER] &&
+            labels?.[TENANT] === value.metadata.labels?.[TENANT]
+          ) &&
+          !sameBinding))
     ) {
       throw new Error(
         `Refusing to adopt ${value.kind} ${value.metadata.namespace ?? ''}/${value.metadata.name}`,
@@ -456,13 +471,9 @@ export class Controller {
           status?.observedGeneration === updated.metadata.generation &&
           (status?.replicas ?? 0) === 0;
       }
-      await this.status(
-        service,
-        false,
-        'Deleting',
-        'Stopping backing service workloads',
-        { runtimeNamespace: n.runtimeNamespace },
-      );
+      await this.status(service, false, 'Deleting', 'Stopping backing service workloads', {
+        runtimeNamespace: n.runtimeNamespace,
+      });
       if (stopped) await this.finalizer(service, false);
       return;
     }
@@ -638,7 +649,7 @@ export class Controller {
       owner.metadata.uid,
       serviceConn,
     );
-    for (const value of desired) await this.ensure(value);
+    for (const value of desired) await this.ensure(value, false, true);
 
     // Drop stale credential Secret when credentials were rotated away.
     if (!desired.some((r) => r.kind === 'Secret')) {
