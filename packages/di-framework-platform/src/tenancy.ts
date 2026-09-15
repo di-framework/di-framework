@@ -1,9 +1,13 @@
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import * as path from 'node:path';
 import * as k8s from '@pulumi/kubernetes';
 import type * as pulumi from '@pulumi/pulumi';
 import { admissionResources } from './tenancy/admission';
+import {
+  type BackingServiceClassDeclaration,
+  controllerClusterRoleRules,
+  controllerScriptHash,
+  defaultBackingServiceClasses,
+  loadControllerScripts,
+} from './tenancy/install';
 import {
   crds,
   INSTALLATION,
@@ -15,6 +19,18 @@ import {
   VERSION,
   validName,
 } from './tenancy/resources';
+
+export {
+  type BackingClassConfig,
+  type BackingServiceClassDeclaration,
+  CONTROLLER_SCRIPT_MODULES,
+  type ControllerClusterRoleRule,
+  controllerClusterRoleRules,
+  controllerScriptHash,
+  defaultBackingServiceClasses,
+  loadControllerScripts,
+  resolveBackingServiceClasses,
+} from './tenancy/install';
 
 export interface TenantDeclaration extends TenantSpec {
   name: string;
@@ -85,21 +101,29 @@ export function installTenancy(args: {
   hostImagePullPolicy: string;
   insecureRegistry?: boolean;
   storageRoot?: string;
-}): { tenants: k8s.apiextensions.CustomResource[]; users: k8s.apiextensions.CustomResource[] } {
+  /** When omitted, seeds platform defaults (`keyvalue-redis`, `messaging-nats`). */
+  backingServiceClasses?: BackingServiceClassDeclaration[];
+}): {
+  tenants: k8s.apiextensions.CustomResource[];
+  users: k8s.apiextensions.CustomResource[];
+  backingServiceClasses: k8s.apiextensions.CustomResource[];
+} {
   const { installation, namespace, provider } = args;
   function createCustom(
     value: Resource,
     dependsOn: pulumi.Resource[] = args.dependsOn,
+    opts: { retainOnDelete?: boolean } = {},
   ): k8s.apiextensions.CustomResource {
     return new k8s.apiextensions.CustomResource(
       `${value.kind.toLowerCase()}-${value.metadata.name}`,
       value,
-      { provider, dependsOn },
+      { provider, dependsOn, retainOnDelete: opts.retainOnDelete },
     );
   }
   function create(
     value: Resource,
     dependsOn: pulumi.Resource[] = args.dependsOn,
+    opts: { retainOnDelete?: boolean } = {},
   ): pulumi.CustomResource {
     const name = `${value.kind.toLowerCase()}-${value.metadata.name}`;
     if (value.apiVersion === 'v1') {
@@ -117,17 +141,15 @@ export function installTenancy(args: {
         );
       throw new Error(`Unsupported core resource ${value.kind}`);
     }
-    return createCustom(value, dependsOn);
+    return createCustom(value, dependsOn, opts);
   }
-  const definitions = crds.map((value) => create(value));
+  // CRDs use retainOnDelete so Pulumi destroy/upgrade does not cascade-delete tenant
+  // BackingService / ServiceBinding instances if the cluster outlives the stack.
+  // Full volume/data retention for BackingService is owned by #453.
+  const definitions = crds.map((value) => create(value, args.dependsOn, { retainOnDelete: true }));
   const policies = admissionResources(installation, namespace).map((value) => create(value));
-  const script = Object.fromEntries(
-    ['resources', 'controller'].map((name) => [
-      `${name}.js`,
-      readFileSync(path.join(__dirname, 'tenancy', `${name}.js`), 'utf8'),
-    ]),
-  );
-  const scriptHash = createHash('sha256').update(JSON.stringify(script)).digest('hex');
+  const script = loadControllerScripts();
+  const scriptHash = controllerScriptHash(script);
   const serviceAccount = create({
     apiVersion: 'v1',
     kind: 'ServiceAccount',
@@ -137,52 +159,7 @@ export function installTenancy(args: {
     apiVersion: 'rbac.authorization.k8s.io/v1',
     kind: 'ClusterRole',
     metadata: { name: `${installation}-controller` },
-    rules: [
-      {
-        apiGroups: ['platform.di-framework.dev'],
-        resources: [
-          'tenants',
-          'users',
-          'tenants/status',
-          'users/status',
-          'tenants/finalizers',
-          'users/finalizers',
-        ],
-        verbs: ['get', 'list', 'watch', 'patch', 'update'],
-      },
-      {
-        apiGroups: [''],
-        resources: [
-          'namespaces',
-          'serviceaccounts',
-          'configmaps',
-          'services',
-          'resourcequotas',
-          'secrets',
-        ],
-        verbs: ['get', 'list', 'watch', 'create', 'patch', 'update', 'delete'],
-      },
-      {
-        apiGroups: ['runtime.wasmcloud.dev'],
-        resources: ['hosts'],
-        verbs: ['get', 'list', 'watch'],
-      },
-      {
-        apiGroups: ['apps'],
-        resources: ['deployments'],
-        verbs: ['get', 'list', 'watch', 'create', 'patch', 'update', 'delete'],
-      },
-      {
-        apiGroups: ['networking.k8s.io'],
-        resources: ['networkpolicies'],
-        verbs: ['get', 'list', 'watch', 'create', 'patch', 'update', 'delete'],
-      },
-      {
-        apiGroups: ['rbac.authorization.k8s.io'],
-        resources: ['roles', 'rolebindings'],
-        verbs: ['get', 'list', 'watch', 'create', 'patch', 'update', 'delete', 'bind', 'escalate'],
-      },
-    ],
+    rules: controllerClusterRoleRules(),
   });
   const binding = create(
     {
@@ -239,6 +216,21 @@ export function installTenancy(args: {
       ],
     },
   });
+  const classSeeds = args.backingServiceClasses ?? defaultBackingServiceClasses();
+  const backingServiceClasses = classSeeds.map(({ name, ...spec }) =>
+    createCustom(
+      {
+        apiVersion: VERSION,
+        kind: 'BackingServiceClass',
+        metadata: {
+          name,
+          labels: { [INSTALLATION]: installation },
+        },
+        spec,
+      } as Resource,
+      definitions,
+    ),
+  );
   const controller = create(
     {
       apiVersion: 'apps/v1',
@@ -296,7 +288,7 @@ export function installTenancy(args: {
         },
       },
     },
-    [...definitions, ...policies, binding, scripts, network],
+    [...definitions, ...policies, ...backingServiceClasses, binding, scripts, network],
   );
   const tenants = args.tenants.map(({ name, ...spec }) =>
     createCustom(
@@ -328,5 +320,5 @@ export function installTenancy(args: {
       [controller, ...tenants],
     ),
   );
-  return { tenants, users };
+  return { tenants, users, backingServiceClasses };
 }

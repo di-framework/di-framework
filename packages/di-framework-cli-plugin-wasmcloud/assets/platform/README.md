@@ -180,7 +180,9 @@ changes belong in the shared package rather than copied tenancy files.
 
 Backing-service CRD contracts (`BackingServiceClass`, `BackingService`,
 `ServiceBinding`), authorization boundaries, and runtime feasibility notes live in
-the `@di-framework/platform` package README.
+the `@di-framework/platform` package README. Platform install seeds the approved
+default classes (`keyvalue-redis`, `messaging-nats`), retains CRDs on stack destroy,
+and ships compiled controller scripts including `backing-services.js`.
 
 For projects generated before this extraction, preserve the existing project name,
 backend, stack, and configuration when updating the import/dependency. Review

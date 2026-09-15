@@ -33,8 +33,9 @@ Managed Kubesolo enables it by default. This mode preserves the existing CNI and
 service proxy ([upstream guide](https://www.kube-router.io/docs/user-guide/)).
 
 Kubeconfig contents are a secret Pulumi input. The controller's compiled JavaScript
-is loaded from this package into a ConfigMap; there is no copied TypeScript
-implementation in generated projects, runtime transpilation, or custom image build.
+(`backing-services.js`, `resources.js`, `controller.js`) is loaded from this package
+into a ConfigMap; there is no copied TypeScript implementation in generated projects,
+runtime transpilation, or custom image build.
 
 Tenant storage currently uses local host paths. The caller must select a persistent
 storage root and a cluster that enforces NetworkPolicy and the generated admission
@@ -65,13 +66,39 @@ reviewing any local customization.
 
 ## Backing services
 
-This section defines the v1alpha1 contract for independently requestable application
-backing services. Installation (#449), Redis/NATS reconciliation (#450), binding
-projection (#451), RBAC/admission (#452), retention (#453), and CLI (#454) implement
-this contract; they must not invent a conflicting shape.
+Platform install ships the three backing-service CRDs (`BackingServiceClass`,
+`BackingService`, `ServiceBinding`) with OpenAPI schemas and status subresources,
+seeds the approved default classes, and extends the controller ClusterRole to
+watch those resources. Redis/NATS reconciliation (#450), binding projection (#451),
+tenant RBAC/admission for bindings (#452), retention (#453), and CLI (#454) build
+on this install path; they must not invent a conflicting shape.
 
 Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
-platform `crds` export from `src/tenancy/resources.ts`.
+platform `crds` export from `src/tenancy/resources.ts`. Class seeding and controller
+script packaging live in `src/tenancy/install.ts`.
+
+### Installation ownership and lifecycle
+
+- **CRDs** are installed before any class or tenant CRs. Pulumi marks CRDs
+  `retainOnDelete` so destroying or upgrading the stack does not cascade-delete
+  existing `BackingService` / `ServiceBinding` instances if the cluster remains.
+  Full volume/data retention for services is owned by #453.
+- **Default classes** `keyvalue-redis` and `messaging-nats` are platform-owned
+  cluster CRs (installation label, `visibility: AllTenants`, `default: true`).
+  Override with Pulumi config `backingServiceClasses`, or disable seeding with
+  `seedDefaultBackingClasses: false`.
+- **Controller scripts** are TypeScript sources compiled by `tsc` into
+  `dist/tenancy/*.js` (`backing-services`, `resources`, `controller`). Pulumi
+  loads those compiled files into the controller ConfigMap; `resources.js`
+  requires `./backing-services` at runtime. There is no runtime `transpileModule`
+  or PLATFORM_TS_ASSETS allowlist for these modules.
+- Scheduler/control-plane NATS remains distinct from application messaging
+  `BackingService` instances.
+
+### Contract
+
+This section defines the v1alpha1 shape for independently requestable application
+backing services.
 
 ### Resources (`platform.di-framework.dev/v1alpha1`)
 

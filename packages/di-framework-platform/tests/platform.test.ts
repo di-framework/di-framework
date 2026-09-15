@@ -76,6 +76,25 @@ test('published implementation provisions tenancy and isolation for an existing 
   const scripts = resources.find((r) => r.name === 'configmap-di-platform-controller')?.inputs.data;
   expect(scripts['controller.js']).toContain('class Controller');
   expect(scripts['resources.js']).toContain('tenantResources');
+  expect(scripts['backing-services.js']).toContain('BackingServiceClass');
+  expect(scripts['resources.js']).toMatch(/require\(["'].\/backing-services["']\)/);
+  expect(resources.some((r) => r.name === 'backingserviceclass-keyvalue-redis')).toBe(true);
+  expect(resources.some((r) => r.name === 'backingserviceclass-messaging-nats')).toBe(true);
+  const role = resources.find((r) => r.name === 'clusterrole-di-test-controller');
+  expect(role?.inputs.rules[0].resources).toEqual(
+    expect.arrayContaining([
+      'backingserviceclasses',
+      'backingservices',
+      'servicebindings',
+      'backingserviceclasses/status',
+      'backingservices/finalizers',
+    ]),
+  );
+  expect(
+    resources.some(
+      (r) => r.name === 'customresourcedefinition-backingserviceclasses.platform.di-framework.dev',
+    ),
+  ).toBe(true);
   expect(resources.find((r) => r.name === 'http-entrypoint')?.inputs.spec.ports[0].nodePort).toBe(
     30080,
   );
