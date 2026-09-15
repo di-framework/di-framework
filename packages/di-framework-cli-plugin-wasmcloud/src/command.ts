@@ -7,6 +7,13 @@ import { runWasmcloudDev } from './dev';
 import { runWasmcloudDoctor } from './doctor';
 import { runWasmcloudPlatformDeploy, runWasmcloudPlatformDestroy } from './platform';
 import { runWasmcloudPlatformInit } from './platform-init';
+import {
+  runWasmcloudServiceClasses,
+  runWasmcloudServiceCreate,
+  runWasmcloudServiceDelete,
+  runWasmcloudServiceGet,
+  runWasmcloudServiceList,
+} from './service';
 
 export function createWasmcloudCommand(deps: WasmcloudDeps = DEFAULT_DEPS): CommandNode {
   return {
@@ -77,6 +84,75 @@ export function createWasmcloudCommand(deps: WasmcloudDeps = DEFAULT_DEPS): Comm
         description: 'Check the project and local toolchain for wasmCloud readiness',
         usage: 'di-framework wasmcloud doctor',
         run: ({ args, io }) => runWasmcloudDoctor(args, io, deps),
+      },
+      service: {
+        description:
+          'Create and manage BackingService custom resources (keyvalue/messaging) via the cluster API',
+        children: {
+          create: {
+            description: 'Create a BackingService custom resource for an approved capability type',
+            usage:
+              'di-framework wasmcloud service create <keyvalue|messaging> --name=<name> [--class=<class>] [--target <name>] [--namespace <ns>] [--wait]',
+            options: [
+              '--name <name>  Required BackingService metadata.name (DNS label, max 40)',
+              '--class <name>  Optional approved BackingServiceClass (defaults: keyvalue-redis, messaging-nats)',
+              '--memory <qty>  Optional sizing parameter (Kubernetes quantity)',
+              '--storage <qty>  Optional sizing parameter (Kubernetes quantity)',
+              '--cpu <qty>  Optional sizing parameter (Kubernetes quantity)',
+              '--deletion-policy <Retain|Delete>  Retention when the CR is deleted (default Retain)',
+              '--target <name>  Deployment target from di-framework.deploy.toml',
+              '--namespace <ns>  Override the target namespace',
+              '--context <name>  Override the kubeconfig context',
+              '--wait  Wait until the Ready condition is True',
+              '--timeout <seconds>  Wait timeout in seconds (default: 120)',
+            ],
+            run: ({ args, io }) => runWasmcloudServiceCreate(args, io, deps),
+          },
+          list: {
+            description: 'List BackingService resources in the target namespace',
+            usage: 'di-framework wasmcloud service list [--target <name>] [--namespace <ns>]',
+            options: [
+              '--target <name>  Deployment target from di-framework.deploy.toml',
+              '--namespace <ns>  Override the target namespace',
+              '--context <name>  Override the kubeconfig context',
+            ],
+            run: ({ args, io }) => runWasmcloudServiceList(args, io, deps),
+          },
+          get: {
+            description:
+              'Show Ready status, type, class, and endpoint summary for a BackingService',
+            usage: 'di-framework wasmcloud service get <name> [--target <name>] [--namespace <ns>]',
+            options: [
+              '--target <name>  Deployment target from di-framework.deploy.toml',
+              '--namespace <ns>  Override the target namespace',
+              '--context <name>  Override the kubeconfig context',
+            ],
+            run: ({ args, io }) => runWasmcloudServiceGet(args, io, deps),
+          },
+          delete: {
+            description:
+              'Delete a BackingService custom resource (controller retention/in-use rules still apply)',
+            usage:
+              'di-framework wasmcloud service delete <name> [--target <name>] [--namespace <ns>]',
+            options: [
+              '--target <name>  Deployment target from di-framework.deploy.toml',
+              '--namespace <ns>  Override the target namespace',
+              '--context <name>  Override the kubeconfig context',
+            ],
+            run: ({ args, io }) => runWasmcloudServiceDelete(args, io, deps),
+          },
+          classes: {
+            description:
+              'Discover approved BackingServiceClass resources (falls back to platform defaults)',
+            usage: 'di-framework wasmcloud service classes [--target <name>]',
+            options: [
+              '--target <name>  Deployment target from di-framework.deploy.toml',
+              '--namespace <ns>  Override the target namespace',
+              '--context <name>  Override the kubeconfig context',
+            ],
+            run: ({ args, io }) => runWasmcloudServiceClasses(args, io, deps),
+          },
+        },
       },
     },
   };

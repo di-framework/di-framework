@@ -16,6 +16,27 @@ export function readOptionValue(args: readonly string[], position: number, optio
   return value;
 }
 
+/**
+ * Match `--flag value` or `--flag=value`. Returns the value and the next index to continue from
+ * (the index of the value token for space form, or the flag token itself for `=` form).
+ */
+export function matchOption(
+  args: readonly string[],
+  position: number,
+  token: string,
+  option: string,
+): { value: string; consumedThrough: number } | undefined {
+  if (token === option) {
+    return { value: readOptionValue(args, position + 1, option), consumedThrough: position + 1 };
+  }
+  if (token.startsWith(`${option}=`)) {
+    const value = token.slice(option.length + 1);
+    if (value.length === 0) invalidUsage(`Missing value for ${option}`, option);
+    return { value, consumedThrough: position };
+  }
+  return undefined;
+}
+
 /** jco runs under real Node.js only; Bun lacks the node internals it uses. */
 export function requireNodeBinary(nodeBinaryPath: string | undefined): string {
   if (nodeBinaryPath === undefined) {

@@ -128,6 +128,25 @@ export {
   registryReferenceHost,
   registryUsesPlainHttp,
 } from './registry';
+export {
+  BACKING_SERVICE_API_VERSION,
+  BACKING_SERVICE_KIND,
+  BACKING_SERVICE_RESOURCE,
+  buildBackingServiceManifest,
+  DEFAULT_SERVICE_CLASSES,
+  isBackingServiceName,
+  isServiceType,
+  parseServiceCreateArgs,
+  parseServiceListArgs,
+  parseServiceNameArgs,
+  runWasmcloudServiceClasses,
+  runWasmcloudServiceCreate,
+  runWasmcloudServiceDelete,
+  runWasmcloudServiceGet,
+  runWasmcloudServiceList,
+  SERVICE_TYPES,
+  summarizeService,
+} from './service';
 export { resolveConnection, resolveTarget } from './target';
 export { renderWashDevYaml, writeWashDevConfig } from './wash-dev';
 export {
