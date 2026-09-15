@@ -77,11 +77,11 @@ describe('backing service CRDs', () => {
       { enum?: string[]; additionalProperties?: boolean }
     >;
     expect(spec.required).toEqual(['type', 'provider', 'visibility']);
-    expect(properties.type?.enum).toEqual(['keyvalue', 'messaging']);
-    expect(properties.provider?.enum).toEqual(['redis', 'nats']);
+    expect(properties.type?.enum).toEqual(['keyvalue', 'messaging', 'postgres']);
+    expect(properties.provider?.enum).toEqual(['redis', 'nats', 'postgres']);
     expect(properties.visibility?.enum).toEqual(['AllTenants', 'SelectedTenants']);
-    expect(properties.defaults?.additionalProperties).toBe(false);
-    expect(properties.parametersSchema?.additionalProperties).toBe(false);
+    expect(properties.defaults?.additionalProperties).toBeUndefined();
+    expect(properties.parametersSchema?.additionalProperties).toBeUndefined();
     const rules = rulesOf(spec);
     expect(rules.some((r) => r.includes('self.type == oldSelf.type'))).toBe(true);
     expect(rules.some((r) => r.includes('self.provider == oldSelf.provider'))).toBe(true);
@@ -95,7 +95,7 @@ describe('backing service CRDs', () => {
     const spec = schemaFor('BackingService').openAPIV3Schema.properties.spec;
     const properties = spec.properties as Record<string, Record<string, unknown>>;
     expect(spec.required).toEqual(['type']);
-    expect(properties.parameters?.additionalProperties).toBe(false);
+    expect(properties.parameters?.additionalProperties).toBeUndefined();
     expect(properties.deletionPolicy).toEqual({
       type: 'string',
       enum: ['Retain', 'Delete'],
@@ -111,7 +111,7 @@ describe('backing service CRDs', () => {
     const spec = root.properties.spec;
     expect(spec.required).toEqual(['serviceName', 'bindingName', 'capability']);
     const capability = (spec.properties as Record<string, { enum?: string[] }>).capability;
-    expect(capability?.enum).toEqual(['keyvalue', 'messaging']);
+    expect(capability?.enum).toEqual(['keyvalue', 'messaging', 'postgres']);
     expect(root['x-kubernetes-validations']?.some((v) => v.rule.includes('serviceName'))).toBe(
       true,
     );
@@ -135,9 +135,9 @@ describe('backing service CRDs', () => {
       }
     ).properties;
     expect(Object.keys(endpointProps).sort()).toEqual(['capability', 'host', 'port']);
-    expect((serviceStatus.endpoint as { additionalProperties: boolean }).additionalProperties).toBe(
-      false,
-    );
+    expect(
+      (serviceStatus.endpoint as { additionalProperties: boolean }).additionalProperties,
+    ).toBeUndefined();
   });
 });
 
@@ -146,6 +146,7 @@ describe('backing service helpers', () => {
     expect(DEFAULT_CLASS_NAMES).toEqual({
       keyvalue: 'keyvalue-redis',
       messaging: 'messaging-nats',
+      postgres: 'postgres-dedicated',
     });
     expect(defaultClassName('keyvalue')).toBe('keyvalue-redis');
     expect(resolveClassName({ type: 'messaging' })).toBe('messaging-nats');
@@ -166,7 +167,7 @@ describe('backing service helpers', () => {
     ).toBeUndefined();
     expect(
       validateClassSpec({ type: 'keyvalue', provider: 'nats', visibility: 'AllTenants' }),
-    ).toBe('provider must match type (keyvalue+redis or messaging+nats)');
+    ).toBe('provider must match type (keyvalue+redis, messaging+nats or postgres+postgres)');
     expect(
       validateClassSpec({ type: 'messaging', provider: 'nats', visibility: 'SelectedTenants' }),
     ).toBe('allowedTenants is required when SelectedTenants');

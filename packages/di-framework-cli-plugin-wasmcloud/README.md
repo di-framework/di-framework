@@ -394,3 +394,15 @@ a host in its own namespace environment. Workload names and decorator paths rema
 to the implicit workload; they do not select user identity or Kubernetes namespaces.
 
 Generated platforms support declarative `tenants` and `users` in their Pulumi stack configuration. See [the generated platform guide](assets/platform/README.md#users-and-tenants) for CRDs, roles, token issuance, and lifecycle behavior.
+
+### Managed PostgreSQL (upcoming release)
+
+`di-framework wasmcloud service create postgres --name orders --wait` provisions
+a dedicated instance through the default `postgres-dedicated` class. A
+`@WasmCloudBinding('orders-db', { serviceName: 'orders' })` on a `Postgres` subclass
+selects it. Deployment validates references and waits for controller-managed
+ServiceBindings before applying the workload. Successful updates and workload
+deletion remove obsolete deployment-owned associations. Shared projections stay
+while other workloads use them.
+
+See [PostgreSQL storage, deletion, and recovery](../di-framework-platform/README.md#dedicated-postgresql-upcoming-release).

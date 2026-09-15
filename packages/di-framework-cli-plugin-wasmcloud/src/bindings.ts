@@ -35,6 +35,7 @@ export type BindingRecord = {
   name: string;
   kind: BindingKind;
   requirement: WitRequirement;
+  serviceName?: string;
   secretFrom?: string;
   configFrom?: string;
   config?: Record<string, string>;
@@ -251,6 +252,7 @@ export function parseBindingsFile(
     let bindingName: string | undefined;
     let options: {
       interfaces?: string[];
+      serviceName?: string;
       secretFrom?: string;
       configFrom?: string;
       config?: Record<string, string>;
@@ -277,10 +279,24 @@ export function parseBindingsFile(
         );
       }
       if (parsed !== undefined) {
+        if (parsed.serviceName !== undefined && typeof parsed.serviceName !== 'string')
+          bindingsFailure(
+            'WASMCLOUD_BINDING_INVALID_SERVICE',
+            'serviceName must be a string literal',
+          );
+        if (
+          parsed.serviceName !== undefined &&
+          ['config', 'configFrom', 'secretFrom'].some((key) => parsed[key] !== undefined)
+        )
+          bindingsFailure(
+            'WASMCLOUD_BINDING_INVALID_OPTIONS',
+            'serviceName cannot be combined with manual connection configuration',
+          );
         options = {
           interfaces: Array.isArray(parsed.interfaces)
             ? (parsed.interfaces as string[])
             : undefined,
+          serviceName: typeof parsed.serviceName === 'string' ? parsed.serviceName : undefined,
           secretFrom: typeof parsed.secretFrom === 'string' ? parsed.secretFrom : undefined,
           configFrom: typeof parsed.configFrom === 'string' ? parsed.configFrom : undefined,
           config:
@@ -322,6 +338,22 @@ export function parseBindingsFile(
       );
     }
     names.add(bindingName);
+    if (options.serviceName !== undefined) {
+      if (
+        kind !== 'Postgres' ||
+        !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(options.serviceName) ||
+        options.serviceName.length > 40
+      )
+        bindingsFailure(
+          'WASMCLOUD_BINDING_INVALID_SERVICE',
+          'serviceName requires Postgres and a DNS label of at most 40 characters',
+        );
+      if (bindingName.length > 54 || !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(bindingName))
+        bindingsFailure(
+          'WASMCLOUD_BINDING_INVALID_NAME',
+          'Managed PostgreSQL binding names must be DNS labels of at most 54 characters',
+        );
+    }
 
     const interfaces = options.interfaces ?? entry.interfaces;
     for (const iface of interfaces) {
@@ -358,9 +390,11 @@ export function parseBindingsFile(
         instanceName: entry.namedInstance ? bindingName : undefined,
         source: statement.name.text,
       },
-      secretFrom:
-        options.secretFrom ??
-        (entry.usesSecret ? defaultSecretName(applicationName, bindingName) : undefined),
+      serviceName: options.serviceName,
+      secretFrom: options.serviceName
+        ? `di-binding-${bindingName}-creds`
+        : (options.secretFrom ??
+          (entry.usesSecret ? defaultSecretName(applicationName, bindingName) : undefined)),
       configFrom: options.configFrom,
       config: options.config,
     });
@@ -394,8 +428,14 @@ export function discoverBindings(project: WasmcloudProject, deps: WasmcloudDeps)
 }
 
 export function requirementsFromBindings(bindings: readonly BindingRecord[]): WitRequirement[] {
-  return bindings.map((binding) => ({
-    ...binding.requirement,
-    interfaces: [...binding.requirement.interfaces],
-  }));
+  return bindings.flatMap((binding): WitRequirement[] => {
+    if (!binding.serviceName)
+      return [{ ...binding.requirement, interfaces: [...binding.requirement.interfaces] }];
+    return binding.requirement.interfaces.map((iface) => ({
+      ...binding.requirement,
+      interfaces: [iface],
+      instanceName: iface === 'types' ? undefined : `${binding.name}-${iface}`,
+      namedImport: iface !== 'types',
+    }));
+  });
 }

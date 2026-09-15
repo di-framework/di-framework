@@ -16,7 +16,7 @@ describe('runWasmcloudDestroy', () => {
     expect(invocations.every((invocation) => invocation.command !== 'pulumi')).toBe(true);
     expect(invocations.some((invocation) => invocation.args[0] === 'destroy')).toBe(false);
     const kubectl = invocations.filter((invocation) => invocation.command === 'kubectl');
-    expect(kubectl).toHaveLength(1);
+    expect(kubectl).toHaveLength(2);
     expect(kubectl[0]?.args).toEqual(
       expect.arrayContaining([
         'delete',

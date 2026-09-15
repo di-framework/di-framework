@@ -11,6 +11,15 @@ import {
   tenantNameFromNamespace,
 } from './backing-service-reconcile';
 import {
+  assertPostgresOwner,
+  ensurePostgresCredentials,
+  ensurePostgresStorage,
+  type PostgresApi,
+  postgresNames,
+  postgresReadiness,
+  postgresServingResources,
+} from './postgres';
+import {
   type BackingService,
   type BackingServiceClass,
   BINDING,
@@ -50,6 +59,8 @@ const plurals: Record<string, string> = {
   Service: 'services',
   ResourceQuota: 'resourcequotas',
   PersistentVolumeClaim: 'persistentvolumeclaims',
+  StorageClass: 'storageclasses',
+  Pod: 'pods',
   Deployment: 'deployments',
   Role: 'roles',
   RoleBinding: 'rolebindings',
@@ -439,9 +450,86 @@ export class Controller {
     const configuration = await this.resolveBackingServiceConfiguration(service, tenant, classes);
     if (!configuration) return;
     const { cls, sizing } = configuration;
+    if (service.spec.type === 'postgres') {
+      await this.reconcilePostgres(service, tenant, cls, sizing);
+      return;
+    }
     const desired = backingServiceResources(service, tenant, cls, this.cfg, sizing);
     const ready = await this.applyBackingServiceResources(desired);
     await this.updateBackingServiceStatus(service, tenant, cls, ready);
+  }
+
+  private async reconcilePostgres(
+    service: BackingService,
+    tenant: Tenant,
+    cls: BackingServiceClass,
+    sizing: SizingParameters,
+  ): Promise<void> {
+    const extra = {
+      runtimeNamespace: names(tenant.metadata.name).runtimeNamespace,
+      classRef: {
+        name: cls.metadata.name,
+        uid: cls.metadata.uid,
+        generation: cls.metadata.generation,
+      },
+      endpoint: endpointFor(service, tenant, 'postgres'),
+    };
+    const api: PostgresApi = {
+      get: (version, kind, namespace, name) =>
+        this.get<Resource>(`${collection(version, kind, namespace)}/${name}`),
+      ensure: (value) => this.ensure(value),
+      create: async (value) => {
+        try {
+          return await this.api.call<Resource>(
+            'POST',
+            collection(value.apiVersion, value.kind, value.metadata.namespace),
+            value,
+          );
+        } catch (error) {
+          if (!(error instanceof ApiError && error.code === 409)) throw error;
+          const existing = await this.get<Resource>(location(value));
+          if (!existing) throw error;
+          assertPostgresOwner(existing, service, this.cfg);
+          return existing;
+        }
+      },
+    };
+    try {
+      const credentials = await ensurePostgresCredentials(api, service, tenant, this.cfg);
+      const pvc = await ensurePostgresStorage(api, service, tenant, cls, this.cfg, sizing);
+      const deployments: Resource[] = [];
+      for (const value of postgresServingResources(
+        service,
+        tenant,
+        this.cfg,
+        sizing,
+        credentials,
+      )) {
+        const applied = await this.ensure(value);
+        if (value.kind === 'Deployment') deployments.push(applied);
+      }
+      const pods = await this.list<Resource>('v1', 'Pod', {
+        [INSTALLATION]: this.cfg.installation,
+        [OWNER]: service.metadata.uid!,
+      });
+      const state = postgresReadiness(pvc, deployments, pods);
+      await this.status(
+        service,
+        !tenant.spec.suspended && state.ready,
+        tenant.spec.suspended ? 'Suspended' : state.reason,
+        tenant.spec.suspended ? 'PostgreSQL stopped; PVC and credentials retained' : state.message,
+        extra,
+      );
+    } catch (error) {
+      // API errors omit response bodies; helper errors never contain credential values.
+      await this.status(
+        service,
+        false,
+        'Failed',
+        error instanceof Error ? error.message : 'PostgreSQL reconciliation failed',
+        extra,
+      );
+    }
   }
 
   private async reconcileBackingServiceDeletion(
@@ -453,6 +541,28 @@ export class Controller {
       [INSTALLATION]: this.cfg.installation,
       [OWNER]: ownerUid,
     };
+    const bindings = (await this.list<ServiceBinding>(VERSION, 'ServiceBinding', {})).filter(
+      (b) =>
+        b.metadata.namespace === service.metadata.namespace &&
+        b.spec.serviceName === service.metadata.name,
+    );
+    if (bindings.length > 0) {
+      await this.status(
+        service,
+        false,
+        'DeletionBlocked',
+        `Remove ServiceBindings before deletion: ${bindings
+          .map((b) => b.metadata.name)
+          .sort()
+          .join(', ')}`,
+        { ...service.status, runtimeNamespace },
+      );
+      return;
+    }
+    if (service.spec.type === 'postgres') {
+      await this.deletePostgres(service, labels, runtimeNamespace);
+      return;
+    }
     const deployments = await this.list<Resource>('apps/v1', 'Deployment', labels);
     const secrets = await this.list<Resource>('v1', 'Secret', labels);
     const services = await this.list<Resource>('v1', 'Service', labels);
@@ -468,6 +578,54 @@ export class Controller {
       runtimeNamespace,
     });
     if (stopped) await this.finalizer(service, false);
+  }
+
+  private async deletePostgres(
+    service: BackingService,
+    labels: Record<string, string>,
+    runtimeNamespace: string,
+  ): Promise<void> {
+    const deployments = await this.list<Resource>('apps/v1', 'Deployment', labels);
+    await this.stopBackingServiceDeployments(deployments);
+    const pods = await this.list<Resource>('v1', 'Pod', labels);
+    if (pods.length > 0) {
+      await this.status(
+        service,
+        false,
+        'Deleting',
+        'Waiting for PostgreSQL pods to terminate before releasing storage',
+        { runtimeNamespace },
+      );
+      return;
+    }
+    const kinds =
+      service.spec.deletionPolicy === 'Delete'
+        ? ['Deployment', 'Service', 'ConfigMap', 'Secret', 'PersistentVolumeClaim']
+        : ['Deployment', 'Service', 'ConfigMap'];
+    const remaining: Resource[] = [];
+    for (const kind of kinds) {
+      const resources = await this.list<Resource>(
+        kind === 'Deployment' ? 'apps/v1' : 'v1',
+        kind,
+        labels,
+      );
+      for (const resource of resources) {
+        if (resource.metadata.namespace !== runtimeNamespace)
+          throw new Error('PostgreSQL resource namespace mismatch');
+        await this.remove(resource);
+        if (await this.get<Resource>(location(resource))) remaining.push(resource);
+      }
+    }
+    await this.status(
+      service,
+      false,
+      'Deleting',
+      remaining.length
+        ? 'Waiting for serving resources and PVC deletion to complete'
+        : 'PostgreSQL stopped; requested retention policy applied',
+      { runtimeNamespace },
+    );
+    if (remaining.length === 0) await this.finalizer(service, false);
   }
 
   private async stopBackingServiceDeployments(deployments: Resource[]): Promise<boolean> {
@@ -653,7 +811,7 @@ export class Controller {
       data?: Record<string, string>;
       stringData?: Record<string, string>;
     }>(
-      `${collection('v1', 'Secret', n.runtimeNamespace)}/${backingServiceResourceName(binding.spec.serviceName)}-conn`,
+      `${collection('v1', 'Secret', n.runtimeNamespace)}/${service?.spec.type === 'postgres' ? postgresNames(service).connection : `${backingServiceResourceName(binding.spec.serviceName)}-conn`}`,
     );
     // Prefer stringData in tests; live Secrets expose base64 `data` — we only lift known cred keys.
     if (connSecret?.stringData) serviceConn = connSecret.stringData;
@@ -668,6 +826,16 @@ export class Controller {
       }
     }
 
+    if (binding.spec.capability === 'postgres' && !serviceConn?.url) {
+      await this.status(
+        binding,
+        false,
+        'CredentialsMissing',
+        'PostgreSQL connection Secret is missing; restore the runtime credentials',
+        { serviceRef: serviceRefBase },
+      );
+      return;
+    }
     const desired = serviceBindingResources(
       binding,
       tenant,

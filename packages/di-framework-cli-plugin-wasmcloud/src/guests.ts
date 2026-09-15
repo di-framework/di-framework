@@ -4,6 +4,7 @@ import type { BindingRecord } from './bindings';
 export const WASMCLOUD_GUESTS_GLOBAL = 'di-framework.wasmcloud.guests';
 
 function specifierFor(binding: BindingRecord, iface: string): string {
+  if (binding.serviceName && iface !== 'types') return `${binding.name}-${iface}`;
   return `${binding.requirement.package}/${iface}@${binding.requirement.version}`;
 }
 

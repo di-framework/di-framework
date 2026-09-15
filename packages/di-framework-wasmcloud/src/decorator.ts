@@ -1,3 +1,4 @@
+import { Postgres } from './bindings/postgres';
 import {
   defineBindingMetadata,
   isWitIdentifier,
@@ -18,6 +19,26 @@ export function WasmCloudBinding(name: string, options: WasmCloudBindingOptions 
       throw new Error(
         `WasmCloud binding name "${name}" must be a WIT identifier matching /^[a-z][a-z0-9-]*$/`,
       );
+    }
+    if (options.serviceName !== undefined) {
+      if (
+        typeof options.serviceName !== 'string' ||
+        !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(options.serviceName) ||
+        options.serviceName.length > 40
+      )
+        throw new Error('serviceName must be a DNS label of at most 40 characters');
+      if (!(ctor.prototype instanceof Postgres))
+        throw new Error('serviceName is currently supported only for Postgres');
+      if (
+        options.config !== undefined ||
+        options.configFrom !== undefined ||
+        options.secretFrom !== undefined
+      )
+        throw new Error('serviceName cannot be combined with manual connection configuration');
+      if (name.length > 54 || !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name))
+        throw new Error(
+          'Managed PostgreSQL binding names must be DNS labels of at most 54 characters',
+        );
     }
     const secretProblem = rejectsPlaintextSecret(options.config);
     if (secretProblem !== undefined) {

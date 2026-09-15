@@ -225,9 +225,9 @@ it('discovers nested actors, alternate decorators and entrypoints outside src', 
     expect(plugin.resolveId('virtual:di-framework-wasmcloud-actors')).toBe('/actors.js');
     const empty = nodeCompatibilityPlugin('/app.ts');
     expect(empty.resolveId('virtual:di-framework-wasmcloud-actors')).toContain('actors-empty');
-    expect(empty.load(empty.resolveId('virtual:di-framework-wasmcloud-actors')!)).toContain(
-      'actorRuntime = undefined',
-    );
+    expect(
+      empty.load(empty.resolveId('virtual:di-framework-wasmcloud-actors') as string),
+    ).toContain('actorRuntime = undefined');
     expect(nodeCompatibilityPlugin('/app.ts', undefined, undefined, {} as any)).toBeDefined();
     expect(nodeCompatibilityPlugin('/app.ts', undefined, {} as any)).toBeDefined();
     fs.mkdirSync(path.join(root, '.di-framework'));

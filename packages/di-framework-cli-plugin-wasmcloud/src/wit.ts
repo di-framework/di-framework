@@ -36,6 +36,7 @@ export type WitRequirement = {
   interfaces: string[];
   direction: WitDirection;
   instanceName?: string;
+  namedImport?: boolean;
   source: string;
 };
 
@@ -226,7 +227,10 @@ function importClause(requirement: AggregatedRequirement, iface: string): string
   const { namespace, name } = parsePackageId(requirement.package);
   const target = `${namespace}:${name}/${iface}@${requirement.version}`;
   if (requirement.direction === 'export') return `export ${target};`;
-  // qjs cannot encode `import name: pkg/iface` (cm-implements). Named instances
+  if (requirement.namedImport && requirement.instanceName)
+    return `import ${requirement.instanceName}: ${target};`;
+  // Legacy bindings retain their unlabeled imports.
+  // qjs previously could not encode `import name: pkg/iface` (cm-implements). Named instances
   // still appear on hostInterfaces; the guest world is unlabeled.
   return `import ${target};`;
 }

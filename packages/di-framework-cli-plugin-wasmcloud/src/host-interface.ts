@@ -54,11 +54,16 @@ function hostInterfaceFromRequirement(
     version: requirement.version,
     // Key-value resource types are linked internally, not advertised by the provider.
     interfaces:
-      requirement.package === 'wasmcloud:keyvalue'
+      requirement.package === 'wasmcloud:keyvalue' ||
+      (requirement.package === 'wasmcloud:postgres' &&
+        requirement.interfaces.every((iface) => iface === 'types'))
         ? requirement.interfaces.filter((iface) => iface !== 'types')
         : [...requirement.interfaces],
   };
-  if (requirement.instanceName !== undefined && !UNLABELED_HOST_PACKAGES.has(requirement.package)) {
+  if (
+    requirement.instanceName !== undefined &&
+    (requirement.namedImport || !UNLABELED_HOST_PACKAGES.has(requirement.package))
+  ) {
     entry.name = requirement.instanceName;
   }
   if (
@@ -92,8 +97,16 @@ export function hostInterfacesFromRequirements(
       const entry = hostInterfaceFromRequirement(requirement, options);
       const overlay =
         requirement.instanceName !== undefined
-          ? byName.get(requirement.instanceName)
+          ? (byName.get(requirement.instanceName) ??
+            (requirement.namedImport
+              ? overlays.find((candidate) => requirement.sources.includes(candidate.className))
+              : undefined))
           : overlays.find((candidate) => requirement.sources.includes(candidate.className));
+      if (
+        requirement.package === 'wasmcloud:postgres' &&
+        requirement.interfaces.every((iface) => iface === 'types')
+      )
+        return entry;
       if (overlay === undefined) return entry;
       if (overlay.config !== undefined) {
         entry.config = { ...entry.config, ...overlay.config };

@@ -103,7 +103,7 @@ describe('tenant deployment targets', () => {
         fakeDeps({ cwd: root, invocations }),
       );
       expectScope(invocations, root, user);
-      expect(invocations).toHaveLength(1);
+      expect(invocations).toHaveLength(2);
       expect(invocations[0]?.args).toContain('delete');
     }
   });

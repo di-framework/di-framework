@@ -1,6 +1,6 @@
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json | undefined };
-export type BackingCapability = 'keyvalue' | 'messaging';
-export type BackingProvider = 'redis' | 'nats';
+export type BackingCapability = 'keyvalue' | 'messaging' | 'postgres';
+export type BackingProvider = 'redis' | 'nats' | 'postgres';
 export type ClassVisibility = 'AllTenants' | 'SelectedTenants';
 export type DeletionPolicy = 'Retain' | 'Delete';
 export interface Metadata {
@@ -36,6 +36,7 @@ export interface BackingServiceClassSpec {
     cpu?: { min?: string; max?: string };
   };
   defaults?: SizingParameters;
+  storageClassName?: string;
   visibility: ClassVisibility;
   allowedTenants?: string[];
   default?: boolean;
@@ -100,15 +101,17 @@ const VERSION = `${GROUP}/v1alpha1`;
 const CLASS = `${GROUP}/class`;
 const SERVICE = `${GROUP}/service`;
 const BINDING = `${GROUP}/binding`;
-const CAPABILITIES = ['keyvalue', 'messaging'] as const;
-const PROVIDERS = ['redis', 'nats'] as const;
+const CAPABILITIES = ['keyvalue', 'messaging', 'postgres'] as const;
+const PROVIDERS = ['redis', 'nats', 'postgres'] as const;
 const DEFAULT_CLASS_NAMES = {
   keyvalue: 'keyvalue-redis',
   messaging: 'messaging-nats',
+  postgres: 'postgres-dedicated',
 } as const;
 const COMPATIBLE: Record<BackingCapability, BackingProvider> = {
   keyvalue: 'redis',
   messaging: 'nats',
+  postgres: 'postgres',
 };
 const CREDENTIAL_STATUS_KEYS = [
   'password',
@@ -143,12 +146,12 @@ const sizingProperties = {
 };
 const sizingObject = {
   type: 'object',
-  additionalProperties: false,
+
   properties: sizingProperties,
 };
 const parameterBound = {
   type: 'object',
-  additionalProperties: false,
+
   properties: { min: quantity, max: quantity },
 };
 const conditions = {
@@ -241,8 +244,8 @@ const classSpec = {
       message: 'spec.provider is immutable',
     },
     {
-      rule: `(self.type == 'keyvalue' && self.provider == 'redis') || (self.type == 'messaging' && self.provider == 'nats')`,
-      message: 'provider must match type (keyvalue+redis or messaging+nats)',
+      rule: `(self.type == 'keyvalue' && self.provider == 'redis') || (self.type == 'messaging' && self.provider == 'nats') || (self.type == 'postgres' && self.provider == 'postgres')`,
+      message: 'provider must match type (keyvalue+redis, messaging+nats or postgres+postgres)',
     },
     {
       rule: `self.visibility != 'SelectedTenants' || (has(self.allowedTenants) && size(self.allowedTenants) > 0)`,
@@ -254,7 +257,7 @@ const classSpec = {
     provider: { type: 'string', enum: [...PROVIDERS] },
     parametersSchema: {
       type: 'object',
-      additionalProperties: false,
+
       properties: {
         storage: parameterBound,
         memory: parameterBound,
@@ -262,6 +265,7 @@ const classSpec = {
       },
     },
     defaults: sizingObject,
+    storageClassName: { type: 'string', maxLength: 253 },
     visibility: { type: 'string', enum: ['AllTenants', 'SelectedTenants'] },
     allowedTenants: {
       type: 'array',
@@ -300,7 +304,7 @@ const bindingSpec = {
     serviceName: nameSchema,
     bindingName: bindingNameSchema,
     capability: { type: 'string', enum: [...CAPABILITIES] },
-    workloadName: { ...nameSchema },
+    workloadName: { ...bindingNameSchema },
   },
 };
 
@@ -314,7 +318,7 @@ const backingServiceCrds = [
   crd('BackingService', 'backingservices', 'Namespaced', serviceSpec, {
     classRef: {
       type: 'object',
-      additionalProperties: false,
+
       properties: {
         name: { type: 'string' },
         uid: { type: 'string' },
@@ -323,7 +327,7 @@ const backingServiceCrds = [
     },
     endpoint: {
       type: 'object',
-      additionalProperties: false,
+
       required: ['host', 'port', 'capability'],
       properties: {
         host: { type: 'string', minLength: 1 },
@@ -341,7 +345,7 @@ const backingServiceCrds = [
     {
       serviceRef: {
         type: 'object',
-        additionalProperties: false,
+
         properties: {
           name: { type: 'string' },
           uid: { type: 'string' },
@@ -387,10 +391,10 @@ function validateSizing(parameters: SizingParameters | undefined): string | unde
 }
 
 function validateClassSpec(spec: BackingServiceClassSpec): string | undefined {
-  if (!CAPABILITIES.includes(spec.type)) return 'type must be keyvalue or messaging';
-  if (!PROVIDERS.includes(spec.provider)) return 'provider must be redis or nats';
+  if (!CAPABILITIES.includes(spec.type)) return 'type must be keyvalue, messaging or postgres';
+  if (!PROVIDERS.includes(spec.provider)) return 'provider must be redis, nats or postgres';
   if (!compatibleProvider(spec.type, spec.provider))
-    return 'provider must match type (keyvalue+redis or messaging+nats)';
+    return 'provider must match type (keyvalue+redis, messaging+nats or postgres+postgres)';
   if (spec.visibility !== 'AllTenants' && spec.visibility !== 'SelectedTenants')
     return 'visibility must be AllTenants or SelectedTenants';
   if (spec.visibility === 'SelectedTenants') {
@@ -410,7 +414,7 @@ function validateClassSpec(spec: BackingServiceClassSpec): string | undefined {
 }
 
 function validateServiceSpec(spec: BackingServiceSpec): string | undefined {
-  if (!CAPABILITIES.includes(spec.type)) return 'type must be keyvalue or messaging';
+  if (!CAPABILITIES.includes(spec.type)) return 'type must be keyvalue, messaging or postgres';
   if (spec.className !== undefined && spec.className !== '' && !validDnsLabel(spec.className))
     return 'className must be a valid DNS label';
   if (
@@ -425,8 +429,9 @@ function validateServiceSpec(spec: BackingServiceSpec): string | undefined {
 function validateBindingSpec(spec: ServiceBindingSpec): string | undefined {
   if (!validDnsLabel(spec.serviceName)) return 'serviceName must be a valid DNS label';
   if (!validDnsLabel(spec.bindingName, 63)) return 'bindingName must be a valid DNS label';
-  if (!CAPABILITIES.includes(spec.capability)) return 'capability must be keyvalue or messaging';
-  if (spec.workloadName !== undefined && !validDnsLabel(spec.workloadName))
+  if (!CAPABILITIES.includes(spec.capability))
+    return 'capability must be keyvalue, messaging or postgres';
+  if (spec.workloadName !== undefined && !validDnsLabel(spec.workloadName, 63))
     return 'workloadName must be a valid DNS label';
   return undefined;
 }
@@ -479,9 +484,11 @@ function defaultClassSeed(type: BackingCapability): BackingServiceClassSpec {
     visibility: 'AllTenants',
     default: true,
     defaults:
-      type === 'keyvalue'
-        ? { storage: '1Gi', memory: '128Mi', cpu: '250m' }
-        : { storage: '1Gi', memory: '128Mi', cpu: '250m' },
+      type === 'postgres'
+        ? { storage: '1Gi', memory: '512Mi', cpu: '250m' }
+        : type === 'keyvalue'
+          ? { storage: '1Gi', memory: '128Mi', cpu: '250m' }
+          : { storage: '1Gi', memory: '128Mi', cpu: '250m' },
     parametersSchema: {
       storage: { min: '256Mi', max: '20Gi' },
       memory: { min: '64Mi', max: '2Gi' },

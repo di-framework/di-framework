@@ -83,3 +83,19 @@ class FakeUserDatabase extends UserDatabase {
 
 testContainer.registerValue(UserDatabase, new FakeUserDatabase());
 ```
+
+## Managed PostgreSQL (upcoming release)
+
+```ts
+@WasmCloudBinding('orders-db', { serviceName: 'orders' })
+export class OrdersDatabase extends Postgres {}
+```
+
+Create the service with `di-framework wasmcloud service create postgres --name orders --wait`.
+Deploying creates workload-owned ServiceBindings and waits for the controller's
+connection Secrets. Multiple bindings can share a service; separate services use
+independent credentials and PVCs. `serviceName` currently supports PostgreSQL only
+and cannot be combined with manual connection configuration.
+
+See [platform PostgreSQL lifecycle and recovery](../di-framework-platform/README.md#dedicated-postgresql-upcoming-release)
+for storage prerequisites, retention, and deletion.

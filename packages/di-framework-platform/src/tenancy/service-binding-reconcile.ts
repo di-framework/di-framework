@@ -46,6 +46,8 @@ function providerForCapability(capability: BackingCapability): BackingProvider {
 }
 
 function connectionUrl(endpoint: EndpointSummary, provider: BackingProvider): string {
+  if (provider === 'postgres')
+    throw new Error('PostgreSQL URLs must come from runtime credentials');
   if (provider === 'redis') return `redis://${endpoint.host}:${endpoint.port}`;
   return `nats://${endpoint.host}:${endpoint.port}`;
 }
@@ -59,6 +61,7 @@ function bindingConfigData(
   binding: ServiceBinding,
   endpoint: EndpointSummary,
 ): Record<string, string> {
+  if (binding.spec.capability === 'postgres') return {};
   const provider = providerForCapability(binding.spec.capability);
   const data: Record<string, string> = {
     backend: provider,
@@ -79,6 +82,8 @@ function bindingCredentialData(
   serviceConn: Record<string, string> | undefined,
 ): Record<string, string> | undefined {
   if (!serviceConn) return undefined;
+  if (_binding.spec.capability === 'postgres')
+    return serviceConn.url ? { url: serviceConn.url } : undefined;
   const creds: Record<string, string> = {};
   for (const key of ['password', 'username', 'token', 'creds', 'auth']) {
     const value = serviceConn[key];
@@ -152,22 +157,39 @@ function serviceBindingResources(
  * Hint for WorkloadDeployment hostInterfaces (#455 will wire this into deploy).
  * Named entries are required for independent Redis/NATS backend selection.
  */
-function bindingHostInterfaceProjection(
-  binding: Pick<ServiceBinding['spec'], 'bindingName' | 'capability'>,
-): {
+function bindingHostInterfaceProjection(binding: {
+  bindingName: string;
+  capability: 'keyvalue' | 'messaging';
+}): {
   name: string;
   namespace: 'wasmcloud';
-  package: 'keyvalue' | 'messaging';
+  package: BackingCapability;
   configFrom: { name: string }[];
   secretFrom?: { name: string }[];
 } {
-  const pkg = binding.capability === 'keyvalue' ? 'keyvalue' : 'messaging';
+  const pkg = binding.capability;
   return {
     name: binding.bindingName,
     namespace: 'wasmcloud',
     package: pkg,
     configFrom: [{ name: bindingProjectionName(binding.bindingName) }],
   };
+}
+
+/** PostgreSQL has one labeled host interface per callable interface. Types stay in WIT. */
+function bindingHostInterfaceProjections(
+  binding: Pick<ServiceBinding['spec'], 'bindingName' | 'capability'>,
+) {
+  if (binding.capability !== 'postgres')
+    return [bindingHostInterfaceProjection({ ...binding, capability: binding.capability })];
+  return ['query', 'prepared'].map((iface) => ({
+    name: `${binding.bindingName}-${iface}`,
+    namespace: 'wasmcloud' as const,
+    package: 'postgres' as const,
+    version: '0.2.0',
+    interfaces: [iface],
+    secretFrom: [{ name: bindingSecretName(binding.bindingName) }],
+  }));
 }
 
 function serviceIsReady(service: BackingService | undefined): boolean {
@@ -188,6 +210,16 @@ function resolveBindingService(
       error: `capability ${binding.spec.capability} does not match BackingService ${service.metadata.name} type ${service.spec.type}`,
     };
   }
+  if (service.metadata.deletionTimestamp) {
+    // Existing projections remain usable while deletion is blocked; new references fail closed.
+    if (
+      binding.status?.serviceRef?.uid !== service.metadata.uid ||
+      !binding.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True')
+    )
+      return {
+        error: `BackingService ${service.metadata.name} is deleting; new associations are refused`,
+      };
+  }
   const endpoint = service.status?.endpoint;
   if (!endpoint?.host || !endpoint.port) {
     return { error: `BackingService ${service.metadata.name} has no endpoint yet` };
@@ -197,7 +229,7 @@ function resolveBindingService(
       error: `BackingService endpoint capability ${endpoint.capability} does not match binding`,
     };
   }
-  if (!serviceIsReady(service)) {
+  if (!serviceIsReady(service) && !service.metadata.deletionTimestamp) {
     return { error: `BackingService ${service.metadata.name} is not Ready` };
   }
   return { service, endpoint };
@@ -253,6 +285,7 @@ export {
   bindingConfigData,
   bindingCredentialData,
   bindingHostInterfaceProjection,
+  bindingHostInterfaceProjections,
   bindingLabels,
   bindingProjectionName,
   bindingSecretName,
