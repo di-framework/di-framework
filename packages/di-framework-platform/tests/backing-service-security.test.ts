@@ -366,6 +366,29 @@ describe('tenant RBAC, quotas, admission policies, and network isolation', () =>
     expect(JSON.stringify(bindings).toLowerCase()).toContain('fail');
   });
 
+  it('emits CEL expressions with balanced parentheses', () => {
+    const policies = admissionResources('test', 'wasmcloud').filter(
+      (resource) => resource.kind === 'ValidatingAdmissionPolicy',
+    );
+    for (const policy of policies) {
+      const spec = policy.spec as {
+        variables?: { expression: string }[];
+        validations: { expression: string }[];
+      };
+      for (const { expression } of [...(spec.variables ?? []), ...spec.validations]) {
+        // String literals may contain parentheses that are not CEL syntax.
+        const syntax = expression.replace(/'[^']*'|"[^"]*"/g, '');
+        let depth = 0;
+        for (const character of syntax) {
+          if (character === '(') depth++;
+          if (character === ')') depth--;
+          expect(depth).toBeGreaterThanOrEqual(0);
+        }
+        expect(depth).toBe(0);
+      }
+    }
+  });
+
   it('isolates backing-service pods to hostgroup ingress while retaining port-forward RBAC', () => {
     const resources = tenantResources(tenant(), cfg, { data: { 'tls.key': 'x' } });
     const backendNet = resources.find(

@@ -33,9 +33,10 @@ Managed Kubesolo enables it by default. This mode preserves the existing CNI and
 service proxy ([upstream guide](https://www.kube-router.io/docs/user-guide/)).
 
 Kubeconfig contents are a secret Pulumi input. The controller's compiled JavaScript
-(`backing-services.js`, `resources.js`, `backing-service-reconcile.js`, `controller.js`)
-is loaded from this package into a ConfigMap; there is no copied TypeScript
-implementation in generated projects, runtime transpilation, or custom image build.
+(`backing-services.js`, `resources.js`, `backing-service-reconcile.js`,
+`service-binding-reconcile.js`, `controller.js`) is loaded from this package into a
+ConfigMap; there is no copied TypeScript implementation in generated projects,
+runtime transpilation, or custom image build.
 
 Tenant storage currently uses local host paths. The caller must select a persistent
 storage root and a cluster that enforces NetworkPolicy and the generated admission
@@ -71,16 +72,17 @@ Platform install ships the three backing-service CRDs (`BackingServiceClass`,
 seeds the approved default classes, and extends the controller ClusterRole to
 watch those resources. Tenant RBAC, ValidatingAdmissionPolicy, ResourceQuota
 counts, and backend NetworkPolicy isolation for bindings are enforced here (#452).
-Redis/NATS reconciliation (#450) is implemented on this install path. Binding
-projection (#451), retention (#453), and CLI (#454) build on it and must not invent
+Redis/NATS reconciliation (#450) and binding projection (#451) are implemented on
+this install path; retention (#453) and CLI (#454) build on it and must not invent
 a conflicting shape.
 
 Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
 platform `crds` export from `src/tenancy/resources.ts`. Class seeding and controller
-script packaging live in `src/tenancy/install.ts`. Admission helpers and policies live
-in `src/tenancy/admission.ts`. Per-tick Redis/NATS provisioning for independently
-requested services lives in `src/tenancy/backing-service-reconcile.ts` and is driven
-from the controller tick loop.
+script packaging live in `src/tenancy/install.ts`. Per-tick Redis/NATS provisioning
+for independently requested services lives in `src/tenancy/backing-service-reconcile.ts`
+and is driven from the controller tick loop. Admission helpers and policies live
+in `src/tenancy/admission.ts`. ServiceBinding projection lives in
+`src/tenancy/service-binding-reconcile.ts`.
 
 ### Controller-managed name prefixes (stable for #450/#451)
 
@@ -117,10 +119,11 @@ model, not a claim of developer-proof network isolation.
   `seedDefaultBackingClasses: false`.
 - **Controller scripts** are TypeScript sources compiled by `tsc` into
   `dist/tenancy/*.js` (`backing-services`, `resources`, `backing-service-reconcile`,
-  `controller`). Pulumi loads those compiled files into the controller ConfigMap;
-  `resources.js` requires `./backing-services` at runtime, and `controller.js`
-  requires both `resources.js` and `backing-service-reconcile.js`. There is no
-  runtime `transpileModule` or PLATFORM_TS_ASSETS allowlist for these modules.
+  `service-binding-reconcile`, `controller`). Pulumi loads those compiled files into
+  the controller ConfigMap; `resources.js` requires `./backing-services` at runtime,
+  and `controller.js` requires `resources.js`, `backing-service-reconcile.js`, and
+  `service-binding-reconcile.js`. There is no runtime `transpileModule` or
+  PLATFORM_TS_ASSETS allowlist for these modules.
 - Scheduler/control-plane NATS remains distinct from application messaging
   `BackingService` instances.
 - Per-tenant **runtime data-plane NATS** (`di-nats`, hostgroup `--data-nats-url`) is
@@ -235,6 +238,50 @@ Verified against the wasmCloud Host Interface Configuration Reference:
 **API implication:** each `ServiceBinding` resolves to a **named** hostInterface whose
 name is `spec.bindingName`. Controllers generate protected config references; do not
 rely on unnamed interfaces for multi-service selection (#451).
+
+### ServiceBinding projection (#451)
+
+The controller reconciles each `ServiceBinding` into a tenant-namespace ConfigMap
+named **`di-binding-<bindingName>`** (and optionally a Secret
+`di-binding-<bindingName>-creds` when credential keys exist on the service connection
+Secret). Admission (#452) already blocks tenant create/update/delete of these names.
+
+Projected ConfigMap keys (never copied into CR status or controller logs):
+
+| Capability | Keys | Notes |
+| --- | --- | --- |
+| `keyvalue` (Redis) | `backend=redis`, `url`, `prefix=<bindingName>:` | `prefix` is key layout only, not auth |
+| `messaging` (NATS) | `backend=nats`, `url` | Subscriptions / consumer groups stay on the workload |
+
+`url` is derived from the referenced `BackingService` `status.endpoint` (Ready required).
+Application messaging uses `di-bs-<service>` endpoints — **not** runtime data-plane
+`di-nats`. Independent NATS instances are selected by giving each binding a distinct
+`bindingName` and a named hostInterface that `configFrom`s the matching projection.
+
+**WorkloadDeployment shape** (CLI/deploy decorator wiring is #455; controllers provide
+the projected resources today):
+
+```yaml
+hostInterfaces:
+  - name: stock          # == ServiceBinding.spec.bindingName
+    namespace: wasmcloud
+    package: keyvalue
+    configFrom:
+      - name: di-binding-stock
+  - name: sync
+    namespace: wasmcloud
+    package: messaging
+    configFrom:
+      - name: di-binding-sync
+    # optional workload-owned subscription knobs in `config:` only
+```
+
+Multiple `ServiceBinding` objects may share one `bindingName` (warehouse components
+sharing `stock`) when they agree on `serviceName` + `capability`. Projection ownership
+is deterministic (lexicographically first live binding UID). Deleting the last peer
+removes the ConfigMap/Secret; credential rotation or endpoint changes update the
+projection on the next reconcile. Status is `Ready` \| `Failed` \| `Deleting` with
+`serviceRef` only — never passwords, tokens, or URLs with auth material.
 
 ### Distinguishing application vs control-plane dependencies
 

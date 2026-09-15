@@ -10,12 +10,13 @@ import {
 } from './resources';
 
 /** Controller ConfigMap modules. TypeScript emit does not bundle imports, so
- * `backing-services` and `backing-service-reconcile` must ship beside `resources` /
- * `controller` (which require them at runtime). */
+ * `backing-services`, `backing-service-reconcile`, and `service-binding-reconcile`
+ * must ship beside `resources` / `controller` (which require them at runtime). */
 export const CONTROLLER_SCRIPT_MODULES = [
   'backing-services',
   'resources',
   'backing-service-reconcile',
+  'service-binding-reconcile',
   'controller',
 ] as const;
 
