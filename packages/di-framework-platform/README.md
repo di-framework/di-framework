@@ -69,15 +69,41 @@ reviewing any local customization.
 Platform install ships the three backing-service CRDs (`BackingServiceClass`,
 `BackingService`, `ServiceBinding`) with OpenAPI schemas and status subresources,
 seeds the approved default classes, and extends the controller ClusterRole to
-watch those resources. Binding projection (#451), tenant RBAC/admission for
-bindings (#452), retention (#453), and CLI (#454) build on this install and
-reconcile path; they must not invent a conflicting shape.
+watch those resources. Tenant RBAC, ValidatingAdmissionPolicy, ResourceQuota
+counts, and backend NetworkPolicy isolation for bindings are enforced here (#452).
+Redis/NATS reconciliation (#450) is implemented on this install path. Binding
+projection (#451), retention (#453), and CLI (#454) build on it and must not invent
+a conflicting shape.
 
 Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
 platform `crds` export from `src/tenancy/resources.ts`. Class seeding and controller
-script packaging live in `src/tenancy/install.ts`. Per-tick Redis/NATS provisioning
-for independently requested services lives in `src/tenancy/backing-service-reconcile.ts`
-and is driven from the controller tick loop.
+script packaging live in `src/tenancy/install.ts`. Admission helpers and policies live
+in `src/tenancy/admission.ts`. Per-tick Redis/NATS provisioning for independently
+requested services lives in `src/tenancy/backing-service-reconcile.ts` and is driven
+from the controller tick loop.
+
+### Controller-managed name prefixes (stable for #450/#451)
+
+| Prefix / name | Kind | Owner | Purpose |
+| --- | --- | --- | --- |
+| `di-bs-*` | ConfigMap (and optional Secret) | Controller (#450) | Per-`BackingService` host plugin config (`url`, `backend`, …) |
+| `di-binding-*` | Secret / ConfigMap | Controller (#451) | Binding-projected credentials and overlays for named `hostInterfaces` |
+| `di-tenant-stock` | ConfigMap | Tenant controller | Transitional shared warehouse Redis path |
+
+Admission allowlists these names on `configFrom` / `secretFrom`. Arbitrary
+user-owned ConfigMaps/Secrets cannot be used to inject endpoints or credentials
+into keyvalue/messaging host interfaces. Tenant users cannot create/update/delete
+objects with these names (fail-closed ValidatingAdmissionPolicy).
+
+### Network isolation and port-forward
+
+Backend pods labeled `platform.di-framework.dev/component=backing-service`
+(stock Redis/NATS today; `di-bs-*` deployments from #450 must use the same label)
+accept ingress only from the tenant hostgroup. `allowSharedHosts` remains
+`false` in generated Helm values. **Port-forward caveat:** `di-runtime-developer`
+still grants `pods/portforward` so developers can reach runtime pods (including
+backends) from their kubeconfig — consistent with the within-tenant Secret access
+model, not a claim of developer-proof network isolation.
 
 ### Installation ownership and lifecycle
 
@@ -178,8 +204,11 @@ Who may:
 | Tenant viewer | get/list status of those resources |
 | Anyone | Cross-tenant references are **rejected**; namespace ownership is source of truth |
 
-Direct Kubernetes API submissions must be authorized the same as the CLI (RBAC and
-admission land in #452). This issue defines the contract those controls enforce.
+Direct Kubernetes API submissions are authorized the same as the CLI: tenant
+Roles grant developers edit / viewers read on `BackingService` and
+`ServiceBinding`, and ValidatingAdmissionPolicy rejects cross-tenant label
+spoofing, unknown classes (fail-closed to approved defaults), cross-namespace
+`serviceName` tricks, and forged hostInterface backend selection.
 
 Protected delivery means controller-owned generated ConfigMaps/Secrets that tenants
 cannot forge or mutate to bypass provisioning — **not** secrecy from tenant
@@ -227,7 +256,9 @@ not delete hostPath/PV data when swapping the ConfigMap for binding-projected co
 - Group/version matches Tenant/User: `platform.di-framework.dev/v1alpha1`.
 - CEL `x-kubernetes-validations` cover immutable `type`/`provider`/`className`,
   type↔provider compatibility, and `SelectedTenants` requiring `allowedTenants`.
-- Same-namespace service existence, capability match against the live service,
-  unique default-per-type across the cluster, and forge-resistant config names are
-  enforced in admission/controllers (#450–#452); TypeScript helpers encode the same
-  rules for unit tests and future reconciler use.
+- Same-namespace service existence and capability match against the live service
+  are enforced by controllers (#450/#451); admission rejects cross-namespace
+  `serviceName` forms and unknown `className` values fail-closed against approved
+  defaults. Unique default-per-type and forge-resistant `di-bs-` / `di-binding-`
+  config names are enforced in admission (#452); TypeScript helpers encode the same
+  rules for unit tests and reconciler use.
