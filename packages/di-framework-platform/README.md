@@ -33,8 +33,9 @@ Managed Kubesolo enables it by default. This mode preserves the existing CNI and
 service proxy ([upstream guide](https://www.kube-router.io/docs/user-guide/)).
 
 Kubeconfig contents are a secret Pulumi input. The controller's compiled JavaScript
-(`backing-services.js`, `resources.js`, `controller.js`) is loaded from this package
-into a ConfigMap; there is no copied TypeScript implementation in generated projects,
+(`backing-services.js`, `resources.js`, `backing-service-reconcile.js`,
+`service-binding-reconcile.js`, `controller.js`) is loaded from this package into a
+ConfigMap; there is no copied TypeScript implementation in generated projects,
 runtime transpilation, or custom image build.
 
 Tenant storage currently uses local host paths. The caller must select a persistent
@@ -69,13 +70,42 @@ reviewing any local customization.
 Platform install ships the three backing-service CRDs (`BackingServiceClass`,
 `BackingService`, `ServiceBinding`) with OpenAPI schemas and status subresources,
 seeds the approved default classes, and extends the controller ClusterRole to
-watch those resources. Redis/NATS reconciliation (#450), binding projection (#451),
-tenant RBAC/admission for bindings (#452), retention (#453), and CLI (#454) build
-on this install path; they must not invent a conflicting shape.
+watch those resources. Tenant RBAC, ValidatingAdmissionPolicy, ResourceQuota
+counts, and backend NetworkPolicy isolation for bindings are enforced here (#452).
+Redis/NATS reconciliation (#450) and binding projection (#451) are implemented on
+this install path; retention (#453) and CLI (#454) build on it and must not invent
+a conflicting shape.
 
 Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
 platform `crds` export from `src/tenancy/resources.ts`. Class seeding and controller
-script packaging live in `src/tenancy/install.ts`.
+script packaging live in `src/tenancy/install.ts`. Per-tick Redis/NATS provisioning
+for independently requested services lives in `src/tenancy/backing-service-reconcile.ts`
+and is driven from the controller tick loop. Admission helpers and policies live
+in `src/tenancy/admission.ts`. ServiceBinding projection lives in
+`src/tenancy/service-binding-reconcile.ts`.
+
+### Controller-managed name prefixes (stable for #450/#451)
+
+| Prefix / name | Kind | Owner | Purpose |
+| --- | --- | --- | --- |
+| `di-bs-*` | ConfigMap (and optional Secret) | Controller (#450) | Per-`BackingService` host plugin config (`url`, `backend`, …) |
+| `di-binding-*` | Secret / ConfigMap | Controller (#451) | Binding-projected credentials and overlays for named `hostInterfaces` |
+| `di-tenant-stock` | ConfigMap | Tenant controller | Transitional shared warehouse Redis path |
+
+Admission allowlists these names on `configFrom` / `secretFrom`. Arbitrary
+user-owned ConfigMaps/Secrets cannot be used to inject endpoints or credentials
+into keyvalue/messaging host interfaces. Tenant users cannot create/update/delete
+objects with these names (fail-closed ValidatingAdmissionPolicy).
+
+### Network isolation and port-forward
+
+Backend pods labeled `platform.di-framework.dev/component=backing-service`
+(stock Redis/NATS today; `di-bs-*` deployments from #450 must use the same label)
+accept ingress only from the tenant hostgroup. `allowSharedHosts` remains
+`false` in generated Helm values. **Port-forward caveat:** `di-runtime-developer`
+still grants `pods/portforward` so developers can reach runtime pods (including
+backends) from their kubeconfig — consistent with the within-tenant Secret access
+model, not a claim of developer-proof network isolation.
 
 ### Installation ownership and lifecycle
 
@@ -88,12 +118,17 @@ script packaging live in `src/tenancy/install.ts`.
   Override with Pulumi config `backingServiceClasses`, or disable seeding with
   `seedDefaultBackingClasses: false`.
 - **Controller scripts** are TypeScript sources compiled by `tsc` into
-  `dist/tenancy/*.js` (`backing-services`, `resources`, `controller`). Pulumi
-  loads those compiled files into the controller ConfigMap; `resources.js`
-  requires `./backing-services` at runtime. There is no runtime `transpileModule`
-  or PLATFORM_TS_ASSETS allowlist for these modules.
+  `dist/tenancy/*.js` (`backing-services`, `resources`, `backing-service-reconcile`,
+  `service-binding-reconcile`, `controller`). Pulumi loads those compiled files into
+  the controller ConfigMap; `resources.js` requires `./backing-services` at runtime,
+  and `controller.js` requires `resources.js`, `backing-service-reconcile.js`, and
+  `service-binding-reconcile.js`. There is no runtime `transpileModule` or
+  PLATFORM_TS_ASSETS allowlist for these modules.
 - Scheduler/control-plane NATS remains distinct from application messaging
   `BackingService` instances.
+- Per-tenant **runtime data-plane NATS** (`di-nats`, hostgroup `--data-nats-url`) is
+  Tenant-reconciled infrastructure — not an application `BackingService`. Application
+  messaging instances are named `di-bs-<service-name>` and owned by BackingService UIDs.
 
 ### Contract
 
@@ -172,8 +207,11 @@ Who may:
 | Tenant viewer | get/list status of those resources |
 | Anyone | Cross-tenant references are **rejected**; namespace ownership is source of truth |
 
-Direct Kubernetes API submissions must be authorized the same as the CLI (RBAC and
-admission land in #452). This issue defines the contract those controls enforce.
+Direct Kubernetes API submissions are authorized the same as the CLI: tenant
+Roles grant developers edit / viewers read on `BackingService` and
+`ServiceBinding`, and ValidatingAdmissionPolicy rejects cross-tenant label
+spoofing, unknown classes (fail-closed to approved defaults), cross-namespace
+`serviceName` tricks, and forged hostInterface backend selection.
 
 Protected delivery means controller-owned generated ConfigMaps/Secrets that tenants
 cannot forge or mutate to bypass provisioning — **not** secrecy from tenant
@@ -201,12 +239,58 @@ Verified against the wasmCloud Host Interface Configuration Reference:
 name is `spec.bindingName`. Controllers generate protected config references; do not
 rely on unnamed interfaces for multi-service selection (#451).
 
+### ServiceBinding projection (#451)
+
+The controller reconciles each `ServiceBinding` into a tenant-namespace ConfigMap
+named **`di-binding-<bindingName>`** (and optionally a Secret
+`di-binding-<bindingName>-creds` when credential keys exist on the service connection
+Secret). Admission (#452) already blocks tenant create/update/delete of these names.
+
+Projected ConfigMap keys (never copied into CR status or controller logs):
+
+| Capability | Keys | Notes |
+| --- | --- | --- |
+| `keyvalue` (Redis) | `backend=redis`, `url`, `prefix=<bindingName>:` | `prefix` is key layout only, not auth |
+| `messaging` (NATS) | `backend=nats`, `url` | Subscriptions / consumer groups stay on the workload |
+
+`url` is derived from the referenced `BackingService` `status.endpoint` (Ready required).
+Application messaging uses `di-bs-<service>` endpoints — **not** runtime data-plane
+`di-nats`. Independent NATS instances are selected by giving each binding a distinct
+`bindingName` and a named hostInterface that `configFrom`s the matching projection.
+
+**WorkloadDeployment shape** (CLI/deploy decorator wiring is #455; controllers provide
+the projected resources today):
+
+```yaml
+hostInterfaces:
+  - name: stock          # == ServiceBinding.spec.bindingName
+    namespace: wasmcloud
+    package: keyvalue
+    configFrom:
+      - name: di-binding-stock
+  - name: sync
+    namespace: wasmcloud
+    package: messaging
+    configFrom:
+      - name: di-binding-sync
+    # optional workload-owned subscription knobs in `config:` only
+```
+
+Multiple `ServiceBinding` objects may share one `bindingName` (warehouse components
+sharing `stock`) when they agree on `serviceName` + `capability`. Projection ownership
+is deterministic (lexicographically first live binding UID). Deleting the last peer
+removes the ConfigMap/Secret; credential rotation or endpoint changes update the
+projection on the next reconcile. Status is `Ready` \| `Failed` \| `Deleting` with
+`serviceRef` only — never passwords, tokens, or URLs with auth material.
+
 ### Distinguishing application vs control-plane dependencies
 
 | Concern | Resource |
 | --- | --- |
-| Application Redis / app NATS | `BackingService` (+ class/binding) |
+| Application Redis / app NATS | `BackingService` → `di-bs-<name>` Deployment/Service in `di-runtime-<tenant>` |
+| Runtime data-plane NATS | Tenant reconcile → fixed `di-nats` (host `--data-nats-url`); not a BackingService |
 | Scheduler NATS, OCI registry, wasmCloud operator, tenant host pool | Platform / tenant runtime provisioning (not `BackingService`) |
+| Transitional warehouse Redis | Tenant reconcile still creates `di-redis` + `di-tenant-stock` until #456 |
 
 Today's tenant controller still provisions per-tenant Redis/NATS deployments and the
 `di-tenant-stock` ConfigMap as a transitional warehouse path. Later issues replace
@@ -219,7 +303,9 @@ not delete hostPath/PV data when swapping the ConfigMap for binding-projected co
 - Group/version matches Tenant/User: `platform.di-framework.dev/v1alpha1`.
 - CEL `x-kubernetes-validations` cover immutable `type`/`provider`/`className`,
   type↔provider compatibility, and `SelectedTenants` requiring `allowedTenants`.
-- Same-namespace service existence, capability match against the live service,
-  unique default-per-type across the cluster, and forge-resistant config names are
-  enforced in admission/controllers (#450–#452); TypeScript helpers encode the same
-  rules for unit tests and future reconciler use.
+- Same-namespace service existence and capability match against the live service
+  are enforced by controllers (#450/#451); admission rejects cross-namespace
+  `serviceName` forms and unknown `className` values fail-closed against approved
+  defaults. Unique default-per-type and forge-resistant `di-bs-` / `di-binding-`
+  config names are enforced in admission (#452); TypeScript helpers encode the same
+  rules for unit tests and reconciler use.

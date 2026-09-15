@@ -91,21 +91,33 @@ describe('backing-service install', () => {
   });
 
   it('loads compiled backing-services into the controller ConfigMap script map', () => {
-    expect([...CONTROLLER_SCRIPT_MODULES]).toEqual(['backing-services', 'resources', 'controller']);
+    expect([...CONTROLLER_SCRIPT_MODULES]).toEqual([
+      'backing-services',
+      'resources',
+      'backing-service-reconcile',
+      'service-binding-reconcile',
+      'controller',
+    ]);
     for (const name of CONTROLLER_SCRIPT_MODULES) {
       expect(existsSync(join(distTenancy, `${name}.js`))).toBe(true);
     }
     const scripts = loadControllerScripts(distTenancy);
     expect(Object.keys(scripts).sort()).toEqual([
+      'backing-service-reconcile.js',
       'backing-services.js',
       'controller.js',
       'resources.js',
+      'service-binding-reconcile.js',
     ]);
     expect(scripts['backing-services.js']).toContain('BackingServiceClass');
     expect(scripts['backing-services.js']).toContain('keyvalue-redis');
     expect(scripts['backing-services.js']).toContain('messaging-nats');
+    expect(scripts['backing-service-reconcile.js']).toContain('di-bs-');
+    expect(scripts['service-binding-reconcile.js']).toContain('di-binding-');
     expect(scripts['resources.js']).toMatch(/require\(["'].\/backing-services["']\)/);
     expect(scripts['controller.js']).toMatch(/require\(["'].\/resources["']\)/);
+    expect(scripts['controller.js']).toMatch(/require\(["'].\/backing-service-reconcile["']\)/);
+    expect(scripts['controller.js']).toMatch(/require\(["'].\/service-binding-reconcile["']\)/);
     expect(controllerScriptHash(scripts)).toMatch(/^[a-f0-9]{64}$/);
     expect(controllerScriptHash(scripts)).toBe(controllerScriptHash(scripts));
     expect(controllerScriptHash({ a: '1' })).not.toBe(controllerScriptHash({ a: '2' }));

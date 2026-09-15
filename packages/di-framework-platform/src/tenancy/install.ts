@@ -9,8 +9,16 @@ import {
   validName,
 } from './resources';
 
-/** Controller ConfigMap modules. `resources.js` requires `./backing-services` at runtime. */
-export const CONTROLLER_SCRIPT_MODULES = ['backing-services', 'resources', 'controller'] as const;
+/** Controller ConfigMap modules. TypeScript emit does not bundle imports, so
+ * `backing-services`, `backing-service-reconcile`, and `service-binding-reconcile`
+ * must ship beside `resources` / `controller` (which require them at runtime). */
+export const CONTROLLER_SCRIPT_MODULES = [
+  'backing-services',
+  'resources',
+  'backing-service-reconcile',
+  'service-binding-reconcile',
+  'controller',
+] as const;
 
 export interface BackingServiceClassDeclaration extends BackingServiceClassSpec {
   name: string;

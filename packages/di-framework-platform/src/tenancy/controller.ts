@@ -2,6 +2,18 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout } from 'node:timers/promises';
 import {
+  backingServiceResourceName,
+  backingServiceResources,
+  endpointFor,
+  RUNTIME_DATA_NATS,
+  resolveBackingSizing,
+  resolveClass,
+  tenantNameFromNamespace,
+} from './backing-service-reconcile';
+import {
+  type BackingService,
+  type BackingServiceClass,
+  BINDING,
   type Condition,
   type ControllerConfig,
   FINALIZER,
@@ -10,6 +22,8 @@ import {
   OWNER,
   type Resource,
   resource,
+  type ServiceBinding,
+  type SizingParameters,
   TENANT,
   type Tenant,
   tenantResources,
@@ -18,6 +32,15 @@ import {
   VERSION,
   validName,
 } from './resources';
+import {
+  assertSafeBindingStatus,
+  bindingProjectionName,
+  bindingSecretName,
+  electBindingOwner,
+  resolveBindingService,
+  serviceBindingResources,
+  sharedBindingConflict,
+} from './service-binding-reconcile';
 
 const plurals: Record<string, string> = {
   Namespace: 'namespaces',
@@ -34,13 +57,17 @@ const plurals: Record<string, string> = {
   Tenant: 'tenants',
   User: 'users',
   Host: 'hosts',
+  BackingServiceClass: 'backingserviceclasses',
+  BackingService: 'backingservices',
+  ServiceBinding: 'servicebindings',
 };
 export function collection(apiVersion: string, kind: string, namespace?: string): string {
   const plural = plurals[kind];
   if (!plural) throw new Error(`Unsupported resource kind: ${kind}`);
   return `${apiVersion === 'v1' ? '/api/v1' : `/apis/${apiVersion}`}${namespace ? `/namespaces/${encodeURIComponent(namespace)}` : ''}/${plural}`;
 }
-function location(value: Resource | Tenant | User): string {
+type Owned = Tenant | User | BackingService | ServiceBinding;
+function location(value: Resource | Owned): string {
   return `${collection(value.apiVersion, value.kind, value.metadata.namespace)}/${encodeURIComponent(value.metadata.name)}`;
 }
 export interface Api {
@@ -151,14 +178,28 @@ export class Controller {
       if (!(error instanceof ApiError && error.code === 404)) throw error;
     }
   }
-  private async ensure(value: Resource, bootstrap = false): Promise<Resource> {
+  private async ensure(
+    value: Resource,
+    bootstrap = false,
+    adoptSameBinding = false,
+  ): Promise<Resource> {
     const existing = await this.get<Resource>(location(value));
     const labels = existing?.metadata.labels;
+    const sameBinding =
+      adoptSameBinding &&
+      labels?.[INSTALLATION] === this.cfg.installation &&
+      labels?.[TENANT] === value.metadata.labels?.[TENANT] &&
+      labels?.[BINDING] === value.metadata.labels?.[BINDING];
     if (
       existing &&
       (labels?.[INSTALLATION] !== this.cfg.installation ||
         (labels?.[OWNER] !== value.metadata.labels?.[OWNER] &&
-          !(bootstrap && !labels?.[OWNER] && labels?.[TENANT] === value.metadata.labels?.[TENANT])))
+          !(
+            bootstrap &&
+            !labels?.[OWNER] &&
+            labels?.[TENANT] === value.metadata.labels?.[TENANT]
+          ) &&
+          !sameBinding))
     ) {
       throw new Error(
         `Refusing to adopt ${value.kind} ${value.metadata.namespace ?? ''}/${value.metadata.name}`,
@@ -179,11 +220,11 @@ export class Controller {
       'application/apply-patch+yaml',
     );
   }
-  private async finalizer(value: Tenant | User, add: boolean): Promise<void> {
+  private async finalizer(value: Owned, add: boolean): Promise<void> {
     const old = value.metadata.finalizers ?? [];
     const finalizers = add ? [...new Set([...old, FINALIZER])] : old.filter((f) => f !== FINALIZER);
     if (JSON.stringify(old) !== JSON.stringify(finalizers)) {
-      const updated = await this.api.call<Tenant | User>(
+      const updated = await this.api.call<Owned>(
         'PATCH',
         location(value),
         { metadata: { resourceVersion: value.metadata.resourceVersion, finalizers } },
@@ -193,7 +234,7 @@ export class Controller {
     }
   }
   private async status(
-    value: Tenant | User,
+    value: Owned,
     ready: boolean,
     reason: string,
     message: string,
@@ -372,11 +413,318 @@ export class Controller {
           },
     );
   }
+  /**
+   * Provision independent Redis/NATS instances for a BackingService CR.
+   * Never touches runtime-internal `${RUNTIME_DATA_NATS}` (hostgroup data plane).
+   */
+  async reconcileBackingService(
+    service: BackingService,
+    tenant: Tenant,
+    classes: BackingServiceClass[],
+  ): Promise<void> {
+    if (!validName(service.metadata.name)) throw new Error('Invalid BackingService name');
+    if (!service.metadata.uid) throw new Error('BackingService is missing metadata.uid');
+    const { namespace, runtimeNamespace } = names(tenant.metadata.name);
+    if (service.metadata.namespace !== namespace)
+      throw new Error(
+        `BackingService ${service.metadata.name} must live in tenant namespace ${namespace}`,
+      );
+
+    if (!service.metadata.deletionTimestamp) await this.finalizer(service, true);
+    if (service.metadata.deletionTimestamp) {
+      await this.reconcileBackingServiceDeletion(service, runtimeNamespace, service.metadata.uid);
+      return;
+    }
+
+    const configuration = await this.resolveBackingServiceConfiguration(service, tenant, classes);
+    if (!configuration) return;
+    const { cls, sizing } = configuration;
+    const desired = backingServiceResources(service, tenant, cls, this.cfg, sizing);
+    const ready = await this.applyBackingServiceResources(desired);
+    await this.updateBackingServiceStatus(service, tenant, cls, ready);
+  }
+
+  private async reconcileBackingServiceDeletion(
+    service: BackingService,
+    runtimeNamespace: string,
+    ownerUid: string,
+  ): Promise<void> {
+    const labels = {
+      [INSTALLATION]: this.cfg.installation,
+      [OWNER]: ownerUid,
+    };
+    const deployments = await this.list<Resource>('apps/v1', 'Deployment', labels);
+    const secrets = await this.list<Resource>('v1', 'Secret', labels);
+    const services = await this.list<Resource>('v1', 'Service', labels);
+    if (service.spec.deletionPolicy === 'Delete') {
+      for (const value of [...deployments, ...secrets, ...services]) await this.remove(value);
+      await this.finalizer(service, false);
+      return;
+    }
+
+    // Retain: stop workloads before releasing the finalizer; keep hostPath data.
+    const stopped = await this.stopBackingServiceDeployments(deployments);
+    await this.status(service, false, 'Deleting', 'Stopping backing service workloads', {
+      runtimeNamespace,
+    });
+    if (stopped) await this.finalizer(service, false);
+  }
+
+  private async stopBackingServiceDeployments(deployments: Resource[]): Promise<boolean> {
+    let stopped = true;
+    for (const deployment of deployments) {
+      // Never scale runtime-internal data NATS through BackingService ownership.
+      if (deployment.metadata.name === RUNTIME_DATA_NATS) {
+        throw new Error(`Refusing to manage runtime data plane ${RUNTIME_DATA_NATS}`);
+      }
+      const updated = await this.api.call<Resource>(
+        'PATCH',
+        `${location(deployment)}?fieldManager=di-platform-controller`,
+        {
+          metadata: { resourceVersion: deployment.metadata.resourceVersion },
+          spec: { replicas: 0 },
+        },
+        'application/merge-patch+json',
+      );
+      const status = updated.status as
+        | { observedGeneration?: number; replicas?: number }
+        | undefined;
+      stopped &&=
+        status?.observedGeneration === updated.metadata.generation && (status?.replicas ?? 0) === 0;
+    }
+    return stopped;
+  }
+
+  private async resolveBackingServiceConfiguration(
+    service: BackingService,
+    tenant: Tenant,
+    classes: BackingServiceClass[],
+  ): Promise<{ cls: BackingServiceClass; sizing: SizingParameters } | undefined> {
+    const { runtimeNamespace } = names(tenant.metadata.name);
+    const resolved = resolveClass(service, classes, tenant.metadata.name);
+    if ('error' in resolved) {
+      await this.status(service, false, 'Failed', resolved.error, { runtimeNamespace });
+      return;
+    }
+    const { cls } = resolved;
+    const sized = resolveBackingSizing(service, cls, tenant);
+    if ('error' in sized) {
+      await this.status(service, false, 'Failed', sized.error, {
+        runtimeNamespace,
+        classRef: {
+          name: cls.metadata.name,
+          uid: cls.metadata.uid,
+          generation: cls.metadata.generation,
+        },
+      });
+      return;
+    }
+    return { cls, sizing: sized.sizing };
+  }
+
+  private async applyBackingServiceResources(desired: Resource[]): Promise<boolean> {
+    let ready = true;
+    for (const value of desired) {
+      const applied = await this.ensure(value);
+      if (value.kind !== 'Deployment') continue;
+      if (applied.metadata.name === RUNTIME_DATA_NATS)
+        throw new Error(`Refusing to manage runtime data plane ${RUNTIME_DATA_NATS}`);
+      const spec = applied.spec as { replicas: number };
+      const status = applied.status as
+        | { observedGeneration?: number; readyReplicas?: number; replicas?: number }
+        | undefined;
+      ready &&=
+        status?.observedGeneration === applied.metadata.generation &&
+        (status?.readyReplicas ?? 0) === spec.replicas &&
+        (spec.replicas !== 0 || (status?.replicas ?? 0) === 0);
+    }
+    return ready;
+  }
+
+  private async updateBackingServiceStatus(
+    service: BackingService,
+    tenant: Tenant,
+    cls: BackingServiceClass,
+    ready: boolean,
+  ): Promise<void> {
+    await this.status(
+      service,
+      ready && !tenant.spec.suspended,
+      tenant.spec.suspended ? 'Suspended' : ready ? 'Ready' : 'Provisioning',
+      tenant.spec.suspended
+        ? 'Tenant suspended; backing service scaled down'
+        : ready
+          ? 'Backing service deployment is ready'
+          : 'Waiting for backing service deployment',
+      {
+        runtimeNamespace: names(tenant.metadata.name).runtimeNamespace,
+        classRef: {
+          name: cls.metadata.name,
+          uid: cls.metadata.uid,
+          generation: cls.metadata.generation,
+        },
+        endpoint: endpointFor(service, tenant, cls.spec.provider),
+      },
+    );
+  }
+
+  /**
+   * Project ServiceBinding → controller-owned `di-binding-<bindingName>` ConfigMap
+   * (and optional Secret) in the tenant namespace for named hostInterfaces.
+   */
+  async reconcileServiceBinding(
+    binding: ServiceBinding,
+    tenant: Tenant,
+    service: BackingService | undefined,
+    peers: ServiceBinding[],
+  ): Promise<void> {
+    if (!validName(binding.metadata.name)) throw new Error('Invalid ServiceBinding name');
+    if (!binding.metadata.uid) throw new Error('ServiceBinding is missing metadata.uid');
+    const n = names(tenant.metadata.name);
+    if (binding.metadata.namespace !== n.namespace)
+      throw new Error(
+        `ServiceBinding ${binding.metadata.name} must live in tenant namespace ${n.namespace}`,
+      );
+    if (!binding.metadata.deletionTimestamp) await this.finalizer(binding, true);
+
+    const serviceRefBase = {
+      name: binding.spec.serviceName,
+      uid: service?.metadata.uid,
+      generation: service?.metadata.generation,
+    };
+
+    if (binding.metadata.deletionTimestamp) {
+      const owner = electBindingOwner(binding.spec.bindingName, peers);
+      if (!owner) {
+        const configName = bindingProjectionName(binding.spec.bindingName);
+        const secretName = bindingSecretName(binding.spec.bindingName);
+        for (const [apiVersion, kind, name] of [
+          ['v1', 'ConfigMap', configName],
+          ['v1', 'Secret', secretName],
+        ] as const) {
+          const value = await this.get<Resource>(
+            `${collection(apiVersion, kind, n.namespace)}/${name}`,
+          );
+          if (
+            value &&
+            value.metadata.labels?.[INSTALLATION] === this.cfg.installation &&
+            value.metadata.labels?.[TENANT] === tenant.metadata.name
+          ) {
+            await this.remove(value);
+          }
+        }
+      }
+      const deletingStatus = { serviceRef: serviceRefBase };
+      assertSafeBindingStatus(deletingStatus);
+      await this.status(
+        binding,
+        false,
+        'Deleting',
+        owner
+          ? 'Binding revoked; shared projection retained for remaining peers'
+          : 'Removing projected binding configuration',
+        deletingStatus,
+      );
+      await this.finalizer(binding, false);
+      return;
+    }
+
+    const conflict = sharedBindingConflict(binding, peers);
+    if (conflict) {
+      const failed = { serviceRef: serviceRefBase };
+      assertSafeBindingStatus(failed);
+      await this.status(binding, false, 'Failed', conflict, failed);
+      return;
+    }
+
+    const resolved = resolveBindingService(binding, service);
+    if ('error' in resolved) {
+      const deferred = { serviceRef: serviceRefBase };
+      assertSafeBindingStatus(deferred);
+      await this.status(binding, false, 'Failed', resolved.error, deferred);
+      return;
+    }
+
+    const owner = electBindingOwner(binding.spec.bindingName, peers) ?? binding;
+    if (!owner.metadata.uid) throw new Error('Elected binding owner is missing metadata.uid');
+
+    let serviceConn: Record<string, string> | undefined;
+    const connSecret = await this.get<{
+      data?: Record<string, string>;
+      stringData?: Record<string, string>;
+    }>(
+      `${collection('v1', 'Secret', n.runtimeNamespace)}/${backingServiceResourceName(binding.spec.serviceName)}-conn`,
+    );
+    // Prefer stringData in tests; live Secrets expose base64 `data` — we only lift known cred keys.
+    if (connSecret?.stringData) serviceConn = connSecret.stringData;
+    else if (connSecret?.data) {
+      serviceConn = {};
+      for (const [key, value] of Object.entries(connSecret.data)) {
+        try {
+          serviceConn[key] = Buffer.from(value, 'base64').toString('utf8');
+        } catch {
+          /* ignore undecodable */
+        }
+      }
+    }
+
+    const desired = serviceBindingResources(
+      binding,
+      tenant,
+      this.cfg,
+      resolved.endpoint,
+      owner.metadata.uid,
+      serviceConn,
+    );
+    for (const value of desired) await this.ensure(value, false, true);
+
+    // Drop stale credential Secret when credentials were rotated away.
+    if (!desired.some((r) => r.kind === 'Secret')) {
+      const stale = await this.get<Resource>(
+        `${collection('v1', 'Secret', n.namespace)}/${bindingSecretName(binding.spec.bindingName)}`,
+      );
+      if (
+        stale &&
+        stale.metadata.labels?.[INSTALLATION] === this.cfg.installation &&
+        (stale.metadata.labels?.[OWNER] === owner.metadata.uid ||
+          stale.metadata.labels?.[OWNER] === binding.metadata.uid)
+      ) {
+        await this.remove(stale);
+      }
+    }
+
+    const readyStatus = {
+      serviceRef: {
+        name: resolved.service.metadata.name,
+        uid: resolved.service.metadata.uid,
+        generation: resolved.service.metadata.generation,
+      },
+    };
+    assertSafeBindingStatus(readyStatus);
+    await this.status(
+      binding,
+      !tenant.spec.suspended,
+      tenant.spec.suspended ? 'Suspended' : 'Ready',
+      tenant.spec.suspended
+        ? 'Tenant suspended; binding projection retained'
+        : 'Service binding configuration projected',
+      readyStatus,
+    );
+  }
+
   async tick(): Promise<void> {
     const tenants = await this.list<Tenant>(VERSION, 'Tenant', {
       [INSTALLATION]: this.cfg.installation,
     });
     const users = await this.list<User>(VERSION, 'User', { [INSTALLATION]: this.cfg.installation });
+    const classes = await this.list<BackingServiceClass>(VERSION, 'BackingServiceClass', {
+      [INSTALLATION]: this.cfg.installation,
+    });
+    // Cluster-wide list: BackingServices are namespaced under di-tenant-* and may lack
+    // installation labels until the controller owns their infra.
+    const services = await this.list<BackingService>(VERSION, 'BackingService', {});
+    const bindings = await this.list<ServiceBinding>(VERSION, 'ServiceBinding', {});
+    const tenantByName = new Map(tenants.map((t) => [t.metadata.name, t]));
     for (const value of [...tenants, ...users]) {
       try {
         if (value.kind === 'Tenant') await this.reconcileTenant(value as Tenant);
@@ -388,6 +736,63 @@ export class Controller {
           await this.status(value, false, 'ReconcileError', message);
         } catch {
           /* Retry on the next poll, including resourceVersion conflicts. */
+        }
+      }
+    }
+    const serviceByKey = new Map(
+      services.map((s) => [`${s.metadata.namespace}/${s.metadata.name}`, s]),
+    );
+    for (const service of services) {
+      const tenantName = tenantNameFromNamespace(service.metadata.namespace);
+      const tenant = tenantName ? tenantByName.get(tenantName) : undefined;
+      if (!tenant) continue;
+      try {
+        await this.reconcileBackingService(service, tenant, classes);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reconciliation failed';
+        console.error(
+          `BackingService/${service.metadata.namespace}/${service.metadata.name}: ${message}`,
+        );
+        try {
+          await this.status(service, false, 'Failed', message, {
+            runtimeNamespace: names(tenant.metadata.name).runtimeNamespace,
+          });
+        } catch {
+          /* Retry on the next poll. */
+        }
+      }
+    }
+    // Refresh services after BS reconcile so bindings see Ready/endpoint updates in-tick.
+    const servicesAfter = await this.list<BackingService>(VERSION, 'BackingService', {});
+    for (const s of servicesAfter) {
+      serviceByKey.set(`${s.metadata.namespace}/${s.metadata.name}`, s);
+    }
+    for (const binding of bindings) {
+      const tenantName = tenantNameFromNamespace(binding.metadata.namespace);
+      const tenant = tenantName ? tenantByName.get(tenantName) : undefined;
+      if (!tenant) continue;
+      const peers = bindings.filter((b) => b.metadata.namespace === binding.metadata.namespace);
+      const service = serviceByKey.get(`${binding.metadata.namespace}/${binding.spec.serviceName}`);
+      try {
+        await this.reconcileServiceBinding(binding, tenant, service, peers);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reconciliation failed';
+        // Never log Secret bodies or credential-bearing payloads.
+        console.error(
+          `ServiceBinding/${binding.metadata.namespace}/${binding.metadata.name}: ${message}`,
+        );
+        try {
+          const failed = {
+            serviceRef: {
+              name: binding.spec.serviceName,
+              uid: service?.metadata.uid,
+              generation: service?.metadata.generation,
+            },
+          };
+          assertSafeBindingStatus(failed);
+          await this.status(binding, false, 'Failed', message, failed);
+        } catch {
+          /* Retry on the next poll. */
         }
       }
     }

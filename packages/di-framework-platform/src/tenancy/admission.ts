@@ -1,32 +1,205 @@
-import { INSTALLATION, type Resource, TENANT } from './resources';
+import {
+  DEFAULT_CLASS_NAMES,
+  GROUP,
+  INSTALLATION,
+  OWNER,
+  type Resource,
+  TENANT,
+} from './resources';
 
-/** The controller's runtime credentials must never become guest capabilities. */
-export function admissionResources(installation: string, namespace: string): Resource[] {
-  const result: Resource[] = [];
-  function policy(
-    name: string,
-    apiGroups: string[],
-    resources: string[],
-    validations: { expression: string; message: string }[],
-    variables?: { name: string; expression: string }[],
-  ): void {
-    const fullName = `${installation}-${name}`;
-    result.push({
+/** Controller-managed ConfigMap prefix for BackingService backend config (#450). */
+export const BS_CONFIG_PREFIX = 'di-bs-';
+/** Controller-managed Secret/ConfigMap prefix for ServiceBinding projection (#451). */
+export const BINDING_CONFIG_PREFIX = 'di-binding-';
+/** Transitional warehouse keyvalue ConfigMap; still admitted alongside di-bs-*. */
+export const STOCK_CONFIG_NAME = 'di-tenant-stock';
+
+const APPROVED_CLASS_NAMES = new Set<string>(Object.values(DEFAULT_CLASS_NAMES));
+
+export function isManagedConfigName(name: string): boolean {
+  return (
+    name === STOCK_CONFIG_NAME ||
+    name.startsWith(BS_CONFIG_PREFIX) ||
+    name.startsWith(BINDING_CONFIG_PREFIX)
+  );
+}
+
+export function isManagedSecretName(name: string): boolean {
+  return name.startsWith(BINDING_CONFIG_PREFIX) || name.startsWith(BS_CONFIG_PREFIX);
+}
+
+export function tenantNameFromNamespace(namespace: string): string | undefined {
+  const match = /^di-tenant-(.+)$/.exec(namespace);
+  return match?.[1];
+}
+
+/** Fail-closed: platform ownership labels must match the trusted namespace, or be absent. */
+export function ownershipLabelsAllowed(
+  labels: Record<string, string> | undefined,
+  namespace: string,
+  installation?: string,
+): boolean {
+  if (!labels) return true;
+  const tenant = tenantNameFromNamespace(namespace);
+  if (!tenant) return false;
+  if (labels[TENANT] !== undefined && labels[TENANT] !== tenant) return false;
+  if (labels[OWNER] !== undefined) return false;
+  if (installation !== undefined && labels[INSTALLATION] !== undefined) {
+    if (labels[INSTALLATION] !== installation) return false;
+  }
+  return true;
+}
+
+export function approvedClassName(className: string | undefined, type: string): boolean {
+  if (className === undefined || className === '') {
+    return type === 'keyvalue' || type === 'messaging';
+  }
+  return APPROVED_CLASS_NAMES.has(className);
+}
+
+export function serviceNameSameNamespace(serviceName: string): boolean {
+  return (
+    typeof serviceName === 'string' &&
+    serviceName.length > 0 &&
+    serviceName.length <= 40 &&
+    !serviceName.includes('/') &&
+    !serviceName.includes('.') &&
+    /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(serviceName)
+  );
+}
+
+export interface HostInterfaceLike {
+  name?: string;
+  namespace?: string;
+  package?: string;
+  configFrom?: { name: string }[];
+  secretFrom?: { name: string }[];
+  config?: Record<string, unknown>;
+}
+
+/**
+ * Mirrors the workload ValidatingAdmissionPolicy CEL (fail-closed).
+ * Unnamed backend selection is denied except the transitional stock keyvalue path.
+ */
+export function hostInterfaceAllowed(hostInterface: HostInterfaceLike): boolean {
+  const { namespace, package: packageName, name } = hostInterface;
+  const configFrom = hostInterface.configFrom ?? [];
+  const secretFrom = hostInterface.secretFrom ?? [];
+  const config = hostInterface.config ?? {};
+  const hasName = typeof name === 'string' && name.length > 0;
+  const hasReferences = configFrom.length > 0 || secretFrom.length > 0;
+  const configKeys = Object.keys(config);
+
+  if (namespace === 'wasi' && (packageName === 'http' || packageName === 'config')) {
+    if (hasName || hasReferences) return false;
+    return packageName === 'config' || configKeys.every((key) => key === 'host' || key === 'path');
+  }
+
+  if (namespace !== 'wasmcloud') return false;
+  if (packageName !== 'keyvalue' && packageName !== 'messaging') return false;
+  if (!configFrom.every((reference) => isManagedConfigName(reference.name))) return false;
+  if (!secretFrom.every((reference) => isManagedSecretName(reference.name))) return false;
+
+  if (packageName === 'keyvalue') {
+    if (configKeys.length > 0) return false;
+    if (hasName) return hasReferences;
+
+    // Transitional unnamed keyvalue may reference only the stock ConfigMap.
+    return (
+      secretFrom.length === 0 &&
+      configFrom.length > 0 &&
+      configFrom.every((reference) => reference.name === STOCK_CONFIG_NAME)
+    );
+  }
+
+  // The transitional stock ConfigMap is reserved for keyvalue.
+  if (configFrom.some((reference) => reference.name === STOCK_CONFIG_NAME)) return false;
+
+  // Messaging accepts subscription options, never inline backend URLs.
+  const subscriptionOptions = [
+    'subscriptions',
+    'consumer_group',
+    'max_in_flight',
+    'admission_wait',
+  ];
+  if (!configKeys.every((key) => subscriptionOptions.includes(key))) return false;
+
+  // Transitional unnamed messaging uses default NATS without backend references.
+  if (!hasName) return !hasReferences;
+  return hasReferences || configKeys.length > 0;
+}
+
+export function validateBackingServiceAdmission(input: {
+  namespace: string;
+  type: string;
+  className?: string;
+  labels?: Record<string, string>;
+  installation?: string;
+}): string | undefined {
+  if (!ownershipLabelsAllowed(input.labels, input.namespace, input.installation))
+    return 'BackingService ownership labels must derive from the tenant namespace';
+  if (input.type !== 'keyvalue' && input.type !== 'messaging')
+    return 'BackingService type must be keyvalue or messaging';
+  if (!approvedClassName(input.className, input.type))
+    return 'BackingService className must be an approved platform default (fail-closed)';
+  return undefined;
+}
+
+export function validateServiceBindingAdmission(input: {
+  namespace: string;
+  serviceName: string;
+  capability: string;
+  labels?: Record<string, string>;
+  installation?: string;
+}): string | undefined {
+  if (!ownershipLabelsAllowed(input.labels, input.namespace, input.installation))
+    return 'ServiceBinding ownership labels must derive from the tenant namespace';
+  if (!serviceNameSameNamespace(input.serviceName))
+    return 'ServiceBinding serviceName must reference a BackingService in the same namespace';
+  if (input.capability !== 'keyvalue' && input.capability !== 'messaging')
+    return 'ServiceBinding capability must be keyvalue or messaging';
+  return undefined;
+}
+
+interface AdmissionValidation {
+  expression: string;
+  message: string;
+}
+
+interface AdmissionVariable {
+  name: string;
+  expression: string;
+}
+
+interface AdmissionPolicy {
+  name: string;
+  apiGroups: string[];
+  resources: string[];
+  apiVersions?: string[];
+  operations?: string[];
+  validations: AdmissionValidation[];
+  variables?: AdmissionVariable[];
+}
+
+/** Every policy denies invalid requests in this installation's tenant namespaces. */
+function policyResources(installation: string, policy: AdmissionPolicy): Resource[] {
+  const fullName = `${installation}-${policy.name}`;
+  const { apiGroups, resources, apiVersions = ['*'], operations = ['CREATE', 'UPDATE'] } = policy;
+  return [
+    {
       apiVersion: 'admissionregistration.k8s.io/v1',
       kind: 'ValidatingAdmissionPolicy',
       metadata: { name: fullName },
       spec: {
         failurePolicy: 'Fail',
         matchConstraints: {
-          resourceRules: [
-            { apiGroups, apiVersions: ['*'], operations: ['CREATE', 'UPDATE'], resources },
-          ],
+          resourceRules: [{ apiGroups, apiVersions, operations, resources }],
         },
-        ...(variables ? { variables } : {}),
-        validations,
+        ...(policy.variables ? { variables: policy.variables } : {}),
+        validations: policy.validations,
       },
-    });
-    result.push({
+    },
+    {
       apiVersion: 'admissionregistration.k8s.io/v1',
       kind: 'ValidatingAdmissionPolicyBinding',
       metadata: { name: fullName },
@@ -40,16 +213,85 @@ export function admissionResources(installation: string, namespace: string): Res
           },
         },
       },
-    });
-  }
-  policy(
-    'workloads',
-    ['runtime.wasmcloud.dev'],
-    ['workloaddeployments'],
-    [
+    },
+  ];
+}
+
+/**
+ * CEL fragments are expanded inside hostInterfaces.all(h, ...), where h is in scope.
+ * Keep missing-field guards next to the fields they protect.
+ */
+function hostInterfaceAdmissionExpression(): string {
+  const unnamed = "(!has(h.name) || h.name == '')";
+  const named = "has(h.name) && h.name != ''";
+  const noConfigReferences = '(!has(h.configFrom) || size(h.configFrom) == 0)';
+  const noSecretReferences = '(!has(h.secretFrom) || size(h.secretFrom) == 0)';
+  const hasConfigReferences = '(has(h.configFrom) && size(h.configFrom) > 0)';
+  const hasSecretReferences = '(has(h.secretFrom) && size(h.secretFrom) > 0)';
+  const hasInlineConfig = '(has(h.config) && size(h.config) > 0)';
+  const managedSecretReferences = `(
+    !has(h.secretFrom) || size(h.secretFrom) == 0 ||
+    h.secretFrom.all(s,
+      s.name.startsWith('${BINDING_CONFIG_PREFIX}') || s.name.startsWith('${BS_CONFIG_PREFIX}'))
+  )`;
+  const managedConfigName = `c.name.startsWith('${BS_CONFIG_PREFIX}') || c.name.startsWith('${BINDING_CONFIG_PREFIX}')`;
+
+  const wasi = `(h['namespace'] == 'wasi' && h['package'] in ['http', 'config'] &&
+    ${unnamed} && ${noSecretReferences} && ${noConfigReferences} &&
+    (!has(h.config) ||
+      (h['package'] == 'http' && h.config.all(k, k in ['host', 'path'])) ||
+      h['package'] == 'config'))`;
+
+  // Unnamed keyvalue is restricted to the transitional stock ConfigMap.
+  const stockKeyvalue = `(${unnamed} &&
+    has(h.configFrom) && size(h.configFrom) > 0 &&
+    h.configFrom.all(c, c.name == '${STOCK_CONFIG_NAME}') && ${noSecretReferences})`;
+  const namedKeyvalue = `(${named} && (${hasConfigReferences} || ${hasSecretReferences}))`;
+  const keyvalue = `(h['namespace'] == 'wasmcloud' && h['package'] == 'keyvalue' &&
+    (!has(h.config) || size(h.config) == 0) &&
+    ${managedSecretReferences} &&
+    (!has(h.configFrom) || size(h.configFrom) == 0 ||
+      h.configFrom.all(c, c.name == '${STOCK_CONFIG_NAME}' || ${managedConfigName})) &&
+    (${stockKeyvalue} || ${namedKeyvalue}))`;
+
+  // Unnamed messaging uses default NATS; named messaging may supply subscription options.
+  const defaultMessaging = `(${unnamed} && ${noConfigReferences} && ${noSecretReferences})`;
+  const namedMessaging = `(${named} &&
+    (${hasConfigReferences} || ${hasSecretReferences} || ${hasInlineConfig}))`;
+  const messaging = `(h['namespace'] == 'wasmcloud' && h['package'] == 'messaging' &&
+    ${managedSecretReferences} &&
+    (!has(h.configFrom) || size(h.configFrom) == 0 || h.configFrom.all(c, ${managedConfigName})) &&
+    (!has(h.config) ||
+      h.config.all(k, k in ['subscriptions', 'consumer_group', 'max_in_flight', 'admission_wait'])) &&
+    (${defaultMessaging} || ${namedMessaging}))`;
+
+  return `!has(variables.w.hostInterfaces) || variables.w.hostInterfaces.all(h,
+    (${wasi} || ${keyvalue} || ${messaging}))`;
+}
+
+function workloadPolicy(): AdmissionPolicy {
+  return {
+    name: 'workloads',
+    apiGroups: ['runtime.wasmcloud.dev'],
+    resources: ['workloaddeployments'],
+    variables: [
+      { name: 'w', expression: 'object.spec.template.spec' },
       {
-        expression:
-          'has(variables.w.environment) && variables.w.environment == object.metadata.namespace && !has(variables.w.hostId)',
+        name: 'locals',
+        expression: `
+          (has(variables.w.components)
+            ? variables.w.components.filter(c, has(c.localResources)).map(c, c.localResources)
+            : []) +
+          (has(variables.w.service) && has(variables.w.service.localResources)
+            ? [variables.w.service.localResources]
+            : [])`,
+      },
+    ],
+    validations: [
+      {
+        expression: `has(variables.w.environment) &&
+          variables.w.environment == object.metadata.namespace &&
+          !has(variables.w.hostId)`,
         message: 'Tenant workloads must target their own environment and cannot select a host ID',
       },
       {
@@ -57,87 +299,109 @@ export function admissionResources(installation: string, namespace: string): Res
         message: 'Tenant workloads cannot mount host volumes',
       },
       {
-        expression:
-          'variables.locals.all(l, (!has(l.allowedHosts) || size(l.allowedHosts) == 0) && (!has(l.allowedHostLoopbackPorts) || size(l.allowedHostLoopbackPorts) == 0) && (!has(l.volumeMounts) || size(l.volumeMounts) == 0))',
+        expression: `variables.locals.all(l,
+          (!has(l.allowedHosts) || size(l.allowedHosts) == 0) &&
+          (!has(l.allowedHostLoopbackPorts) || size(l.allowedHostLoopbackPorts) == 0) &&
+          (!has(l.volumeMounts) || size(l.volumeMounts) == 0))`,
         message: 'Tenant guests cannot request network or host filesystem capabilities',
       },
       {
-        expression: `!has(variables.w.hostInterfaces) || variables.w.hostInterfaces.all(h,
-      (!has(h.name) || h.name == '') &&
-      (!has(h.secretFrom) || size(h.secretFrom) == 0) &&
-      ((h['namespace'] == 'wasi' && h['package'] in ['http', 'config']) ||
-       (h['namespace'] == 'wasmcloud' && h['package'] in ['keyvalue', 'messaging'])) &&
-      (!has(h.configFrom) || size(h.configFrom) == 0 || (h['package'] == 'keyvalue' && h.configFrom.all(c, c.name == 'di-tenant-stock'))) &&
-      (!has(h.config) ||
-        (h['package'] == 'http' && h.config.all(k, k in ['host', 'path'])) ||
-        h['package'] == 'config' ||
-        (h['package'] == 'messaging' && h.config.all(k, k in ['subscriptions', 'consumer_group', 'max_in_flight', 'admission_wait'])) ||
-        (h['package'] == 'keyvalue' && size(h.config) == 0)))`,
+        expression: hostInterfaceAdmissionExpression(),
         message:
-          'Only tenant-scoped native host interfaces are allowed; use di-tenant-stock for Redis',
+          'Only wasi http/config or wasmcloud keyvalue/messaging with controller-managed di-bs-/di-binding- (or transitional di-tenant-stock / default NATS) references are allowed',
       },
     ],
-    [
-      { name: 'w', expression: 'object.spec.template.spec' },
+  };
+}
+
+/** Reserve controller-managed configuration and credentials against tenant-user mutation. */
+function backendConfigPolicy(namespace: string): AdmissionPolicy {
+  const objectName =
+    "(request.operation == 'DELETE' ? oldObject.metadata.name : object.metadata.name)";
+  return {
+    name: 'backend-config',
+    apiGroups: [''],
+    apiVersions: ['v1'],
+    operations: ['CREATE', 'UPDATE', 'DELETE'],
+    resources: ['configmaps', 'secrets'],
+    validations: [
       {
-        name: 'locals',
-        expression:
-          '(has(variables.w.components) ? variables.w.components.filter(c, has(c.localResources)).map(c, c.localResources) : []) + (has(variables.w.service) && has(variables.w.service.localResources) ? [variables.w.service.localResources] : [])',
+        expression: `
+          !request.userInfo.username.startsWith('system:serviceaccount:${namespace}:di-user-') ||
+          !(${objectName} == '${STOCK_CONFIG_NAME}' ||
+            ${objectName}.startsWith('${BS_CONFIG_PREFIX}') ||
+            ${objectName}.startsWith('${BINDING_CONFIG_PREFIX}'))`,
+        message:
+          'di-tenant-stock, di-bs-*, and di-binding-* ConfigMaps/Secrets are managed by the platform controller',
       },
     ],
-  );
-  // Reserve the backend configuration against create/update/delete, including deletecollection.
-  const reservedName = `${installation}-backend-config`;
-  result.push({
-    apiVersion: 'admissionregistration.k8s.io/v1',
-    kind: 'ValidatingAdmissionPolicy',
-    metadata: { name: reservedName },
-    spec: {
-      failurePolicy: 'Fail',
-      matchConstraints: {
-        resourceRules: [
-          {
-            apiGroups: [''],
-            apiVersions: ['v1'],
-            operations: ['CREATE', 'UPDATE', 'DELETE'],
-            resources: ['configmaps'],
-          },
-        ],
-      },
+  };
+}
+
+function ownershipLabelsExpression(installation: string): string {
+  return `!has(object.metadata.labels) || (
+    (!has(object.metadata.labels['${OWNER}'])) &&
+    (!has(object.metadata.labels['${TENANT}']) ||
+      object.metadata.namespace == 'di-tenant-' + object.metadata.labels['${TENANT}']) &&
+    (!has(object.metadata.labels['${INSTALLATION}']) ||
+      object.metadata.labels['${INSTALLATION}'] == '${installation}')
+  )`;
+}
+
+/** The controller's runtime credentials must never become guest capabilities. */
+export function admissionResources(installation: string, namespace: string): Resource[] {
+  const ownershipLabels = ownershipLabelsExpression(installation);
+  const policies: AdmissionPolicy[] = [
+    workloadPolicy(),
+    backendConfigPolicy(namespace),
+    {
+      name: 'services',
+      apiGroups: [''],
+      resources: ['services'],
       validations: [
         {
-          expression: `!request.userInfo.username.startsWith('system:serviceaccount:${namespace}:di-user-') || (request.operation == 'DELETE' ? oldObject.metadata.name : object.metadata.name) != 'di-tenant-stock'`,
-          message: 'di-tenant-stock is managed by the platform controller',
+          expression: `(!has(object.spec.type) || object.spec.type == 'ClusterIP') &&
+            (!has(object.spec.externalIPs) || size(object.spec.externalIPs) == 0)`,
+          message: 'Tenant services must be ClusterIP services without external IPs',
         },
       ],
     },
-  });
-  result.push({
-    apiVersion: 'admissionregistration.k8s.io/v1',
-    kind: 'ValidatingAdmissionPolicyBinding',
-    metadata: { name: reservedName },
-    spec: {
-      policyName: reservedName,
-      validationActions: ['Deny'],
-      matchResources: {
-        namespaceSelector: {
-          matchLabels: { [INSTALLATION]: installation },
-          matchExpressions: [{ key: TENANT, operator: 'Exists' }],
+    {
+      name: 'backingservices',
+      apiGroups: [GROUP],
+      resources: ['backingservices'],
+      validations: [
+        {
+          expression: ownershipLabels,
+          message: 'BackingService ownership labels must derive from the tenant namespace',
         },
-      },
+        {
+          expression: `object.spec.type in ['keyvalue', 'messaging'] &&
+            (!has(object.spec.className) || object.spec.className == '' ||
+              object.spec.className in ['${DEFAULT_CLASS_NAMES.keyvalue}', '${DEFAULT_CLASS_NAMES.messaging}'])`,
+          message:
+            'BackingService className must be an approved platform default (fail-closed for unknown classes)',
+        },
+      ],
     },
-  });
-  policy(
-    'services',
-    [''],
-    ['services'],
-    [
-      {
-        expression:
-          "(!has(object.spec.type) || object.spec.type == 'ClusterIP') && (!has(object.spec.externalIPs) || size(object.spec.externalIPs) == 0)",
-        message: 'Tenant services must be ClusterIP services without external IPs',
-      },
-    ],
-  );
-  return result;
+    {
+      name: 'servicebindings',
+      apiGroups: [GROUP],
+      resources: ['servicebindings'],
+      validations: [
+        {
+          expression: ownershipLabels,
+          message: 'ServiceBinding ownership labels must derive from the tenant namespace',
+        },
+        {
+          expression: `object.spec.capability in ['keyvalue', 'messaging'] &&
+            object.spec.serviceName != '' &&
+            !object.spec.serviceName.contains('/') && !object.spec.serviceName.contains('.')`,
+          message:
+            'ServiceBinding must reference a same-namespace BackingService with capability keyvalue or messaging',
+        },
+      ],
+    },
+  ];
+  return policies.flatMap((policy) => policyResources(installation, policy));
 }
