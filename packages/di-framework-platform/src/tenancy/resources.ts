@@ -1,3 +1,4 @@
+import { backingServiceCrds } from './backing-services';
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json | undefined };
 export interface Metadata {
   name: string;
@@ -194,6 +195,7 @@ const crds = [
       },
     },
   ),
+  ...backingServiceCrds,
 ];
 function names(name: string) {
   return {
@@ -582,6 +584,45 @@ function userResources(user: User, tenants: Tenant[], cfg: ControllerConfig): Re
   return result;
 }
 
+export type {
+  BackingCapability,
+  BackingProvider,
+  BackingService,
+  BackingServiceClass,
+  BackingServiceClassSpec,
+  BackingServiceClassStatus,
+  BackingServiceSpec,
+  BackingServiceStatus,
+  ClassVisibility,
+  DeletionPolicy,
+  EndpointSummary,
+  ServiceBinding,
+  ServiceBindingSpec,
+  ServiceBindingStatus,
+  SizingParameters,
+} from './backing-services';
+export {
+  assertUniqueDefaults,
+  BINDING,
+  backingServiceCrds,
+  bindingMatchesService,
+  CAPABILITIES,
+  CLASS,
+  COMPATIBLE,
+  CREDENTIAL_STATUS_KEYS,
+  classVisibleToTenant,
+  compatibleProvider,
+  DEFAULT_CLASS_NAMES,
+  defaultClassName,
+  defaultClassSeed,
+  PROVIDERS,
+  resolveClassName,
+  SERVICE,
+  statusContainsCredentials,
+  validateBindingSpec,
+  validateClassSpec,
+  validateServiceSpec,
+} from './backing-services';
 export {
   crds,
   FINALIZER,

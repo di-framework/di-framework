@@ -1,9 +1,10 @@
 # @di-framework/platform
 
 Shared TypeScript/Pulumi infrastructure for the wasmCloud CLI extension and
-`di-framework-kube`. This package owns the operator, Tenant/User CRDs, controller,
-admission policies, tenant namespace declarations, and HTTP entrypoint. Application
-WorkloadDeployments remain owned by application deployment tooling.
+`di-framework-kube`. This package owns the operator, Tenant/User CRDs, backing-service
+CRD contracts, controller, admission policies, tenant namespace declarations, and
+HTTP entrypoint. Application WorkloadDeployments remain owned by application
+deployment tooling.
 
 - `@di-framework/platform/local` provisions the isolated Docker/k0s cluster,
   registry, and platform used by generated CLI projects.
@@ -61,3 +62,137 @@ Run `pulumi preview` and verify existing resources retain their identities befor
 applying. The local entrypoint preserves prior logical resource names. Old copied
 `tenancy.ts` and `tenancy/` files are no longer imported and can be removed after
 reviewing any local customization.
+
+## Backing services
+
+This section defines the v1alpha1 contract for independently requestable application
+backing services. Installation (#449), Redis/NATS reconciliation (#450), binding
+projection (#451), RBAC/admission (#452), retention (#453), and CLI (#454) implement
+this contract; they must not invent a conflicting shape.
+
+Schemas and helpers live in `src/tenancy/backing-services.ts` and are included in the
+platform `crds` export from `src/tenancy/resources.ts`.
+
+### Resources (`platform.di-framework.dev/v1alpha1`)
+
+| Kind | Scope | Owner |
+| --- | --- | --- |
+| `BackingServiceClass` | Cluster | Platform administrator |
+| `BackingService` | Namespaced (`di-tenant-<name>`) | Tenant developer |
+| `ServiceBinding` | Namespaced (`di-tenant-<name>`) | Tenant developer |
+
+**BackingServiceClass** selects a capability and an approved implementation:
+
+- `spec.type`: `keyvalue` \| `messaging`
+- `spec.provider`: `redis` \| `nats`
+- v1 compatibility is fixed: `keyvalue`+`redis`, `messaging`+`nats` (CEL + TypeScript helpers)
+- `spec.parametersSchema` / `spec.defaults`: typed sizing only (`storage`, `memory`, `cpu`);
+  no images, endpoints, hostPaths, or free-form infrastructure knobs
+- `spec.visibility`: `AllTenants` \| `SelectedTenants` (requires `allowedTenants`)
+- `spec.default`: at most one default class per `type`; default names are
+  `keyvalue-redis` and `messaging-nats`
+- Immutable after create: `type`, `provider`
+- Status: `Ready` condition and `observedGeneration` only
+
+**BackingService** is the tenant's request for a provisioned capability:
+
+- `spec.type` required; `spec.className` optional (empty → platform default for that type)
+- `spec.parameters` may override class defaults for sizing fields only
+- `spec.deletionPolicy`: `Retain` (default) \| `Delete` — controls data/PV retention when
+  the service is deleted (#453)
+- Immutable: `type`; `className` once set/resolved
+- Status conditions: `Ready`, `Provisioning`, `Failed`, `Deleting`, plus
+  `observedGeneration`, `classRef`, `runtimeNamespace`, and an `endpoint` summary
+  (`host`, `port`, `capability`). Status **never** contains credentials, passwords,
+  tokens, connection URLs with auth material, or secret names that encode secrets.
+
+Ownership and installation labels come from the tenant namespace and controller-managed
+labels (`platform.di-framework.dev/installation`, owner UID, tenant). Users cannot
+spoof cross-tenant ownership by writing labels on the object.
+
+**ServiceBinding** associates a declared application binding with a compatible service:
+
+- `spec.serviceName`: `BackingService` in the **same** namespace (cross-tenant refs rejected)
+- `spec.bindingName`: declared application binding (e.g. `stock`, `sync`) → named
+  `hostInterfaces[].name`
+- `spec.capability`: must match the referenced service's `type`
+- `spec.workloadName` is optional documentation/diagnostics only; **authorization is
+  tenant-level in v1**, not per workload
+- Multiple bindings may share one `BackingService` (warehouse `receive` / `take` /
+  `sync` sharing `stock`)
+- Status: `Ready` \| `Failed` \| `Deleting`, `observedGeneration`, and
+  `serviceRef` (`name`/`uid`/`generation`); never credentials
+
+### Authorization (tenant boundary)
+
+**Decision for v1: the authorization boundary is the tenant, not a user or workload.**
+
+Rationale from the #445 model already shipping in this platform:
+
+- Tenant developers already have Secret CRUD in `di-tenant-<name>` and port-forward
+  access to runtime pods. Claiming per-user or per-workload credential isolation
+  would contradict that access.
+- Redis `prefix` values are naming conventions for key layout, **not** an
+  authorization boundary.
+- Therefore this API does **not** claim per-user or per-workload credential isolation.
+
+Who may:
+
+| Actor | May |
+| --- | --- |
+| Platform admin | Manage `BackingServiceClass`; controllers provision infrastructure |
+| Tenant developer | Create/update/delete `BackingService` and `ServiceBinding` in their tenant namespace only |
+| Tenant viewer | get/list status of those resources |
+| Anyone | Cross-tenant references are **rejected**; namespace ownership is source of truth |
+
+Direct Kubernetes API submissions must be authorized the same as the CLI (RBAC and
+admission land in #452). This issue defines the contract those controls enforce.
+
+Protected delivery means controller-owned generated ConfigMaps/Secrets that tenants
+cannot forge or mutate to bypass provisioning — **not** secrecy from tenant
+developers who can already read Secrets in their namespace.
+
+### Runtime feasibility (wasmCloud 2.8+/2.9 hostInterfaces)
+
+Verified against the wasmCloud Host Interface Configuration Reference:
+
+- Named `hostInterfaces` entries are **required** for independent Redis/NATS backend
+  selection. Unnamed `wasi:keyvalue` and unnamed `wasmcloud:messaging` entries ignore
+  backend-selection keys on stock hosts.
+- Config merge order: inline `config` ← `configFrom` ← `secretFrom` (later wins).
+- Keyvalue Redis (named entry): `backend=redis`, `url` required, `prefix` optional
+  (layout only, not auth).
+- Messaging NATS (named entry): `backend=nats`, `url` required; subscriptions /
+  consumer groups remain workload-owned configuration.
+- `secretFrom` delivers credentials to the host plugin. Kubernetes Secrets in the
+  tenant namespace remain readable by developers.
+- Scheduler/control-plane NATS (TLS, host `wasmcloudNatsUrl` / `--scheduler-nats-url`)
+  is **distinct** from application messaging `BackingService` NATS. Never conflate
+  them with application backends, the registry, or the operator.
+
+**API implication:** each `ServiceBinding` resolves to a **named** hostInterface whose
+name is `spec.bindingName`. Controllers generate protected config references; do not
+rely on unnamed interfaces for multi-service selection (#451).
+
+### Distinguishing application vs control-plane dependencies
+
+| Concern | Resource |
+| --- | --- |
+| Application Redis / app NATS | `BackingService` (+ class/binding) |
+| Scheduler NATS, OCI registry, wasmCloud operator, tenant host pool | Platform / tenant runtime provisioning (not `BackingService`) |
+
+Today's tenant controller still provisions per-tenant Redis/NATS deployments and the
+`di-tenant-stock` ConfigMap as a transitional warehouse path. Later issues replace
+that with explicit `BackingService` / `ServiceBinding` objects **without silent data
+loss**: migration (#456) must retain volumes when `deletionPolicy: Retain` and must
+not delete hostPath/PV data when swapping the ConfigMap for binding-projected config.
+
+### Versioning and validation
+
+- Group/version matches Tenant/User: `platform.di-framework.dev/v1alpha1`.
+- CEL `x-kubernetes-validations` cover immutable `type`/`provider`/`className`,
+  type↔provider compatibility, and `SelectedTenants` requiring `allowedTenants`.
+- Same-namespace service existence, capability match against the live service,
+  unique default-per-type across the cluster, and forge-resistant config names are
+  enforced in admission/controllers (#450–#452); TypeScript helpers encode the same
+  rules for unit tests and future reconciler use.
