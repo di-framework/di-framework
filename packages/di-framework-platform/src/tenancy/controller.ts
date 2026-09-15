@@ -415,39 +415,6 @@ export class Controller {
       );
     if (!service.metadata.deletionTimestamp) await this.finalizer(service, true);
 
-    const resolved = resolveClass(service, classes, tenant.metadata.name);
-    if ('error' in resolved) {
-      await this.status(service, false, 'Failed', resolved.error, {
-        runtimeNamespace: n.runtimeNamespace,
-      });
-      return;
-    }
-    const { cls } = resolved;
-    const sized = resolveBackingSizing(service, cls, tenant);
-    if ('error' in sized) {
-      await this.status(service, false, 'Failed', sized.error, {
-        runtimeNamespace: n.runtimeNamespace,
-        classRef: {
-          name: cls.metadata.name,
-          uid: cls.metadata.uid,
-          generation: cls.metadata.generation,
-        },
-      });
-      return;
-    }
-
-    const classRef = {
-      name: cls.metadata.name,
-      uid: cls.metadata.uid,
-      generation: cls.metadata.generation,
-    };
-    const endpoint = endpointFor(service, tenant, cls.spec.provider);
-    const statusExtra = {
-      runtimeNamespace: n.runtimeNamespace,
-      classRef,
-      endpoint,
-    };
-
     if (service.metadata.deletionTimestamp) {
       const owned = await this.list<Resource>('apps/v1', 'Deployment', {
         [INSTALLATION]: this.cfg.installation,
@@ -494,11 +461,44 @@ export class Controller {
         false,
         'Deleting',
         'Stopping backing service workloads',
-        statusExtra,
+        { runtimeNamespace: n.runtimeNamespace },
       );
       if (stopped) await this.finalizer(service, false);
       return;
     }
+
+    const resolved = resolveClass(service, classes, tenant.metadata.name);
+    if ('error' in resolved) {
+      await this.status(service, false, 'Failed', resolved.error, {
+        runtimeNamespace: n.runtimeNamespace,
+      });
+      return;
+    }
+    const { cls } = resolved;
+    const sized = resolveBackingSizing(service, cls, tenant);
+    if ('error' in sized) {
+      await this.status(service, false, 'Failed', sized.error, {
+        runtimeNamespace: n.runtimeNamespace,
+        classRef: {
+          name: cls.metadata.name,
+          uid: cls.metadata.uid,
+          generation: cls.metadata.generation,
+        },
+      });
+      return;
+    }
+
+    const classRef = {
+      name: cls.metadata.name,
+      uid: cls.metadata.uid,
+      generation: cls.metadata.generation,
+    };
+    const endpoint = endpointFor(service, tenant, cls.spec.provider);
+    const statusExtra = {
+      runtimeNamespace: n.runtimeNamespace,
+      classRef,
+      endpoint,
+    };
 
     const desired = backingServiceResources(service, tenant, cls, this.cfg, sized.sizing);
     let ready = true;
