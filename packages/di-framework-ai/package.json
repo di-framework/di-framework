@@ -52,7 +52,7 @@
     "@di-framework/auth": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5",
-    "zod": "^4.6.2"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "@di-framework/auth": "^5",

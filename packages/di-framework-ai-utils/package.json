@@ -47,7 +47,7 @@
     "@di-framework/ai": "workspace:*",
     "@di-framework/core": "workspace:*",
     "@di-framework/repo": "workspace:*",
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "4.3.0",
     "@types/bun": "latest",
     "typescript": "^5"
   },
@@ -55,7 +55,7 @@
     "@di-framework/ai": "^5",
     "@di-framework/core": "^5",
     "@di-framework/repo": "^5",
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "4.3.0",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
