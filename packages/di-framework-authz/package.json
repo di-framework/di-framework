@@ -39,14 +39,14 @@
     "@di-framework/auth": "^5",
     "@di-framework/core": "^5",
     "@di-framework/http": "^5",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "devDependencies": {
     "@di-framework/auth": "workspace:*",
     "@di-framework/core": "workspace:*",
     "@di-framework/http": "workspace:*",
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependenciesMeta": {
     "@di-framework/http": {

@@ -40,11 +40,11 @@
   },
   "peerDependencies": {
     "@di-framework/core": "^5",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "files": [
     "dist",

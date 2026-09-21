@@ -49,14 +49,14 @@
     "@di-framework/repo": "workspace:*",
     "@huggingface/transformers": "4.2.0",
     "@types/bun": "latest",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependencies": {
     "@di-framework/ai": "^5",
     "@di-framework/core": "^5",
     "@di-framework/repo": "^5",
     "@huggingface/transformers": "4.2.0",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "peerDependenciesMeta": {
     "@di-framework/repo": {
