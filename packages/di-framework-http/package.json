@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/http",
-  "version": "5.2.6",
+  "version": "6.0.0",
   "description": "Extends di-framework with HTTP features",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

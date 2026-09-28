@@ -89,8 +89,6 @@ const FEATURE_ADAPTER_OPERATIONS: Readonly<Record<string, readonly string[]>> = 
 };
 
 const REMOVED_ENTRYPOINTS = [
-  'packages/di-framework-ai-utils/src/skills-index-cli.ts',
-  'packages/di-framework-ai-utils/src/skills/skills-index-cli.ts',
   'packages/di-framework-http/src/cli.ts',
   'packages/di-framework-tsc/bin/dtsc.cjs',
   'packages/di-framework-cli/cmd/mx.ts',

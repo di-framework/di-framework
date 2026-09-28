@@ -34,7 +34,6 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
     expect(names).toContain('@di-framework/socket');
     expect(names).toContain('@di-framework/rpc');
     expect(names).toContain('@di-framework/ai');
-    expect(names).toContain('@di-framework/ai-utils');
   });
 
   it('correctly classifies unmeasured packages like @di-framework/tsc', () => {
@@ -52,13 +51,7 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
     );
     expect(getPackageSlugFromPath('packages/di-framework-cli/cmd/build.ts')).toBe('cli');
     expect(getPackageSlugFromPath('packages/di-framework-codegen/index.ts')).toBe('codegen');
-    expect(getPackageSlugFromPath('packages/di-framework-ai-utils/src/index.ts')).toBe('ai-utils');
-    expect(getPackageSlugFromPath('packages/di-framework-wasmcloud/src/index.ts')).toBe(
-      'wasmcloud',
-    );
-    expect(getPackageSlugFromPath('packages/di-framework-cloudfoundry/src/index.ts')).toBe(
-      'cloudfoundry',
-    );
+
     expect(getPackageSlugFromPath('examples/packages/basic/index.ts')).toBeNull();
   });
 
@@ -67,7 +60,6 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
     expect(isSourceFile('packages/di-framework-auth/src/authorization.ts')).toBe(true);
     expect(isSourceFile('packages/di-framework-core/tests/container.test.ts')).toBe(false);
     expect(isSourceFile('packages/di-framework-core/dist/index.js')).toBe(false);
-    expect(isSourceFile('packages/di-framework-ai/tests/preload-wasm-mock.ts')).toBe(false);
     expect(isSourceFile('scripts/check-line-coverage.ts')).toBe(false);
     expect(isSourceFile('examples/packages/basic/index.ts')).toBe(false);
   });

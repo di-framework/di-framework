@@ -1,5 +1,4 @@
 [test]
-preload = ["./packages/di-framework-ai/tests/preload-wasm-mock.ts"]
 coverageReporter = ["text", "lcov"]
 # Line coverage must stay at 100%. Function coverage is not enforced: Bun
 # under-counts some decorated/implicit constructors even when every line runs.
@@ -11,8 +10,4 @@ coveragePathIgnorePatterns = [
   "**/scripts/**",
   "**/coverage/**",
   "**/dist/**",
-  # Opt-in benchmark entrypoints require a fetched 6.5 GB corpus, DuckDB,
-  # or the local embedding model. Their reusable logic is tested separately.
-  "examples/packages/ai-skills-scale/src/build-index.ts",
-  "examples/packages/ai-skills-scale/src/materialize-gitskills.ts",
 ]
