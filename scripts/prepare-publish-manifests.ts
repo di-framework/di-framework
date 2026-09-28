@@ -2,8 +2,8 @@
  * Rewrite published internal `@di-framework/*` dependency ranges in every
  * release package so they accept the workspace root version (typically `^<major>`).
  *
- * Used by the Release workflow before `check-packaging` and publish so packed
- * manifests are what npm will ship.
+ * Used by Auto Tag, so the release commit contains the aligned ranges, and by
+ * the Release workflow before `check-packaging` and publish.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -43,7 +43,9 @@ export function prepareAllPublishManifests(workspaceRoot = process.cwd()): {
       throw new Error(`Refusing to prepare ${pkgJson.name}@${version}: ${detail}`);
     }
 
-    writeFileSync(pkgJsonPath, `${JSON.stringify(prepared, null, 2)}\n`);
+    const next = `${JSON.stringify(prepared, null, 2)}\n`;
+    if (next === raw) continue;
+    writeFileSync(pkgJsonPath, next);
     updated.push(pkgJson.name);
   }
 
