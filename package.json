@@ -19,6 +19,7 @@
     "test": "bun test",
     "publish": "bun run packages/di-framework-cli/main.ts mx publish",
     "link-cli": "(cd packages/di-framework-cli && bun link >/dev/null 2>&1)",
+    "link:examples": "bun scripts/link-examples.ts",
     "postinstall": "git config core.hooksPath .githooks && bun link-cli && bun run build && echo 'di-framework init | build | check  (mx: maintainers)'",
     "tsc": "tsc",
     "lint": "biome check .",

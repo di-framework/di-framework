@@ -43,3 +43,6 @@ references
 
 # di-framework generated assets
 .di-framework
+
+# Cloned examples workspace for CI / local verification
+/examples
