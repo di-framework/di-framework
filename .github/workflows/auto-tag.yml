@@ -21,13 +21,14 @@ concurrency:
   group: auto-tag
   cancel-in-progress: false
 
-permissions:
-  contents: write
-  actions: write
-  pull-requests: write
+permissions: read-all
 
 jobs:
   tag:
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
     name: Bump version and tag
     runs-on: ubuntu-latest
     if: >-
@@ -35,12 +36,12 @@ jobs:
       !startsWith(github.event.head_commit.message, 'chore(release):')
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "20"
 
