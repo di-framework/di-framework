@@ -1,5 +1,36 @@
-import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const SINGLETON_PEER_DEPENDENCIES = new Set(['graphql']);
+
+export function resolvePackageDirectory(startDir: string, packageName: string): string | undefined {
+  const res = Bun.spawnSync(['bun', '-e', `console.log(import.meta.resolve("${packageName}"))`], {
+    cwd: startDir,
+  });
+  if (res.exitCode !== 0 || !res.stdout.toString().trim()) return undefined;
+  const rawUrl = res.stdout.toString().trim();
+  try {
+    const filePath = new URL(rawUrl).pathname;
+    let current = dirname(filePath);
+    while (current !== '/' && current !== '.') {
+      const pkgJsonPath = resolve(current, 'package.json');
+      if (existsSync(pkgJsonPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
+          if (pkg.name === packageName) {
+            return current;
+          }
+        } catch {
+          // ignore error and continue up
+        }
+      }
+      current = dirname(current);
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function resolveExamplesDir(rootDir = process.cwd()): string {
   if (process.env.EXAMPLES_DIR) {
@@ -48,7 +79,11 @@ export async function linkFrameworkToExamples(
   }
 
   const entries = readdirSync(packagesDir, { withFileTypes: true });
-  const linkedPackages: Array<{ name: string; directory: string }> = [];
+  const linkedPackages: Array<{
+    name: string;
+    directory: string;
+    peerDependencies?: Record<string, string>;
+  }> = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -56,7 +91,11 @@ export async function linkFrameworkToExamples(
     if (!existsSync(pkgJsonPath)) continue;
     const pkg = await Bun.file(pkgJsonPath).json();
     if (pkg.name?.startsWith('@di-framework/')) {
-      linkedPackages.push({ name: pkg.name, directory: resolve(packagesDir, entry.name) });
+      linkedPackages.push({
+        name: pkg.name,
+        directory: resolve(packagesDir, entry.name),
+        peerDependencies: pkg.peerDependencies,
+      });
     }
   }
 
@@ -84,6 +123,30 @@ export async function linkFrameworkToExamples(
 
   for (const { name } of linkedPackages) {
     manifest.overrides[name] = `link:${name}`;
+  }
+
+  // Link external singleton peer dependencies required by packages (e.g. graphql)
+  const processedPeers = new Set<string>();
+  for (const { directory, peerDependencies } of linkedPackages) {
+    if (!peerDependencies) continue;
+    for (const peerName of Object.keys(peerDependencies)) {
+      if (!SINGLETON_PEER_DEPENDENCIES.has(peerName) || processedPeers.has(peerName)) continue;
+      processedPeers.add(peerName);
+
+      const peerDir = resolvePackageDirectory(directory, peerName);
+      if (peerDir) {
+        console.log(`Registering bun link for singleton peer dependency ${peerName} in ${peerDir}...`);
+        const peerChild = Bun.spawn(['bun', 'link'], {
+          cwd: peerDir,
+          stdout: 'inherit',
+          stderr: 'inherit',
+        });
+        const peerExit = await peerChild.exited;
+        if (peerExit === 0) {
+          manifest.overrides[peerName] = `link:${peerName}`;
+        }
+      }
+    }
   }
 
   await Bun.write(examplesManifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
