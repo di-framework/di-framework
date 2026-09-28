@@ -174,6 +174,18 @@ describe('publish command', () => {
       expect(dryRun).toBeGreaterThan(packAudit);
     });
 
+    it('Auto Tag commits each workspace package version with the root bump', async () => {
+      const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/auto-tag.yml')).text();
+      const bump = workflow.indexOf(
+        'npm version "$NEXT" --no-git-tag-version --allow-same-version',
+      );
+      const sync = workflow.indexOf('node scripts/sync-workspace-versions.mjs');
+      const add = workflow.indexOf('git add package.json packages/*/package.json');
+      expect(bump).toBeGreaterThan(-1);
+      expect(sync).toBeGreaterThan(bump);
+      expect(add).toBeGreaterThan(sync);
+    });
+
     it('matches the Release workflow publish list', async () => {
       const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/release.yml')).text();
       const loop = workflow.match(/for pkg in([\s\S]*?); do/);

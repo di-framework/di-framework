@@ -96,10 +96,14 @@ jobs:
           git fetch origin main
           git checkout -B "$BRANCH" origin/main
 
-          # Bump after branch reset so origin/main doesn't wipe package.json
+          # Bump after branch reset so origin/main doesn't wipe package.json.
+          # npm version only rewrites the workspace root. Updating workspaces
+          # with npm also runs an install and writes package-lock.json, so the
+          # published packages are synced with node instead.
           npm version "$NEXT" --no-git-tag-version --allow-same-version
+          node scripts/sync-workspace-versions.mjs
 
-          git add package.json
+          git add package.json packages/*/package.json
           git add -u bun.lock package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "::error::nothing to commit for v$NEXT (package.json already at that version?)"
