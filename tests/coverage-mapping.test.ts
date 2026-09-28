@@ -33,7 +33,8 @@ describe('Coverage LCOV Parsing & Package Mapping', () => {
     expect(names).toContain('@di-framework/authz');
     expect(names).toContain('@di-framework/socket');
     expect(names).toContain('@di-framework/rpc');
-    expect(names).toContain('@di-framework/ai');
+    expect(names).toContain('@di-framework/queues');
+    expect(names).toContain('@di-framework/actors');
   });
 
   it('correctly classifies unmeasured packages like @di-framework/tsc', () => {

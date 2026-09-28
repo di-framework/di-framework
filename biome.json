@@ -15,8 +15,7 @@
       "!**/*.d.ts",
       "!bun.lock",
       "!deno.lock",
-      "!eslint.json",
-      "!packages/di-framework-cli-plugin-wasmcloud/assets/platform"
+      "!eslint.json"
     ]
   },
   "formatter": {

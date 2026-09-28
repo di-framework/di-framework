@@ -138,8 +138,6 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-socket');
       expect(PACKAGES).toContain('packages/di-framework-rpc');
       expect(PACKAGES).toContain('packages/di-framework-codegen');
-      expect(PACKAGES).toContain('packages/di-framework-cloudfoundry');
-      expect(PACKAGES).toContain('packages/di-framework-wasmcloud');
       expect(PACKAGES).toContain('packages/di-framework-cli-extension');
       expect(PACKAGES).toContain('packages/di-framework-cli');
       expect(PACKAGES).toContain('packages/di-framework-tsc');
