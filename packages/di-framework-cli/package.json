@@ -31,8 +31,8 @@
     "build": "bun -e \"console.log('@di-framework/cli: source bin, no compile step')\""
   },
   "dependencies": {
-    "@di-framework/cli-extension": "^5",
-    "@di-framework/codegen": "^5",
+    "@di-framework/cli-extension": "^6",
+    "@di-framework/codegen": "^6",
     "bun": "^1.4.2"
   },
   "devDependencies": {

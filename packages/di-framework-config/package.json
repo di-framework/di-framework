@@ -72,7 +72,7 @@
     "zod": "^4.6.5"
   },
   "peerDependencies": {
-    "@di-framework/core": "^5",
+    "@di-framework/core": "^6",
     "smol-toml": "^1.3.0",
     "typescript": "^5",
     "yaml": "^2.6.0",
