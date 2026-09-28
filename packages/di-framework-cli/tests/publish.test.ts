@@ -180,10 +180,12 @@ describe('publish command', () => {
         'npm version "$NEXT" --no-git-tag-version --allow-same-version',
       );
       const sync = workflow.indexOf('node scripts/sync-workspace-versions.mjs');
+      const ranges = workflow.indexOf('bun scripts/prepare-publish-manifests.ts');
       const add = workflow.indexOf('git add package.json packages/*/package.json');
       expect(bump).toBeGreaterThan(-1);
       expect(sync).toBeGreaterThan(bump);
-      expect(add).toBeGreaterThan(sync);
+      expect(ranges).toBeGreaterThan(sync);
+      expect(add).toBeGreaterThan(ranges);
     });
 
     it('matches the Release workflow publish list', async () => {
