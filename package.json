@@ -28,10 +28,10 @@
     "release:patch": "gh workflow run auto-tag.yml -f bump=patch"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.13",
+    "@biomejs/biome": "^2.5.14",
     "@types/bun": "latest",
     "bun-types": "1.4.2",
-    "happy-dom": "^20.14.3"
+    "happy-dom": "^20.14.5"
   },
   "peerDependencies": {
     "typescript": "^5.9.3"
