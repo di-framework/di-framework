@@ -83,9 +83,12 @@ fi
 
 echo ""
 
-# 5. Validate examples compile
+# 5. Validate examples compile when this repo still carries them.
+# Sample apps live in di-framework/examples after the v6 split.
 print_test "Validating example code..."
-if npx tsc --noEmit -p examples/tsconfig.json 2>/dev/null; then
+if [ ! -f "examples/tsconfig.json" ]; then
+  print_success "Example apps are covered in di-framework/examples"
+elif npx tsc --noEmit -p examples/tsconfig.json 2>/dev/null; then
   print_success "Advanced example validated"
 else
   print_error "Advanced example has type errors"
@@ -95,7 +98,9 @@ echo ""
 
 # 6. Check if examples package is properly structured
 print_test "Checking examples package structure..."
-if [ -f "examples/package.json" ]; then
+if [ ! -d "examples" ]; then
+  print_success "Example apps are covered in di-framework/examples"
+elif [ -f "examples/package.json" ]; then
   print_success "Examples package.json found"
 else
   print_error "Examples package.json not found"

@@ -1,5 +1,0 @@
-{
-  "name": "warehouse-sync",
-  "entry": "src/index.ts",
-  "workload": "warehouse"
-}

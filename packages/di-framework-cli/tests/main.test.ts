@@ -50,9 +50,7 @@ describe('CLI main router', () => {
       'generate',
       'build',
       'check',
-      'agent',
       'http',
-      'skills',
       'actor',
       'migrations',
       'mx',
@@ -65,21 +63,11 @@ describe('CLI main router', () => {
       'typecheck',
       'publish',
     ]);
-    expect(Object.keys(COMMAND_TREE.children?.skills?.children ?? {})).toEqual([
-      'index',
-      'validate',
-    ]);
     expect(Object.keys(COMMAND_TREE.children?.actor?.children ?? {})).toEqual([
       'list',
       'inspect',
       'reset',
       'clean',
-    ]);
-    expect(Object.keys(COMMAND_TREE.children?.agent?.children ?? {})).toEqual([
-      'audit',
-      'init',
-      'inspect',
-      'migrate',
     ]);
   });
 
@@ -132,49 +120,9 @@ describe('CLI main router', () => {
         calls.push(['check', args]);
         return {};
       },
-      agentAudit: async (args) => {
-        calls.push(['agent audit', args]);
-        return {};
-      },
-      agentInit: async (args) => {
-        calls.push(['agent init', args]);
-        return {};
-      },
-      agentInspect: async (args) => {
-        calls.push(['agent inspect', args]);
-        return {};
-      },
-      agentMigrate: async (args) => {
-        calls.push(['agent migrate', args]);
-        return {};
-      },
       httpOpenAPIGenerate: async (args) => {
         calls.push(['http openapi generate', args]);
         return { data: { outputPath: '/tmp/openapi.json', bytes: 10 } };
-      },
-      skillsIndexBuild: async (args) => {
-        calls.push(['skills index build', args]);
-        return {};
-      },
-      skillsIndexInspect: async (args) => {
-        calls.push(['skills index inspect', args]);
-        return {};
-      },
-      skillsIndexValidate: async (args) => {
-        calls.push(['skills index validate', args]);
-        return {};
-      },
-      skillsIndexQuery: async (args) => {
-        calls.push(['skills index query', args]);
-        return {};
-      },
-      skillsIndexMigrate: async (args) => {
-        calls.push(['skills index migrate', args]);
-        return {};
-      },
-      skillsValidate: async (args) => {
-        calls.push(['skills validate', args]);
-        return {};
       },
       actorList: async (args) => {
         calls.push(['actor list', args]);
@@ -247,17 +195,7 @@ describe('CLI main router', () => {
       ['generate', '--check'],
       ['build', '--watch'],
       ['check', 'tsconfig.app.json'],
-      ['agent', 'audit', '--source-mode', 'merge'],
-      ['agent', 'init', '--asset', '.agents/skills'],
-      ['agent', 'inspect', '--source-mode', 'replace'],
-      ['agent', 'migrate', '--plan'],
       ['http', 'openapi', 'generate', '--controllers', './controllers.ts'],
-      ['skills', 'index', 'build', '--skills-dir', '.agents/skills'],
-      ['skills', 'index', 'inspect', '--input', 'skills.json'],
-      ['skills', 'index', 'validate'],
-      ['skills', 'index', 'query', '--query', 'review code'],
-      ['skills', 'index', 'migrate', '--output', 'current.json'],
-      ['skills', 'validate', '--skills-dir', '.agents/skills'],
       ['actor', 'list', '--namespace', 'demo'],
       ['actor', 'inspect', 'Counter', '--key', '1'],
       ['actor', 'reset', '--all'],
@@ -279,17 +217,7 @@ describe('CLI main router', () => {
       ['generate', ['--check']],
       ['build', ['--watch']],
       ['check', ['tsconfig.app.json']],
-      ['agent audit', ['--source-mode', 'merge']],
-      ['agent init', ['--asset', '.agents/skills']],
-      ['agent inspect', ['--source-mode', 'replace']],
-      ['agent migrate', ['--plan']],
       ['http openapi generate', ['--controllers', './controllers.ts']],
-      ['skills index build', ['--skills-dir', '.agents/skills']],
-      ['skills index inspect', ['--input', 'skills.json']],
-      ['skills index validate', []],
-      ['skills index query', ['--query', 'review code']],
-      ['skills index migrate', ['--output', 'current.json']],
-      ['skills validate', ['--skills-dir', '.agents/skills']],
       ['actor list', ['--namespace', 'demo']],
       ['actor inspect', ['Counter', '--key', '1']],
       ['actor reset', ['--all']],

@@ -8,11 +8,8 @@ import { COMMAND_TREE, createCommandTree } from '../main';
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
 const CANONICAL_GROUPS = [
-  'agent',
   'http',
   'http openapi',
-  'skills',
-  'skills index',
   'actor',
   'migrations',
   'mx',
@@ -24,17 +21,7 @@ const CANONICAL_LEAVES = [
   'generate',
   'build',
   'check',
-  'agent audit',
-  'agent init',
-  'agent inspect',
-  'agent migrate',
   'http openapi generate',
-  'skills index build',
-  'skills index inspect',
-  'skills index validate',
-  'skills index query',
-  'skills index migrate',
-  'skills validate',
   'actor list',
   'actor inspect',
   'actor reset',
@@ -54,32 +41,7 @@ const CANONICAL_LEAVES = [
 ];
 
 const FEATURE_ADAPTER_OPERATIONS: Readonly<Record<string, readonly string[]>> = {
-  'cmd/agent/audit.ts': ['auditAgentConfiguration'],
-  'cmd/agent/init.ts': [
-    'auditAgentConfiguration',
-    'planAgentConfigurationMigration',
-    'executeAgentConfigurationMigration',
-  ],
-  'cmd/agent/inspect.ts': [
-    'resolveSkillSources',
-    'validateResolvedSkillCatalog',
-    'discoverAgentInstructions',
-    'loadAiIgnorePolicy',
-  ],
-  'cmd/agent/migrate.ts': [
-    'auditAgentConfiguration',
-    'planAgentConfigurationMigration',
-    'executeAgentConfigurationMigration',
-  ],
   'cmd/http/openapi-generate.ts': ['generateOpenAPIDocument', 'writeOpenAPIDocument'],
-  'cmd/skills/index.ts': [
-    'buildSkillsIndex',
-    'inspectSkillsIndex',
-    'validateSkillsIndex',
-    'querySkillsIndex',
-    'migrateSkillsIndex',
-  ],
-  'cmd/skills/validate.ts': ['validateSkillCatalog'],
   'cmd/extensions/install.ts': ['installExtension'],
   'cmd/extensions/uninstall.ts': ['uninstallExtension'],
   'cmd/extensions/list.ts': ['listInstalledExtensions'],
@@ -89,8 +51,6 @@ const FEATURE_ADAPTER_OPERATIONS: Readonly<Record<string, readonly string[]>> = 
 };
 
 const REMOVED_ENTRYPOINTS = [
-  'packages/di-framework-ai-utils/src/skills-index-cli.ts',
-  'packages/di-framework-ai-utils/src/skills/skills-index-cli.ts',
   'packages/di-framework-http/src/cli.ts',
   'packages/di-framework-tsc/bin/dtsc.cjs',
   'packages/di-framework-cli/cmd/mx.ts',

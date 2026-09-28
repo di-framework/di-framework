@@ -5,7 +5,9 @@
 Security updates are provided for the following release lines of this monorepo (all `@di-framework/*` packages share the same version):
 
 | Version | Supported          |
-| ------- | ------------------ |
+|---------| ------------------ |
+| 6.x     | :white_check_mark: |
+| 5.x     | :white_check_mark: |
 | 4.2.x   | :white_check_mark: |
 | 4.1.x   | :x:                |
 | < 4.0   | :x:                |

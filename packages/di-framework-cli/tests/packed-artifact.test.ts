@@ -75,7 +75,6 @@ describe('packed CLI artifact', () => {
     // source CLI itself participate in module resolution.
     const installedScope = join(projectRoot, 'node_modules', '@di-framework');
     const dependencySources = {
-      'ai-utils': join(REPO_ROOT, 'packages', 'di-framework-ai-utils'),
       'cli-extension': join(CLI_ROOT, 'node_modules', '@di-framework', 'cli-extension'),
       codegen: join(CLI_ROOT, 'node_modules', '@di-framework', 'codegen'),
       http: join(REPO_ROOT, 'packages', 'di-framework-http'),

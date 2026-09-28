@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createExtensionDispatch } from '../extensions/dispatch';
 import { main } from '../main';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
-const PLUGIN_ROOT = join(REPO_ROOT, 'packages', 'di-framework-cli-plugin-wasmcloud');
+const PLUGIN_PACKAGE = '@di-framework/cli-plugin-wasmcloud';
 
 function captureIo() {
   const stdout: string[] = [];
@@ -21,25 +21,64 @@ function captureIo() {
   };
 }
 
+function writeFixturePlugin(store: string): void {
+  const packageRoot = join(store, 'node_modules', '@di-framework', 'cli-plugin-wasmcloud');
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    join(store, 'package.json'),
+    `${JSON.stringify({
+      name: 'di-framework-extensions',
+      private: true,
+      dependencies: { [PLUGIN_PACKAGE]: '6.0.0' },
+    })}\n`,
+  );
+  writeFileSync(
+    join(packageRoot, 'package.json'),
+    `${JSON.stringify({
+      name: PLUGIN_PACKAGE,
+      version: '6.0.0',
+      type: 'module',
+      main: 'index.js',
+    })}\n`,
+  );
+  writeFileSync(
+    join(packageRoot, 'index.js'),
+    `export default {
+  schemaVersion: 1,
+  name: 'wasmcloud',
+  description: 'Fixture platform extension',
+  command: {
+    description: 'Fixture platform extension',
+    children: {
+      doctor: {
+        description: 'Check readiness',
+        run: async () => {
+          const config = await Bun.file('di-framework.config.json').json();
+          return { data: { application: config.name, checks: [{ id: 'config', ok: true }] } };
+        },
+      },
+    },
+  },
+};
+`,
+  );
+}
+
 describe('wasmcloud extension end-to-end', () => {
+  const temps: string[] = [];
+
   afterEach(() => {
     process.chdir(REPO_ROOT);
+    for (const temp of temps.splice(0)) rmSync(temp, { recursive: true, force: true });
   });
 
-  it('mounts the built plugin from a synthetic store and runs doctor', async () => {
+  it('mounts an installed extension from a synthetic store and runs doctor', async () => {
     const store = mkdtempSync(join(tmpdir(), 'ext-e2e-store-'));
-    writeFileSync(
-      join(store, 'package.json'),
-      `${JSON.stringify({
-        name: 'di-framework-extensions',
-        private: true,
-        dependencies: { '@di-framework/cli-plugin-wasmcloud': '^5' },
-      })}\n`,
-    );
-    mkdirSync(join(store, 'node_modules', '@di-framework'), { recursive: true });
-    symlinkSync(PLUGIN_ROOT, join(store, 'node_modules', '@di-framework', 'cli-plugin-wasmcloud'));
+    temps.push(store);
+    writeFixturePlugin(store);
 
     const project = mkdtempSync(join(tmpdir(), 'ext-e2e-project-'));
+    temps.push(project);
     writeFileSync(
       join(project, 'di-framework.config.json'),
       `${JSON.stringify({ name: 'E2E App', entry: 'app.ts' })}\n`,
@@ -61,5 +100,5 @@ describe('wasmcloud extension end-to-end', () => {
     expect(envelope.data.checks.length).toBeGreaterThan(0);
     expect([0, 1]).toContain(exitCode);
     expect(envelope.ok).toBe(exitCode === 0);
-  }, 60_000); // doctor probes real tools; each probe is bounded, the sum can exceed bun's 5s default
+  });
 });

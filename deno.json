@@ -3,10 +3,5 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false
   },
-  "nodeModulesDir": "auto",
-  "workspace": ["examples/packages/deno-http", "examples/packages/deno-sandboxes"],
-  "tasks": {
-    "http:example": "deno run --allow-net --sloppy-imports examples/packages/deno-http/src/main.ts",
-    "sandboxes:example": "deno run --allow-net --allow-env --env-file=examples/packages/deno-sandboxes/.env --sloppy-imports examples/packages/deno-sandboxes/src/main.ts"
-  }
+  "nodeModulesDir": "auto"
 }

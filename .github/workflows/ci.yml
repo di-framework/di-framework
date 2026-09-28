@@ -25,11 +25,6 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install SQLite build toolchain
-        run: |
-          bash packages/di-framework-sqlite-component/scripts/install-tools.sh --rust
-          echo "$GITHUB_WORKSPACE/packages/di-framework-sqlite-component/.tools/bin" >> "$GITHUB_PATH"
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -53,9 +48,6 @@ jobs:
           bun run packages/di-framework-cli/main.ts mx build --sync-versions
           bun scripts/release-prepublish.ts --publish-dry-run
           git checkout -- packages/*/package.json
-
-      - name: Verify optional Transformers.js peer installs
-        run: bun run check-ai-utils-optional-peer
 
       - name: Test
         run: bun test --coverage
@@ -174,25 +166,3 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -d "$payload"
           echo "Dispatched coverage update to di-framework/docs (run_id=$GITHUB_RUN_ID)"
-
-  deno-examples:
-    name: Deno examples
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
-        with:
-          deno-version: v2.x
-
-      - name: Test Deno HTTP example
-        working-directory: examples/packages/deno-http
-        run: deno task test
-
-      # The sandbox example provisions remote Deno Sandboxes and needs
-      # service credentials, so keep its CI check compile-only.
-      - name: Type-check Deno sandbox example
-        working-directory: examples/packages/deno-sandboxes
-        run: deno check --sloppy-imports src/main.ts src/test.main.ts src/sandbox.example.ts
