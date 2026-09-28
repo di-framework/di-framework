@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveExamplesDir } from '../scripts/link-examples';
+import { resolveExamplesDir, resolvePackageDirectory } from '../scripts/link-examples';
 
 describe('link-examples script', () => {
   let tempDir: string;
@@ -50,5 +50,19 @@ describe('link-examples script', () => {
     mkdirSync(emptyDir, { recursive: true });
 
     expect(() => resolveExamplesDir(emptyDir)).toThrow('Could not locate examples workspace');
+  });
+
+  it('resolves installed package directory from start directory', () => {
+    const pkgDir = resolvePackageDirectory(
+      join(process.cwd(), 'packages/di-framework-graphql'),
+      'graphql',
+    );
+    expect(pkgDir).toBeDefined();
+    expect(pkgDir?.endsWith('graphql')).toBe(true);
+  });
+
+  it('returns undefined for non-existent package', () => {
+    const pkgDir = resolvePackageDirectory(process.cwd(), 'non-existent-pkg-xyz');
+    expect(pkgDir).toBeUndefined();
   });
 });
