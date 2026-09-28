@@ -1,5 +1,0 @@
-{
-  "name": "scheduled-worker",
-  "entry": "src/index.ts",
-  "ingress": false
-}

@@ -1,9 +1,0 @@
-{
-  "extends": "../tsconfig.base.json",
-  "compilerOptions": {
-    "moduleResolution": "bundler",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": false
-  },
-  "include": ["packages/*/src/**/*", "tests/**/*", "scripts/**/*.ts"]
-}
