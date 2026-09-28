@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/actors",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "Local virtual actor runtime with serialized invocations and transactional in-memory storage for di-framework.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
