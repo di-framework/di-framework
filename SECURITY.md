@@ -8,11 +8,9 @@ Security updates are provided for the following release lines of this monorepo (
 |---------| ------------------ |
 | 6.x     | :white_check_mark: |
 | 5.x     | :white_check_mark: |
-| 4.2.x   | :white_check_mark: |
-| 4.1.x   | :x:                |
-| < 4.0   | :x:                |
+| < 5.0   | :x:                |
 
-Only the latest minor line receives security fixes. Older 4.x minors and any pre-4.0 releases are unsupported; upgrade to the latest 4.2.x patch when a fix is published.
+Only the latest minor line receives security fixes. Older minors and any pre-5.0 releases are unsupported; upgrade to the latest 6.x or 5.x patch when a fix is published.
 
 ## Reporting a Vulnerability
 
