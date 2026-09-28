@@ -79,7 +79,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@di-framework/core": "^5",
+    "@di-framework/core": "^6",
     "typescript": "^5"
   }
 }

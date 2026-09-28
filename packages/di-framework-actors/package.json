@@ -40,10 +40,10 @@
     }
   },
   "dependencies": {
-    "@di-framework/repo": "^5"
+    "@di-framework/repo": "^6"
   },
   "peerDependencies": {
-    "@di-framework/core": "^5",
+    "@di-framework/core": "^6",
     "typescript": "^5"
   },
   "files": [
