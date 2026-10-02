@@ -133,8 +133,14 @@ describe('Surface Emitters', () => {
     expect(code).not.toBeNull();
     expect(code!).toContain('@HttpRouter(');
     expect(code!).toContain('export class OrdersV1HttpController');
-    expect(code!).toContain('.post(');
-    expect(code!).toContain('.get(');
+    expect(code!).toContain('@Endpoint(');
+    expect(code!).toContain("summary: 'Create an order'");
+    expect(code!).toContain('schema: CreateOrder.jsonSchema');
+    expect(code!).toContain('schema: Order.jsonSchema');
+    expect(code!).toContain("routes.post('/v1/orders'");
+    expect(code!).toContain("routes.get('/v1/orders/:id'");
+    expect(code!).toContain('if (output instanceof Response) return output;');
+    expect(code!).toContain('request,');
   });
 
   it('emitEventsSurface generates @EventBridge with @Inbound and @Outbound', () => {

@@ -15,7 +15,7 @@ bun add @di-framework/codegen
 - **Typed Schema Manifests**: Self-describing, versioned declarations using standard TypeScript objects (`satisfies SchemaCodegenManifest`).
 - **Deterministic Emitters**:
   - `contracts.ts`: Validation helpers and contract type re-exports.
-  - `http.ts`: `@HttpRouter` controller classes with route metadata.
+  - `http.ts`: `@HttpRouter` controller classes with `@Endpoint` metadata on each route.
   - `events.ts`: `@EventBridge` definitions with `@Inbound` and `@Outbound` routes.
   - `rpc.ts`: Opt-in `@RpcMessage` and `@RpcService` declarations.
   - `tools.ts`: Opt-in `@ToolSet` and `@Tool` beans.
