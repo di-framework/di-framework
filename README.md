@@ -1,9 +1,5 @@
 # di-framework
 
-[![OpenSSF Best Practices](https://www.bestpractices.coreinfrastructure.org/projects/1/badge)](https://www.bestpractices.coreinfrastructure.org/projects/1)
-[Security Assurance & Evidence](./security/README.md)
-
-
 Lightweight, type-safe dependency injection for TypeScript — plus packages for HTTP, GraphQL, events, auth, RPC, and more.
 
 [Documentation](https://docs.di-framework.dev)
