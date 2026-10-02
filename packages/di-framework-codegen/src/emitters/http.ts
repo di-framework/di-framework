@@ -160,9 +160,11 @@ function importLines(pairs: Array<[string, string]>): string[] {
     grouped.set(modulePath, existing);
   }
   return Array.from(grouped.keys())
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .map((modulePath) => {
-      const exports = Array.from(grouped.get(modulePath)!).sort().join(', ');
+      const exports = Array.from(grouped.get(modulePath)!)
+        .sort((a, b) => a.localeCompare(b))
+        .join(', ');
       return `import { ${exports} } from '${modulePath}';`;
     });
 }
@@ -170,11 +172,12 @@ function importLines(pairs: Array<[string, string]>): string[] {
 function joinPath(prefix: string, path: string): string {
   if (!prefix) return path;
   const base = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
-  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${suffix}`;
 }
 
 function escapeString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return value.replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`);
 }
 
 function capitalize(str: string): string {
