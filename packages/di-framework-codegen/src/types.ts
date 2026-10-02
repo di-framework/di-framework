@@ -32,6 +32,8 @@ export interface SchemaCodegenManifestHttp {
   successStatus?: number;
   summary?: string;
   description?: string;
+  /** OpenAPI parameter objects, excluding path params derived from the route. */
+  parameters?: ReadonlyArray<Record<string, unknown>>;
 }
 
 export interface SchemaCodegenManifestEvents {
@@ -123,6 +125,7 @@ export interface NormalizedOperation {
     successStatus: number;
     summary?: string;
     description?: string;
+    parameters?: ReadonlyArray<Record<string, unknown>>;
   };
   events?: {
     inbound?: {

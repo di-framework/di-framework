@@ -108,6 +108,7 @@ export function normalizeManifest(
         successStatus: status,
         summary: op.http.summary,
         description: op.http.description,
+        ...(op.http.parameters ? { parameters: op.http.parameters } : {}),
       };
     }
 
