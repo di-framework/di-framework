@@ -98,6 +98,9 @@ describe('Surface Emitters', () => {
           method: 'GET',
           path: '/orders/:id',
           successStatus: 200,
+          parameters: [
+            { name: 'verbose', in: 'query', required: false, schema: { type: 'boolean' } },
+          ],
         },
         rpc: {
           package: 'orders.v1',
@@ -131,14 +134,18 @@ describe('Surface Emitters', () => {
   it('emitHttpSurface generates @HttpRouter controller with POST and GET methods', () => {
     const code = emitHttpSurface(sampleNormManifest);
     expect(code).not.toBeNull();
-    expect(code!).toContain('@HttpRouter(');
+    expect(code!).toContain('@Controller()');
     expect(code!).toContain('export class OrdersV1HttpController');
+    expect(code!).toContain('export { routes };');
     expect(code!).toContain('@Endpoint(');
     expect(code!).toContain("summary: 'Create an order'");
     expect(code!).toContain('schema: CreateOrder.jsonSchema');
     expect(code!).toContain('schema: Order.jsonSchema');
     expect(code!).toContain("routes.post('/v1/orders'");
     expect(code!).toContain("routes.get('/v1/orders/:id'");
+    expect(code!).toContain(
+      'parameters: [{"name":"verbose","in":"query","required":false,"schema":{"type":"boolean"}}]',
+    );
     expect(code!).toContain('if (output instanceof Response) return output;');
     expect(code!).toContain('request,');
   });

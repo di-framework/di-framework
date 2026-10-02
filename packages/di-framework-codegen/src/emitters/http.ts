@@ -18,12 +18,11 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
   );
   const schemaImports = importLines(
     httpOps.flatMap((op) => {
-      const input = manifest.schemas[op.inputSchemaName];
-      const output = manifest.schemas[op.outputSchemaName];
-      return [
-        input ? [input.relativeModulePathFromGen, op.inputSchemaName] : undefined,
-        output ? [output.relativeModulePathFromGen, op.outputSchemaName] : undefined,
-      ].filter((item): item is [string, string] => item !== undefined);
+      const names = schemaNamesInMetadata(op);
+      return names.flatMap((name) => {
+        const schema = manifest.schemas[name];
+        return schema ? [[schema.relativeModulePathFromGen, name] as [string, string]] : [];
+      });
     }),
   );
 
@@ -47,33 +46,30 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
     emitRoute(op, controllerName, prefix, exportToPropMap.get(op.handler.exportName)!),
   );
 
-  const prefixOpts = prefix ? `{\n  prefix: '${escapeString(prefix)}',\n}` : '';
   const httpImports =
     httpOps.length > 0
       ? `import { useContainer } from '@di-framework/core/container';
 import { Component } from '@di-framework/core/decorators';
-import { Controller, Endpoint, HttpRouter, json, TypedRouter } from '@di-framework/http';`
-      : `import { HttpRouter } from '@di-framework/http';`;
+import { Controller, Endpoint, json, TypedRouter } from '@di-framework/http';`
+      : `import { Controller } from '@di-framework/http';`;
 
   const schemaBlock = schemaImports.length > 0 ? `\n${schemaImports.join('\n')}` : '';
   const validatorBlock =
-    validatorsList.length > 0
-      ? `\nimport {\n  ${validatorsList},\n} from './contracts';`
-      : '';
+    validatorsList.length > 0 ? `\nimport {\n  ${validatorsList},\n} from './contracts';` : '';
   const routesConst = httpOps.length > 0 ? `\nconst routes = TypedRouter();\n` : '';
-  const routeFields =
-    routes.length > 0 ? `\n\n${routes.join('\n\n')}\n\n  static route = routes;` : '';
+  const routeFields = routes.length > 0 ? `\n\n${routes.join('\n\n')}` : '';
 
   return `${OWNERSHIP_HEADER}
 
 ${httpImports}
 ${handlerImports.join('\n')}${schemaBlock}${validatorBlock}
 ${routesConst}
-${httpOps.length > 0 ? '@Controller()\n' : ''}@HttpRouter(${prefixOpts})
+@Controller()
 export class ${controllerName} {
 ${handlerProps.join('\n\n')}${routeFields}
 }
-`;
+
+${httpOps.length > 0 ? 'export { routes };\n' : ''}`;
 }
 
 function emitRoute(
@@ -95,7 +91,7 @@ function emitRoute(
   return `  @Endpoint({
 ${endpointMetadata(op)}
   })
-  static ${op.name} = routes.${method}('${escapeString(path)}', async (request: Request) => {
+  static ${op.name} = routes.${method}('${escapeString(path)}', async (request) => {
     const self = useContainer().resolve(${controllerName});
     ${bodyRead}
     const command = validate${op.inputSchemaName}(body);
@@ -108,6 +104,15 @@ ${endpointMetadata(op)}
     if (output instanceof Response) return output;
     return json(validate${op.outputSchemaName}(output)${statusArg});
   });`;
+}
+
+function schemaNamesInMetadata(op: NormalizedOperation): string[] {
+  const http = op.http!;
+  const method = http.method.toLowerCase();
+  const names: string[] = [];
+  if (method === 'post' || method === 'put' || method === 'patch') names.push(op.inputSchemaName);
+  if (http.successStatus !== 204) names.push(op.outputSchemaName);
+  return names;
 }
 
 function endpointMetadata(op: NormalizedOperation): string {
