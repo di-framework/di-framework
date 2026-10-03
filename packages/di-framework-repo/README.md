@@ -350,13 +350,18 @@ di-framework migrations status --db ./dev.db --json
 Guests that call the `wasmcloud:postgres` binding pass parameters as tagged `pg-value` variants. The host binds in binary, so a text payload in a `uuid` or `boolean` column is rejected. Import the codec from `@di-framework/repo/postgres`. The same functions are on the portable wasmCloud build (`import … from '@di-framework/repo'` when the `wasmcloud` export condition is set).
 
 ```ts
-import { pgValue, readRows } from '@di-framework/repo/postgres';
+import { float8, int8, pgValue, readRows, text } from '@di-framework/repo/postgres';
 
 const rows = await readRows(
   await query('select id from users where id = $1', [pgValue(userId)]),
 );
+await query('insert into events (id, score, label) values ($1, $2, $3)', [
+  int8(id),
+  float8(score),
+  text(label),
+]);
 ```
 
-`pgValue` tags `null`, `text`, `uuid`, `bool`, `int4`, `int8`, `numeric`, `timestamp-tz`, `bytea`, and `jsonb`. `pgScalar` turns one result cell into a JSON value. `readRows` reads the column list and row stream. `postgresError` and `assertBatch` surface an `err` variant. `isUniqueViolation` detects SQLSTATE `23505`.
+`pgValue` infers a default tag from the JavaScript value: `null`, `text`, `uuid` (UUID-shaped strings), `bool`, `int4`, `int8` (`bigint`, or a safe integer outside the int4 range), `numeric` (other finite numbers), `timestamp-tz`, `bytea`, and `jsonb`. That default is only a guess. The host binds in binary, so a small integer in an `int8` column, a float in a `float8` column, or a UUID-shaped string in a `text` column is rejected. Pass the column tag (`pgValue(value, 'int8')`) or use `text`, `uuid`, `int8`, or `float8`. `int8` keeps a `bigint` so values above 2^53 are not rounded. `pgScalar` turns one result cell into a JSON value; an `int8` that is not a safe integer becomes a decimal string. `readRows` reads the column list and row stream. `postgresError` and `assertBatch` surface an `err` variant. `isUniqueViolation` detects SQLSTATE `23505` at the start of a `PostgreSQL` error, or the words `duplicate key`.
 
 Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not point `MigrationRunner` at this binding. Postgres schema history stays a guest concern; the runner's placeholders and transaction handle are SQLite.

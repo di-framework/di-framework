@@ -3,12 +3,15 @@ import { pgValue as pgValueFromIndex } from '../src/index';
 import { pgValue as pgValueFromPortable } from '../src/portable';
 import {
   assertBatch,
+  float8,
+  int8,
   isUniqueViolation,
   pgScalar,
   pgValue,
   postgresError,
   readRows,
   text,
+  uuid,
 } from '../src/postgres';
 
 const cell = (val: string) => ({ tag: 'text' as const, val });
@@ -54,10 +57,14 @@ describe('wasmCloud postgres values', () => {
     expect(pgValue(4)).toEqual({ tag: 'int4', val: 4 });
     expect(pgValue(-2_147_483_648)).toEqual({ tag: 'int4', val: -2_147_483_648 });
     expect(pgValue(2_147_483_647)).toEqual({ tag: 'int4', val: 2_147_483_647 });
-    expect(pgValue(2_147_483_648)).toEqual({ tag: 'int8', val: 2_147_483_648 });
-    expect(pgValue(-2_147_483_649)).toEqual({ tag: 'int8', val: -2_147_483_649 });
-    expect(pgValue(3n)).toEqual({ tag: 'int8', val: 3 });
+    expect(pgValue(2_147_483_648)).toEqual({ tag: 'int8', val: 2_147_483_648n });
+    expect(pgValue(-2_147_483_649)).toEqual({ tag: 'int8', val: -2_147_483_649n });
+    expect(pgValue(3n)).toEqual({ tag: 'int8', val: 3n });
+    expect(pgValue(9007199254740993n)).toEqual({ tag: 'int8', val: 9007199254740993n });
     expect(pgValue(1.5)).toEqual({ tag: 'numeric', val: '1.5' });
+    expect(() => pgValue(2 ** 53)).toThrow('exact integer');
+    expect(() => pgValue(9223372036854775808n)).toThrow('signed 64-bit range');
+    expect(() => pgValue(-9223372036854775809n)).toThrow('signed 64-bit range');
     expect(() => pgValue(Number.NaN)).toThrow('finite number');
     expect(() => pgValue(Number.POSITIVE_INFINITY)).toThrow('finite number');
     expect(pgValue(new Uint8Array([1, 2]))).toEqual({ tag: 'bytea', val: [1, 2] });
@@ -89,6 +96,16 @@ describe('wasmCloud postgres values', () => {
     expect(pgScalar({ tag: 'text', val: { unused: true } })).toBeNull();
     expect(pgScalar({ other: true })).toEqual({ other: true });
     expect(pgScalar({ tag: 'int4', val: 4 })).toBe(4);
+    expect(pgScalar({ tag: 'int8', val: 3n })).toBe(3);
+    expect(pgScalar({ tag: 'int8', val: 9007199254740993n })).toBe('9007199254740993');
+    expect(pgScalar({ tag: 'big-int', val: 4n })).toBe(4);
+    expect(pgScalar({ tag: 'bigserial', val: 8n })).toBe(8);
+    expect(pgScalar({ tag: 'serial8', val: 9n })).toBe(9);
+    expect(pgScalar({ tag: 'int8', val: 4 })).toBe(4);
+    expect(pgScalar({ tag: 'int8' })).toBeNull();
+    expect(JSON.stringify(pgScalar({ tag: 'int8', val: 9007199254740993n }))).toBe(
+      '"9007199254740993"',
+    );
     expect(pgScalar({ tag: 'uuid', val: '11111111-1111-4111-8111-111111111111' })).toBe(
       '11111111-1111-4111-8111-111111111111',
     );
@@ -163,6 +180,10 @@ describe('wasmCloud postgres values', () => {
     );
     expect(isUniqueViolation(new Error('duplicate key value'))).toBe(true);
     expect(isUniqueViolation(new Error('PostgreSQL 42P01 missing'))).toBe(false);
+    expect(
+      isUniqueViolation(new Error('PostgreSQL 22P02 invalid input syntax for type uuid: "123505"')),
+    ).toBe(false);
+    expect(isUniqueViolation(new Error('PostgreSQL 235050 too wide'))).toBe(false);
     expect(isUniqueViolation('23505')).toBe(false);
   });
 
@@ -223,6 +244,62 @@ describe('wasmCloud postgres values', () => {
     await expect(
       readRows(table(['id'], [], Promise.resolve({ tag: 'err', val: { code: '57014' } }))),
     ).rejects.toThrow('PostgreSQL 57014');
+  });
+
+  test('lets the caller name the column type', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(pgValue(id, 'text')).toEqual(text(id));
+    expect(text(id).tag).toBe('text');
+    expect(pgValue('not-a-uuid', 'uuid')).toEqual(uuid('not-a-uuid'));
+    expect(uuid(id)).toEqual({ tag: 'uuid', val: id });
+    expect(pgValue(4, 'int8')).toEqual(int8(4));
+    expect(int8(4)).toEqual({ tag: 'int8', val: 4n });
+    expect(int8(4n)).toEqual({ tag: 'int8', val: 4n });
+    expect(pgValue(4n, 'int4')).toEqual({ tag: 'int4', val: 4 });
+    expect(pgValue(1.5, 'numeric')).toEqual({ tag: 'numeric', val: '1.5' });
+    expect(pgValue('1.50', 'numeric')).toEqual({ tag: 'numeric', val: '1.50' });
+    expect(pgValue(true, 'bool')).toEqual({ tag: 'bool', val: true });
+    expect(pgValue('{"a":1}', 'jsonb')).toEqual({ tag: 'jsonb', val: '{"a":1}' });
+    expect(pgValue({ a: 1 }, 'jsonb')).toEqual({ tag: 'jsonb', val: '{"a":1}' });
+    expect(pgValue(new Uint8Array([1]), 'bytea')).toEqual({ tag: 'bytea', val: [1] });
+    const date = new Date('2026-10-03T13:04:05.006Z');
+    expect(pgValue(date, 'timestamp-tz')).toEqual(pgValue(date));
+    expect(pgValue(null, 'int8')).toEqual({ tag: 'null' });
+
+    const encoded = float8(1.5);
+    expect(encoded.tag).toBe('float8');
+    expect(pgValue(1.5, 'float8')).toEqual(encoded);
+    const [mantissa, exponent, sign] = encoded.val as [bigint, number, number];
+    expect(sign * Number(mantissa) * 2 ** exponent).toBe(1.5);
+    const negative = float8(-0);
+    const [zeroMantissa, , zeroSign] = negative.val as [bigint, number, number];
+    expect(zeroMantissa).toBe(0n);
+    expect(zeroSign).toBe(-1);
+    expect(float8(Number.MIN_VALUE).tag).toBe('float8');
+    const [subMantissa] = float8(Number.MIN_VALUE).val as [bigint, number, number];
+    expect(subMantissa).toBeGreaterThan(0n);
+
+    expect(() => pgValue(1, 'text')).toThrow('text parameter has the wrong type');
+    expect(() => pgValue(1, 'uuid')).toThrow('uuid parameter has the wrong type');
+    expect(() => pgValue('no', 'bool')).toThrow('bool parameter has the wrong type');
+    expect(() => pgValue(1.5, 'int4')).toThrow('int4 parameter has the wrong type');
+    expect(() => pgValue(2_147_483_648, 'int4')).toThrow('int4 parameter has the wrong type');
+    expect(() => pgValue(2_147_483_648n, 'int4')).toThrow('int4 parameter has the wrong type');
+    expect(() => pgValue(1.5, 'int8')).toThrow('int8 parameter has the wrong type');
+    expect(() => pgValue('4', 'int8')).toThrow('int8 parameter has the wrong type');
+    expect(() => int8(1.5)).toThrow('int8 parameter has the wrong type');
+    expect(() => pgValue('1', 'float8')).toThrow('float8 parameter has the wrong type');
+    expect(() => float8(Number.NaN)).toThrow('float8 parameter has the wrong type');
+    expect(() => float8(Number.POSITIVE_INFINITY)).toThrow('float8 parameter has the wrong type');
+    expect(() => pgValue(Number.NaN, 'numeric')).toThrow('numeric parameter has the wrong type');
+    expect(() => pgValue(true, 'numeric')).toThrow('numeric parameter has the wrong type');
+    expect(() => pgValue('2026-10-03', 'timestamp-tz')).toThrow(
+      'timestamp-tz parameter has the wrong type',
+    );
+    expect(() => pgValue(new Date(Number.NaN), 'timestamp-tz')).toThrow(
+      'timestamp-tz parameter has the wrong type',
+    );
+    expect(() => pgValue('bytes', 'bytea')).toThrow('bytea parameter has the wrong type');
   });
 
   test('ships from the postgres entry and the portable wasmCloud build', () => {

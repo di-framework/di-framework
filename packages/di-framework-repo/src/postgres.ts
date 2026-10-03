@@ -23,38 +23,69 @@ export interface PgParameter {
   val?: unknown;
 }
 
+/**
+ * Column type for {@link pgValue}. Inference is only the default: a small
+ * number is `int4`, a float is `numeric`, and a UUID-shaped string is `uuid`.
+ * Pass a tag, or use {@link text}, {@link uuid}, {@link int8}, or {@link float8},
+ * when the column is a different Postgres type.
+ */
+export type PgTag =
+  | 'text'
+  | 'uuid'
+  | 'bool'
+  | 'int4'
+  | 'int8'
+  | 'float8'
+  | 'numeric'
+  | 'timestamp-tz'
+  | 'bytea'
+  | 'jsonb';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INT4_MIN = -2_147_483_648;
 const INT4_MAX = 2_147_483_647;
+const INT8_MIN = -9223372036854775808n;
+const INT8_MAX = 9223372036854775807n;
 
-/** Tag a string as Postgres `text`. */
+/** Tag a string as Postgres `text`, including a value that looks like a UUID. */
 export function text(value: string): PgText {
   return { tag: 'text', val: value };
 }
 
+/** Tag a string as Postgres `uuid`. */
+export function uuid(value: string): PgParameter {
+  return { tag: 'uuid', val: value };
+}
+
 /**
- * Encode a repository parameter as the Postgres type the column expects.
- * The host binds in binary, so a text payload in a uuid or boolean slot is rejected.
+ * Tag an integer as Postgres `int8` (`s64`). The payload stays a `bigint` so
+ * values above 2^53 are not rounded.
  */
-export function pgValue(value: unknown): PgParameter {
+export function int8(value: bigint | number): PgParameter {
+  if (typeof value === 'bigint') return int8Parameter(value);
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return int8Parameter(BigInt(value));
+  throw wrongType('int8');
+}
+
+/** Tag a finite number as Postgres `float8` (`hashable-f64`). */
+export function float8(value: number): PgParameter {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw wrongType('float8');
+  return { tag: 'float8', val: hashableF64(value) };
+}
+
+/**
+ * Encode a repository parameter as a `pg-value`.
+ *
+ * Without `tag`, the JavaScript value picks a default: UUID-shaped strings
+ * become `uuid`, integers in the int4 range become `int4`, other safe integers
+ * become `int8`, and other finite numbers become `numeric`. The host binds in
+ * binary, so that default is rejected when the column type differs. Pass `tag`
+ * (or {@link text}, {@link uuid}, {@link int8}, {@link float8}) to name the column.
+ */
+export function pgValue(value: unknown, tag?: PgTag): PgParameter {
   if (value == null) return { tag: 'null' };
-  if (typeof value === 'string') {
-    return UUID.test(value) ? { tag: 'uuid', val: value } : text(value);
-  }
-  if (typeof value === 'boolean') return { tag: 'bool', val: value };
-  if (typeof value === 'bigint') return { tag: 'int8', val: Number(value) };
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('PostgreSQL parameter is not a finite number');
-    if (Number.isInteger(value)) {
-      return value >= INT4_MIN && value <= INT4_MAX
-        ? { tag: 'int4', val: value }
-        : { tag: 'int8', val: value };
-    }
-    return { tag: 'numeric', val: String(value) };
-  }
-  if (value instanceof Date) return { tag: 'timestamp-tz', val: timestampTz(value) };
-  if (value instanceof Uint8Array) return { tag: 'bytea', val: [...value] };
-  return { tag: 'jsonb', val: JSON.stringify(value) };
+  if (tag !== undefined) return coerce(value, tag);
+  return infer(value);
 }
 
 /** Normalize a binding failure, including an `err` variant, into an `Error`. */
@@ -73,7 +104,7 @@ export function postgresError(cause: unknown): Error {
 /** True when `error` is a Postgres unique violation (`23505`). */
 export function isUniqueViolation(error: unknown): boolean {
   const text = error instanceof Error ? error.message : '';
-  return text.includes('23505') || text.toLowerCase().includes('duplicate key');
+  return /^PostgreSQL 23505\b/.test(text) || text.toLowerCase().includes('duplicate key');
 }
 
 /** Turn one cell of a `pg-value` variant into a JSON value. */
@@ -94,7 +125,108 @@ export function pgScalar(value: unknown): unknown {
   }
   if (tagged.tag === 'timestamp' || tagged.tag === 'timestamp-tz') return timestampIso(tagged.val);
   if (tagged.tag === 'bool' || tagged.tag === 'boolean') return tagged.val === true;
+  if (
+    tagged.tag === 'int8' ||
+    tagged.tag === 'big-int' ||
+    tagged.tag === 'bigserial' ||
+    tagged.tag === 'serial8'
+  ) {
+    return jsonInt(tagged.val);
+  }
   return tagged.val === undefined ? null : tagged.val;
+}
+
+function infer(value: unknown): PgParameter {
+  if (typeof value === 'string') {
+    return UUID.test(value) ? uuid(value) : text(value);
+  }
+  if (typeof value === 'boolean') return { tag: 'bool', val: value };
+  if (typeof value === 'bigint') return int8(value);
+  if (typeof value === 'number') return inferNumber(value);
+  if (value instanceof Date) return { tag: 'timestamp-tz', val: timestampTz(value) };
+  if (value instanceof Uint8Array) return { tag: 'bytea', val: [...value] };
+  return { tag: 'jsonb', val: JSON.stringify(value) };
+}
+
+function inferNumber(value: number): PgParameter {
+  if (!Number.isFinite(value)) throw new Error('PostgreSQL parameter is not a finite number');
+  if (Number.isInteger(value)) {
+    if (value >= INT4_MIN && value <= INT4_MAX) return { tag: 'int4', val: value };
+    if (Number.isSafeInteger(value)) return int8(value);
+    throw new Error('PostgreSQL int8 parameter is not an exact integer');
+  }
+  return { tag: 'numeric', val: String(value) };
+}
+
+function coerce(value: unknown, tag: PgTag): PgParameter {
+  switch (tag) {
+    case 'text':
+      if (typeof value !== 'string') throw wrongType(tag);
+      return text(value);
+    case 'uuid':
+      if (typeof value !== 'string') throw wrongType(tag);
+      return uuid(value);
+    case 'bool':
+      if (typeof value !== 'boolean') throw wrongType(tag);
+      return { tag: 'bool', val: value };
+    case 'int4':
+      return int4Parameter(value);
+    case 'int8':
+      if (typeof value !== 'bigint' && typeof value !== 'number') throw wrongType(tag);
+      return int8(value);
+    case 'float8':
+      if (typeof value !== 'number') throw wrongType(tag);
+      return float8(value);
+    case 'numeric':
+      if (typeof value === 'number') {
+        if (!Number.isFinite(value)) throw wrongType(tag);
+        return { tag: 'numeric', val: String(value) };
+      }
+      if (typeof value === 'string') return { tag: 'numeric', val: value };
+      throw wrongType(tag);
+    case 'timestamp-tz':
+      if (!(value instanceof Date) || Number.isNaN(value.getTime())) throw wrongType(tag);
+      return { tag: 'timestamp-tz', val: timestampTz(value) };
+    case 'bytea':
+      if (!(value instanceof Uint8Array)) throw wrongType(tag);
+      return { tag: 'bytea', val: [...value] };
+    case 'jsonb':
+      return { tag: 'jsonb', val: typeof value === 'string' ? value : JSON.stringify(value) };
+  }
+}
+
+function int4Parameter(value: unknown): PgParameter {
+  if (typeof value === 'bigint') {
+    if (value < BigInt(INT4_MIN) || value > BigInt(INT4_MAX)) throw wrongType('int4');
+    return { tag: 'int4', val: Number(value) };
+  }
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < INT4_MIN ||
+    value > INT4_MAX
+  ) {
+    throw wrongType('int4');
+  }
+  return { tag: 'int4', val: value };
+}
+
+function int8Parameter(value: bigint): PgParameter {
+  if (value < INT8_MIN || value > INT8_MAX) {
+    throw new Error('PostgreSQL int8 parameter is outside the signed 64-bit range');
+  }
+  return { tag: 'int8', val: value };
+}
+
+function wrongType(tag: string): Error {
+  return new Error(`PostgreSQL ${tag} parameter has the wrong type`);
+}
+
+/** JSON number when `value` is an exact safe integer, otherwise a decimal string. */
+function jsonInt(value: unknown): unknown {
+  if (typeof value !== 'bigint') return value === undefined ? null : value;
+  const asNumber = Number(value);
+  return Number.isSafeInteger(asNumber) && BigInt(asNumber) === value ? asNumber : value.toString();
 }
 
 /** Throw when a batch result is an `err` variant. */
@@ -182,6 +314,22 @@ function record(columns: unknown, row: unknown): Record<string, unknown> {
     if (typeof column === 'string') out[column] = pgScalar(row[index]);
   }
   return out;
+}
+
+/**
+ * `num::Float::integer_decode` for `f64`: mantissa, exponent, sign.
+ * The host rebuilds the value as `sign * mantissa * 2^exponent`.
+ */
+function hashableF64(value: number): [bigint, number, number] {
+  const bits = new DataView(new ArrayBuffer(8));
+  bits.setFloat64(0, value);
+  const raw = bits.getBigUint64(0);
+  const sign = raw >> 63n === 0n ? 1 : -1;
+  let exponent = Number((raw >> 52n) & 0x7ffn);
+  const fraction = raw & 0xfffffffffffffn;
+  const mantissa = exponent === 0 ? fraction << 1n : fraction | (1n << 52n);
+  exponent -= 1023 + 52;
+  return [mantissa, exponent, sign];
 }
 
 function timestampTz(value: Date) {
