@@ -32,6 +32,12 @@
     "./portable": {
       "types": "./dist/portable.d.ts",
       "default": "./dist/portable.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "wasmcloud": "./dist/postgres.js",
+      "import": "./dist/postgres.js",
+      "default": "./dist/postgres.js"
     }
   },
   "peerDependencies": {
