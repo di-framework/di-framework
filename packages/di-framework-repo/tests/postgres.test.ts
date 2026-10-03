@@ -255,7 +255,9 @@ describe('wasmCloud postgres values', () => {
     expect(pgValue(4, 'int8')).toEqual(int8(4));
     expect(int8(4)).toEqual({ tag: 'int8', val: 4n });
     expect(int8(4n)).toEqual({ tag: 'int8', val: 4n });
+    expect(pgValue(4, 'int4')).toEqual({ tag: 'int4', val: 4 });
     expect(pgValue(4n, 'int4')).toEqual({ tag: 'int4', val: 4 });
+    expect(pgValue(-2_147_483_648, 'int4')).toEqual({ tag: 'int4', val: -2_147_483_648 });
     expect(pgValue(1.5, 'numeric')).toEqual({ tag: 'numeric', val: '1.5' });
     expect(pgValue('1.50', 'numeric')).toEqual({ tag: 'numeric', val: '1.50' });
     expect(pgValue(true, 'bool')).toEqual({ tag: 'bool', val: true });
