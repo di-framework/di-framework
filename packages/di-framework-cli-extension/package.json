@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/cli-extension",
-  "version": "6.0.3",
+  "version": "6.0.4",
   "description": "Author API for di-framework CLI extensions: command types, failures, and the extension manifest contract.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
