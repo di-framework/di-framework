@@ -344,3 +344,19 @@ di-framework migrations execute --db ./dev.db --dir ./migrations --dry-run
 # Output stable JSON envelope
 di-framework migrations status --db ./dev.db --json
 ```
+
+## wasmCloud Postgres values
+
+Guests that call the `wasmcloud:postgres` binding pass parameters as tagged `pg-value` variants. The host binds in binary, so a text payload in a `uuid` or `boolean` column is rejected. Import the codec from `@di-framework/repo/postgres`. The same functions are on the portable wasmCloud build (`import … from '@di-framework/repo'` when the `wasmcloud` export condition is set).
+
+```ts
+import { pgValue, readRows } from '@di-framework/repo/postgres';
+
+const rows = await readRows(
+  await query('select id from users where id = $1', [pgValue(userId)]),
+);
+```
+
+`pgValue` tags `null`, `text`, `uuid`, `bool`, `int4`, `int8`, `numeric`, `timestamp-tz`, `bytea`, and `jsonb`. `pgScalar` turns one result cell into a JSON value. `readRows` reads the column list and row stream. `postgresError` and `assertBatch` surface an `err` variant. `isUniqueViolation` detects SQLSTATE `23505`.
+
+Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not point `MigrationRunner` at this binding. Postgres schema history stays a guest concern; the runner's placeholders and transaction handle are SQLite.
