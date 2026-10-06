@@ -1,0 +1,37 @@
+`@WasmCloudBinding($name)` as $binding where {
+  not $name <: includes ",",
+  or {
+    $name <: includes "_",
+    $name <: includes "A",
+    $name <: includes "B",
+    $name <: includes "C",
+    $name <: includes "D",
+    $name <: includes "E",
+    $name <: includes "F",
+    $name <: includes "G",
+    $name <: includes "H",
+    $name <: includes "I",
+    $name <: includes "J",
+    $name <: includes "K",
+    $name <: includes "L",
+    $name <: includes "M",
+    $name <: includes "N",
+    $name <: includes "O",
+    $name <: includes "P",
+    $name <: includes "Q",
+    $name <: includes "R",
+    $name <: includes "S",
+    $name <: includes "T",
+    $name <: includes "U",
+    $name <: includes "V",
+    $name <: includes "W",
+    $name <: includes "X",
+    $name <: includes "Y",
+    $name <: includes "Z"
+  },
+  register_diagnostic(
+    span = $name,
+    severity = "error",
+    message = "WasmCloud binding names must be WIT identifiers: /^[a-z][a-z0-9-]*$/."
+  )
+}

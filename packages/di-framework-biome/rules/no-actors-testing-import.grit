@@ -1,0 +1,8 @@
+`import $spec from $source` as $imp where {
+  $source <: includes "@di-framework/actors/testing",
+  register_diagnostic(
+    span = $imp,
+    severity = "error",
+    message = "`@di-framework/actors/testing` imports bun:test. Keep it in test files, not application source."
+  )
+}

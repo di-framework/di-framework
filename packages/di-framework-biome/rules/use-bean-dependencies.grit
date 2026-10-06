@@ -1,0 +1,9 @@
+`@Bean($args) $name($params) { $_ }` as $method where {
+  $params <: includes ":",
+  not $method <: includes "dependencies",
+  register_diagnostic(
+    span = $method,
+    severity = "error",
+    message = "List `@Bean` factory parameters in `dependencies`. Core does not infer them from types."
+  )
+}

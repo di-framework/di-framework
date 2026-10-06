@@ -141,6 +141,7 @@ describe('publish command', () => {
       expect(PACKAGES).toContain('packages/di-framework-cli-extension');
       expect(PACKAGES).toContain('packages/di-framework-cli');
       expect(PACKAGES).toContain('packages/di-framework-tsc');
+      expect(PACKAGES).toContain('packages/di-framework-biome');
     });
 
     it('matches the build command PACKAGES list', async () => {

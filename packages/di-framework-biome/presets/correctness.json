@@ -1,0 +1,33 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "plugins": [
+    {
+      "path": "./node_modules/@di-framework/biome/rules/no-actors-testing-import.grit",
+      "includes": ["**", "!**/*.test.ts", "!**/*.test.tsx", "!**/tests/**"]
+    },
+    "./node_modules/@di-framework/biome/rules/no-bad-cron-expression.grit",
+    "./node_modules/@di-framework/biome/rules/no-bean-outside-configuration.grit",
+    "./node_modules/@di-framework/biome/rules/no-bootstrap-decorator.grit",
+    "./node_modules/@di-framework/biome/rules/no-emit-decorator-metadata.grit",
+    "./node_modules/@di-framework/biome/rules/no-generated-value-without-id-property.grit",
+    "./node_modules/@di-framework/biome/rules/no-generated-value-without-id.grit",
+    "./node_modules/@di-framework/biome/rules/no-inject-outside-container.grit",
+    "./node_modules/@di-framework/biome/rules/no-plaintext-binding-secret.grit",
+    "./node_modules/@di-framework/biome/rules/no-reflect-metadata.grit",
+    "./node_modules/@di-framework/biome/rules/no-service-name-on-non-postgres.grit",
+    "./node_modules/@di-framework/biome/rules/no-short-auth-secret.grit",
+    "./node_modules/@di-framework/biome/rules/use-bean-dependencies.grit",
+    "./node_modules/@di-framework/biome/rules/use-configuration-import-core.grit",
+    "./node_modules/@di-framework/biome/rules/use-configuration-import-value.grit",
+    "./node_modules/@di-framework/biome/rules/use-configuration-import.grit",
+    "./node_modules/@di-framework/biome/rules/use-experimental-decorators.grit",
+    "./node_modules/@di-framework/biome/rules/use-scoped-core-import.grit",
+    "./node_modules/@di-framework/biome/rules/use-wit-binding-name-options.grit",
+    "./node_modules/@di-framework/biome/rules/use-wit-binding-name.grit"
+  ]
+}

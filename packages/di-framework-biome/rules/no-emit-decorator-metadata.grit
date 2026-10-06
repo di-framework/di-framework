@@ -1,0 +1,9 @@
+language json;
+
+`"emitDecoratorMetadata": true` as $value where {
+  register_diagnostic(
+    span = $value,
+    severity = "error",
+    message = "Leave `emitDecoratorMetadata` off. di-framework stores decorator metadata itself."
+  )
+}

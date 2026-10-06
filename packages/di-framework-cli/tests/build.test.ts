@@ -114,6 +114,7 @@ describe('build command', () => {
       expect(PACKAGES).toContain('packages/di-framework-cli-extension');
       expect(PACKAGES).toContain('packages/di-framework-cli');
       expect(PACKAGES).toContain('packages/di-framework-tsc');
+      expect(PACKAGES).toContain('packages/di-framework-biome');
     });
 
     it('every package directory exists', async () => {

@@ -1,0 +1,46 @@
+{
+  "name": "@di-framework/biome",
+  "version": "6.0.4",
+  "description": "Biome GritQL plugins that catch di-framework implementation mistakes.",
+  "author": "@di-framework Contributors",
+  "license": "(MIT OR Apache-2.0)",
+  "type": "module",
+  "main": "./recommended.json",
+  "exports": {
+    ".": "./recommended.json",
+    "./correctness": "./presets/correctness.json",
+    "./rules/*": "./rules/*"
+  },
+  "files": [
+    "recommended.json",
+    "presets",
+    "rules",
+    "README.md"
+  ],
+  "keywords": [
+    "biome",
+    "grit",
+    "lint",
+    "di-framework",
+    "dependency-injection"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/di-framework/di-framework",
+    "directory": "packages/di-framework-biome"
+  },
+  "bugs": {
+    "url": "https://github.com/di-framework/di-framework/issues"
+  },
+  "homepage": "https://github.com/di-framework/di-framework#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@biomejs/biome": "^2.5.0"
+  },
+  "scripts": {
+    "build": "bun -e \"console.log('@di-framework/biome: GritQL plugins, no compile step')\"",
+    "test": "bun test"
+  }
+}

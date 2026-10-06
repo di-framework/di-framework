@@ -1,0 +1,11 @@
+`@WasmCloudBinding($name, { serviceName: $service })
+export class $cls extends $base {
+  $body
+}` as $binding where {
+  not $base <: `Postgres`,
+  register_diagnostic(
+    span = $binding,
+    severity = "error",
+    message = "`serviceName` is supported only on classes that extend `Postgres`."
+  )
+}
