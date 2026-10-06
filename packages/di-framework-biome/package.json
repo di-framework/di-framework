@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/biome",
-  "version": "6.0.4",
+  "version": "6.0.5",
   "description": "Biome GritQL plugins that catch di-framework implementation mistakes.",
   "author": "@di-framework Contributors",
   "license": "(MIT OR Apache-2.0)",
