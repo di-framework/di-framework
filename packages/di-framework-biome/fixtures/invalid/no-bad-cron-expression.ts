@@ -3,9 +3,4 @@ export class MaintenanceService {
   nightly() {
     return 'too many fields';
   }
-
-  @Cron('@daily')
-  daily() {
-    return 'named';
-  }
 }

@@ -27,9 +27,7 @@ export class UserService {
   @Value('database.host')
   host!: string;
 
-  constructor(@Component(DatabaseService) private db: DatabaseService) {
-    this.db = db;
-  }
+  constructor(@Component(DatabaseService) private db: DatabaseService) {}
 
   @Cron('0 2 * * *')
   prune() {
@@ -39,8 +37,10 @@ export class UserService {
 
 @Controller()
 export class UsersController {
-  constructor(@Component(UserService) private users: UserService) {
-    this.users = users;
+  constructor(@Component(UserService) private users: UserService) {}
+
+  list() {
+    return this.users;
   }
 }
 

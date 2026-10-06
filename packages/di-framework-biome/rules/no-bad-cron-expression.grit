@@ -1,5 +1,5 @@
 `@Cron($expr)` as $cron where {
-  $expr <: r"'(?:@|[^']* [^']* [^']* [^']* [^']* [^'][^']*)'",
+  $expr <: r"'(?:@[^']*|[^']* [^']* [^']* [^']* [^']* [^'][^']*)'",
   register_diagnostic(
     span = $cron,
     severity = "error",

@@ -23,6 +23,8 @@ bun add -d @biomejs/biome @di-framework/biome
 
 `unsafeParameterDecoratorsEnabled` lets Biome parse `@Component` on constructor parameters. Plugin paths are resolved from the application root, so the package must be installed in `node_modules`.
 
+`@di-framework/biome` enables every rule. `@di-framework/biome/correctness` is the same set without the 5.x package renames (`no-wasmcloud-package`, `no-cli-plugin-wasmcloud`) and the deprecated `@di-framework/socket/bun` alias.
+
 ```bash
 biome check .
 ```

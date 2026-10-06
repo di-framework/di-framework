@@ -21,6 +21,7 @@ const invalid = [
   ['use-bean-dependencies.ts', 'dependencies'],
   ['no-inject-outside-container.ts', '@Container()'],
   ['no-bad-cron-expression.ts', '5-field'],
+  ['no-bad-cron-named.ts', '5-field'],
   ['no-generated-value-without-id.ts', '@GeneratedValue'],
   ['no-plaintext-binding-secret.ts', 'secretFrom'],
   ['use-wit-binding-name.ts', 'WIT identifiers'],
