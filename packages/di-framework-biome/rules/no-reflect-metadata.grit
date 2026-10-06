@@ -1,0 +1,16 @@
+or {
+  `import 'reflect-metadata'` as $imp where {
+    register_diagnostic(
+      span = $imp,
+      severity = "error",
+      message = "di-framework does not use reflect-metadata. Remove the import."
+    )
+  },
+  `import "reflect-metadata"` as $imp where {
+    register_diagnostic(
+      span = $imp,
+      severity = "error",
+      message = "di-framework does not use reflect-metadata. Remove the import."
+    )
+  }
+}

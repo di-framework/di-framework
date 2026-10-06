@@ -1,0 +1,9 @@
+`@GeneratedValue($_)
+$name!: $type;` as $field where {
+  not $field <: includes "@Id",
+  register_diagnostic(
+    span = $field,
+    severity = "error",
+    message = "`@GeneratedValue` requires `@Id` on the same property."
+  )
+}

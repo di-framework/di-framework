@@ -70,6 +70,7 @@
     "**/dist",
     "examples/**",
     "packages/di-framework-tsc/fixture/**",
+    "packages/di-framework-biome/fixtures/**",
     "references/**"
   ]
 }

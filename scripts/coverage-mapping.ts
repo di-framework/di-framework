@@ -62,6 +62,8 @@ export interface ShieldBadgeJson {
 export const UNMEASURED_PACKAGES: Record<string, string> = {
   '@di-framework/tsc':
     'Contains Go plugin source (plugin/main.go) and CJS wrappers; no TypeScript source files instrumented by Bun LCOV runner.',
+  '@di-framework/biome':
+    'GritQL lint plugins. The package test shells out to Biome; there is no instrumented library source.',
 };
 
 /**

@@ -15,7 +15,9 @@
       "!**/*.d.ts",
       "!bun.lock",
       "!deno.lock",
-      "!eslint.json"
+      "!eslint.json",
+      "!**/*.grit",
+      "!packages/di-framework-biome/fixtures"
     ]
   },
   "formatter": {

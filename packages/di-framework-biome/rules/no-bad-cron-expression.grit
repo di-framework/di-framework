@@ -1,0 +1,8 @@
+`@Cron($expr)` as $cron where {
+  $expr <: r"'(?:@|[^']* [^']* [^']* [^']* [^']* [^'][^']*)'",
+  register_diagnostic(
+    span = $cron,
+    severity = "error",
+    message = "`@Cron` accepts a 5-field expression (minute hour day-of-month month day-of-week) or a millisecond interval. Names, seconds, and `?` are rejected."
+  )
+}

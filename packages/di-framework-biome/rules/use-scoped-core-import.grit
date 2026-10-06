@@ -1,0 +1,12 @@
+`import $spec from $source` as $imp where {
+  or {
+    $source <: includes "'di-framework/",
+    $source <: includes "\"di-framework/"
+  },
+  not $source <: includes "@di-framework/",
+  register_diagnostic(
+    span = $imp,
+    severity = "error",
+    message = "Import `@di-framework/core/...`. An unscoped `di-framework` import loads a second container."
+  )
+}

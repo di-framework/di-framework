@@ -1,0 +1,11 @@
+`import { $names } from '@di-framework/core/decorators'` as $imp where {
+  or {
+    $names <: contains `Value`,
+    $names <: contains `WithProfile`
+  },
+  register_diagnostic(
+    span = $imp,
+    severity = "error",
+    message = "Import `Value` and `WithProfile` from `@di-framework/config`. Core `@Configuration` declares bean factories."
+  )
+}

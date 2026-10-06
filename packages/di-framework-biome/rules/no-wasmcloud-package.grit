@@ -1,0 +1,9 @@
+`import $spec from $source` as $imp where {
+  $source <: includes "@di-framework/wasmcloud",
+  not $source <: includes "cli-plugin-wasmcloud",
+  register_diagnostic(
+    span = $imp,
+    severity = "error",
+    message = "Import `@di-framework/bindings`. `@di-framework/wasmcloud` is the 5.x package name."
+  )
+}

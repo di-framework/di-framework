@@ -22,6 +22,8 @@ export const PACKAGES = [
   'packages/di-framework-cli',
   // plugin.cjs + Go sidecar; package.json "build" is a no-op (not tsc/bun compile)
   'packages/di-framework-tsc',
+  // GritQL plugins; package.json "build" is a no-op
+  'packages/di-framework-biome',
 ];
 
 /** Bun `$` tagged-template runner; injectable for in-process coverage tests. */

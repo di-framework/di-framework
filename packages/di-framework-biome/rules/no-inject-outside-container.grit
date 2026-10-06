@@ -1,0 +1,20 @@
+`export class $name { $body }` as $cls where {
+  or {
+    $body <: contains `@Component($_)`,
+    $body <: contains `@ServiceBinding($_)`,
+    $body <: contains `@Value($_)`
+  },
+  not $cls <: within `@Container($_) export class $name { $body }`,
+  not $cls <: within `@Container export class $name { $body }`,
+  not $cls <: within `@Controller($_) export class $name { $body }`,
+  not $cls <: within `@Portal($_) export class $name { $body }`,
+  not $cls <: within `@Repository($_) export class $name { $body }`,
+  not $cls <: within `@RpcService($_) export class $name { $body }`,
+  not $cls <: within `@EventBridge($_) export class $name { $body }`,
+  not $cls <: within `@SocketGateway($_) export class $name { $body }`,
+  register_diagnostic(
+    span = $cls,
+    severity = "error",
+    message = "Injection decorators need `@Container()`, or a decorator that composes it (`@Controller`, `@Portal`, `@Repository`, `@RpcService`, `@EventBridge`, `@SocketGateway`)."
+  )
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!config.json"
+    ]
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "linter": {
+    "rules": {
+      "preset": "none"
+    }
+  },
+  "plugins": [
+    {
+      "path": "../rules/no-actors-testing-import.grit",
+      "includes": ["**", "!**/*.test.ts", "!**/*.test.tsx", "!**/tests/**"]
+    },
+    "../rules/no-bad-cron-expression.grit",
+    "../rules/no-bean-outside-configuration.grit",
+    "../rules/no-bootstrap-decorator.grit",
+    "../rules/no-cli-plugin-wasmcloud.grit",
+    "../rules/no-emit-decorator-metadata.grit",
+    "../rules/no-generated-value-without-id-property.grit",
+    "../rules/no-generated-value-without-id.grit",
+    "../rules/no-inject-outside-container.grit",
+    "../rules/no-plaintext-binding-secret.grit",
+    "../rules/no-reflect-metadata.grit",
+    "../rules/no-service-name-on-non-postgres.grit",
+    "../rules/no-short-auth-secret.grit",
+    "../rules/no-socket-bun-alias.grit",
+    "../rules/no-wasmcloud-package.grit",
+    "../rules/use-bean-dependencies.grit",
+    "../rules/use-configuration-import-core.grit",
+    "../rules/use-configuration-import-value.grit",
+    "../rules/use-configuration-import.grit",
+    "../rules/use-experimental-decorators.grit",
+    "../rules/use-scoped-core-import.grit",
+    "../rules/use-wit-binding-name-options.grit",
+    "../rules/use-wit-binding-name.grit"
+  ]
+}

@@ -1,0 +1,16 @@
+or {
+  `@Bootstrap($_)` as $deco where {
+    register_diagnostic(
+      span = $deco,
+      severity = "error",
+      message = "`@Bootstrap()` resolves the class while the module is loading. Start it from ApplicationContext.builder().bootstrap(Server).start()."
+    )
+  },
+  `@Bootstrap` as $deco where {
+    register_diagnostic(
+      span = $deco,
+      severity = "error",
+      message = "`@Bootstrap()` resolves the class while the module is loading. Start it from ApplicationContext.builder().bootstrap(Server).start()."
+    )
+  }
+}

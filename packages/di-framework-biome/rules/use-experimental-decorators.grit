@@ -1,0 +1,9 @@
+language json;
+
+`"experimentalDecorators": false` as $value where {
+  register_diagnostic(
+    span = $value,
+    severity = "error",
+    message = "Set `experimentalDecorators` to true. di-framework decorators are legacy TypeScript decorators."
+  )
+}
