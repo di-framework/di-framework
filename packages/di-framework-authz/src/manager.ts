@@ -1,6 +1,6 @@
 import type { AuthorizationManager, Principal } from '@di-framework/auth';
-import { compareCodeUnits } from '@di-framework/core/compare';
 import { useContainer } from '@di-framework/core/container';
+import { compareCodeUnits } from 'shared/compare';
 import { parsePolicies } from './ebnf.ts';
 import { evaluatePolicy } from './evaluator.ts';
 import { compilePolicies } from './registry.ts';

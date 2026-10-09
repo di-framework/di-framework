@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '@di-framework/core/compare';
+import { compareCodeUnits } from 'shared/compare';
 import type { BlobStorageAdapter } from '../adapter';
 import type {
   BlobBody,

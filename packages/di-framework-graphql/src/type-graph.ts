@@ -8,7 +8,7 @@
  * its output.
  */
 
-import { compareCodeUnits } from '@di-framework/core/compare';
+import { compareCodeUnits } from 'shared/compare';
 import { SemanticBoundaryError, SemanticSchemaError } from './errors.ts';
 import {
   collectFieldDeclarations,

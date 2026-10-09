@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { compareCodeUnits } from '../compare.ts';
+import { compareCodeUnits } from 'shared/compare';
 
 describe('compareCodeUnits', () => {
   it('orders strings by UTF-16 code unit', () => {

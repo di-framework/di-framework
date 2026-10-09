@@ -32,7 +32,8 @@
     "@biomejs/biome": "^2.5.14",
     "@types/bun": "latest",
     "bun-types": "1.4.2",
-    "happy-dom": "^20.14.5"
+    "happy-dom": "^20.14.5",
+    "shared": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5.9.3"

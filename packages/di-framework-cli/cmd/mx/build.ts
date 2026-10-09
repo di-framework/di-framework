@@ -4,6 +4,7 @@ import { join } from 'path';
 import type { CliIo, CommandResult } from '../../command';
 import { CommandFailure } from '../../command';
 import { fixEsmImports } from '../../scripts/fix-esm-imports';
+import { ensureSharedCompare, vendorSharedCompare } from '../../scripts/shared-compare';
 
 function isErrno(err: unknown, code: string): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === code;
@@ -81,6 +82,7 @@ export async function build(
 
   const syncVersions = options.syncVersions === true;
   const workspaceRoot = options.workspaceRoot ?? process.cwd();
+  await ensureSharedCompare(workspaceRoot);
   let version: string | undefined;
   if (syncVersions) {
     const rootPkgPath = join(workspaceRoot, 'package.json');
@@ -122,6 +124,7 @@ export async function build(
     }
 
     fixEsmImports(join(fullPath, 'dist'));
+    vendorSharedCompare(join(fullPath, 'dist'), join(workspaceRoot, 'packages/shared/dist'));
     io.stdout.write(`  ✅ Finished building ${pkgDir}\n`);
   }
 

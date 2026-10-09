@@ -12,7 +12,6 @@
   },
   "include": [
     "application-context.ts",
-    "compare.ts",
     "container.ts",
     "decorators/**/*.ts",
     "types.ts",

@@ -9,6 +9,7 @@
         "@types/bun": "latest",
         "bun-types": "1.4.2",
         "happy-dom": "^20.14.5",
+        "shared": "workspace:*",
       },
       "peerDependencies": {
         "typescript": "^5.9.3",
@@ -16,7 +17,7 @@
     },
     "packages/di-framework-actors": {
       "name": "@di-framework/actors",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "dependencies": {
         "@di-framework/repo": "^6",
       },
@@ -27,7 +28,7 @@
     },
     "packages/di-framework-auth": {
       "name": "@di-framework/auth",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@di-framework/graphql": "workspace:*",
         "@di-framework/http": "workspace:*",
@@ -53,7 +54,7 @@
     },
     "packages/di-framework-authz": {
       "name": "@di-framework/authz",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@di-framework/auth": "workspace:*",
         "@di-framework/core": "workspace:*",
@@ -73,14 +74,14 @@
     },
     "packages/di-framework-biome": {
       "name": "@di-framework/biome",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "peerDependencies": {
         "@biomejs/biome": "^2.5.0",
       },
     },
     "packages/di-framework-cli": {
       "name": "@di-framework/cli",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "bin": {
         "di-framework": "./main.ts",
       },
@@ -99,14 +100,14 @@
     },
     "packages/di-framework-cli-extension": {
       "name": "@di-framework/cli-extension",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "peerDependencies": {
         "typescript": "^5",
       },
     },
     "packages/di-framework-codegen": {
       "name": "@di-framework/codegen",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5",
@@ -118,7 +119,7 @@
     },
     "packages/di-framework-config": {
       "name": "@di-framework/config",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@types/bun": "latest",
         "smol-toml": "^1.9.0",
@@ -141,7 +142,7 @@
     },
     "packages/di-framework-core": {
       "name": "@di-framework/core",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "fast-check": "^4.10.2",
         "typescript": "^5",
@@ -152,7 +153,7 @@
     },
     "packages/di-framework-events": {
       "name": "@di-framework/events",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@types/bun": "latest",
         "kafkajs": "^2.2.4",
@@ -172,7 +173,7 @@
     },
     "packages/di-framework-graphql": {
       "name": "@di-framework/graphql",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@types/bun": "latest",
         "graphql": "^17.0.2",
@@ -189,7 +190,7 @@
     },
     "packages/di-framework-http": {
       "name": "@di-framework/http",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "dependencies": {
         "itty-router": "^5.0.22",
       },
@@ -204,7 +205,7 @@
     },
     "packages/di-framework-queues": {
       "name": "@di-framework/queues",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "dependencies": {
         "@di-framework/core": "^6",
         "@di-framework/repo": "^6",
@@ -220,7 +221,7 @@
     },
     "packages/di-framework-repo": {
       "name": "@di-framework/repo",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "peerDependencies": {
         "@di-framework/core": "^6",
         "typescript": "^5",
@@ -228,7 +229,7 @@
     },
     "packages/di-framework-rpc": {
       "name": "@di-framework/rpc",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "devDependencies": {
         "@bufbuild/protobuf": "^2.15.0",
         "@connectrpc/connect": "^2.2.0",
@@ -253,7 +254,7 @@
     },
     "packages/di-framework-socket": {
       "name": "@di-framework/socket",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "dependencies": {
         "ws": "^8.21.3",
       },
@@ -269,11 +270,15 @@
     },
     "packages/di-framework-tsc": {
       "name": "@di-framework/tsc",
-      "version": "6.0.4",
+      "version": "6.0.5",
       "dependencies": {
         "ttsc": ">=0.30.4",
         "typescript": "^7.0.0",
       },
+    },
+    "packages/shared": {
+      "name": "shared",
+      "version": "6.0.5",
     },
   },
   "packages": {
@@ -448,6 +453,8 @@
     "nkeys.js": ["nkeys.js@1.1.0", "", { "dependencies": { "tweetnacl": "1.0.3" } }, "sha512-tB/a0shZL5UZWSwsoeyqfTszONTt4k2YS0tuQioMOD180+MbombYVgzDUYHlx+gejYK6rgf08n/2Df99WY0Sxg=="],
 
     "pure-rand": ["pure-rand@8.4.2", "", {}, "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="],
+
+    "shared": ["shared@workspace:packages/shared"],
 
     "smol-toml": ["smol-toml@1.9.0", "", {}, "sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ=="],
 

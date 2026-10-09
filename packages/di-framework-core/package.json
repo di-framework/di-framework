@@ -61,12 +61,6 @@
       "import": "./dist/types.js",
       "default": "./dist/types.js"
     },
-    "./compare": {
-      "types": "./dist/compare.d.ts",
-      "bun": "./dist/compare.js",
-      "import": "./dist/compare.js",
-      "default": "./dist/compare.js"
-    },
     "./service-bindings": {
       "types": "./dist/service-bindings/index.d.ts",
       "bun": "./dist/service-bindings/index.js",

@@ -6,7 +6,7 @@
  * schema, with an escape hatch (`new SemanticRegistry()`) for tests.
  */
 
-import { compareCodeUnits } from '@di-framework/core/compare';
+import { compareCodeUnits } from 'shared/compare';
 import { getBoundedContext } from './metadata.ts';
 import type {
   Ctor,

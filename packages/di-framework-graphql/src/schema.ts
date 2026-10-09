@@ -6,7 +6,6 @@
  * `graphql-js` types and attaches the resolvers.
  */
 
-import { compareCodeUnits } from '@di-framework/core/compare';
 import type { Container } from '@di-framework/core/container';
 import {
   type ASTNode,
@@ -39,6 +38,7 @@ import {
   subscribe,
   validate,
 } from 'graphql';
+import { compareCodeUnits } from 'shared/compare';
 import type { AuthorizationOptions } from './authorization.ts';
 import { SemanticSchemaError } from './errors.ts';
 import { getRegistry } from './registry.ts';
