@@ -25,7 +25,7 @@ jobs:
           bun install --frozen-lockfile --ignore-scripts
           # The bun package's postinstall links its platform binary. Other
           # lifecycle scripts stay skipped.
-          node node_modules/bun/install.js
+          node packages/di-framework-cli/node_modules/bun/install.js
 
       - name: Build packages
         run: bun run packages/di-framework-cli/main.ts mx build --sync-versions
