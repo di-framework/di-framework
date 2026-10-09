@@ -1,6 +1,6 @@
 {
   "name": "@di-framework/auth",
-  "version": "6.0.5",
+  "version": "6.0.6",
   "description": "Authentication for di-framework — sessions, JWT/JWS bearer, OAuth2/OIDC, and WebAuthn passkeys on WebCrypto with zero runtime dependencies",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
