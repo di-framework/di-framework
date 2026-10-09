@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@di-framework/core/compare';
 import type {
   JsonValue,
   PolicyCondition,
@@ -80,7 +81,7 @@ export class PolicyRegistry {
         rules.push({
           id,
           effect: draft.effect,
-          actions: [...new Set(draft.actions)].sort((left, right) => left.localeCompare(right)),
+          actions: [...new Set(draft.actions)].sort(compareCodeUnits),
           conditions: draft.conditions,
         });
       }

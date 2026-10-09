@@ -6,6 +6,7 @@
  * schema, with an escape hatch (`new SemanticRegistry()`) for tests.
  */
 
+import { compareCodeUnits } from '@di-framework/core/compare';
 import { getBoundedContext } from './metadata.ts';
 import type {
   Ctor,
@@ -112,7 +113,7 @@ export class SemanticRegistry {
       const context = extension.context ?? getBoundedContext(extension.target);
       if (context) names.add(context);
     }
-    return Array.from(names).sort((left, right) => left.localeCompare(right));
+    return Array.from(names).sort(compareCodeUnits);
   }
 
   /** Copy every declaration into a fresh registry (prototype pattern, as the container does). */

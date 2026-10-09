@@ -1,4 +1,5 @@
 import type { AuthorizationManager, Principal } from '@di-framework/auth';
+import { compareCodeUnits } from '@di-framework/core/compare';
 import { useContainer } from '@di-framework/core/container';
 import { parsePolicies } from './ebnf.ts';
 import { evaluatePolicy } from './evaluator.ts';
@@ -98,7 +99,7 @@ function decision(allowed: boolean, category: PolicyDecision['category'], ruleId
   const detail: PolicyDecision = {
     allowed,
     category,
-    ruleIds: [...ruleIds].sort((left, right) => left.localeCompare(right)),
+    ruleIds: [...ruleIds].sort(compareCodeUnits),
   };
   return allowed
     ? { allowed: true as const, detail }

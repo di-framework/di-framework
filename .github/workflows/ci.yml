@@ -26,7 +26,11 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          # The bun package's postinstall links its platform binary. Other
+          # lifecycle scripts stay skipped.
+          node node_modules/bun/install.js
 
       - name: Build packages
         run: bun run build
@@ -201,7 +205,11 @@ jobs:
           deno-version: v2.x
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          # The bun package's postinstall links its platform binary. Other
+          # lifecycle scripts stay skipped.
+          node node_modules/bun/install.js
 
       - name: Build packages
         run: bun run build

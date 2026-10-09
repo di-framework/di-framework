@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
+import { compareCodeUnits } from './order.ts';
 import type { SchemaCodegenManifest } from './types.ts';
 
 export interface LoadedManifest {
@@ -32,7 +33,7 @@ export function findManifestFiles(patterns: string[], cwd: string = process.cwd(
     }
   }
 
-  return Array.from(filePaths).sort((left, right) => left.localeCompare(right));
+  return Array.from(filePaths).sort(compareCodeUnits);
 }
 
 export async function loadManifests(

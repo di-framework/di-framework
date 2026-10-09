@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@di-framework/core/compare';
 import type { BlobStorageAdapter } from '../adapter';
 import type {
   BlobBody,
@@ -260,7 +261,7 @@ export class S3BlobStorageAdapter implements BlobStorageAdapter {
 
     const headerKeys = Object.keys(signedHeadersRecord)
       .map((k) => k.toLowerCase())
-      .sort((left, right) => left.localeCompare(right));
+      .sort(compareCodeUnits);
     const canonicalHeaders = headerKeys
       .map((k) => `${k}:${(signedHeadersRecord[k] ?? '').trim()}\n`)
       .join('');

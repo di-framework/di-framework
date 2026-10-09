@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@di-framework/core/compare';
 import type { BlobStorageAdapter } from '../adapter';
 import type {
   BlobBody,
@@ -69,7 +70,7 @@ export class InMemoryBlobStorageAdapter implements BlobStorageAdapter {
     const limit = options.limit ?? 1000;
     const cursor = options.cursor;
 
-    const allKeys = Array.from(this.store.keys()).sort((left, right) => left.localeCompare(right));
+    const allKeys = Array.from(this.store.keys()).sort(compareCodeUnits);
 
     const items: BlobMetadata[] = [];
     const prefixesSet = new Set<string>();
@@ -95,7 +96,7 @@ export class InMemoryBlobStorageAdapter implements BlobStorageAdapter {
       }
     }
 
-    const prefixes = Array.from(prefixesSet).sort((left, right) => left.localeCompare(right));
+    const prefixes = Array.from(prefixesSet).sort(compareCodeUnits);
 
     // If cursor is provided, find offset
     let startIndex = 0;

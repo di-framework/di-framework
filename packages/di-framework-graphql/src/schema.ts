@@ -6,6 +6,7 @@
  * `graphql-js` types and attaches the resolvers.
  */
 
+import { compareCodeUnits } from '@di-framework/core/compare';
 import type { Container } from '@di-framework/core/container';
 import {
   type ASTNode,
@@ -684,7 +685,7 @@ export function buildSemanticSubgraphs(
   const registry = options.registry ?? getRegistry();
   const contexts = options.contexts ?? registry.getContexts();
   const subgraphs: Record<string, SemanticSchema> = {};
-  for (const context of [...contexts].sort((left, right) => left.localeCompare(right))) {
+  for (const context of [...contexts].sort(compareCodeUnits)) {
     subgraphs[context] = buildSemanticSchema({ ...options, contexts: [context] });
   }
   return subgraphs;

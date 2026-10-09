@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import { normalizeImportPath } from '../normalize.ts';
+import { compareCodeUnits } from '../order.ts';
 import type { GeneratedFileResult, NormalizedManifest } from '../types.ts';
 
 export function initializeCompanions(
@@ -23,7 +24,7 @@ export function initializeCompanions(
         const schemaImportPath = normalizeImportPath(handlerDir, inputSchemaObj.modulePath);
 
         const schemaTypes = Array.from(new Set([op.inputSchemaName, op.outputSchemaName]))
-          .sort((left, right) => left.localeCompare(right))
+          .sort(compareCodeUnits)
           .join(',\n  ');
 
         const content = `import { Container } from '@di-framework/core/decorators';
