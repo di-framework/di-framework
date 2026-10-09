@@ -33,7 +33,9 @@ export function saveLedger(ledgerPath: string, generatedFiles: string[]): void {
     mkdirSync(ledgerDir, { recursive: true });
   }
 
-  const sortedFiles = Array.from(new Set(generatedFiles)).sort();
+  const sortedFiles = Array.from(new Set(generatedFiles)).sort((left, right) =>
+    left.localeCompare(right),
+  );
   const ledger: OwnershipLedger = {
     version: '1',
     generatedFiles: sortedFiles,

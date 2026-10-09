@@ -80,7 +80,7 @@ export class PolicyRegistry {
         rules.push({
           id,
           effect: draft.effect,
-          actions: [...new Set(draft.actions)].sort(),
+          actions: [...new Set(draft.actions)].sort((left, right) => left.localeCompare(right)),
           conditions: draft.conditions,
         });
       }

@@ -5,7 +5,8 @@ on:
     - cron: "0 14 * * 1"  # Monday 14:00 UTC
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 concurrency:
   group: weekly-unstick
@@ -28,7 +29,9 @@ jobs:
 
       - name: Install Cursor CLI
         run: |
-          curl https://cursor.com/install -fsS | bash
+          curl https://cursor.com/install -fsS -o /tmp/cursor-install.sh
+          echo "dd6677f33cb7efa34809557b1c6df3a11e389b76ce4e56ce5751db13dd7260e6  /tmp/cursor-install.sh" | sha256sum -c -
+          bash /tmp/cursor-install.sh
           echo "$HOME/.cursor/bin" >> $GITHUB_PATH
 
       - name: Run Cursor Agent

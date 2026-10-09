@@ -119,7 +119,7 @@ describe('findManifestFiles, loadManifests, and loadLedger', () => {
     testDir = join(tmpdir(), `config-test-${Date.now()}`);
     mkdirSync(testDir, { recursive: true });
 
-    expect(loadConfig('./non-existent.ts', testDir)).rejects.toThrow(/not found/);
+    await expect(loadConfig('./non-existent.ts', testDir)).rejects.toThrow(/not found/);
 
     // Write candidate file
     const candidatePath = join(testDir, 'di-framework.codegen.ts');

@@ -238,7 +238,7 @@ class GraphBuilder {
     const reachable = this.collectReachable(graph);
     graph.inputs = reachable.inputs;
     graph.enums = reachable.enums;
-    graph.scalars = Array.from(this.usedScalars).sort();
+    graph.scalars = Array.from(this.usedScalars).sort((left, right) => left.localeCompare(right));
 
     // An interface is emitted when something implements it or a field returns
     // it; an orphan interface would make the schema invalid.
@@ -384,12 +384,14 @@ class GraphBuilder {
         resolved.implementations.push(object.name);
       }
 
-      object.interfaces = Array.from(names).sort();
+      object.interfaces = Array.from(names).sort((left, right) => left.localeCompare(right));
       assertUniqueFieldNames(object.name, object.fields);
     }
 
     for (const resolved of this.interfaces.values()) {
-      resolved.implementations = Array.from(new Set(resolved.implementations)).sort();
+      resolved.implementations = Array.from(new Set(resolved.implementations)).sort((left, right) =>
+        left.localeCompare(right),
+      );
     }
   }
 
@@ -595,7 +597,7 @@ class GraphBuilder {
       }
       resolved.members.push(object.name);
     }
-    resolved.members.sort();
+    resolved.members.sort((left, right) => left.localeCompare(right));
     return resolved;
   }
 
@@ -1136,7 +1138,7 @@ class GraphBuilder {
       const context = getBoundedContext(declaration.target);
       if (declaration.portal && context && this.inSelectedContext(context)) names.add(context);
     }
-    return Array.from(names).sort();
+    return Array.from(names).sort((left, right) => left.localeCompare(right));
   }
 
   /** Inputs and enums reachable from the emitted fields. */
@@ -1278,7 +1280,7 @@ export function buildContextSubgraphs(
   const registry = options.registry ?? getRegistry();
   const contexts = options.contexts ?? registry.getContexts();
   const subgraphs: Record<string, TypeGraph> = {};
-  for (const context of [...contexts].sort()) {
+  for (const context of [...contexts].sort((left, right) => left.localeCompare(right))) {
     subgraphs[context] = buildTypeGraph({ ...options, contexts: [context] });
   }
   return subgraphs;

@@ -458,7 +458,7 @@ export function createRpcClient<T>(
             if (actualClientStream) {
               // Bi-directional streaming
               await transport.send({ jsonrpc: '2.0', id: callId, method });
-              (async () => {
+              void (async () => {
                 try {
                   for await (const item of params as AsyncIterable<unknown>) {
                     if (merged.signal?.aborted) break;
@@ -541,7 +541,7 @@ export function createRpcClient<T>(
             return resultPromise;
           }
 
-          (async () => {
+          void (async () => {
             try {
               for await (const item of params as AsyncIterable<unknown>) {
                 const itemToSend = await composeInterceptors(

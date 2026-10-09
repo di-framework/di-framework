@@ -112,7 +112,7 @@ export class SemanticRegistry {
       const context = extension.context ?? getBoundedContext(extension.target);
       if (context) names.add(context);
     }
-    return Array.from(names).sort();
+    return Array.from(names).sort((left, right) => left.localeCompare(right));
   }
 
   /** Copy every declaration into a fresh registry (prototype pattern, as the container does). */

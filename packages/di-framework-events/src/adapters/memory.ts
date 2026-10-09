@@ -36,9 +36,9 @@ export function memoryTransport(options: MemoryTransportOptions = {}): EventTran
         };
         try {
           await handler(message, ack);
-          if (!settled) ack.ack();
+          if (!settled) await ack.ack();
         } catch {
-          if (!settled) ack.nack({ requeue: false });
+          if (!settled) await ack.nack({ requeue: false });
         }
       }),
     );

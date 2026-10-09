@@ -604,8 +604,12 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
   };
 
   const formatResult = (result: ExecutionResult): ExecutionResult => {
-    if (!options.errorFormatter || !result.errors) return result;
-    return { ...result, errors: result.errors.map(options.errorFormatter) };
+    const formatError = options.errorFormatter;
+    if (!formatError || !result.errors) return result;
+    return {
+      ...result,
+      errors: result.errors.map((error) => formatError(error)),
+    };
   };
 
   return {
@@ -617,7 +621,11 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
     async execute(request) {
       const { document, errors } = prepare(request);
       if (errors.length > 0)
-        return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+        return {
+          errors: errors.map((error) =>
+            options.errorFormatter ? options.errorFormatter(error) : error,
+          ),
+        };
       return formatResult(
         await execute({
           schema,
@@ -633,7 +641,11 @@ export function buildSemanticSchema(options: SemanticSchemaOptions = {}): Semant
     async subscribe(request) {
       const { document, errors } = prepare(request);
       if (errors.length > 0)
-        return { errors: errors.map(options.errorFormatter ?? ((error) => error)) };
+        return {
+          errors: errors.map((error) =>
+            options.errorFormatter ? options.errorFormatter(error) : error,
+          ),
+        };
       const result = (await subscribe({
         schema,
         document,
@@ -672,7 +684,7 @@ export function buildSemanticSubgraphs(
   const registry = options.registry ?? getRegistry();
   const contexts = options.contexts ?? registry.getContexts();
   const subgraphs: Record<string, SemanticSchema> = {};
-  for (const context of [...contexts].sort()) {
+  for (const context of [...contexts].sort((left, right) => left.localeCompare(right))) {
     subgraphs[context] = buildSemanticSchema({ ...options, contexts: [context] });
   }
   return subgraphs;

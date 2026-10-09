@@ -391,7 +391,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
   const activeSessions = new Map<string | number, PushStream<Record<string, unknown>>>();
 
   const emitToHandlers = async (payload: unknown) => {
-    await Promise.all([...handlers].map((h) => h(payload)));
+    await Promise.all([...handlers].map((h) => Promise.resolve(h(payload))));
   };
 
   const invoke = async (call: JsonRpcCall): Promise<JsonRpcResponse | undefined> => {
@@ -424,7 +424,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
       if (serverStreaming && !clientStreaming) {
         // Server-streaming gRPC call
         const stream = await invokeMethod((call.params ?? {}) as Record<string, unknown>);
-        (async () => {
+        void (async () => {
           try {
             for await (const item of stream as AsyncIterable<unknown>) {
               const nextFrame: JsonRpcStreamNextSuccess = {
@@ -462,7 +462,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
         // Client-streaming gRPC call
         const pushStream = new PushStream<Record<string, unknown>>();
         if (id !== undefined) activeSessions.set(id, pushStream);
-        (async () => {
+        void (async () => {
           try {
             const result = await invokeMethod(pushStream);
             if (id !== undefined) activeSessions.delete(id);
@@ -491,7 +491,7 @@ export function grpcTransport(options: GrpcTransportOptions): RpcTransport {
         const pushStream = new PushStream<Record<string, unknown>>();
         if (id !== undefined) activeSessions.set(id, pushStream);
         const stream = await invokeMethod(pushStream);
-        (async () => {
+        void (async () => {
           try {
             for await (const item of stream as AsyncIterable<unknown>) {
               const nextFrame: JsonRpcStreamNextSuccess = {

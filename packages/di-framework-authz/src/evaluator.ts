@@ -29,8 +29,8 @@ function structuralEqual(a: unknown, b: JsonValue): boolean {
     !Array.isArray(a) &&
     !Array.isArray(b)
   ) {
-    const ak = Object.keys(a as object).sort(),
-      bk = Object.keys(b).sort();
+    const ak = Object.keys(a as object).sort((left, right) => left.localeCompare(right)),
+      bk = Object.keys(b).sort((left, right) => left.localeCompare(right));
     return (
       ak.length === bk.length &&
       ak.every(
@@ -74,12 +74,12 @@ export function evaluatePolicy(
   const denies = applicable
     .filter((rule) => rule.effect === 'deny')
     .map((rule) => rule.id)
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
   if (denies.length) return { allowed: false, category: 'explicit-deny', ruleIds: denies };
   const allows = applicable
     .filter((rule) => rule.effect === 'allow')
     .map((rule) => rule.id)
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
   return allows.length
     ? { allowed: true, category: 'allow-rule-matched', ruleIds: allows }
     : { allowed: false, category: 'no-matching-allow', ruleIds: [] };

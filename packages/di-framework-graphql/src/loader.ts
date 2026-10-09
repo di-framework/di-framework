@@ -40,7 +40,7 @@ export class BatchLoader<K, V> {
   private schedule(): void {
     if (this.scheduled) return;
     this.scheduled = true;
-    Promise.resolve().then(() => queueMicrotask(() => void this.dispatch()));
+    void Promise.resolve().then(() => queueMicrotask(() => void this.dispatch()));
   }
 
   private async dispatch(): Promise<void> {

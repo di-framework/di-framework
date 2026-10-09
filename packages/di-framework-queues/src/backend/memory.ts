@@ -45,8 +45,7 @@ export class InMemoryQueueBackend implements QueueBackend {
     }
 
     const id =
-      options?.jobId ??
-      `job_${enqueuedAt}_${this.nextId++}_${Math.random().toString(36).substring(2, 9)}`;
+      options?.jobId ?? `job_${enqueuedAt}_${this.nextId++}_${crypto.randomUUID().slice(0, 8)}`;
 
     const defaults = queueRegistry.getForQueue(queueName)[0]?.options;
     const job: Job<T> = {

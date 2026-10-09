@@ -103,7 +103,9 @@ describe('check command', () => {
       await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        await checkApp({ cwd: root, pretty: false });
+        await expect(checkApp({ cwd: root, pretty: false })).resolves.toMatchObject({
+          tool: 'tsc',
+        });
       } finally {
         log.mockRestore();
       }
@@ -143,7 +145,9 @@ describe('check command', () => {
       await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        await checkApp({ cwd: root, pretty: false });
+        await expect(checkApp({ cwd: root, pretty: false })).resolves.toMatchObject({
+          tool: 'tsc',
+        });
       } finally {
         log.mockRestore();
       }
@@ -171,7 +175,9 @@ describe('check command', () => {
       await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        await checkApp({ cwd: root, pretty: false });
+        await expect(checkApp({ cwd: root, pretty: false })).resolves.toMatchObject({
+          tool: 'tsc',
+        });
       } finally {
         log.mockRestore();
       }
@@ -228,7 +234,9 @@ describe('check command', () => {
       await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
-        await checkApp({ cwd: root, tsconfigPath: 'tsconfig.json', pretty: false });
+        await expect(
+          checkApp({ cwd: root, tsconfigPath: 'tsconfig.json', pretty: false }),
+        ).resolves.toMatchObject({ tool: 'tsc' });
       } finally {
         log.mockRestore();
       }
@@ -301,8 +309,8 @@ describe('check command', () => {
     });
 
     it('check --help returns', async () => {
-      await check(['--help']);
-      await check(['-h']);
+      await expect(check(['--help'])).resolves.toEqual({ data: { help: true } });
+      await expect(check(['-h'])).resolves.toEqual({ data: { help: true } });
     });
 
     it('check runs against an explicit tsconfig path', async () => {
@@ -328,7 +336,9 @@ describe('check command', () => {
       const cwd = process.cwd();
       try {
         process.chdir(root);
-        await check(['tsconfig.json', '--no-pretty']);
+        await expect(check(['tsconfig.json', '--no-pretty'])).resolves.toMatchObject({
+          data: { tool: 'tsc' },
+        });
       } finally {
         process.chdir(cwd);
         log.mockRestore();

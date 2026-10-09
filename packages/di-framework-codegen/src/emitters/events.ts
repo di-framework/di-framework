@@ -18,7 +18,7 @@ export function emitEventsSurface(manifest: NormalizedManifest): string | null {
   const eventImports = ['EventBridge'];
   if (hasInbound) eventImports.push('Inbound');
   if (hasOutbound) eventImports.push('Outbound');
-  eventImports.sort();
+  eventImports.sort((left, right) => left.localeCompare(right));
 
   const validators = new Set<string>();
   for (const op of eventOps) {
@@ -26,7 +26,9 @@ export function emitEventsSurface(manifest: NormalizedManifest): string | null {
       validators.add(`validate${op.inputSchemaName}`);
     }
   }
-  const validatorsList = Array.from(validators).sort().join(', ');
+  const validatorsList = Array.from(validators)
+    .sort((left, right) => left.localeCompare(right))
+    .join(', ');
 
   const properties: string[] = [];
 

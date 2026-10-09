@@ -93,8 +93,7 @@ export class WasmSqliteQueueBackend implements QueueBackend {
     }
     const now = Date.now();
     const defaults = queueRegistry.getForQueue(queueName)[0]?.options;
-    const id =
-      options.jobId ?? `job_${now}_${this.nextId++}_${Math.random().toString(36).substring(2, 9)}`;
+    const id = options.jobId ?? `job_${now}_${this.nextId++}_${crypto.randomUUID().slice(0, 8)}`;
     const job: Job<T> = {
       id,
       queueName,

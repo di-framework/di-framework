@@ -3,9 +3,10 @@
 # End-to-End Test Script for DI Framework
 # Tests the entire project including compilation, unit tests, and example validation
 
-echo "================================"
+SEPARATOR='================================'
+echo "$SEPARATOR"
 echo "DI Framework E2E Test Suite"
-echo "================================"
+echo "$SEPARATOR"
 echo ""
 
 # Color codes for output
@@ -21,16 +22,19 @@ TESTS_FAILED=0
 # Function to print test status
 print_test() {
   echo -e "${YELLOW}▶ $1${NC}"
+  return 0
 }
 
 print_success() {
   echo -e "${GREEN}✓ $1${NC}"
   ((TESTS_PASSED++))
+  return 0
 }
 
 print_error() {
   echo -e "${RED}✗ $1${NC}"
   ((TESTS_FAILED++))
+  return 0
 }
 
 # 1. Check dependencies
@@ -51,7 +55,7 @@ echo ""
 
 # 2. Install dependencies
 print_test "Installing dependencies..."
-if bun install --frozen-lockfile 2>/dev/null || bun install; then
+if bun install --frozen-lockfile --ignore-scripts 2>/dev/null || bun install --ignore-scripts; then
   print_success "Dependencies installed"
 else
   print_error "Failed to install dependencies"
@@ -62,11 +66,11 @@ echo ""
 
 # 3. TypeScript type checking (per-package)
 print_test "Running TypeScript type checks..."
-if npx tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>/dev/null; then
+if ./node_modules/.bin/tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>/dev/null; then
   print_success "di-framework type checks passed"
 else
   print_error "di-framework type checks failed"
-  npx tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>&1 | head -20
+  ./node_modules/.bin/tsc --noEmit -p packages/di-framework-core/tsconfig.json 2>&1 | head -20
   exit 1
 fi
 
@@ -86,9 +90,9 @@ echo ""
 # 5. Validate examples compile when this repo still carries them.
 # Sample apps live in di-framework/examples after the v6 split.
 print_test "Validating example code..."
-if [ ! -f "examples/tsconfig.json" ]; then
+if [[ ! -f "examples/tsconfig.json" ]]; then
   print_success "Example apps are covered in di-framework/examples"
-elif npx tsc --noEmit -p examples/tsconfig.json 2>/dev/null; then
+elif ./node_modules/.bin/tsc --noEmit -p examples/tsconfig.json 2>/dev/null; then
   print_success "Advanced example validated"
 else
   print_error "Advanced example has type errors"
@@ -98,9 +102,9 @@ echo ""
 
 # 6. Check if examples package is properly structured
 print_test "Checking examples package structure..."
-if [ ! -d "examples" ]; then
+if [[ ! -d "examples" ]]; then
   print_success "Example apps are covered in di-framework/examples"
-elif [ -f "examples/package.json" ]; then
+elif [[ -f "examples/package.json" ]]; then
   print_success "Examples package.json found"
 else
   print_error "Examples package.json not found"
@@ -109,11 +113,11 @@ fi
 echo ""
 
 # Summary
-echo "================================"
+echo "$SEPARATOR"
 echo "Test Summary"
-echo "================================"
+echo "$SEPARATOR"
 echo -e "${GREEN}Passed: $TESTS_PASSED${NC}"
-if [ $TESTS_FAILED -gt 0 ]; then
+if [[ $TESTS_FAILED -gt 0 ]]; then
   echo -e "${RED}Failed: $TESTS_FAILED${NC}"
   exit 1
 else

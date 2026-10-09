@@ -69,7 +69,7 @@ export class InMemoryBlobStorageAdapter implements BlobStorageAdapter {
     const limit = options.limit ?? 1000;
     const cursor = options.cursor;
 
-    const allKeys = Array.from(this.store.keys()).sort();
+    const allKeys = Array.from(this.store.keys()).sort((left, right) => left.localeCompare(right));
 
     const items: BlobMetadata[] = [];
     const prefixesSet = new Set<string>();
@@ -95,7 +95,7 @@ export class InMemoryBlobStorageAdapter implements BlobStorageAdapter {
       }
     }
 
-    const prefixes = Array.from(prefixesSet).sort();
+    const prefixes = Array.from(prefixesSet).sort((left, right) => left.localeCompare(right));
 
     // If cursor is provided, find offset
     let startIndex = 0;

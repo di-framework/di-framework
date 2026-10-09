@@ -2,7 +2,9 @@ import { OWNERSHIP_HEADER } from '../ledger.ts';
 import type { NormalizedManifest } from '../types.ts';
 
 export function emitValidationSurface(manifest: NormalizedManifest): string {
-  const schemaNames = Object.keys(manifest.schemas).sort();
+  const schemaNames = Object.keys(manifest.schemas).sort((left, right) =>
+    left.localeCompare(right),
+  );
 
   // Group schemas by relative module path
   const modulesMap = new Map<string, string[]>();
@@ -15,10 +17,12 @@ export function emitValidationSurface(manifest: NormalizedManifest): string {
   }
 
   const importLines: string[] = [];
-  const sortedModules = Array.from(modulesMap.keys()).sort();
+  const sortedModules = Array.from(modulesMap.keys()).sort((left, right) =>
+    left.localeCompare(right),
+  );
 
   for (const mod of sortedModules) {
-    const names = modulesMap.get(mod)!.sort();
+    const names = modulesMap.get(mod)!.sort((left, right) => left.localeCompare(right));
     const typeList = names.join(', ');
     const valueList = names.map((n) => `${n} as ${n}Schema`).join(', ');
 

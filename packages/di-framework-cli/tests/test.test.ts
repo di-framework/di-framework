@@ -52,7 +52,7 @@ describe('test command', () => {
 
   describe('test()', () => {
     it('writes the script, runs bash, and cleans up', async () => {
-      await test('#!/bin/bash\necho e2e-ok\nexit 0\n');
+      await expect(test('#!/bin/bash\necho e2e-ok\nexit 0\n')).resolves.toBeUndefined();
     });
 
     it('propagates bash failures', async () => {

@@ -32,7 +32,9 @@ export function normalizeManifest(
 
   // 1. Normalize Schemas
   const schemas: Record<string, NormalizedSchema> = {};
-  for (const schemaName of Object.keys(manifest.schemas).sort()) {
+  for (const schemaName of Object.keys(manifest.schemas).sort((left, right) =>
+    left.localeCompare(right),
+  )) {
     const rawSchema = manifest.schemas[schemaName]!;
     let runtimeSchema: RuntimeSchema;
     let explicitModule: string | undefined;
@@ -65,7 +67,9 @@ export function normalizeManifest(
 
   // 2. Normalize Operations
   const operations: Record<string, NormalizedOperation> = {};
-  for (const opName of Object.keys(manifest.operations).sort()) {
+  for (const opName of Object.keys(manifest.operations).sort((left, right) =>
+    left.localeCompare(right),
+  )) {
     const op = manifest.operations[opName]!;
 
     if (!schemas[op.input]) {
@@ -136,7 +140,9 @@ export function normalizeManifest(
       ): Record<string, SchemaCodegenManifestRpcField> => {
         const res: Record<string, SchemaCodegenManifestRpcField> = {};
         if (!fields) return res;
-        for (const fieldKey of Object.keys(fields).sort()) {
+        for (const fieldKey of Object.keys(fields).sort((left, right) =>
+          left.localeCompare(right),
+        )) {
           const val = fields[fieldKey]!;
           if (typeof val === 'number') {
             res[fieldKey] = { number: val, type: 'string' };

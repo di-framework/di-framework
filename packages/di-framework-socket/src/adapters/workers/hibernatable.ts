@@ -219,7 +219,7 @@ export class HibernatableSocketHub {
         protocol: 'websocket',
         mode: 'plain',
         send(frame) {
-          duplex.send(frame);
+          void duplex.send(frame);
         },
         close(code, reason) {
           duplex.close?.(code, reason);
@@ -273,7 +273,7 @@ export class HibernatableSocketHub {
         protocol: 'websocket',
         mode: 'plain',
         send(frame) {
-          duplex.send(frame);
+          void duplex.send(frame);
         },
         close(code, reason) {
           duplex.close?.(code, reason);

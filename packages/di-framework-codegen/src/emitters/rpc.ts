@@ -22,9 +22,13 @@ export function emitRpcSurface(manifest: NormalizedManifest): string | null {
   }
 
   const handlerImports: string[] = [];
-  const sortedHandlerMods = Array.from(handlersMap.keys()).sort();
+  const sortedHandlerMods = Array.from(handlersMap.keys()).sort((left, right) =>
+    left.localeCompare(right),
+  );
   for (const mod of sortedHandlerMods) {
-    const exports = Array.from(handlersMap.get(mod)!).sort().join(', ');
+    const exports = Array.from(handlersMap.get(mod)!)
+      .sort((left, right) => left.localeCompare(right))
+      .join(', ');
     handlerImports.push(`import { ${exports} } from '${mod}';`);
   }
 
@@ -34,10 +38,14 @@ export function emitRpcSurface(manifest: NormalizedManifest): string | null {
     validators.add(`validate${op.inputSchemaName}`);
     validators.add(`validate${op.outputSchemaName}`);
   }
-  const validatorsList = Array.from(validators).sort().join(',\n  ');
+  const validatorsList = Array.from(validators)
+    .sort((left, right) => left.localeCompare(right))
+    .join(',\n  ');
 
   // Handler injection properties
-  const allHandlerExports = Array.from(new Set(rpcOps.map((op) => op.handler.exportName))).sort();
+  const allHandlerExports = Array.from(new Set(rpcOps.map((op) => op.handler.exportName))).sort(
+    (left, right) => left.localeCompare(right),
+  );
   const handlerProps: string[] = [];
   const exportToPropMap = new Map<string, string>();
 

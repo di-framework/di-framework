@@ -37,7 +37,7 @@ export class MigrationRunner {
     this.lockTable = options.lockTable ?? '_migrations_lock';
     this.lockTimeoutMs = options.lockTimeoutMs ?? 60000;
     this.configuredMigrations = options.migrations ? [...options.migrations] : [];
-    this.runnerId = `runner_${process.pid}_${Math.random().toString(36).slice(2, 9)}`;
+    this.runnerId = `runner_${process.pid}_${crypto.randomUUID().slice(0, 8)}`;
   }
 
   async getDb(): Promise<MigrationDatabase> {

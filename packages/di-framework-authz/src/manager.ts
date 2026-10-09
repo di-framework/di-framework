@@ -95,7 +95,11 @@ export function policyAuthorizationManager(
   };
 }
 function decision(allowed: boolean, category: PolicyDecision['category'], ruleIds: string[]) {
-  const detail: PolicyDecision = { allowed, category, ruleIds: [...ruleIds].sort() };
+  const detail: PolicyDecision = {
+    allowed,
+    category,
+    ruleIds: [...ruleIds].sort((left, right) => left.localeCompare(right)),
+  };
   return allowed
     ? { allowed: true as const, detail }
     : { allowed: false as const, reason: category, detail };

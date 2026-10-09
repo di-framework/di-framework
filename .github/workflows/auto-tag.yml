@@ -21,7 +21,8 @@ concurrency:
   group: auto-tag
   cancel-in-progress: false
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   tag:

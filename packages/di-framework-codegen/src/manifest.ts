@@ -32,7 +32,7 @@ export function findManifestFiles(patterns: string[], cwd: string = process.cwd(
     }
   }
 
-  return Array.from(filePaths).sort();
+  return Array.from(filePaths).sort((left, right) => left.localeCompare(right));
 }
 
 export async function loadManifests(

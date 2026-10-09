@@ -69,7 +69,7 @@ export async function createWorkerWebSocketUpgrade(
         protocol: 'websocket',
         mode,
         send(frame) {
-          duplex.send(frame);
+          void duplex.send(frame);
         },
         close(code, reason) {
           duplex.close?.(code, reason);

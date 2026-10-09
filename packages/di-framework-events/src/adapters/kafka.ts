@@ -155,7 +155,7 @@ export function kafkaTransport(options: KafkaTransportOptions): EventTransport {
               };
               try {
                 await handler(eventMessage, ack);
-                if (!settled) ack.ack();
+                if (!settled) await ack.ack();
               } catch (err) {
                 if (!settled) throw err;
               }

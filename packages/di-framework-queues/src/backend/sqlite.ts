@@ -21,6 +21,39 @@ function wasmBackendRequested(): boolean {
   return process.env.DI_SQLITE_BACKEND?.trim().toLowerCase() === 'wasm';
 }
 
+function resolveQueueDatabase(databaseOrPath: string | Database | SqliteQueueBackendOptions): {
+  database: string | Database;
+  durableWasi: boolean;
+} {
+  let durableWasi = wasmBackendRequested();
+  if (typeof databaseOrPath === 'string' || databaseOrPath instanceof Database) {
+    return { database: databaseOrPath, durableWasi };
+  }
+  if ('exec' in databaseOrPath) {
+    return { database: databaseOrPath as Database, durableWasi };
+  }
+  if (databaseOrPath.durableWasi !== undefined) durableWasi = databaseOrPath.durableWasi;
+  return {
+    database: databaseOrPath.path ?? databaseOrPath.db ?? ':memory:',
+    durableWasi,
+  };
+}
+
+function openQueueDatabase(resolved: string | Database): Database {
+  if (typeof resolved !== 'string') return resolved;
+  if (resolved !== ':memory:' && !resolved.startsWith('file::memory:')) {
+    const dir = dirname(resolved);
+    if (dir && dir !== '.') {
+      try {
+        mkdirSync(dir, { recursive: true });
+      } catch {
+        // directory may already exist
+      }
+    }
+  }
+  return new Database(resolved, { create: true });
+}
+
 export class SqliteQueueBackend implements QueueBackend {
   readonly name = 'sqlite';
   /** Journal configuration applied at construction. */
@@ -29,38 +62,14 @@ export class SqliteQueueBackend implements QueueBackend {
   private nextId = 1;
 
   constructor(databaseOrPath: string | Database | SqliteQueueBackendOptions = ':memory:') {
-    let resolved: string | Database = ':memory:';
-    let durableWasi = wasmBackendRequested();
-    if (typeof databaseOrPath === 'string') {
-      resolved = databaseOrPath;
-    } else if (databaseOrPath instanceof Database) {
-      resolved = databaseOrPath;
-    } else if (typeof databaseOrPath === 'object' && databaseOrPath !== null) {
-      if ('exec' in databaseOrPath) {
-        resolved = databaseOrPath as Database;
-      } else {
-        resolved = databaseOrPath.path ?? databaseOrPath.db ?? ':memory:';
-        if (databaseOrPath.durableWasi !== undefined) durableWasi = databaseOrPath.durableWasi;
-      }
-    }
+    const { database, durableWasi } = resolveQueueDatabase(databaseOrPath);
     this.journalMode = durableWasi ? 'delete' : 'wal';
+    this.db = openQueueDatabase(database);
+    this.applyJournalPragmas();
+    this.initSchema();
+  }
 
-    if (typeof resolved === 'string') {
-      if (resolved !== ':memory:' && !resolved.startsWith('file::memory:')) {
-        const dir = dirname(resolved);
-        if (dir && dir !== '.') {
-          try {
-            mkdirSync(dir, { recursive: true });
-          } catch {
-            // directory may already exist
-          }
-        }
-      }
-      this.db = new Database(resolved, { create: true });
-    } else {
-      this.db = resolved;
-    }
-
+  private applyJournalPragmas(): void {
     try {
       if (this.journalMode === 'delete') {
         // Rollback journal + full sync: the only durable mode shared with the WASI component.
@@ -74,8 +83,6 @@ export class SqliteQueueBackend implements QueueBackend {
     } catch {
       // WAL might not be supported on in-memory db
     }
-
-    this.initSchema();
   }
 
   getDatabase(): Database {
@@ -152,8 +159,7 @@ export class SqliteQueueBackend implements QueueBackend {
     }
 
     const id =
-      options?.jobId ??
-      `job_${enqueuedAt}_${this.nextId++}_${Math.random().toString(36).substring(2, 9)}`;
+      options?.jobId ?? `job_${enqueuedAt}_${this.nextId++}_${crypto.randomUUID().slice(0, 8)}`;
 
     const priority = options?.priority ?? 0;
     const defaults = queueRegistry.getForQueue(queueName)[0]?.options;

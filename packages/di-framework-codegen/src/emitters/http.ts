@@ -31,9 +31,13 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
     validators.add(`validate${op.inputSchemaName}`);
     validators.add(`validate${op.outputSchemaName}`);
   }
-  const validatorsList = Array.from(validators).sort().join(',\n  ');
+  const validatorsList = Array.from(validators)
+    .sort((left, right) => left.localeCompare(right))
+    .join(',\n  ');
 
-  const allHandlerExports = Array.from(new Set(httpOps.map((op) => op.handler.exportName))).sort();
+  const allHandlerExports = Array.from(new Set(httpOps.map((op) => op.handler.exportName))).sort(
+    (left, right) => left.localeCompare(right),
+  );
   const exportToPropMap = new Map<string, string>();
   const handlerProps: string[] = [];
   for (const exportName of allHandlerExports) {

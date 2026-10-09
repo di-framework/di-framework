@@ -102,7 +102,7 @@ describe('init command', () => {
     });
 
     it('init --help prints help without throwing', async () => {
-      await init(['--help']);
+      await expect(init(['--help'])).resolves.toEqual({ data: { help: true } });
     });
 
     it('init scaffolds into --dir', async () => {

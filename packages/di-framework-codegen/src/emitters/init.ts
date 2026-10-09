@@ -23,7 +23,7 @@ export function initializeCompanions(
         const schemaImportPath = normalizeImportPath(handlerDir, inputSchemaObj.modulePath);
 
         const schemaTypes = Array.from(new Set([op.inputSchemaName, op.outputSchemaName]))
-          .sort()
+          .sort((left, right) => left.localeCompare(right))
           .join(',\n  ');
 
         const content = `import { Container } from '@di-framework/core/decorators';

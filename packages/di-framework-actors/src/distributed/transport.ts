@@ -2,6 +2,13 @@
  * Transport implementations for distributed actor RPC.
  */
 import type { ActorRpcDispatcher } from './dispatcher';
+
+function randomFraction(): number {
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return (bytes[0] ?? 0) / 0x1_0000_0000;
+}
+
 import type { ActorRpcRequest, ActorRpcResponse, ActorTransport } from './types';
 
 /**
@@ -78,7 +85,7 @@ export class MemoryActorTransport implements ActorTransport {
 
     const response = await this.dispatcher.dispatch(request);
 
-    if (this.dropNext || (this.dropRate > 0 && Math.random() < this.dropRate)) {
+    if (this.dropNext || (this.dropRate > 0 && randomFraction() < this.dropRate)) {
       this.dropNext = false;
       throw new Error(
         `[SimulatedNetworkFailure] Network connection lost: response for request '${request.requestId}' was dropped in flight.`,
