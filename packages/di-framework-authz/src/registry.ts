@@ -1,3 +1,4 @@
+import { compareCodeUnits } from 'shared/compare';
 import type {
   JsonValue,
   PolicyCondition,
@@ -80,7 +81,7 @@ export class PolicyRegistry {
         rules.push({
           id,
           effect: draft.effect,
-          actions: [...new Set(draft.actions)].sort(),
+          actions: [...new Set(draft.actions)].sort(compareCodeUnits),
           conditions: draft.conditions,
         });
       }

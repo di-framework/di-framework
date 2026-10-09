@@ -316,9 +316,8 @@ export function Auth(options: RegisterAuthOptions = {}) {
   // biome-ignore lint/suspicious/noExplicitAny: decorators operate on arbitrary constructors.
   return <C extends new (...args: any[]) => any>(target: C): C => {
     const runtime = registerAuth(options);
-    // biome-ignore lint/suspicious/noExplicitAny: see above.
-    const AuthClass = class extends (target as any) {
-      // biome-ignore lint/suspicious/noExplicitAny: see above.
+    const AuthClass = class extends target {
+      // biome-ignore lint/suspicious/noExplicitAny: decorators operate on arbitrary constructors.
       constructor(...args: any[]) {
         super(...args);
         Object.assign(this, runtime);

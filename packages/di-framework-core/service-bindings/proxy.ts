@@ -52,10 +52,8 @@ export function createServiceBindingClient<T = any>(
         };
       },
       has(_target, prop) {
-        if (typeof prop === 'string' && (prop === '$bindingMeta' || prop === 'toString')) {
-          return true;
-        }
-        return true;
+        // then/catch/finally stay absent so the client is not treated as a Promise.
+        return prop !== 'then' && prop !== 'catch' && prop !== 'finally';
       },
     },
   );

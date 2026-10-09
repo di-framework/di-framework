@@ -343,7 +343,7 @@ describe('repo bridge against InMemoryRepository', () => {
       webauthn: mapAdapter<WebAuthnCredential>(),
       apiKeys: mapAdapter<ApiKeyCredential>(),
     });
-    expect(credStoreNoCas.updateSignCount('c1', 2, 1, now)).rejects.toThrow(
+    await expect(credStoreNoCas.updateSignCount('c1', 2, 1, now)).rejects.toThrow(
       /updateSignCount requires/,
     );
   });

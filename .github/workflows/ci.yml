@@ -5,7 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -25,7 +26,11 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          # The bun package's postinstall links its platform binary. Other
+          # lifecycle scripts stay skipped.
+          node packages/di-framework-cli/node_modules/bun/install.js
 
       - name: Build packages
         run: bun run build
@@ -35,7 +40,7 @@ jobs:
           node-version: "24.x"
 
       - name: Ensure modern npm for pack audit
-        run: npm install -g npm@latest
+        run: npm install -g npm@12.2.0 --ignore-scripts
 
       - name: Check package tarballs
         run: bun run check-packaging
@@ -124,7 +129,7 @@ jobs:
 
       - name: Convert LCOV to Cobertura
         run: |
-          pip install lcov_cobertura --quiet
+          pip install "lcov-cobertura==2.1.1" --only-binary=:all: --quiet
           lcov_cobertura coverage/lcov.info -o coverage/cobertura.xml
 
       - name: Upload coverage artifact
@@ -200,7 +205,11 @@ jobs:
           deno-version: v2.x
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          # The bun package's postinstall links its platform binary. Other
+          # lifecycle scripts stay skipped.
+          node packages/di-framework-cli/node_modules/bun/install.js
 
       - name: Build packages
         run: bun run build

@@ -453,7 +453,8 @@ export class SqliteActorStorage implements ActorStorage {
           try {
             db?.close();
           } catch {}
-          await new Promise((res) => setTimeout(res, 25 * initAttempts + Math.random() * 25));
+          const jitter = (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32;
+          await new Promise((res) => setTimeout(res, 25 * initAttempts + jitter * 25));
           continue;
         }
         if (releaseLock) {
@@ -761,7 +762,8 @@ export class SqliteActorStorage implements ActorStorage {
         attempts++;
         const isBusy = err?.message?.includes('busy') || err?.message?.includes('locked');
         if (isBusy && attempts <= 8) {
-          await new Promise((res) => setTimeout(res, 25 * attempts + Math.random() * 25));
+          const jitter = (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32;
+          await new Promise((res) => setTimeout(res, 25 * attempts + jitter * 25));
           continue;
         }
         throw err;

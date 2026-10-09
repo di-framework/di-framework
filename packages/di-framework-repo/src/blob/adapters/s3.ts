@@ -1,3 +1,4 @@
+import { compareCodeUnits } from 'shared/compare';
 import type { BlobStorageAdapter } from '../adapter';
 import type {
   BlobBody,
@@ -260,7 +261,7 @@ export class S3BlobStorageAdapter implements BlobStorageAdapter {
 
     const headerKeys = Object.keys(signedHeadersRecord)
       .map((k) => k.toLowerCase())
-      .sort();
+      .sort(compareCodeUnits);
     const canonicalHeaders = headerKeys
       .map((k) => `${k}:${(signedHeadersRecord[k] ?? '').trim()}\n`)
       .join('');
@@ -509,8 +510,8 @@ export class S3BlobStorageAdapter implements BlobStorageAdapter {
     uploadId: string,
     parts: Array<{ partNumber: number; etag: string }>,
   ): Promise<string> {
-    const partsXml = parts
-      .sort((a, b) => a.partNumber - b.partNumber)
+    const orderedParts = parts.toSorted((a, b) => a.partNumber - b.partNumber);
+    const partsXml = orderedParts
       .map((p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`)
       .join('');
     const completeXml = `<CompleteMultipartUpload>${partsXml}</CompleteMultipartUpload>`;

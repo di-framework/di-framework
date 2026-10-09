@@ -89,6 +89,15 @@ describe('normalizeManifest', () => {
             policyModule: '/app/src/policies/order.policy.ts',
           },
         },
+        getOrder: {
+          input: 'Order',
+          output: 'CreateOrder',
+          handler: {
+            module: '/app/src/handlers/query.handlers.ts',
+            export: 'QueryHandlers',
+            method: 'getOrder',
+          },
+        },
       },
     };
 
@@ -113,6 +122,7 @@ describe('normalizeManifest', () => {
     expect(op?.http?.summary).toBe('Create order');
     expect(op?.events?.outbound?.event).toBe('order.created.v1');
     expect(op?.rpc?.inputFields.amount?.type).toBe('double');
+    expect(norm.operations.getOrder?.inputSchemaName).toBe('Order');
   });
 
   it('throws on invalid schema definition or unknown input/output schema references', async () => {

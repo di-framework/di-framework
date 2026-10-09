@@ -1,4 +1,5 @@
 import { OWNERSHIP_HEADER } from '../ledger.ts';
+import { compareCodeUnits, importLines } from '../order.ts';
 import type { NormalizedManifest, SchemaCodegenManifestRpcField } from '../types.ts';
 
 export function emitRpcSurface(manifest: NormalizedManifest): string | null {
@@ -12,21 +13,9 @@ export function emitRpcSurface(manifest: NormalizedManifest): string | null {
 
   const serviceClassName = `${capitalize(manifest.name)}${capitalize(manifest.version)}RpcService`;
 
-  // Handlers required
-  const handlersMap = new Map<string, Set<string>>();
-  for (const op of rpcOps) {
-    const mod = op.handler.relativeModulePathFromGen;
-    const existing = handlersMap.get(mod) ?? new Set();
-    existing.add(op.handler.exportName);
-    handlersMap.set(mod, existing);
-  }
-
-  const handlerImports: string[] = [];
-  const sortedHandlerMods = Array.from(handlersMap.keys()).sort();
-  for (const mod of sortedHandlerMods) {
-    const exports = Array.from(handlersMap.get(mod)!).sort().join(', ');
-    handlerImports.push(`import { ${exports} } from '${mod}';`);
-  }
+  const handlerImports = importLines(
+    rpcOps.map((op) => [op.handler.relativeModulePathFromGen, op.handler.exportName]),
+  );
 
   // Validators required
   const validators = new Set<string>();
@@ -34,10 +23,12 @@ export function emitRpcSurface(manifest: NormalizedManifest): string | null {
     validators.add(`validate${op.inputSchemaName}`);
     validators.add(`validate${op.outputSchemaName}`);
   }
-  const validatorsList = Array.from(validators).sort().join(',\n  ');
+  const validatorsList = Array.from(validators).sort(compareCodeUnits).join(',\n  ');
 
   // Handler injection properties
-  const allHandlerExports = Array.from(new Set(rpcOps.map((op) => op.handler.exportName))).sort();
+  const allHandlerExports = Array.from(new Set(rpcOps.map((op) => op.handler.exportName))).sort(
+    compareCodeUnits,
+  );
   const handlerProps: string[] = [];
   const exportToPropMap = new Map<string, string>();
 

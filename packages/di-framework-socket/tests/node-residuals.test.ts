@@ -51,6 +51,7 @@ describe('node-tcp residual branches', () => {
     hdr.writeUInt32BE(100, 0);
     raw.write(hdr);
     await new Promise<void>((resolve) => raw.once('close', () => resolve()));
+    expect(raw.closed).toBe(true);
     client.close();
   });
 
@@ -70,6 +71,7 @@ describe('node-tcp residual branches', () => {
       security: { mode: 'plain' },
     });
     await Bun.sleep(20);
+    expect(serverConn).toBeDefined();
     serverConn?.close();
     client.close();
 
@@ -124,6 +126,7 @@ describe('node-udp residual branches', () => {
     await Bun.sleep(30);
     raw.close();
 
+    expect(server.port).toBeGreaterThan(0);
     serverConn?.close();
     client.close();
   });
@@ -153,6 +156,7 @@ describe('node-udp residual branches', () => {
       security: { mode: 'secure' },
     });
     await Bun.sleep(50);
+    expect(server.port).toBeGreaterThan(0);
     serverConn?.close();
     client.close();
   });
@@ -167,6 +171,7 @@ describe('node-udp residual branches', () => {
     stoppers.push(() => server.stop());
 
     // Handshake may succeed then onConnection throws → ensurePeer catch deletes peer
+    expect(server.port).toBeGreaterThan(0);
     try {
       const client = await connectUdpClient({
         hostname: '127.0.0.1',
@@ -255,6 +260,7 @@ describe('node-websocket residual branches', () => {
       security: { mode: 'secure' },
     });
     await Bun.sleep(30);
+    expect(server.port).toBeGreaterThan(0);
     client.close();
   });
 
@@ -273,6 +279,7 @@ describe('node-websocket residual branches', () => {
       security: { mode: 'plain' },
     });
     await Bun.sleep(20);
+    expect(serverConn).toBeDefined();
     serverConn?.close(1000, 'done');
     client.close();
   });

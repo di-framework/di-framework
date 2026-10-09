@@ -23,7 +23,7 @@ export const enum ConstLevel {
 enum ComputedEnum {
   Fixed = 1,
   // biome-ignore lint/style/useLiteralEnumMembers: verifies safe skipping of computed enums
-  Dynamic = Math.random(),
+  Dynamic = Date.now(),
 }
 
 export class Token {

@@ -14,6 +14,36 @@ import type { CliIo } from '../command';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 
+const STRICT_TSCONFIG =
+  JSON.stringify({
+    compilerOptions: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      module: 'esnext',
+      target: 'esnext',
+      moduleResolution: 'bundler',
+    },
+    include: ['src/**/*.ts'],
+  }) + '\n';
+
+async function writeStrictSources(root: string, source = 'export const x: number = 1;\n') {
+  mkdirSync(join(root, 'src'), { recursive: true });
+  await Bun.write(join(root, 'tsconfig.json'), STRICT_TSCONFIG);
+  await Bun.write(join(root, 'src', 'index.ts'), source);
+}
+
+async function expectTscPasses(root: string, options: { tsconfigPath?: string } = {}) {
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    await expect(checkApp({ cwd: root, pretty: false, ...options })).resolves.toMatchObject({
+      tool: 'tsc',
+    });
+  } finally {
+    log.mockRestore();
+  }
+}
+
 function captureIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -85,28 +115,8 @@ describe('check command', () => {
     it('passes a valid project', async () => {
       const root = mkdtempSync(join(tmpdir(), 'check-ok-'));
       temps.push(root);
-      mkdirSync(join(root, 'src'), { recursive: true });
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        await checkApp({ cwd: root, pretty: false });
-      } finally {
-        log.mockRestore();
-      }
+      await writeStrictSources(root);
+      await expectTscPasses(root);
     }, 60_000);
 
     it('fails without tsconfig', async () => {
@@ -126,27 +136,8 @@ describe('check command', () => {
           scripts: { check: 'echo should-not-run && exit 1' },
         }) + '\n',
       );
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        await checkApp({ cwd: root, pretty: false });
-      } finally {
-        log.mockRestore();
-      }
+      await writeStrictSources(root);
+      await expectTscPasses(root);
     }, 60_000);
 
     it('runs tsc when package.json has no ttsc', async () => {
@@ -154,27 +145,8 @@ describe('check command', () => {
       temps.push(root);
       mkdirSync(join(root, 'src'), { recursive: true });
       await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        await checkApp({ cwd: root, pretty: false });
-      } finally {
-        log.mockRestore();
-      }
+      await writeStrictSources(root);
+      await expectTscPasses(root);
     }, 60_000);
 
     it('prefers ttsc --noEmit when ttsc is installed locally', async () => {
@@ -211,48 +183,14 @@ describe('check command', () => {
       temps.push(root);
       mkdirSync(join(root, 'src'), { recursive: true });
       await Bun.write(join(root, 'package.json'), JSON.stringify({ name: 'x' }) + '\n');
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
-      const log = spyOn(console, 'log').mockImplementation(() => {});
-      try {
-        await checkApp({ cwd: root, tsconfigPath: 'tsconfig.json', pretty: false });
-      } finally {
-        log.mockRestore();
-      }
+      await writeStrictSources(root);
+      await expectTscPasses(root, { tsconfigPath: 'tsconfig.json' });
     }, 60_000);
 
     it('throws when tsc reports type errors', async () => {
       const root = mkdtempSync(join(tmpdir(), 'check-fail-'));
       temps.push(root);
-      mkdirSync(join(root, 'src'), { recursive: true });
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = "noop";\n');
+      await writeStrictSources(root, 'export const x: number = "noop";\n');
       const log = spyOn(console, 'log').mockImplementation(() => {});
       try {
         await expect(checkApp({ cwd: root, pretty: false })).rejects.toThrow('Typecheck failed');
@@ -301,34 +239,21 @@ describe('check command', () => {
     });
 
     it('check --help returns', async () => {
-      await check(['--help']);
-      await check(['-h']);
+      await expect(check(['--help'])).resolves.toEqual({ data: { help: true } });
+      await expect(check(['-h'])).resolves.toEqual({ data: { help: true } });
     });
 
     it('check runs against an explicit tsconfig path', async () => {
       const root = mkdtempSync(join(tmpdir(), 'check-cli-'));
       temps.push(root);
-      mkdirSync(join(root, 'src'), { recursive: true });
-      await Bun.write(
-        join(root, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            noEmit: true,
-            skipLibCheck: true,
-            module: 'esnext',
-            target: 'esnext',
-            moduleResolution: 'bundler',
-          },
-          include: ['src/**/*.ts'],
-        }) + '\n',
-      );
-      await Bun.write(join(root, 'src', 'index.ts'), 'export const x: number = 1;\n');
+      await writeStrictSources(root);
       const log = spyOn(console, 'log').mockImplementation(() => {});
       const cwd = process.cwd();
       try {
         process.chdir(root);
-        await check(['tsconfig.json', '--no-pretty']);
+        await expect(check(['tsconfig.json', '--no-pretty'])).resolves.toMatchObject({
+          data: { tool: 'tsc' },
+        });
       } finally {
         process.chdir(cwd);
         log.mockRestore();

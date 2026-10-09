@@ -185,13 +185,13 @@ describe('app build command', () => {
   });
 
   it('build --help prints help', async () => {
-    await build(['--help']);
-    await build(['-h']);
+    await expect(build(['--help'])).resolves.toEqual({ data: { help: true } });
+    await expect(build(['-h'])).resolves.toEqual({ data: { help: true } });
   });
 
   it('buildApp honors --help in passthrough', async () => {
-    await buildApp({ cwd: '/tmp', passthrough: ['--help'] });
-    await buildApp({ cwd: '/tmp', passthrough: ['-h'] });
+    await expect(buildApp({ cwd: '/tmp', passthrough: ['--help'] })).resolves.toBeUndefined();
+    await expect(buildApp({ cwd: '/tmp', passthrough: ['-h'] })).resolves.toBeUndefined();
   });
 
   it('throws when package.json has no tsconfig', async () => {

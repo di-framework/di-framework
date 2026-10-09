@@ -1,3 +1,4 @@
+import { compareCodeUnits } from 'shared/compare';
 import type {
   JsonValue,
   PolicyCondition,
@@ -29,8 +30,8 @@ function structuralEqual(a: unknown, b: JsonValue): boolean {
     !Array.isArray(a) &&
     !Array.isArray(b)
   ) {
-    const ak = Object.keys(a as object).sort(),
-      bk = Object.keys(b).sort();
+    const ak = Object.keys(a as object).sort(compareCodeUnits),
+      bk = Object.keys(b).sort(compareCodeUnits);
     return (
       ak.length === bk.length &&
       ak.every(
@@ -74,12 +75,12 @@ export function evaluatePolicy(
   const denies = applicable
     .filter((rule) => rule.effect === 'deny')
     .map((rule) => rule.id)
-    .sort();
+    .sort(compareCodeUnits);
   if (denies.length) return { allowed: false, category: 'explicit-deny', ruleIds: denies };
   const allows = applicable
     .filter((rule) => rule.effect === 'allow')
     .map((rule) => rule.id)
-    .sort();
+    .sort(compareCodeUnits);
   return allows.length
     ? { allowed: true, category: 'allow-rule-matched', ruleIds: allows }
     : { allowed: false, category: 'no-matching-allow', ruleIds: [] };

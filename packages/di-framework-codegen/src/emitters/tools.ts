@@ -1,4 +1,5 @@
 import { OWNERSHIP_HEADER } from '../ledger.ts';
+import { compareCodeUnits, importLines } from '../order.ts';
 import type { NormalizedManifest } from '../types.ts';
 
 export function emitToolsSurface(manifest: NormalizedManifest): string | null {
@@ -16,38 +17,15 @@ export function emitToolsSurface(manifest: NormalizedManifest): string | null {
   const firstAuthResource =
     toolOps.find((op) => op.authorization?.resource)?.authorization?.resource ?? manifest.name;
 
-  // Schema value imports (for .jsonSchema property)
-  const schemaImportsMap = new Map<string, Set<string>>();
-  for (const op of toolOps) {
-    const s = manifest.schemas[op.inputSchemaName]!;
-    const mod = s.relativeModulePathFromGen;
-    const existing = schemaImportsMap.get(mod) ?? new Set();
-    existing.add(op.inputSchemaName);
-    schemaImportsMap.set(mod, existing);
-  }
-
-  const schemaImportLines: string[] = [];
-  const sortedSchemaMods = Array.from(schemaImportsMap.keys()).sort();
-  for (const mod of sortedSchemaMods) {
-    const exports = Array.from(schemaImportsMap.get(mod)!).sort().join(', ');
-    schemaImportLines.push(`import { ${exports} } from '${mod}';`);
-  }
-
-  // Handler imports
-  const handlersMap = new Map<string, Set<string>>();
-  for (const op of toolOps) {
-    const mod = op.handler.relativeModulePathFromGen;
-    const existing = handlersMap.get(mod) ?? new Set();
-    existing.add(op.handler.exportName);
-    handlersMap.set(mod, existing);
-  }
-
-  const handlerImports: string[] = [];
-  const sortedHandlerMods = Array.from(handlersMap.keys()).sort();
-  for (const mod of sortedHandlerMods) {
-    const exports = Array.from(handlersMap.get(mod)!).sort().join(', ');
-    handlerImports.push(`import { ${exports} } from '${mod}';`);
-  }
+  const schemaImportLines = importLines(
+    toolOps.map((op) => {
+      const schema = manifest.schemas[op.inputSchemaName]!;
+      return [schema.relativeModulePathFromGen, op.inputSchemaName] as [string, string];
+    }),
+  );
+  const handlerImports = importLines(
+    toolOps.map((op) => [op.handler.relativeModulePathFromGen, op.handler.exportName]),
+  );
 
   // Validation imports
   const validators = new Set<string>();
@@ -55,10 +33,12 @@ export function emitToolsSurface(manifest: NormalizedManifest): string | null {
     validators.add(`validate${op.inputSchemaName}`);
     validators.add(`validate${op.outputSchemaName}`);
   }
-  const validatorsList = Array.from(validators).sort().join(',\n  ');
+  const validatorsList = Array.from(validators).sort(compareCodeUnits).join(',\n  ');
 
   // Handler injection properties
-  const allHandlerExports = Array.from(new Set(toolOps.map((op) => op.handler.exportName))).sort();
+  const allHandlerExports = Array.from(new Set(toolOps.map((op) => op.handler.exportName))).sort(
+    compareCodeUnits,
+  );
   const handlerProps: string[] = [];
   const exportToPropMap = new Map<string, string>();
 

@@ -46,7 +46,7 @@ export function fixEsmImports(directory: string): void {
     }
     visit(parsed);
     let result = source;
-    for (const edit of edits.reverse()) {
+    for (const edit of edits.toReversed()) {
       result = result.slice(0, edit.start) + edit.value + result.slice(edit.end);
     }
     if (result !== source) writeFileSync(file, result);

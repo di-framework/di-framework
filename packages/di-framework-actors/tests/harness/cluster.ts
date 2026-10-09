@@ -51,7 +51,7 @@ export function spawnTestWorker(ownerId: string, baseDir: string): TestWorkerNod
   const decoder = new TextDecoder();
   let buffer = '';
 
-  (async () => {
+  void (async () => {
     try {
       while (true) {
         const { value, done } = await reader.read();

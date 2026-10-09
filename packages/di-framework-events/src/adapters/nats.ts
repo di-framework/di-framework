@@ -188,9 +188,9 @@ export function natsTransport(options: NatsTransportOptions = {}): EventTranspor
 
         try {
           await handler(eventMessage, ack);
-          if (!settled) ack.ack();
+          if (!settled) await ack.ack();
         } catch {
-          if (!settled) ack.nack({ requeue: true });
+          if (!settled) await ack.nack({ requeue: true });
         }
       };
 

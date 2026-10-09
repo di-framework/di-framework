@@ -1,4 +1,5 @@
 import { OWNERSHIP_HEADER } from '../ledger.ts';
+import { compareCodeUnits } from '../order.ts';
 import type { NormalizedManifest } from '../types.ts';
 
 export function emitEventsSurface(manifest: NormalizedManifest): string | null {
@@ -18,7 +19,7 @@ export function emitEventsSurface(manifest: NormalizedManifest): string | null {
   const eventImports = ['EventBridge'];
   if (hasInbound) eventImports.push('Inbound');
   if (hasOutbound) eventImports.push('Outbound');
-  eventImports.sort();
+  eventImports.sort(compareCodeUnits);
 
   const validators = new Set<string>();
   for (const op of eventOps) {
@@ -26,7 +27,7 @@ export function emitEventsSurface(manifest: NormalizedManifest): string | null {
       validators.add(`validate${op.inputSchemaName}`);
     }
   }
-  const validatorsList = Array.from(validators).sort().join(', ');
+  const validatorsList = Array.from(validators).sort(compareCodeUnits).join(', ');
 
   const properties: string[] = [];
 

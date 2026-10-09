@@ -8,7 +8,7 @@ export function socketTransport(connection: SocketConnection): RpcTransport {
   const unsubscribe = connection.onMessage(async (frame) => {
     if (frame.kind !== 'text' || frame.text === undefined) return;
     const payload = parseJsonRpc(frame.text);
-    await Promise.all([...handlers].map((handler) => handler(payload)));
+    await Promise.all([...handlers].map((handler) => Promise.resolve(handler(payload))));
   });
 
   return {

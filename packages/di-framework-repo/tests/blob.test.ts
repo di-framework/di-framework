@@ -196,7 +196,7 @@ describe('InMemoryBlobStorageAdapter & BaseBlobRepository', () => {
 
     const repo = new TestBlobRepository(minimalAdapter);
     expect(await repo.deleteMany(['exist', 'not-exist'])).toBe(1);
-    expect(repo.getSignedUrl('key', { operation: 'get' })).rejects.toThrow('getSignedUrl');
+    await expect(repo.getSignedUrl('key', { operation: 'get' })).rejects.toThrow('getSignedUrl');
     await repo.dispose(); // should not throw
   });
 });
@@ -485,9 +485,9 @@ describe('S3BlobStorageAdapter', () => {
       bucket: 'public-bucket',
     });
 
-    expect(unauthenticatedAdapter.getSignedUrl('file.txt', { operation: 'get' })).rejects.toThrow(
-      'missing accessKeyId',
-    );
+    await expect(
+      unauthenticatedAdapter.getSignedUrl('file.txt', { operation: 'get' }),
+    ).rejects.toThrow('missing accessKeyId');
 
     const failingFetch = (async () =>
       new Response('Internal error', { status: 500 })) as unknown as typeof fetch;
@@ -498,10 +498,10 @@ describe('S3BlobStorageAdapter', () => {
       fetch: failingFetch,
     });
 
-    expect(errorAdapter.get('file.txt')).rejects.toThrow('status 500');
-    expect(errorAdapter.put('file.txt', 'content')).rejects.toThrow('status 500');
-    expect(errorAdapter.head('file.txt')).rejects.toThrow('status 500');
-    expect(errorAdapter.list()).rejects.toThrow('status 500');
+    await expect(errorAdapter.get('file.txt')).rejects.toThrow('status 500');
+    await expect(errorAdapter.put('file.txt', 'content')).rejects.toThrow('status 500');
+    await expect(errorAdapter.head('file.txt')).rejects.toThrow('status 500');
+    await expect(errorAdapter.list()).rejects.toThrow('status 500');
   });
 
   it('handles multipart upload failure and triggers abort', async () => {
@@ -536,7 +536,9 @@ describe('S3BlobStorageAdapter', () => {
       fetch: mockFetch,
     });
 
-    expect(adapter.put('fail.bin', new Uint8Array(20))).rejects.toThrow('uploadPart #1 failed');
+    await expect(adapter.put('fail.bin', new Uint8Array(20))).rejects.toThrow(
+      'uploadPart #1 failed',
+    );
     // Allow abort microtask to complete
     await new Promise((r) => setTimeout(r, 10));
     expect(aborted).toBe(true);

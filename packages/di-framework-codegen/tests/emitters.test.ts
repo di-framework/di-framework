@@ -186,6 +186,35 @@ describe('Surface Emitters', () => {
     expect(code!).toContain('private queryHandlers!: QueryHandlers;');
   });
 
+  it('sorts schema imports from more than one module', () => {
+    const base = sampleNormManifest.operations.createOrder!;
+    const extra: NormalizedManifest = {
+      ...sampleNormManifest,
+      schemas: {
+        ...sampleNormManifest.schemas,
+        Extra: {
+          name: 'Extra',
+          runtimeSchema: dummySchema,
+          modulePath: '/app/src/contracts/extra.schemas.ts',
+          relativeModulePathFromGen: '../../../contracts/extra.schemas',
+        },
+      },
+      operations: {
+        ...sampleNormManifest.operations,
+        extra: {
+          ...base,
+          name: 'extra',
+          inputSchemaName: 'Extra',
+          outputSchemaName: 'Extra',
+          handler: base.handler,
+          tool: { name: 'extra_tool', description: 'Extra' },
+        },
+      },
+    };
+    expect(emitValidationSurface(extra)).toContain("from '../../../contracts/extra.schemas'");
+    expect(emitToolsSurface(extra)).toContain("from '../../../contracts/extra.schemas'");
+  });
+
   it('returns null when surfaces are absent', () => {
     const emptyManifest: NormalizedManifest = {
       name: 'empty',

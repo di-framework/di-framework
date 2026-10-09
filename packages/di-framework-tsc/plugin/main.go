@@ -20,6 +20,8 @@ import (
 	"github.com/samchon/ttsc/packages/ttsc/driver"
 )
 
+const expectedMessagePrefix = "Expected "
+
 type options struct {
 	cwd      string
 	emit     bool
@@ -449,13 +451,13 @@ func stmtsFromCheckerTypeSeen(
 		if !ok {
 			return nil
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid enum value")}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to be a valid enum value")}
 	case classTypeSymbol(t) != nil:
 		invalid, className, ok := classInvalidPredicate(factory, checker, enclosing, path, t)
 		if !ok {
 			return nil
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an instance of "+className)}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to be an instance of "+className)}
 	case flags&shimchecker.TypeFlagsUnion != 0:
 		members := t.Types()
 		if len(members) == 0 || len(members) > 12 {
@@ -473,7 +475,7 @@ func stmtsFromCheckerTypeSeen(
 				invalid = binary(factory, invalid, shimast.KindAmpersandAmpersandToken, memberInvalid)
 			}
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its union type")}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to match its union type")}
 	case flags&shimchecker.TypeFlagsIntersection != 0:
 		if base, ok := brandedBaseType(checker, t); ok {
 			return stmtsFromCheckerTypeSeen(factory, checker, enclosing, path, base, state, depth+1)
@@ -513,7 +515,7 @@ func stmtsFromCheckerTypeSeen(
 		if !ok {
 			return nil
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to match its template literal type")}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to match its template literal type")}
 	case flags&shimchecker.TypeFlagsString != 0:
 		return []*shimast.Node{typeofCheck(factory, path, "string")}
 	case flags&shimchecker.TypeFlagsNumber != 0:
@@ -527,13 +529,13 @@ func stmtsFromCheckerTypeSeen(
 		if !ok {
 			return nil
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be an array with valid elements")}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to be an array with valid elements")}
 	case flags&shimchecker.TypeFlagsObject != 0 && shimchecker.IsTupleType(t):
 		invalid, ok := tupleInvalidPredicate(factory, checker, enclosing, path, t, state, depth)
 		if !ok {
 			return nil
 		}
-		return []*shimast.Node{throwIf(factory, invalid, "Expected "+path+" to be a valid tuple")}
+		return []*shimast.Node{throwIf(factory, invalid, expectedMessagePrefix+path+" to be a valid tuple")}
 	case flags&shimchecker.TypeFlagsObject != 0:
 		return structuralStatements(factory, checker, enclosing, path, t, state, depth)
 	default:
@@ -871,7 +873,7 @@ func structuralStatements(
 	indexType, hasStringIndex, _ := stringIndexValueType(checker, t)
 	if hasStringIndex {
 		invalid, _ := stringIndexInvalidPredicate(factory, checker, enclosing, path, indexType, state, depth)
-		out = append(out, throwIf(factory, invalid, "Expected "+path+" to have valid string-indexed values"))
+		out = append(out, throwIf(factory, invalid, expectedMessagePrefix+path+" to have valid string-indexed values"))
 	}
 	return out
 }
@@ -1239,11 +1241,11 @@ func arrayInvalidPredicate(
 
 func equalityCheck(factory *shimast.NodeFactory, path string, expected *shimast.Expression, label string) *shimast.Node {
 	cond := binary(factory, pathExpr(factory, path), shimast.KindExclamationEqualsEqualsToken, expected)
-	return throwIf(factory, cond, "Expected "+path+" to equal "+label)
+	return throwIf(factory, cond, expectedMessagePrefix+path+" to equal "+label)
 }
 
 func requiredPropertyCheck(factory *shimast.NodeFactory, path, property string) *shimast.Node {
-	return throwIf(factory, missingPropertyPredicate(factory, path, property), "Expected "+path+" to have required property "+strconv.Quote(property))
+	return throwIf(factory, missingPropertyPredicate(factory, path, property), expectedMessagePrefix+path+" to have required property "+strconv.Quote(property))
 }
 
 func missingPropertyPredicate(factory *shimast.NodeFactory, path, property string) *shimast.Expression {
@@ -1319,16 +1321,16 @@ func pathExpr(factory *shimast.NodeFactory, path string) *shimast.Expression {
 			end = quotedEnd + 2
 			continue
 		}
-		close := strings.IndexByte(path[start:], ']')
-		if close < 0 {
+		bracketEnd := strings.IndexByte(path[start:], ']')
+		if bracketEnd < 0 {
 			return expr
 		}
-		close += start
-		index := path[start:close]
+		bracketEnd += start
+		index := path[start:bracketEnd]
 		// An identifier-shaped synthesized index prints as the numeric token while
 		// avoiding the emitter asking source-text questions of a detached literal.
 		expr = factory.NewElementAccessExpression(expr, nil, factory.NewIdentifier(index), 0)
-		end = close + 1
+		end = bracketEnd + 1
 	}
 	return expr
 }
@@ -1340,7 +1342,7 @@ func typeofCheck(factory *shimast.NodeFactory, path, kind string) *shimast.Node 
 		shimast.KindExclamationEqualsEqualsToken,
 		factory.NewStringLiteral(kind, shimast.TokenFlagsNone),
 	)
-	return throwIf(factory, cond, "Expected "+path+" to be a "+kind)
+	return throwIf(factory, cond, expectedMessagePrefix+path+" to be a "+kind)
 }
 
 func objectCheck(factory *shimast.NodeFactory, path string) *shimast.Node {
@@ -1357,7 +1359,7 @@ func objectCheck(factory *shimast.NodeFactory, path string) *shimast.Node {
 		factory.NewToken(shimast.KindNullKeyword),
 	)
 	cond := binary(factory, notObject, shimast.KindBarBarToken, isNull)
-	return throwIf(factory, cond, "Expected "+path+" to be an object")
+	return throwIf(factory, cond, expectedMessagePrefix+path+" to be an object")
 }
 
 func throwIf(factory *shimast.NodeFactory, condition *shimast.Expression, message string) *shimast.Node {

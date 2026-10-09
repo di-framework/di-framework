@@ -163,11 +163,11 @@ describe('publish command', () => {
     it('Test workflow dry-runs release prepublish on release/v* PRs', async () => {
       const workflow = await Bun.file(join(REPO_ROOT, '.github/workflows/ci.yml')).text();
       expect(workflow).toContain('node-version: "24.x"');
-      expect(workflow).toContain('npm install -g npm@latest');
+      expect(workflow).toContain('npm install -g npm@12.2.0 --ignore-scripts');
       expect(workflow).toContain("startsWith(github.head_ref, 'release/v')");
       expect(workflow).toContain('mx build --sync-versions');
       expect(workflow).toContain('bun scripts/release-prepublish.ts --publish-dry-run');
-      const npmLatest = workflow.indexOf('npm install -g npm@latest');
+      const npmLatest = workflow.indexOf('npm install -g npm@12.2.0 --ignore-scripts');
       const packAudit = workflow.indexOf('bun run check-packaging');
       const dryRun = workflow.indexOf('bun scripts/release-prepublish.ts --publish-dry-run');
       expect(npmLatest).toBeGreaterThan(-1);

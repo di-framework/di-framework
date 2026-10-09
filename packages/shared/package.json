@@ -1,0 +1,15 @@
+{
+  "name": "shared",
+  "version": "6.0.5",
+  "private": true,
+  "description": "Internal utilities shared by di-framework packages. Not published.",
+  "type": "module",
+  "exports": {
+    "./compare": {
+      "bun": "./compare.ts",
+      "types": "./dist/compare.d.ts",
+      "import": "./dist/compare.js",
+      "default": "./dist/compare.js"
+    }
+  }
+}

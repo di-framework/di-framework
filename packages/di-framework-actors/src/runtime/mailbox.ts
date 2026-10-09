@@ -67,7 +67,7 @@ export class ActorMailbox {
         },
         reject: (err: Error) => reject(err),
       });
-      this.processQueue();
+      void this.processQueue();
     });
   }
 

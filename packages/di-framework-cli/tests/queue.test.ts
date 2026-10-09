@@ -134,11 +134,11 @@ describe('Queue CLI Commands', () => {
 
   it('validates invalid options and arguments', async () => {
     const { io } = createCaptureIo();
-    expect(runQueueInspect([], io)).rejects.toThrow('Missing queue name argument');
-    expect(runQueueInspect(['q1', '--status', 'invalid-status'], io)).rejects.toThrow(
+    await expect(runQueueInspect([], io)).rejects.toThrow('Missing queue name argument');
+    await expect(runQueueInspect(['q1', '--status', 'invalid-status'], io)).rejects.toThrow(
       'Invalid status',
     );
-    expect(runQueueRetry([], io)).rejects.toThrow('Missing queue name argument');
-    expect(runQueueList(['--unknown-flag'], io)).rejects.toThrow('Unknown option');
+    await expect(runQueueRetry([], io)).rejects.toThrow('Missing queue name argument');
+    await expect(runQueueList(['--unknown-flag'], io)).rejects.toThrow('Unknown option');
   });
 });

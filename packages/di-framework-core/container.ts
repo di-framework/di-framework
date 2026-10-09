@@ -283,7 +283,7 @@ export class Container {
    * Get or create a service instance
    */
   public resolve<T>(serviceClass: Constructor<T> | string): T {
-    const key = typeof serviceClass === 'string' ? serviceClass : serviceClass;
+    const key = serviceClass;
     const keyStr = typeof serviceClass === 'string' ? serviceClass : serviceClass.name;
 
     // Check for circular dependencies

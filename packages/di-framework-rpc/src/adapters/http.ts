@@ -52,7 +52,9 @@ export function httpTransport(options: HttpRpcTransportOptions): RpcTransport {
               if (!jsonText) continue;
               try {
                 const parsedFrame = JSON.parse(jsonText);
-                await Promise.all([...handlers].map((handler) => handler(parsedFrame)));
+                await Promise.all(
+                  [...handlers].map((handler) => Promise.resolve(handler(parsedFrame))),
+                );
               } catch {}
             }
           }
@@ -62,7 +64,9 @@ export function httpTransport(options: HttpRpcTransportOptions): RpcTransport {
             if (jsonText) {
               try {
                 const parsedFrame = JSON.parse(jsonText);
-                await Promise.all([...handlers].map((handler) => handler(parsedFrame)));
+                await Promise.all(
+                  [...handlers].map((handler) => Promise.resolve(handler(parsedFrame))),
+                );
               } catch {}
             }
           }
@@ -71,7 +75,7 @@ export function httpTransport(options: HttpRpcTransportOptions): RpcTransport {
       }
 
       const result = await response.json();
-      await Promise.all([...handlers].map((handler) => handler(result)));
+      await Promise.all([...handlers].map((handler) => Promise.resolve(handler(result))));
     },
     subscribe(handler) {
       handlers.add(handler);

@@ -1,4 +1,5 @@
 import { OWNERSHIP_HEADER } from '../ledger.ts';
+import { compareCodeUnits, importLines } from '../order.ts';
 import type { NormalizedManifest, NormalizedOperation } from '../types.ts';
 
 export function emitHttpSurface(manifest: NormalizedManifest): string | null {
@@ -31,9 +32,11 @@ export function emitHttpSurface(manifest: NormalizedManifest): string | null {
     validators.add(`validate${op.inputSchemaName}`);
     validators.add(`validate${op.outputSchemaName}`);
   }
-  const validatorsList = Array.from(validators).sort().join(',\n  ');
+  const validatorsList = Array.from(validators).sort(compareCodeUnits).join(',\n  ');
 
-  const allHandlerExports = Array.from(new Set(httpOps.map((op) => op.handler.exportName))).sort();
+  const allHandlerExports = Array.from(new Set(httpOps.map((op) => op.handler.exportName))).sort(
+    compareCodeUnits,
+  );
   const exportToPropMap = new Map<string, string>();
   const handlerProps: string[] = [];
   for (const exportName of allHandlerExports) {
@@ -150,23 +153,6 @@ function endpointMetadata(op: NormalizedOperation): string {
       },
     },`);
   return lines.join('\n');
-}
-
-function importLines(pairs: Array<[string, string]>): string[] {
-  const grouped = new Map<string, Set<string>>();
-  for (const [modulePath, exportName] of pairs) {
-    const existing = grouped.get(modulePath) ?? new Set();
-    existing.add(exportName);
-    grouped.set(modulePath, existing);
-  }
-  return Array.from(grouped.keys())
-    .sort((a, b) => a.localeCompare(b))
-    .map((modulePath) => {
-      const exports = Array.from(grouped.get(modulePath)!)
-        .sort((a, b) => a.localeCompare(b))
-        .join(', ');
-      return `import { ${exports} } from '${modulePath}';`;
-    });
 }
 
 function joinPath(prefix: string, path: string): string {

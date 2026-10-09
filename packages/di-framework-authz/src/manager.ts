@@ -1,5 +1,6 @@
 import type { AuthorizationManager, Principal } from '@di-framework/auth';
 import { useContainer } from '@di-framework/core/container';
+import { compareCodeUnits } from 'shared/compare';
 import { parsePolicies } from './ebnf.ts';
 import { evaluatePolicy } from './evaluator.ts';
 import { compilePolicies } from './registry.ts';
@@ -95,7 +96,11 @@ export function policyAuthorizationManager(
   };
 }
 function decision(allowed: boolean, category: PolicyDecision['category'], ruleIds: string[]) {
-  const detail: PolicyDecision = { allowed, category, ruleIds: [...ruleIds].sort() };
+  const detail: PolicyDecision = {
+    allowed,
+    category,
+    ruleIds: [...ruleIds].sort(compareCodeUnits),
+  };
   return allowed
     ? { allowed: true as const, detail }
     : { allowed: false as const, reason: category, detail };

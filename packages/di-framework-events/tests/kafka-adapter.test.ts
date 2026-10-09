@@ -102,7 +102,7 @@ describe('kafkaTransport - pending subscriptions', () => {
   });
 
   it('removes a pending subscription cancelled before start() ever runs', async () => {
-    const { mock: kafkajs } = makeMock();
+    const { mock: kafkajs, subscribedTopics } = makeMock();
     const transport = kafkaTransport({
       client: { clientId: 'test', brokers: ['b:9092'] },
       groupId: 'g1',
@@ -113,7 +113,7 @@ describe('kafkaTransport - pending subscriptions', () => {
     const unsub = await transport.subscribe('never', handler);
     await unsub();
     await transport.start?.();
-    // Since it was cancelled, no subscribe call should occur for 'never'.
+    expect(subscribedTopics.some((entry) => entry.topic === 'never')).toBe(false);
     await transport.stop?.();
   });
 });

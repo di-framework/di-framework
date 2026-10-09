@@ -6,7 +6,8 @@ on:
       - "v*"
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   release:
@@ -20,7 +21,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          # The bun package's postinstall links its platform binary. Other
+          # lifecycle scripts stay skipped.
+          node packages/di-framework-cli/node_modules/bun/install.js
 
       - name: Build packages
         run: bun run packages/di-framework-cli/main.ts mx build --sync-versions
@@ -34,7 +39,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Ensure modern npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@12.2.0 --ignore-scripts
 
       - name: Align manifests and verify packed packages
         run: bun scripts/release-prepublish.ts
