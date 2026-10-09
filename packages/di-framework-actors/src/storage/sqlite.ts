@@ -13,12 +13,6 @@ import { acquireActorLock } from './lock';
 import { actorIdentityToPath, assertStoredActorIdentity, trimUnderscores } from './path';
 import type { ActorStorage, ActorStorageTransaction, TransactionOptions } from './types';
 
-function randomFraction(): number {
-  const bytes = new Uint32Array(1);
-  crypto.getRandomValues(bytes);
-  return (bytes[0] ?? 0) / 0x1_0000_0000;
-}
-
 function cloneValue<T>(value: T): T {
   if (value === undefined || value === null) return value;
   if (typeof value !== 'object' && typeof value !== 'function') return value;
@@ -459,7 +453,8 @@ export class SqliteActorStorage implements ActorStorage {
           try {
             db?.close();
           } catch {}
-          await new Promise((res) => setTimeout(res, 25 * initAttempts + randomFraction() * 25));
+          const jitter = (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32;
+          await new Promise((res) => setTimeout(res, 25 * initAttempts + jitter * 25));
           continue;
         }
         if (releaseLock) {
@@ -767,7 +762,8 @@ export class SqliteActorStorage implements ActorStorage {
         attempts++;
         const isBusy = err?.message?.includes('busy') || err?.message?.includes('locked');
         if (isBusy && attempts <= 8) {
-          await new Promise((res) => setTimeout(res, 25 * attempts + randomFraction() * 25));
+          const jitter = (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32;
+          await new Promise((res) => setTimeout(res, 25 * attempts + jitter * 25));
           continue;
         }
         throw err;
