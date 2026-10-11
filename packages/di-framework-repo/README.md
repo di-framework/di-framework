@@ -365,3 +365,33 @@ await query('insert into events (id, score, label) values ($1, $2, $3)', [
 `pgValue` infers a default tag from the JavaScript value: `null`, `text`, `uuid` (UUID-shaped strings), `bool`, `int4`, `int8` (`bigint`, or a safe integer outside the int4 range), `numeric` (other finite numbers), `timestamp-tz`, `bytea`, and `jsonb`. That default is only a guess. The host binds in binary, so a small integer in an `int8` column, a float in a `float8` column, or a UUID-shaped string in a `text` column is rejected. Pass the column tag (`pgValue(value, 'int8')`) or use `text`, `uuid`, `int8`, or `float8`. `int8` keeps a `bigint` so values above 2^53 are not rounded. `pgScalar` turns one result cell into a JSON value; an `int8` that is not a safe integer becomes a decimal string. `readRows` reads the column list and row stream. `postgresError` and `assertBatch` surface an `err` variant. `isUniqueViolation` detects SQLSTATE `23505` at the start of a `PostgreSQL` error, or the words `duplicate key`.
 
 Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not point `MigrationRunner` at this binding. Postgres schema history stays a guest concern; the runner's placeholders and transaction handle are SQLite.
+
+## Embedded PostgreSQL (PGlite) in a Wasm component
+
+`createWasmPgliteDatabase` adapts the `di-framework:pglite/database@0.2.0` WIT import to `SqlDatabase`. The provider component bundles PostgreSQL 17 and stores the cluster under a directory in a writable WASI preopen; compose your component with it (see `platform/pglite-component` in [di-framework/platform](https://github.com/di-framework/platform)). The function is on the package entry and on the portable wasmCloud build.
+
+```ts
+import { createWasmPgliteDatabase, type SqlDatabase } from '@di-framework/repo';
+
+// The database root is yours to choose. An empty path selects /data/pglite.
+const db: SqlDatabase = await createWasmPgliteDatabase('/data/identity');
+
+await db.exec('CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, email text UNIQUE, meta jsonb)');
+await db.transaction(async (tx) => {
+  await tx.run('INSERT INTO users (id, email, meta) VALUES (?, ?, ?)', [id, email, { plan: 'free' }]);
+});
+const user = await db.first<{ email: string; meta: { plan: string } }>(
+  'SELECT email, meta FROM users WHERE id = ?',
+  [id],
+);
+```
+
+The provider allows one open connection per component instance. Keep one handle and share it: every call goes through one async mutex.
+
+- **Transactions.** `transaction(fn)` runs the provider's `begin` and `commit`, and `rollback` when `fn` throws. Statements issued from inside `fn`, through the callback view or the outer handle, join the transaction; other tasks wait for it. A nested `transaction()` opens a savepoint. When it throws, only its own work rolls back, and the outer transaction can continue. Its work commits only with the outer transaction. Sibling savepoints started concurrently run one at a time.
+- **Placeholders.** `?` placeholders become `$1`, `$2`, ... in order. The rewrite skips `'...'` and `E'...'` strings, `"..."` identifiers, `$tag$...$tag$` bodies, `--` and `/* */` comments, and the jsonb operators `?|` and `?&`. The bare jsonb `?` operator looks like a placeholder: use `jsonb_exists(col, ?)` in a statement with parameters. A statement run without parameters is not rewritten. You can write `$n` yourself, but do not mix `$n` with `?` in one statement.
+- **Parameters.** `string` is sent as text, and PostgreSQL infers its type from context, so a UUID or timestamp string works against `uuid` and `timestamptz` columns. A safe integer is `int8`, another number is `float8`, a `boolean` is `bool`, and `Uint8Array`, `ArrayBuffer` and typed arrays are `bytea`. A `Date` is sent as an RFC 3339 timestamp. Plain objects and arrays are sent as JSON, so a JavaScript array is not a PostgreSQL array: pass a literal such as `'{a,b}'`. A `bigint` outside the safe integer range is sent as decimal text, so it is not rounded.
+- **Results.** Values match the `wasmcloud:postgres` codec above, so repositories behave the same on both backends. `json` and `jsonb` are parsed. `timestamptz` is an ISO string with milliseconds (`2024-01-15T10:30:00.123Z`, microseconds truncated); `infinity` and BC dates are returned as PostgreSQL prints them. An `int8` outside the safe integer range is a decimal string. `bool` is a boolean, `bytea` is a `Uint8Array`, and `timestamp` without zone, `date`, `uuid`, `numeric` and arrays are strings.
+- **Errors.** Failures throw `WasmPgliteError` with the WIT `tag`. A PostgreSQL error keeps its SQLSTATE in `error.code` (`'23505'` for a unique violation), and the message starts with `PostgreSQL <code>`, so `isUniqueViolation` works too.
+
+Pass `module` or `loadModule` to supply the interface yourself (for tests), and `database` or `statementTimeoutMs` to forward `open-options`. `createSqlDatabaseFromWasmPgliteConnection` wraps a connection you have already opened. `toPgPlaceholders` is exported on its own.
