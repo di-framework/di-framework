@@ -148,6 +148,262 @@ describe('wasmCloud postgres values', () => {
     );
   });
 
+  describe('64-bit payloads from either componentize-qjs runtime', () => {
+    // di.4 and older lift s64/u64 as a Number; di.5 and jco lift a BigInt.
+    const runtimes = [
+      { name: 'BigInt (0.4.4-di.5, jco)', lift: (value: bigint): bigint | number => value },
+      { name: 'Number (0.4.4-di.4)', lift: (value: bigint): bigint | number => Number(value) },
+    ];
+
+    /** `f64::integer_decode`, the layout the host uses for float8. */
+    const f64Tuple = (value: number) => float8(value).val as [bigint, number, number];
+
+    /** `f32::integer_decode`, the layout the host uses for float4. */
+    function f32Tuple(value: number): [bigint, number, number] {
+      const view = new DataView(new ArrayBuffer(4));
+      view.setFloat32(0, value);
+      const bits = view.getUint32(0);
+      const sign = bits >>> 31 === 0 ? 1 : -1;
+      const exponent = (bits >>> 23) & 0xff;
+      const fraction = bits & 0x7fffff;
+      const mantissa = exponent === 0 ? fraction << 1 : fraction | 0x800000;
+      return [BigInt(mantissa), exponent - 150, sign];
+    }
+
+    const F64_SAMPLES = [
+      0,
+      -0,
+      1.5,
+      -0.1,
+      Math.PI,
+      1e300,
+      -1e-300,
+      Number.MAX_VALUE,
+      Number.MIN_VALUE,
+      2 ** -1022,
+      2 ** -1074 * 12345,
+      2 ** 53 + 2,
+    ];
+    const F32_SAMPLES = [0, 1.5, Math.fround(0.1), Math.fround(-3.4e38), Math.fround(1e-40)];
+
+    for (const { name, lift } of runtimes) {
+      const f64 = (value: number) => {
+        const [mantissa, exponent, sign] = f64Tuple(value);
+        return [lift(mantissa), exponent, sign];
+      };
+      const f32 = (value: number) => {
+        const [mantissa, exponent, sign] = f32Tuple(value);
+        return [lift(mantissa), exponent, sign];
+      };
+      const pt = (x: number, y: number) => [f64(x), f64(y)];
+
+      test(`decodes integer cases lifted as ${name}`, () => {
+        for (const tag of [
+          'int8',
+          'big-int',
+          'big-serial',
+          'bigserial',
+          'serial8',
+          'txid-snapshot',
+          'pg-lsn',
+        ]) {
+          expect(pgScalar({ tag, val: lift(42n) })).toBe(42);
+          expect(pgScalar({ tag, val: lift(-(2n ** 53n) + 1n) })).toBe(-(2 ** 53) + 1);
+          expect(pgScalar({ tag })).toBeNull();
+        }
+        expect(pgScalar({ tag: 'int8-array', val: [lift(1n), lift(-2n)] })).toEqual([1, -2]);
+        expect(pgScalar({ tag: 'pg-lsn-array', val: [lift(7n)] })).toEqual([7]);
+        expect(pgScalar({ tag: 'pg-snapshot', val: [lift(10n), lift(12n), [lift(11n)]] })).toEqual([
+          10,
+          12,
+          [11],
+        ]);
+      });
+
+      test(`decodes float and geometric cases lifted as ${name}`, () => {
+        for (const sample of F64_SAMPLES) {
+          expect(pgScalar({ tag: 'float8', val: f64(sample) })).toBe(sample);
+          expect(pgScalar({ tag: 'double', val: f64(sample) })).toBe(sample);
+        }
+        for (const sample of F32_SAMPLES) {
+          expect(pgScalar({ tag: 'float4', val: f32(sample) })).toBe(sample);
+          expect(pgScalar({ tag: 'real', val: f32(sample) })).toBe(sample);
+        }
+        // Infinity and NaN, in both the f64 and the f32 layout, decode to
+        // PostgreSQL's text forms so JSON.stringify does not turn them into null.
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, 1] })).toBe('Infinity');
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, -1] })).toBe('-Infinity');
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n + 1n), 972, 1] })).toBe('NaN');
+        expect(pgScalar({ tag: 'float4', val: f32(Number.NEGATIVE_INFINITY) })).toBe('-Infinity');
+        expect(pgScalar({ tag: 'float4', val: f32(Number.NaN) })).toBe('NaN');
+        expect(
+          JSON.parse(
+            JSON.stringify(
+              pgScalar({ tag: 'float8-array', val: [[lift(2n ** 52n), 972, -1], f64(1)] }),
+            ),
+          ),
+        ).toEqual(['-Infinity', 1]);
+
+        expect(pgScalar({ tag: 'float8-array', val: [f64(1.5), f64(-2)] })).toEqual([1.5, -2]);
+        expect(pgScalar({ tag: 'float4-array', val: [f32(0.5)] })).toEqual([0.5]);
+        expect(pgScalar({ tag: 'point', val: pt(1, -2) })).toEqual([1, -2]);
+        expect(pgScalar({ tag: 'point-array', val: [pt(1, 2)] })).toEqual([[1, 2]]);
+        for (const tag of ['path', 'polygon']) {
+          expect(pgScalar({ tag, val: [pt(0, 0), pt(1.5, 2)] })).toEqual([
+            [0, 0],
+            [1.5, 2],
+          ]);
+          expect(pgScalar({ tag: `${tag}-array`, val: [[pt(0, 1)]] })).toEqual([[[0, 1]]]);
+        }
+        for (const tag of ['box', 'line', 'lseg']) {
+          expect(pgScalar({ tag, val: [pt(0, 0.25), pt(3, 4)] })).toEqual([
+            [0, 0.25],
+            [3, 4],
+          ]);
+          expect(pgScalar({ tag: `${tag}-array`, val: [[pt(0, 1), pt(2, 3)]] })).toEqual([
+            [
+              [0, 1],
+              [2, 3],
+            ],
+          ]);
+        }
+        expect(pgScalar({ tag: 'circle', val: [pt(1, 2), f64(0.5)] })).toEqual([[1, 2], 0.5]);
+        expect(pgScalar({ tag: 'circle-array', val: [[pt(1, 2), f64(3)]] })).toEqual([[[1, 2], 3]]);
+      });
+    }
+
+    test('keeps BigInt values above 2^53 exact as decimal strings', () => {
+      expect(pgScalar({ tag: 'int8', val: 9007199254740993n })).toBe('9007199254740993');
+      expect(pgScalar({ tag: 'big-serial', val: 2n ** 62n })).toBe('4611686018427387904');
+      expect(pgScalar({ tag: 'big-int', val: -(2n ** 63n) })).toBe('-9223372036854775808');
+      expect(pgScalar({ tag: 'txid-snapshot', val: 2n ** 63n - 1n })).toBe('9223372036854775807');
+      expect(pgScalar({ tag: 'pg-lsn', val: 2n ** 64n - 1n })).toBe('18446744073709551615');
+      expect(pgScalar({ tag: 'int8-array', val: [1n, 2n ** 53n + 1n] })).toEqual([
+        1,
+        '9007199254740993',
+      ]);
+      expect(pgScalar({ tag: 'pg-lsn-array', val: [2n ** 60n] })).toEqual(['1152921504606846976']);
+      expect(pgScalar({ tag: 'pg-snapshot', val: [10n, 2n ** 60n, [2n ** 53n + 1n]] })).toEqual([
+        10,
+        '1152921504606846976',
+        ['9007199254740993'],
+      ]);
+      // A Number from an older runtime was already rounded; it passes through.
+      expect(pgScalar({ tag: 'int8', val: 2 ** 60 })).toBe(2 ** 60);
+    });
+
+    test('passes malformed 64-bit payloads through unchanged', () => {
+      expect(pgScalar({ tag: 'float8', val: 'nope' })).toBe('nope');
+      expect(pgScalar({ tag: 'float8', val: [1n, 0] })).toEqual([1n, 0]);
+      expect(pgScalar({ tag: 'float8', val: ['1', 0, 1] })).toEqual(['1', 0, 1]);
+      // A malformed exponent or sign passes through rather than decoding to NaN.
+      expect(pgScalar({ tag: 'float8', val: [1n, 'x', 1] })).toEqual([1n, 'x', 1]);
+      expect(pgScalar({ tag: 'float8', val: [1, 0, null] })).toEqual([1, 0, null]);
+      expect(pgScalar({ tag: 'float4', val: [1n, undefined, 1] })).toEqual([1n, undefined, 1]);
+      expect(pgScalar({ tag: 'float8-array', val: 'nope' })).toBe('nope');
+      expect(pgScalar({ tag: 'point', val: 'nope' })).toBe('nope');
+      expect(pgScalar({ tag: 'float8' })).toBeNull();
+      // Elements beyond the WIT tuple shape pass through unchanged.
+      expect(pgScalar({ tag: 'pg-snapshot', val: [1n, 2n, [], 2n ** 60n] })).toEqual([
+        1,
+        2,
+        [],
+        2n ** 60n,
+      ]);
+      expect(pgScalar({ tag: 'point', val: [f64Tuple(1), f64Tuple(2), 2n ** 60n, 'z'] })).toEqual([
+        1,
+        2,
+        2n ** 60n,
+        'z',
+      ]);
+      // Tags are looked up as own keys only.
+      expect(pgScalar({ tag: 'constructor', val: 1 })).toBe(1);
+    });
+
+    test('readRows output is JSON-safe and exact for BigInt and Number cells', async () => {
+      const columns = [
+        'id',
+        'ids',
+        'serial',
+        'lsn',
+        'lsns',
+        'txid',
+        'snapshot',
+        'score',
+        'scores',
+        'ratio',
+        'ratios',
+        'at',
+        'area',
+      ];
+      const pointCell = (lift: (value: bigint) => bigint | number) => {
+        const [xm, xe, xs] = f64Tuple(1.25);
+        const [ym, ye, ys] = f64Tuple(-2);
+        return [
+          [lift(xm), xe, xs],
+          [lift(ym), ye, ys],
+        ];
+      };
+      const bigRow = [
+        { tag: 'int8', val: 9007199254740993n },
+        { tag: 'int8-array', val: [1n, 2n ** 62n] },
+        { tag: 'big-serial', val: 2n ** 53n + 1n },
+        { tag: 'pg-lsn', val: 2n ** 64n - 1n },
+        { tag: 'pg-lsn-array', val: [16n] },
+        { tag: 'txid-snapshot', val: 2n ** 63n - 1n },
+        { tag: 'pg-snapshot', val: [5n, 2n ** 60n, [6n]] },
+        { tag: 'float8', val: f64Tuple(0.1) },
+        { tag: 'float8-array', val: [f64Tuple(1e300), f64Tuple(Number.MIN_VALUE)] },
+        { tag: 'float4', val: f32Tuple(Math.fround(0.1)) },
+        { tag: 'float4-array', val: [f32Tuple(2.5)] },
+        { tag: 'point', val: pointCell((value) => value) },
+        { tag: 'circle', val: [pointCell((value) => value), f64Tuple(3)] },
+      ];
+      const numberRow = bigRow.map((cell) => ({
+        tag: cell.tag,
+        val: JSON.parse(
+          JSON.stringify(cell.val, (_key, value) =>
+            typeof value === 'bigint' ? Number(value) : value,
+          ),
+        ) as unknown,
+      }));
+
+      const rows = await readRows(table(columns, [bigRow, numberRow]));
+      expect(() => JSON.stringify(rows)).not.toThrow();
+      expect(JSON.parse(JSON.stringify(rows[0]))).toEqual({
+        id: '9007199254740993',
+        ids: [1, '4611686018427387904'],
+        serial: '9007199254740993',
+        lsn: '18446744073709551615',
+        lsns: [16],
+        txid: '9223372036854775807',
+        snapshot: [5, '1152921504606846976', [6]],
+        score: 0.1,
+        scores: [1e300, Number.MIN_VALUE],
+        ratio: Math.fround(0.1),
+        ratios: [2.5],
+        at: [1.25, -2],
+        area: [[1.25, -2], 3],
+      });
+      // An older runtime rounds integers above 2^53; floats and safe integers stay exact.
+      expect(JSON.parse(JSON.stringify(rows[1]))).toEqual({
+        id: 9007199254740992,
+        ids: [1, 2 ** 62],
+        serial: 9007199254740992,
+        lsn: 2 ** 64,
+        lsns: [16],
+        txid: 2 ** 63,
+        snapshot: [5, 2 ** 60, [6]],
+        score: 0.1,
+        scores: [1e300, Number.MIN_VALUE],
+        ratio: Math.fround(0.1),
+        ratios: [2.5],
+        at: [1.25, -2],
+        area: [[1.25, -2], 3],
+      });
+    });
+  });
+
   test('detects unique violations and formats err variant messages', () => {
     const wrapped = new Error('PostgreSQL already');
     expect(postgresError(wrapped)).toBe(wrapped);

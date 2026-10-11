@@ -177,19 +177,33 @@ export function unwrapWasmResult<T>(value: T | WasmResult<T>): T {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
+const INT64_MAX = 2n ** 63n - 1n;
+const INT64_MIN = -(2n ** 63n);
+
+/**
+ * A safe bigint is sent as a Number, which every componentize-qjs runtime
+ * lowers to `s64`. A larger one stays a BigInt: 0.4.4-di.5 and jco lower it
+ * exactly, while di.4 and older trap on it. Outside the s64 range the runtime
+ * would wrap it modulo 2^64, so it is refused here.
+ */
+function bigintToWasm(value: bigint): WasmSqlValue {
+  if (value >= MIN_SAFE && value <= MAX_SAFE) {
+    return { tag: 'integer', val: Number(value) };
+  }
+  if (value >= INT64_MIN && value <= INT64_MAX) {
+    return { tag: 'integer', val: value };
+  }
+  throw new TypeError(
+    `Cannot bind bigint ${value} as a SQLite parameter; value is outside the signed 64-bit range`,
+  );
+}
 
 /** Converts a bound JavaScript parameter into a `sql-value` variant. */
 export function toWasmSqlValue(value: unknown): WasmSqlValue {
   if (value === null || value === undefined) return { tag: 'null' };
   switch (typeof value) {
     case 'bigint':
-      // componentize-qjs lowers WIT s64 from JS numbers (f64), not BigInt.
-      if (value >= MIN_SAFE && value <= MAX_SAFE) {
-        return { tag: 'integer', val: Number(value) };
-      }
-      throw new TypeError(
-        `Cannot bind bigint ${value} as a SQLite parameter; value exceeds Number.MAX_SAFE_INTEGER`,
-      );
+      return bigintToWasm(value);
     case 'number':
       if (Number.isSafeInteger(value)) {
         return { tag: 'integer', val: value };
@@ -215,7 +229,12 @@ export function toWasmSqlValue(value: unknown): WasmSqlValue {
   );
 }
 
-/** Converts a `sql-value` variant into the JavaScript value native drivers return. */
+/**
+ * Converts a `sql-value` variant into the JavaScript value native drivers
+ * return. An `integer` arrives as a `Number` from componentize-qjs 0.4.4-di.4
+ * and older, and as a `BigInt` from di.5 and jco. A safe BigInt becomes a
+ * Number; a larger one stays a BigInt so it is not rounded.
+ */
 export function fromWasmSqlValue(value: WasmSqlValue): unknown {
   switch (value.tag) {
     case 'null':
