@@ -15,8 +15,14 @@ export interface SqlDatabase {
    * Runs `fn` inside `BEGIN IMMEDIATE … COMMIT`, rolling back when it throws.
    * All statements on one handle are serialized, including `run`/`query`/`exec`
    * issued outside a transaction. Nested `transaction()` calls on the callback
-   * view join the outer one. Same-context statements on the outer handle while
-   * a transaction is open still join it; concurrent tasks wait for the lock.
+   * view join the outer one; concurrent tasks wait for the lock.
+   *
+   * Inside `fn`, prefer the callback view: it joins the transaction from any
+   * async context (a worker loop, a pre-created `AsyncResource`, code the
+   * AsyncLocalStorage shim of a Wasm guest does not instrument). The outer
+   * handle joins only from `fn`'s own async context; from anywhere else it
+   * waits for the lock, which deadlocks if `fn` awaits it.
+   *
    * Joining ends with the transaction: a continuation that runs afterwards (a
    * timer scheduled inside it, a retained callback view) waits for the lock.
    */
@@ -92,6 +98,12 @@ function normalizeChanges(result: { changes?: number | bigint } | undefined | nu
   return { changes: undefined };
 }
 
+/** A transaction opened by `createSqlDatabase`; `active` is cleared when it ends. */
+interface OpenTransaction {
+  active: boolean;
+  readonly view: SqlDatabase;
+}
+
 /**
  * Builds a `SqlDatabase` on top of a driver, adding serialized transactions
  * and re-entrant nesting.
@@ -103,9 +115,9 @@ export function createSqlDatabase(
   const begin = options.beginStatement ?? 'BEGIN IMMEDIATE';
   const mutex = new AsyncMutex();
   // Leases are cleared when the lock or transaction ends, so a continuation
-  // that outlives it (a timer, a retained view) waits like any other caller.
+  // on the outer handle that outlives it (a timer) waits like any other caller.
   const mutexHeld = new AsyncLocalStorage<{ active: boolean }>();
-  const activeTransaction = new AsyncLocalStorage<{ active: boolean }>();
+  const activeTransaction = new AsyncLocalStorage<OpenTransaction>();
 
   const run = async (sql: string, params: unknown[]) =>
     normalizeChanges(await driver.run(sql, params));
@@ -134,29 +146,39 @@ export function createSqlDatabase(
     });
   };
 
-  const statements = {
+  type Guard = <T>(fn: () => Promise<T>) => Promise<T>;
+  const statementsVia = (guard: Guard) => ({
     [SQL_DATABASE_BRAND]: true,
-    run: (sql: string, params: unknown[] = []) => locked(() => run(sql, params)),
-    query: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => query<T>(sql, params)),
-    first: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => first<T>(sql, params)),
-    exec: (sql: string) => locked(() => exec(sql)),
+    run: (sql: string, params: unknown[] = []) => guard(() => run(sql, params)),
+    query: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => query<T>(sql, params)),
+    first: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => first<T>(sql, params)),
+    exec: (sql: string) => guard(() => exec(sql)),
+  });
+
+  // The callback view joins its transaction from any async context while it is
+  // open, and takes the lock like the outer handle once it has ended.
+  const openTransaction = (): OpenTransaction => {
+    const tx: OpenTransaction = {
+      active: true,
+      view: {
+        ...statementsVia((fn) => (tx.active ? fn() : locked(fn))),
+        transaction: (fn) => (tx.active ? fn(tx.view) : database.transaction(fn)),
+      } as SqlDatabase,
+    };
+    return tx;
   };
 
-  const transactionView: SqlDatabase = {
-    ...statements,
-    transaction: (fn) => database.transaction(fn),
-  } as SqlDatabase;
-
   const database: SqlDatabase = {
-    ...statements,
+    ...statementsVia(locked),
     transaction: async <T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T> => {
-      if (activeTransaction.getStore()?.active) return fn(transactionView);
+      const current = activeTransaction.getStore();
+      if (current?.active) return fn(current.view);
       return locked(async () => {
-        const lease = { active: true };
+        const tx = openTransaction();
         try {
           await exec(begin);
           try {
-            const result = await activeTransaction.run(lease, () => fn(transactionView));
+            const result = await activeTransaction.run(tx, () => fn(tx.view));
             await exec('COMMIT');
             return result;
           } catch (error) {
@@ -166,7 +188,7 @@ export function createSqlDatabase(
             throw error;
           }
         } finally {
-          lease.active = false;
+          tx.active = false;
         }
       });
     },

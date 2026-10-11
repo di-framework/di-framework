@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { AsyncResource } from 'node:async_hooks';
 import {
   createSqlDatabaseFromWasmPgliteConnection,
   createWasmPgliteDatabase,
@@ -27,6 +28,13 @@ import {
 import { createWasmPgliteDatabase as fromPortable } from '../src/portable';
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+const withTimeout = <T>(promise: Promise<T>, ms = 1000) =>
+  Promise.race([
+    promise,
+    tick(ms).then(() => {
+      throw new Error('deadlock');
+    }),
+  ]);
 
 describe('pglite value conversion', () => {
   test('binds JavaScript values as pglite value variants', () => {
@@ -579,6 +587,60 @@ describe('pglite SqlDatabase adapter', () => {
       'query STALE TX $1',
       'COMMIT',
     ]);
+  });
+
+  test('the callback view joins its open transaction from another async context', async () => {
+    const { connection, log } = fakeConnection();
+    const db = createSqlDatabaseFromWasmPgliteConnection(connection);
+    // Created before the transaction, so it does not carry the transaction's context.
+    const resource = new AsyncResource('outside');
+    const jobs: Array<() => Promise<void>> = [];
+    let wake: () => void = () => {};
+    let stop = false;
+    const worker = (async () => {
+      while (!stop) {
+        const job = jobs.shift();
+        if (job) await job();
+        else await new Promise<void>((resolve) => (wake = resolve));
+      }
+    })();
+    const onWorker = (job: () => Promise<unknown>) =>
+      new Promise<void>((done, fail) => {
+        jobs.push(() => job().then(() => done(), fail));
+        wake();
+      });
+    const result = await withTimeout(
+      db.transaction(async (tx) => {
+        await resource.runInAsyncScope(() => tx.run('FROM RESOURCE ?', [1]));
+        await onWorker(() => tx.query('FROM WORKER ?', [1]));
+        await tx.transaction(async (sp) => {
+          await onWorker(async () => {
+            await sp.exec('SP FROM WORKER');
+            await sp.transaction(async (deeper) => deeper.first('DEEPER ?', [1]));
+          });
+        });
+        return 'ok';
+      }),
+    );
+    stop = true;
+    wake();
+    await worker;
+    expect(result).toBe('ok');
+    expect(log).toEqual([
+      'BEGIN',
+      'run FROM RESOURCE $1',
+      'query FROM WORKER $1',
+      'SAVEPOINT di_sp_1',
+      'exec SP FROM WORKER',
+      'SAVEPOINT di_sp_2',
+      'first DEEPER $1',
+      'RELEASE di_sp_2',
+      'RELEASE di_sp_1',
+      'COMMIT',
+    ]);
+    // The handle is still usable afterwards.
+    await db.run('AFTER ?', [1]);
+    expect(log.at(-1)).toBe('run AFTER $1');
   });
 
   test('a continuation that outlives its savepoint joins the still-open transaction', async () => {

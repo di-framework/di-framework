@@ -409,6 +409,11 @@ function descendsFrom(scope: TransactionScope, ancestor: TransactionScope): bool
  * Sibling savepoints started concurrently run one at a time; a plain statement
  * issued while a sibling savepoint is open joins that savepoint.
  *
+ * Inside `fn`, prefer the callback view: while its transaction or savepoint is
+ * open it joins from any async context. The outer handle joins only from
+ * `fn`'s own async context (tracked with AsyncLocalStorage); from anywhere else
+ * it waits for the mutex, which deadlocks if `fn` awaits it.
+ *
  * Joining lasts only while the transaction is open. A continuation that runs
  * after it ends, such as a timer scheduled inside `fn` or a retained callback
  * view, takes the mutex like any other caller.
@@ -502,21 +507,25 @@ export function createSqlDatabaseFromWasmPgliteConnection(
     });
   };
 
-  const statements = {
+  type Guard = <T>(fn: () => Promise<T>) => Promise<T>;
+  const statementsVia = (guard: Guard) => ({
     [SQL_DATABASE_BRAND]: true,
-    run: (sql: string, params: unknown[] = []) => locked(() => run(sql, params)),
-    query: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => query<T>(sql, params)),
-    first: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => first<T>(sql, params)),
-    exec: (sql: string) => locked(() => exec(sql)),
-  };
+    run: (sql: string, params: unknown[] = []) => guard(() => run(sql, params)),
+    query: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => query<T>(sql, params)),
+    first: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => first<T>(sql, params)),
+    exec: (sql: string) => guard(() => exec(sql)),
+  });
 
+  // A view runs directly while its scope is open, from any async context: the
+  // scope's lease is cleared before the mutex is released. Once the scope has
+  // ended, the view takes the mutex like the outer handle.
   const createScope = (parent?: TransactionScope): TransactionScope => {
     const scope: TransactionScope = {
       parent,
       children: new AsyncMutex(),
       lease: { active: true },
       view: {
-        ...statements,
+        ...statementsVia((fn) => (scope.lease.active ? fn() : locked(fn))),
         // A view kept past its scope opens a fresh transaction instead.
         transaction: (fn) => (scope.lease.active ? nest(scope, fn) : database.transaction(fn)),
       } as SqlDatabase,
@@ -525,7 +534,7 @@ export function createSqlDatabaseFromWasmPgliteConnection(
   };
 
   const database: SqlDatabase = {
-    ...statements,
+    ...statementsVia(locked),
     transaction: async <T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T> => {
       const current = liveScope();
       if (current) return nest(current, fn);

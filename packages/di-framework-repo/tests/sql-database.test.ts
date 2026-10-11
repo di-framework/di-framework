@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
+import { AsyncResource } from 'node:async_hooks';
 import {
   AsyncMutex,
   createMigrationDatabase,
@@ -520,6 +521,63 @@ describe('SqlDatabase wrappers and backend registry', () => {
       'STALE TX',
       'COMMIT',
     ]);
+  });
+
+  test('createSqlDatabase views join their open transaction from another async context', async () => {
+    const log: string[] = [];
+    const db = createSqlDatabase({
+      run: (sql) => {
+        log.push(sql);
+        return { changes: 1 };
+      },
+      query: (sql) => {
+        log.push(sql);
+        return [];
+      },
+      exec: (sql) => {
+        log.push(sql);
+      },
+    });
+    const resource = new AsyncResource('outside');
+    const jobs: Array<() => Promise<void>> = [];
+    let wake: () => void = () => {};
+    let stop = false;
+    const worker = (async () => {
+      while (!stop) {
+        const job = jobs.shift();
+        if (job) await job();
+        else await new Promise<void>((resolve) => (wake = resolve));
+      }
+    })();
+    const onWorker = (job: () => Promise<unknown>) =>
+      new Promise<void>((done, fail) => {
+        jobs.push(() => job().then(() => done(), fail));
+        wake();
+      });
+    const result = await Promise.race([
+      db.transaction(async (tx) => {
+        await resource.runInAsyncScope(() => tx.run('FROM RESOURCE'));
+        await onWorker(async () => {
+          await tx.query('FROM WORKER');
+          await tx.transaction(async (nested) => nested.exec('NESTED FROM WORKER'));
+        });
+        return 'ok';
+      }),
+      new Promise((resolve) => setTimeout(() => resolve('deadlock'), 1000)),
+    ]);
+    stop = true;
+    wake();
+    await worker;
+    expect(result).toBe('ok');
+    expect(log).toEqual([
+      'BEGIN IMMEDIATE',
+      'FROM RESOURCE',
+      'FROM WORKER',
+      'NESTED FROM WORKER',
+      'COMMIT',
+    ]);
+    await db.run('AFTER');
+    expect(log.at(-1)).toBe('AFTER');
   });
 
   test('AsyncMutex releases on failure and preserves order', async () => {
