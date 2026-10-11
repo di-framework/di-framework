@@ -33,6 +33,7 @@ import {
   wasmSqliteSyncModeSql,
   wrapBunSqliteDatabase,
 } from '../src/index';
+import { startWorker, withTimeout } from './async-context';
 
 describe('sql-value conversion', () => {
   test('encodes JavaScript parameters as sql-value variants', () => {
@@ -539,35 +540,18 @@ describe('SqlDatabase wrappers and backend registry', () => {
       },
     });
     const resource = new AsyncResource('outside');
-    const jobs: Array<() => Promise<void>> = [];
-    let wake: () => void = () => {};
-    let stop = false;
-    const worker = (async () => {
-      while (!stop) {
-        const job = jobs.shift();
-        if (job) await job();
-        else await new Promise<void>((resolve) => (wake = resolve));
-      }
-    })();
-    const onWorker = (job: () => Promise<unknown>) =>
-      new Promise<void>((done, fail) => {
-        jobs.push(() => job().then(() => done(), fail));
-        wake();
-      });
-    const result = await Promise.race([
+    const worker = startWorker();
+    const result = await withTimeout(
       db.transaction(async (tx) => {
         await resource.runInAsyncScope(() => tx.run('FROM RESOURCE'));
-        await onWorker(async () => {
+        await worker.run(async () => {
           await tx.query('FROM WORKER');
           await tx.transaction(async (nested) => nested.exec('NESTED FROM WORKER'));
         });
         return 'ok';
       }),
-      new Promise((resolve) => setTimeout(() => resolve('deadlock'), 1000)),
-    ]);
-    stop = true;
-    wake();
-    await worker;
+    );
+    await worker.stop();
     expect(result).toBe('ok');
     expect(log).toEqual([
       'BEGIN IMMEDIATE',

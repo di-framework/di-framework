@@ -18,6 +18,14 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
+  contextLock,
+  type Guard,
+  guardedStatements,
+  type Lease,
+  leaseGuard,
+  type SqlStatementCalls,
+} from '../sql-lock';
+import {
   AsyncMutex,
   SQL_DATABASE_BRAND,
   type SqlDatabase,
@@ -374,15 +382,6 @@ async function call<T>(fn: () => WasmMaybeResult<T>): Promise<T> {
   }
 }
 
-/**
- * Proof that the current async context holds a lock or scope. It is cleared
- * when that lock or scope ends, so a continuation that outlives it (a timer, a
- * retained view) stops being treated as the holder.
- */
-interface Lease {
-  active: boolean;
-}
-
 /** A transaction or savepoint level; siblings opened from it run one at a time. */
 interface TransactionScope {
   readonly view: SqlDatabase;
@@ -421,8 +420,7 @@ function descendsFrom(scope: TransactionScope, ancestor: TransactionScope): bool
 export function createSqlDatabaseFromWasmPgliteConnection(
   connection: WasmPgliteConnection,
 ): SqlDatabase {
-  const mutex = new AsyncMutex();
-  const mutexHeld = new AsyncLocalStorage<Lease>();
+  const locked = contextLock(new AsyncMutex());
   const activeScope = new AsyncLocalStorage<TransactionScope>();
   let savepoints = 0;
 
@@ -430,36 +428,30 @@ export function createSqlDatabaseFromWasmPgliteConnection(
     const values = toWasmPgParams(params);
     return { sql: values.length > 0 ? toPgPlaceholders(sql) : sql, values };
   };
-  const run = async (sql: string, params: unknown[]) => {
-    const bound = bind(sql, params);
-    const changes = await call(() => connection.run(bound.sql, bound.values));
-    return { changes: Number(changes ?? 0) };
+  const calls: SqlStatementCalls = {
+    run: async (sql, params) => {
+      const bound = bind(sql, params);
+      const changes = await call(() => connection.run(bound.sql, bound.values));
+      return { changes: Number(changes ?? 0) };
+    },
+    query: async (sql, params) => {
+      const bound = bind(sql, params);
+      const rows = await call(() => connection.query(bound.sql, bound.values));
+      return rows.map((row) => fromWasmPgRow(row));
+    },
+    first: async (sql, params) => {
+      const bound = bind(sql, params);
+      const row = await call(() => connection.first(bound.sql, bound.values));
+      return row ? fromWasmPgRow(row) : null;
+    },
+    exec: async (sql) => {
+      await call(() => connection.exec(sql));
+    },
   };
-  const query = async <T = SqlRow>(sql: string, params: unknown[]): Promise<T[]> => {
-    const bound = bind(sql, params);
-    const rows = await call(() => connection.query(bound.sql, bound.values));
-    return rows.map((row) => fromWasmPgRow(row) as T);
-  };
-  const first = async <T = SqlRow>(sql: string, params: unknown[]): Promise<T | null> => {
-    const bound = bind(sql, params);
-    const row = await call(() => connection.first(bound.sql, bound.values));
-    return row ? (fromWasmPgRow(row) as T) : null;
-  };
-  const exec = async (sql: string) => {
-    await call(() => connection.exec(sql));
-  };
-
-  const locked = async <T>(fn: () => Promise<T>): Promise<T> => {
-    if (mutexHeld.getStore()?.active) return fn();
-    return mutex.run(async () => {
-      const lease: Lease = { active: true };
-      try {
-        return await mutexHeld.run(lease, fn);
-      } finally {
-        lease.active = false;
-      }
-    });
-  };
+  const statementsVia = (guard: Guard) => ({
+    [SQL_DATABASE_BRAND]: true,
+    ...guardedStatements(guard, calls),
+  });
 
   /** The innermost transaction or savepoint of this context that is still open. */
   const liveScope = (): TransactionScope | undefined => {
@@ -507,27 +499,19 @@ export function createSqlDatabaseFromWasmPgliteConnection(
     });
   };
 
-  type Guard = <T>(fn: () => Promise<T>) => Promise<T>;
-  const statementsVia = (guard: Guard) => ({
-    [SQL_DATABASE_BRAND]: true,
-    run: (sql: string, params: unknown[] = []) => guard(() => run(sql, params)),
-    query: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => query<T>(sql, params)),
-    first: <T = SqlRow>(sql: string, params: unknown[] = []) => guard(() => first<T>(sql, params)),
-    exec: (sql: string) => guard(() => exec(sql)),
-  });
-
   // A view runs directly while its scope is open, from any async context: the
   // scope's lease is cleared before the mutex is released. Once the scope has
   // ended, the view takes the mutex like the outer handle.
   const createScope = (parent?: TransactionScope): TransactionScope => {
+    const lease: Lease = { active: true };
     const scope: TransactionScope = {
       parent,
       children: new AsyncMutex(),
-      lease: { active: true },
+      lease,
       view: {
-        ...statementsVia((fn) => (scope.lease.active ? fn() : locked(fn))),
+        ...statementsVia(leaseGuard(lease, locked)),
         // A view kept past its scope opens a fresh transaction instead.
-        transaction: (fn) => (scope.lease.active ? nest(scope, fn) : database.transaction(fn)),
+        transaction: (fn) => (lease.active ? nest(scope, fn) : database.transaction(fn)),
       } as SqlDatabase,
     };
     return scope;

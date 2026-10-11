@@ -26,15 +26,9 @@ import {
   type WasmPgValue,
 } from '../src/index';
 import { createWasmPgliteDatabase as fromPortable } from '../src/portable';
+import { startWorker, withTimeout } from './async-context';
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
-const withTimeout = <T>(promise: Promise<T>, ms = 1000) =>
-  Promise.race([
-    promise,
-    tick(ms).then(() => {
-      throw new Error('deadlock');
-    }),
-  ]);
 
 describe('pglite value conversion', () => {
   test('binds JavaScript values as pglite value variants', () => {
@@ -594,27 +588,13 @@ describe('pglite SqlDatabase adapter', () => {
     const db = createSqlDatabaseFromWasmPgliteConnection(connection);
     // Created before the transaction, so it does not carry the transaction's context.
     const resource = new AsyncResource('outside');
-    const jobs: Array<() => Promise<void>> = [];
-    let wake: () => void = () => {};
-    let stop = false;
-    const worker = (async () => {
-      while (!stop) {
-        const job = jobs.shift();
-        if (job) await job();
-        else await new Promise<void>((resolve) => (wake = resolve));
-      }
-    })();
-    const onWorker = (job: () => Promise<unknown>) =>
-      new Promise<void>((done, fail) => {
-        jobs.push(() => job().then(() => done(), fail));
-        wake();
-      });
+    const worker = startWorker();
     const result = await withTimeout(
       db.transaction(async (tx) => {
         await resource.runInAsyncScope(() => tx.run('FROM RESOURCE ?', [1]));
-        await onWorker(() => tx.query('FROM WORKER ?', [1]));
+        await worker.run(() => tx.query('FROM WORKER ?', [1]));
         await tx.transaction(async (sp) => {
-          await onWorker(async () => {
+          await worker.run(async () => {
             await sp.exec('SP FROM WORKER');
             await sp.transaction(async (deeper) => deeper.first('DEEPER ?', [1]));
           });
@@ -622,9 +602,7 @@ describe('pglite SqlDatabase adapter', () => {
         return 'ok';
       }),
     );
-    stop = true;
-    wake();
-    await worker;
+    await worker.stop();
     expect(result).toBe('ok');
     expect(log).toEqual([
       'BEGIN',
