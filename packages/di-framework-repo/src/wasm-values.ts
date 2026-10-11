@@ -1,6 +1,6 @@
 /**
- * Value helpers shared by the Wasm SQL adapters. Internal: not re-exported
- * from the package entry points.
+ * Value helpers shared by the Wasm SQL adapters. Public to adapter packages
+ * through `@di-framework/repo/adapter-kit`.
  */
 
 /**

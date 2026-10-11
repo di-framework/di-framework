@@ -366,32 +366,11 @@ await query('insert into events (id, score, label) values ($1, $2, $3)', [
 
 Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not point `MigrationRunner` at this binding. Postgres schema history stays a guest concern; the runner's placeholders and transaction handle are SQLite.
 
-## Embedded PostgreSQL (PGlite) in a Wasm component
+## Writing a SqlDatabase adapter package
 
-`createWasmPgliteDatabase` adapts the `di-framework:pglite/database@0.2.0` WIT import to `SqlDatabase`. The provider component bundles PostgreSQL 17 and stores the cluster under a directory in a writable WASI preopen; compose your component with it (see `platform/pglite-component` in [di-framework/platform](https://github.com/di-framework/platform)). The function is on the package entry and on the portable wasmCloud build.
+Adapters for a specific engine or WIT provider ship with the component they wrap (for example `@di-framework/pglite-component`) and depend on `@di-framework/repo` as a peer. `@di-framework/repo/adapter-kit` is their stable surface. It never references `bun:sqlite` or `node:sqlite`, so it is safe in Wasm component bundles.
 
-```ts
-import { createWasmPgliteDatabase, type SqlDatabase } from '@di-framework/repo';
-
-// The database root is yours to choose. An empty path selects /data/pglite.
-const db: SqlDatabase = await createWasmPgliteDatabase('/data/identity');
-
-await db.exec('CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, email text UNIQUE, meta jsonb)');
-await db.transaction(async (tx) => {
-  await tx.run('INSERT INTO users (id, email, meta) VALUES (?, ?, ?)', [id, email, { plan: 'free' }]);
-});
-const user = await db.first<{ email: string; meta: { plan: string } }>(
-  'SELECT email, meta FROM users WHERE id = ?',
-  [id],
-);
-```
-
-The provider allows one open connection per component instance. Keep one handle and share it: every call goes through one async mutex.
-
-- **Transactions.** `transaction(fn)` runs the provider's `begin` and `commit`, and `rollback` when `fn` throws. Statements issued from inside `fn`, through the callback view or the outer handle, join the transaction; other tasks wait for it. Inside `fn`, prefer the callback view: while the transaction is open it joins from any async context, including a worker loop or `AsyncResource` created earlier, and Wasm-guest code that the `node:async_hooks` shim does not instrument (native async generators). The outer handle joins only from `fn`'s own async context. From any other context it waits for the mutex, so awaiting it from `fn` deadlocks. A nested `transaction()` opens a savepoint. When it throws, only its own work rolls back, and the outer transaction can continue. Its work commits only with the outer transaction. Sibling savepoints started concurrently run one at a time. A plain statement issued through a view while a sibling savepoint is open joins that savepoint and rolls back with it: in `Promise.all([tx.transaction(failing), (async () => { await work(); await tx.run(...); })()])`, a `run` issued while the savepoint is open lands inside it, so await the savepoint first when the statement must survive it. Joining lasts only while the transaction is open: a timer scheduled inside `fn`, or a callback view kept after it returns, waits for the mutex like any other caller and never runs inside another task's transaction.
-- **Placeholders.** `?` placeholders become `$1`, `$2`, ... in order. The rewrite skips `'...'` and `E'...'` strings, `"..."` identifiers, `$tag$...$tag$` bodies, `--` and `/* */` comments, and the jsonb operators `?|` and `?&`. Because of that, `?||` reads as `?|` followed by `|`: put a space in the concatenation (`? || 'x'`). The bare jsonb `?` operator looks like a placeholder: use `jsonb_exists(col, ?)` in a statement with parameters. A statement run without parameters is not rewritten. You can write `$n` yourself, but do not mix `$n` with `?` in one statement.
-- **Parameters.** `string` is sent as text, and PostgreSQL infers its type from context, so a UUID or timestamp string works against `uuid` and `timestamptz` columns. A safe integer is `int8`, another number is `float8`, a `boolean` is `bool`, and `Uint8Array`, `ArrayBuffer` and typed arrays are `bytea`. A `Date` is sent as an RFC 3339 timestamp. Plain objects and arrays are sent as JSON, so a JavaScript array is not a PostgreSQL array: pass a literal such as `'{a,b}'`. A `bigint` outside the safe integer range is sent as decimal text, so it is not rounded.
-- **Results.** Values match the `wasmcloud:postgres` codec above, so repositories behave the same on both backends. `json` and `jsonb` are parsed. `timestamptz` is an ISO string with milliseconds (`2024-01-15T10:30:00.123Z`, microseconds truncated); `infinity` and BC dates are returned as PostgreSQL prints them. An `int8` outside the safe integer range is a decimal string, but only when the binding lifts WIT `s64` as a `bigint`; a binding that lifts it as a JavaScript number (componentize-qjs lowers `s64` from numbers) has already lost the precision, so cast large `int8` columns to `text` in the query (`id::text`) when exact values matter. `bool` is a boolean, `bytea` is a `Uint8Array`, and `timestamp` without zone, `date`, `uuid`, `numeric` and arrays are strings.
-- **Errors.** Failures throw `WasmPgliteError` with the WIT `tag`. A PostgreSQL error keeps its SQLSTATE in `error.code` (`'23505'` for a unique violation), and the message starts with `PostgreSQL <code>`, so `isUniqueViolation` works too.
-
-Pass `module` or `loadModule` to supply the interface yourself (for tests), and `database` or `statementTimeoutMs` to forward `open-options`. `createSqlDatabaseFromWasmPgliteConnection` wraps a connection you have already opened. `toPgPlaceholders` is exported on its own.
+- `SqlDatabase`, `SqlRow`, and `SQL_DATABASE_BRAND`: the contract an adapter returns and the brand `isSqlDatabase` checks.
+- `AsyncMutex`, `contextLock`, `leaseGuard`, `guardedStatements`, and the `Guard`, `Lease`, and `SqlStatementCalls` types: the one-connection lock and the transaction/savepoint lease the built-in adapters use, so statements from a transaction's callback view join it from any async context while other callers wait.
+- `WasmResult` and `WasmMaybeResult`: the `result<T, E>` shapes component bindings return.
+- `wasmBlobBytes`: the bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view.

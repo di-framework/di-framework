@@ -1,6 +1,6 @@
 /**
  * Locking shared by the `SqlDatabase` adapters that serialize one connection.
- * Internal: not re-exported from the package entry points.
+ * Public to adapter packages through `@di-framework/repo/adapter-kit`.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AsyncMutex, SqlRow } from './sqlite/sql-database';
