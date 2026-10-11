@@ -38,12 +38,6 @@
       "wasmcloud": "./dist/postgres.js",
       "import": "./dist/postgres.js",
       "default": "./dist/postgres.js"
-    },
-    "./adapter-kit": {
-      "types": "./dist/adapter-kit.d.ts",
-      "wasmcloud": "./dist/adapter-kit.js",
-      "import": "./dist/adapter-kit.js",
-      "default": "./dist/adapter-kit.js"
     }
   },
   "peerDependencies": {

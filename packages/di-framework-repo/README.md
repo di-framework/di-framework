@@ -368,7 +368,7 @@ Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not
 
 ## Writing a SqlDatabase adapter package
 
-Adapters for a specific engine or WIT provider ship with the component they wrap (for example `@di-framework/pglite-component`) and depend on `@di-framework/repo` as a peer. `@di-framework/repo/adapter-kit` is their stable surface. It never references `bun:sqlite` or `node:sqlite`, so it is safe in Wasm component bundles.
+Adapters for a specific engine or WIT provider ship with the component they wrap (for example `@di-framework/pglite-component`) and depend on `@di-framework/repo` as a peer. Everything they need is on the package entry, including the portable `wasmcloud` build, which never references `bun:sqlite` or `node:sqlite`.
 
 - `SqlDatabase`, `SqlRow`, and `SQL_DATABASE_BRAND`: the contract an adapter returns and the brand `isSqlDatabase` checks.
 - `AsyncMutex`, `contextLock`, `leaseGuard`, `guardedStatements`, and the `Guard`, `Lease`, and `SqlStatementCalls` types: the one-connection lock and the transaction/savepoint lease the built-in adapters use, so statements from a transaction's callback view join it from any async context while other callers wait.

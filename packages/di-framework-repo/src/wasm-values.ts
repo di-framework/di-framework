@@ -1,6 +1,6 @@
 /**
- * Value helpers shared by the Wasm SQL adapters. Public to adapter packages
- * through `@di-framework/repo/adapter-kit`.
+ * Value helpers shared by the Wasm SQL adapters. `wasmBlobBytes` is exported
+ * from the package entry for out-of-tree adapter packages.
  */
 
 /**
