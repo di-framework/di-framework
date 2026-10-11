@@ -3,6 +3,19 @@
  * from the package entry for out-of-tree adapter packages.
  */
 
+/** A WIT `result<T, E>` as a record. The `err` payload is engine-specific. */
+export type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
+
+/** Either a bare value (bindings that throw on `err`) or a result record. */
+export type WasmMaybeResult<T> = T | WasmResult<T> | Promise<T | WasmResult<T>>;
+
+/** Whether `value` is a `{ tag: 'ok' | 'err', val }` result record. */
+export function isWasmResult<T>(value: unknown): value is WasmResult<T> {
+  if (typeof value !== 'object' || value === null) return false;
+  const tag = (value as { tag?: unknown }).tag;
+  return (tag === 'ok' || tag === 'err') && 'val' in value;
+}
+
 /**
  * The bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view, or
  * `undefined` for any other value. Views share the underlying buffer.

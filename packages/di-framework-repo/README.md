@@ -371,6 +371,6 @@ Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not
 Adapters for a specific engine or WIT provider ship with the component they wrap (for example `@di-framework/pglite-component`) and depend on `@di-framework/repo` as a peer. Everything they need is on the package entry, including the portable `wasmcloud` build, which never references `bun:sqlite` or `node:sqlite`.
 
 - `SqlDatabase`, `SqlRow`, and `SQL_DATABASE_BRAND`: the contract an adapter returns and the brand `isSqlDatabase` checks.
-- `AsyncMutex`, `contextLock`, `leaseGuard`, `guardedStatements`, and the `Guard`, `Lease`, and `SqlStatementCalls` types: the one-connection lock and the transaction/savepoint lease the built-in adapters use, so statements from a transaction's callback view join it from any async context while other callers wait.
-- `WasmResult` and `WasmMaybeResult`: the `result<T, E>` shapes component bindings return.
+- `AsyncMutex`, `contextLock`, `leaseGuard`, `guardedStatements`, and the `SqlGuard`, `SqlLease`, and `SqlStatementCalls` types: the one-connection lock and the transaction/savepoint lease the built-in adapters use, so statements from a transaction's callback view join it from any async context while other callers wait. Statements inside one transaction are not serialized against each other. An adapter over an async engine that cannot interleave statements on one connection must serialize them itself.
+- `WasmResult`, `WasmMaybeResult`, and `isWasmResult`: the `result<T, E>` shapes component bindings return, and a check for the record form. Map the `err` payload to your engine's error yourself.
 - `wasmBlobBytes`: the bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view.

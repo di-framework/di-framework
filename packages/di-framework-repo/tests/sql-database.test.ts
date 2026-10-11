@@ -457,6 +457,12 @@ describe('SqlDatabase wrappers and backend registry', () => {
     await db.close?.();
   });
 
+  test('Bun wrapper rejects a query-only handle without statement.run', async () => {
+    const db = wrapBunSqliteDatabase({ query: () => ({ all: () => [] }) });
+    await expect(db.run('insert', [])).rejects.toThrow('does not support run(sql, ...params)');
+    await expect(db.exec('create')).rejects.toThrow('does not support exec(sql)');
+  });
+
   test('createSqlDatabase falls back to query() for drivers without first()', async () => {
     const seen: string[] = [];
     const db = createSqlDatabase({

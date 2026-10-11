@@ -8,7 +8,7 @@
  * return `{ tag: 'ok' | 'err', val }` records, others throw an error object
  * carrying the variant as `payload`. Both shapes are normalized here.
  */
-import { wasmBlobBytes } from '../wasm-values';
+import { isWasmResult, type WasmMaybeResult, type WasmResult, wasmBlobBytes } from '../wasm-values';
 import { registerSqliteOpener } from './open';
 import { createSqlDatabase, type SqlDatabase, type SqlDriver, type SqlRow } from './sql-database';
 
@@ -76,10 +76,7 @@ export type WasmSqlValue =
 
 export type WasmSqlRow = Array<[string, WasmSqlValue]>;
 
-export type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
-
-/** Either a bare value (bindings that throw on `err`) or a result record. */
-export type WasmMaybeResult<T> = T | WasmResult<T> | Promise<T | WasmResult<T>>;
+export type { WasmMaybeResult, WasmResult } from '../wasm-values';
 
 /** Guest-side view of the `connection` resource. */
 export interface WasmSqliteConnection {
@@ -169,15 +166,9 @@ export function normalizeWasmSqliteError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function isResultRecord<T>(value: unknown): value is WasmResult<T> {
-  if (typeof value !== 'object' || value === null) return false;
-  const tag = (value as { tag?: unknown }).tag;
-  return (tag === 'ok' || tag === 'err') && 'val' in (value as object);
-}
-
 /** Unwraps `{ tag: 'ok' | 'err' }` records; passes bare values through. */
 export function unwrapWasmResult<T>(value: T | WasmResult<T>): T {
-  if (isResultRecord<T>(value)) {
+  if (isWasmResult<T>(value)) {
     if (value.tag === 'err') throw normalizeWasmSqliteError(value.val);
     return value.val;
   }

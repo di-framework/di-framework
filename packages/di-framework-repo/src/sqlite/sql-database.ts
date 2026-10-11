@@ -6,13 +6,17 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
+  AsyncMutex,
   contextLock,
-  type Guard,
   guardedStatements,
-  type Lease,
   leaseGuard,
+  type SqlGuard,
+  type SqlLease,
+  type SqlRow,
   type SqlStatementCalls,
 } from '../sql-lock';
+
+export { AsyncMutex, type SqlRow };
 
 export interface SqlDatabase {
   run(sql: string, params?: unknown[]): Promise<{ changes?: number }>;
@@ -56,8 +60,6 @@ export function isSqlDatabase(value: unknown): value is SqlDatabase {
   );
 }
 
-export type SqlRow = Record<string, unknown>;
-
 /**
  * Minimal primitive a `SqlDatabase` is assembled from. Methods may be
  * synchronous (Bun, Node, WIT host calls) or return promises.
@@ -71,25 +73,6 @@ export interface SqlDriver {
   ): SqlRow | null | undefined | Promise<SqlRow | null | undefined>;
   exec(sql: string): void | Promise<void>;
   close?(): void | Promise<void>;
-}
-
-/** Promise-chain mutex used to serialize transactions on one connection. */
-export class AsyncMutex {
-  private tail: Promise<void> = Promise.resolve();
-
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    const previous = this.tail;
-    let release!: () => void;
-    this.tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
-  }
 }
 
 export interface CreateSqlDatabaseOptions {
@@ -108,7 +91,7 @@ function normalizeChanges(result: { changes?: number | bigint } | undefined | nu
 
 /** A transaction opened by `createSqlDatabase`; its lease is cleared when it ends. */
 interface OpenTransaction {
-  readonly lease: Lease;
+  readonly lease: SqlLease;
   readonly view: SqlDatabase;
 }
 
@@ -136,7 +119,7 @@ export function createSqlDatabase(
       await driver.exec(sql);
     },
   };
-  const statementsVia = (guard: Guard) => ({
+  const statementsVia = (guard: SqlGuard) => ({
     [SQL_DATABASE_BRAND]: true,
     ...guardedStatements(guard, calls),
   });
@@ -144,7 +127,7 @@ export function createSqlDatabase(
   // The callback view joins its transaction from any async context while it is
   // open, and takes the lock like the outer handle once it has ended.
   const openTransaction = (): OpenTransaction => {
-    const lease: Lease = { active: true };
+    const lease: SqlLease = { active: true };
     const view = {
       ...statementsVia(leaseGuard(lease, locked)),
       transaction: (fn) => (lease.active ? fn(view) : database.transaction(fn)),
