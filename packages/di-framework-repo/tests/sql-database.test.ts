@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
+import { AsyncResource } from 'node:async_hooks';
 import {
   AsyncMutex,
   createMigrationDatabase,
@@ -32,6 +33,7 @@ import {
   wasmSqliteSyncModeSql,
   wrapBunSqliteDatabase,
 } from '../src/index';
+import { startWorker, withTimeout } from './async-context';
 
 describe('sql-value conversion', () => {
   test('encodes JavaScript parameters as sql-value variants', () => {
@@ -455,6 +457,12 @@ describe('SqlDatabase wrappers and backend registry', () => {
     await db.close?.();
   });
 
+  test('Bun wrapper rejects a query-only handle without statement.run', async () => {
+    const db = wrapBunSqliteDatabase({ query: () => ({ all: () => [] }) });
+    await expect(db.run('insert', [])).rejects.toThrow('does not support run(sql, ...params)');
+    await expect(db.exec('create')).rejects.toThrow('does not support exec(sql)');
+  });
+
   test('createSqlDatabase falls back to query() for drivers without first()', async () => {
     const seen: string[] = [];
     const db = createSqlDatabase({
@@ -469,6 +477,97 @@ describe('SqlDatabase wrappers and backend registry', () => {
     expect(await db.first<{ a: number }>('SELECT a')).toEqual({ a: 1 });
     expect(seen).toEqual(['SELECT a']);
     await db.close?.();
+  });
+
+  test('createSqlDatabase stops joining a transaction once it has ended', async () => {
+    const log: string[] = [];
+    const db = createSqlDatabase({
+      run: (sql) => {
+        log.push(sql);
+        return { changes: 1 };
+      },
+      query: (sql) => {
+        log.push(sql);
+        return [];
+      },
+      exec: (sql) => {
+        log.push(sql);
+      },
+    });
+    const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    let leaked!: Promise<unknown>;
+    let kept!: SqlDatabase;
+    await db.transaction(async (tx) => {
+      kept = tx;
+      await tx.transaction(async (nested) => nested.run('FIRST'));
+      leaked = tick(5).then(() => db.run('LEAKED'));
+    });
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const second = db.transaction(async (tx) => {
+      await tx.run('SECOND');
+      await hold;
+      throw new Error('drop second');
+    });
+    await tick(15);
+    const stale = kept.run('STALE');
+    const staleTx = kept.transaction(async (tx) => tx.query('STALE TX'));
+    await tick(5);
+    // Neither the timer nor the retained view runs inside the second transaction.
+    expect(log).toEqual(['BEGIN IMMEDIATE', 'FIRST', 'COMMIT', 'BEGIN IMMEDIATE', 'SECOND']);
+    release();
+    await expect(second).rejects.toThrow('drop second');
+    await Promise.all([leaked, stale, staleTx]);
+    expect(log.slice(5)).toEqual([
+      'ROLLBACK',
+      'LEAKED',
+      'STALE',
+      'BEGIN IMMEDIATE',
+      'STALE TX',
+      'COMMIT',
+    ]);
+  });
+
+  test('createSqlDatabase views join their open transaction from another async context', async () => {
+    const log: string[] = [];
+    const db = createSqlDatabase({
+      run: (sql) => {
+        log.push(sql);
+        return { changes: 1 };
+      },
+      query: (sql) => {
+        log.push(sql);
+        return [];
+      },
+      exec: (sql) => {
+        log.push(sql);
+      },
+    });
+    const resource = new AsyncResource('outside');
+    const worker = startWorker();
+    const result = await withTimeout(
+      db.transaction(async (tx) => {
+        await resource.runInAsyncScope(() => tx.run('FROM RESOURCE'));
+        await worker.run(async () => {
+          await tx.query('FROM WORKER');
+          await tx.transaction(async (nested) => nested.exec('NESTED FROM WORKER'));
+        });
+        return 'ok';
+      }),
+    );
+    await worker.stop();
+    expect(result).toBe('ok');
+    expect(log).toEqual([
+      'BEGIN IMMEDIATE',
+      'FROM RESOURCE',
+      'FROM WORKER',
+      'NESTED FROM WORKER',
+      'COMMIT',
+    ]);
+    await db.run('AFTER');
+    expect(log.at(-1)).toBe('AFTER');
   });
 
   test('AsyncMutex releases on failure and preserves order', async () => {

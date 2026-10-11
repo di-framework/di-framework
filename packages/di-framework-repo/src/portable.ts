@@ -15,5 +15,8 @@ export * from './migrations/index';
 export * from './postgres';
 export * from './query-derivation';
 export * from './repository';
+// Lease lock, mutex, and Wasm value helpers for out-of-tree SqlDatabase adapters.
+export * from './sql-lock';
 export * from './sqlite/index';
 export * from './types';
+export { isWasmResult, type WasmMaybeResult, type WasmResult, wasmBlobBytes } from './wasm-values';

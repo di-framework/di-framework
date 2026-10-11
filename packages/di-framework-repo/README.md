@@ -365,3 +365,12 @@ await query('insert into events (id, score, label) values ($1, $2, $3)', [
 `pgValue` infers a default tag from the JavaScript value: `null`, `text`, `uuid` (UUID-shaped strings), `bool`, `int4`, `int8` (`bigint`, or a safe integer outside the int4 range), `numeric` (other finite numbers), `timestamp-tz`, `bytea`, and `jsonb`. That default is only a guess. The host binds in binary, so a small integer in an `int8` column, a float in a `float8` column, or a UUID-shaped string in a `text` column is rejected. Pass the column tag (`pgValue(value, 'int8')`) or use `text`, `uuid`, `int8`, or `float8`. `int8` keeps a `bigint` so values above 2^53 are not rounded. `pgScalar` turns one result cell into a JSON value; an `int8` that is not a safe integer becomes a decimal string. `readRows` reads the column list and row stream. `postgresError` and `assertBatch` surface an `err` variant. `isUniqueViolation` detects SQLSTATE `23505` at the start of a `PostgreSQL` error, or the words `duplicate key`.
 
 Adapt the binding to `SqlDatabase` with `createSqlDatabase` in the guest. Do not point `MigrationRunner` at this binding. Postgres schema history stays a guest concern; the runner's placeholders and transaction handle are SQLite.
+
+## Writing a SqlDatabase adapter package
+
+Adapters for a specific engine or WIT provider ship with the component they wrap (for example `@di-framework/pglite-component`) and depend on `@di-framework/repo` as a peer. Everything they need is on the package entry, including the portable `wasmcloud` build, which never references `bun:sqlite` or `node:sqlite`.
+
+- `SqlDatabase`, `SqlRow`, and `SQL_DATABASE_BRAND`: the contract an adapter returns and the brand `isSqlDatabase` checks.
+- `AsyncMutex`, `contextLock`, `leaseGuard`, `guardedStatements`, and the `SqlGuard`, `SqlLease`, and `SqlStatementCalls` types: the one-connection lock and the transaction/savepoint lease the built-in adapters use, so statements from a transaction's callback view join it from any async context while other callers wait. Statements inside one transaction are not serialized against each other. An adapter over an async engine that cannot interleave statements on one connection must serialize them itself.
+- `WasmResult`, `WasmMaybeResult`, and `isWasmResult`: the `result<T, E>` shapes component bindings return, and a check for the record form. Map the `err` payload to your engine's error yourself.
+- `wasmBlobBytes`: the bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view.
