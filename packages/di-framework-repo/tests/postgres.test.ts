@@ -229,18 +229,20 @@ describe('wasmCloud postgres values', () => {
           expect(pgScalar({ tag: 'float4', val: f32(sample) })).toBe(sample);
           expect(pgScalar({ tag: 'real', val: f32(sample) })).toBe(sample);
         }
-        // Infinity and NaN, in both the f64 and the f32 layout.
-        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, 1] })).toBe(
-          Number.POSITIVE_INFINITY,
-        );
-        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, -1] })).toBe(
-          Number.NEGATIVE_INFINITY,
-        );
-        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n + 1n), 972, 1] })).toBeNaN();
-        expect(pgScalar({ tag: 'float4', val: f32(Number.NEGATIVE_INFINITY) })).toBe(
-          Number.NEGATIVE_INFINITY,
-        );
-        expect(pgScalar({ tag: 'float4', val: f32(Number.NaN) })).toBeNaN();
+        // Infinity and NaN, in both the f64 and the f32 layout, decode to
+        // PostgreSQL's text forms so JSON.stringify does not turn them into null.
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, 1] })).toBe('Infinity');
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n), 972, -1] })).toBe('-Infinity');
+        expect(pgScalar({ tag: 'float8', val: [lift(2n ** 52n + 1n), 972, 1] })).toBe('NaN');
+        expect(pgScalar({ tag: 'float4', val: f32(Number.NEGATIVE_INFINITY) })).toBe('-Infinity');
+        expect(pgScalar({ tag: 'float4', val: f32(Number.NaN) })).toBe('NaN');
+        expect(
+          JSON.parse(
+            JSON.stringify(
+              pgScalar({ tag: 'float8-array', val: [[lift(2n ** 52n), 972, -1], f64(1)] }),
+            ),
+          ),
+        ).toEqual(['-Infinity', 1]);
 
         expect(pgScalar({ tag: 'float8-array', val: [f64(1.5), f64(-2)] })).toEqual([1.5, -2]);
         expect(pgScalar({ tag: 'float4-array', val: [f32(0.5)] })).toEqual([0.5]);
@@ -294,15 +296,25 @@ describe('wasmCloud postgres values', () => {
       expect(pgScalar({ tag: 'float8', val: 'nope' })).toBe('nope');
       expect(pgScalar({ tag: 'float8', val: [1n, 0] })).toEqual([1n, 0]);
       expect(pgScalar({ tag: 'float8', val: ['1', 0, 1] })).toEqual(['1', 0, 1]);
+      // A malformed exponent or sign passes through rather than decoding to NaN.
+      expect(pgScalar({ tag: 'float8', val: [1n, 'x', 1] })).toEqual([1n, 'x', 1]);
+      expect(pgScalar({ tag: 'float8', val: [1, 0, null] })).toEqual([1, 0, null]);
+      expect(pgScalar({ tag: 'float4', val: [1n, undefined, 1] })).toEqual([1n, undefined, 1]);
       expect(pgScalar({ tag: 'float8-array', val: 'nope' })).toBe('nope');
       expect(pgScalar({ tag: 'point', val: 'nope' })).toBe('nope');
       expect(pgScalar({ tag: 'float8' })).toBeNull();
-      // A tuple longer than the WIT shape still has its extra integers made JSON-safe.
+      // Elements beyond the WIT tuple shape pass through unchanged.
       expect(pgScalar({ tag: 'pg-snapshot', val: [1n, 2n, [], 2n ** 60n] })).toEqual([
         1,
         2,
         [],
-        '1152921504606846976',
+        2n ** 60n,
+      ]);
+      expect(pgScalar({ tag: 'point', val: [f64Tuple(1), f64Tuple(2), 2n ** 60n, 'z'] })).toEqual([
+        1,
+        2,
+        2n ** 60n,
+        'z',
       ]);
       // Tags are looked up as own keys only.
       expect(pgScalar({ tag: 'constructor', val: 1 })).toBe(1);

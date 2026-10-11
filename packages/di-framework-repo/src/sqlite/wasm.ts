@@ -180,24 +180,30 @@ const MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
 const INT64_MAX = 2n ** 63n - 1n;
 const INT64_MIN = -(2n ** 63n);
 
+/**
+ * A safe bigint is sent as a Number, which every componentize-qjs runtime
+ * lowers to `s64`. A larger one stays a BigInt: 0.4.4-di.5 and jco lower it
+ * exactly, while di.4 and older trap on it. Outside the s64 range the runtime
+ * would wrap it modulo 2^64, so it is refused here.
+ */
+function bigintToWasm(value: bigint): WasmSqlValue {
+  if (value >= MIN_SAFE && value <= MAX_SAFE) {
+    return { tag: 'integer', val: Number(value) };
+  }
+  if (value >= INT64_MIN && value <= INT64_MAX) {
+    return { tag: 'integer', val: value };
+  }
+  throw new TypeError(
+    `Cannot bind bigint ${value} as a SQLite parameter; value is outside the signed 64-bit range`,
+  );
+}
+
 /** Converts a bound JavaScript parameter into a `sql-value` variant. */
 export function toWasmSqlValue(value: unknown): WasmSqlValue {
   if (value === null || value === undefined) return { tag: 'null' };
   switch (typeof value) {
     case 'bigint':
-      // A safe bigint is sent as a Number, which every componentize-qjs
-      // runtime lowers to `s64`. A larger one stays a BigInt: 0.4.4-di.5 and
-      // jco lower it exactly, while di.4 and older reject it. Outside the s64
-      // range the runtime would wrap it modulo 2^64, so it is refused here.
-      if (value >= MIN_SAFE && value <= MAX_SAFE) {
-        return { tag: 'integer', val: Number(value) };
-      }
-      if (value >= INT64_MIN && value <= INT64_MAX) {
-        return { tag: 'integer', val: value };
-      }
-      throw new TypeError(
-        `Cannot bind bigint ${value} as a SQLite parameter; value is outside the signed 64-bit range`,
-      );
+      return bigintToWasm(value);
     case 'number':
       if (Number.isSafeInteger(value)) {
         return { tag: 'integer', val: value };

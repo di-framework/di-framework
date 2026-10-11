@@ -140,7 +140,13 @@ const listOf =
 const tupleOf =
   (...items: Decoder[]): Decoder =>
   (value) =>
-    Array.isArray(value) ? value.map((part, index) => (items[index] ?? jsonInt)(part)) : value;
+    Array.isArray(value)
+      ? value.map((part, index) => {
+          // Extra elements of a malformed tuple pass through unchanged.
+          const item = items[index];
+          return item ? item(part) : part;
+        })
+      : value;
 
 const point = tupleOf(hashableF64Number, hashableF64Number);
 const segment = tupleOf(point, point);
@@ -155,6 +161,8 @@ const DECODERS = new Map<string, Decoder>([
   ['int8', jsonInt],
   ['big-int', jsonInt],
   ['big-serial', jsonInt],
+  // Not a `wasmcloud:postgres@0.2.0` case (the WIT case is `big-serial`); kept
+  // as a backwards-compatible alias for hosts that emitted the older tag.
   ['bigserial', jsonInt],
   ['serial8', jsonInt],
   ['txid-snapshot', jsonInt],
@@ -280,6 +288,10 @@ function jsonInt(value: unknown): unknown {
   return Number.isSafeInteger(asNumber) && BigInt(asNumber) === value ? asNumber : value.toString();
 }
 
+function isIntegerLike(part: unknown): part is number | bigint {
+  return typeof part === 'bigint' || typeof part === 'number';
+}
+
 const F64_SPECIAL_EXPONENT = 2047 - 1075;
 const F32_SPECIAL_EXPONENT = 255 - 150;
 const F64_HIDDEN_BIT = 2 ** 52;
@@ -291,12 +303,19 @@ const F32_HIDDEN_BIT = 2 ** 23;
  * `float4` with the `f32` layout and `float8` with the `f64` layout; both give
  * `sign * mantissa * 2^exponent`, and the mantissa is below 2^53, so a
  * `Number` or a `BigInt` mantissa decodes exactly. Infinity and NaN keep the
- * all-ones exponent of their layout.
+ * all-ones exponent of their layout; they decode to the strings `'Infinity'`,
+ * `'-Infinity'` and `'NaN'` (PostgreSQL's own text forms) because
+ * `JSON.stringify` would turn the numbers into `null`. A tuple whose parts are
+ * not all numbers or bigints is malformed and passes through unchanged.
  */
 function hashableF64Number(value: unknown): unknown {
   if (!Array.isArray(value) || value.length !== 3) return value;
-  const [rawMantissa, rawExponent, rawSign] = value as [unknown, unknown, unknown];
-  if (typeof rawMantissa !== 'bigint' && typeof rawMantissa !== 'number') return value;
+  if (!value.every(isIntegerLike)) return value;
+  const [rawMantissa, rawExponent, rawSign] = value as [
+    number | bigint,
+    number | bigint,
+    number | bigint,
+  ];
   const mantissa = Number(rawMantissa);
   const exponent = Number(rawExponent);
   const sign = Number(rawSign) < 0 ? -1 : 1;
@@ -307,7 +326,8 @@ function hashableF64Number(value: unknown): unknown {
       mantissa < 2 * F32_HIDDEN_BIT);
   if (special) {
     const hidden = exponent === F64_SPECIAL_EXPONENT ? F64_HIDDEN_BIT : F32_HIDDEN_BIT;
-    return mantissa === hidden ? sign * Number.POSITIVE_INFINITY : Number.NaN;
+    if (mantissa !== hidden) return 'NaN';
+    return sign < 0 ? '-Infinity' : 'Infinity';
   }
   // 2 ** -1075 underflows to 0, so scale subnormals in two exact steps.
   if (exponent < -1000) return sign * mantissa * 2 ** (exponent + 600) * 2 ** -600;
