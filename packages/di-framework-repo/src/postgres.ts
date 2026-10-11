@@ -125,16 +125,64 @@ export function pgScalar(value: unknown): unknown {
   }
   if (tagged.tag === 'timestamp' || tagged.tag === 'timestamp-tz') return timestampIso(tagged.val);
   if (tagged.tag === 'bool' || tagged.tag === 'boolean') return tagged.val === true;
-  if (
-    tagged.tag === 'int8' ||
-    tagged.tag === 'big-int' ||
-    tagged.tag === 'bigserial' ||
-    tagged.tag === 'serial8'
-  ) {
-    return jsonInt(tagged.val);
-  }
+  const decode = DECODERS.get(tagged.tag);
+  if (decode) return tagged.val === undefined ? null : decode(tagged.val);
   return tagged.val === undefined ? null : tagged.val;
 }
+
+type Decoder = (value: unknown) => unknown;
+
+const listOf =
+  (item: Decoder): Decoder =>
+  (value) =>
+    Array.isArray(value) ? value.map(item) : value;
+
+const tupleOf =
+  (...items: Decoder[]): Decoder =>
+  (value) =>
+    Array.isArray(value) ? value.map((part, index) => (items[index] ?? jsonInt)(part)) : value;
+
+const point = tupleOf(hashableF64Number, hashableF64Number);
+const segment = tupleOf(point, point);
+const circle = tupleOf(point, hashableF64Number);
+
+/**
+ * Decoders for every `pg-value` case whose WIT payload holds an `s64` or
+ * `u64`. componentize-qjs 0.4.4-di.4 and older lift those as a `Number`;
+ * di.5 and jco lift them as a `BigInt`. Both shapes decode to JSON-safe values.
+ */
+const DECODERS = new Map<string, Decoder>([
+  ['int8', jsonInt],
+  ['big-int', jsonInt],
+  ['big-serial', jsonInt],
+  ['bigserial', jsonInt],
+  ['serial8', jsonInt],
+  ['txid-snapshot', jsonInt],
+  ['pg-lsn', jsonInt],
+  ['int8-array', listOf(jsonInt)],
+  ['pg-lsn-array', listOf(jsonInt)],
+  ['pg-snapshot', tupleOf(jsonInt, jsonInt, listOf(jsonInt))],
+  ['float8', hashableF64Number],
+  ['double', hashableF64Number],
+  ['float4', hashableF64Number],
+  ['real', hashableF64Number],
+  ['float8-array', listOf(hashableF64Number)],
+  ['float4-array', listOf(hashableF64Number)],
+  ['point', point],
+  ['point-array', listOf(point)],
+  ['path', listOf(point)],
+  ['path-array', listOf(listOf(point))],
+  ['polygon', listOf(point)],
+  ['polygon-array', listOf(listOf(point))],
+  ['box', segment],
+  ['box-array', listOf(segment)],
+  ['line', segment],
+  ['line-array', listOf(segment)],
+  ['lseg', segment],
+  ['lseg-array', listOf(segment)],
+  ['circle', circle],
+  ['circle-array', listOf(circle)],
+]);
 
 function infer(value: unknown): PgParameter {
   if (typeof value === 'string') {
@@ -222,11 +270,48 @@ function wrongType(tag: string): Error {
   return new Error(`PostgreSQL ${tag} parameter has the wrong type`);
 }
 
-/** JSON number when `value` is an exact safe integer, otherwise a decimal string. */
+/**
+ * JSON number when `value` is an exact safe integer, otherwise a decimal
+ * string. A `Number` passes through: an older runtime already rounded it.
+ */
 function jsonInt(value: unknown): unknown {
   if (typeof value !== 'bigint') return value === undefined ? null : value;
   const asNumber = Number(value);
   return Number.isSafeInteger(asNumber) && BigInt(asNumber) === value ? asNumber : value.toString();
+}
+
+const F64_SPECIAL_EXPONENT = 2047 - 1075;
+const F32_SPECIAL_EXPONENT = 255 - 150;
+const F64_HIDDEN_BIT = 2 ** 52;
+const F32_HIDDEN_BIT = 2 ** 23;
+
+/**
+ * Rebuild a `hashable-f64` (`tuple<u64, s16, s8>`, from
+ * `num::Float::integer_decode`) as a JavaScript number. The host decodes
+ * `float4` with the `f32` layout and `float8` with the `f64` layout; both give
+ * `sign * mantissa * 2^exponent`, and the mantissa is below 2^53, so a
+ * `Number` or a `BigInt` mantissa decodes exactly. Infinity and NaN keep the
+ * all-ones exponent of their layout.
+ */
+function hashableF64Number(value: unknown): unknown {
+  if (!Array.isArray(value) || value.length !== 3) return value;
+  const [rawMantissa, rawExponent, rawSign] = value as [unknown, unknown, unknown];
+  if (typeof rawMantissa !== 'bigint' && typeof rawMantissa !== 'number') return value;
+  const mantissa = Number(rawMantissa);
+  const exponent = Number(rawExponent);
+  const sign = Number(rawSign) < 0 ? -1 : 1;
+  const special =
+    (exponent === F64_SPECIAL_EXPONENT && mantissa >= F64_HIDDEN_BIT) ||
+    (exponent === F32_SPECIAL_EXPONENT &&
+      mantissa >= F32_HIDDEN_BIT &&
+      mantissa < 2 * F32_HIDDEN_BIT);
+  if (special) {
+    const hidden = exponent === F64_SPECIAL_EXPONENT ? F64_HIDDEN_BIT : F32_HIDDEN_BIT;
+    return mantissa === hidden ? sign * Number.POSITIVE_INFINITY : Number.NaN;
+  }
+  // 2 ** -1075 underflows to 0, so scale subnormals in two exact steps.
+  if (exponent < -1000) return sign * mantissa * 2 ** (exponent + 600) * 2 ** -600;
+  return sign * mantissa * 2 ** exponent;
 }
 
 /** Throw when a batch result is an `err` variant. */

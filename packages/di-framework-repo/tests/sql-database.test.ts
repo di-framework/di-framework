@@ -46,9 +46,20 @@ describe('sql-value conversion', () => {
       tag: 'real',
       val: Number.MAX_SAFE_INTEGER + 2,
     });
-    // componentize-qjs lowers WIT s64 from JS numbers; oversized bigints are rejected.
-    expect(() => toWasmSqlValue(2n ** 62n)).toThrow(/MAX_SAFE_INTEGER/);
+    // A safe bigint is sent as a Number, which every componentize-qjs runtime
+    // lowers. A larger s64 stays a BigInt (lowered exactly by 0.4.4-di.5 and
+    // jco); outside the s64 range it would wrap, so it is rejected.
     expect(toWasmSqlValue(42n)).toEqual({ tag: 'integer', val: 42 });
+    expect(toWasmSqlValue(-(2n ** 53n) + 1n)).toEqual({
+      tag: 'integer',
+      val: Number.MIN_SAFE_INTEGER,
+    });
+    expect(toWasmSqlValue(2n ** 62n)).toEqual({ tag: 'integer', val: 2n ** 62n });
+    expect(toWasmSqlValue(2n ** 53n)).toEqual({ tag: 'integer', val: 2n ** 53n });
+    expect(toWasmSqlValue(2n ** 63n - 1n)).toEqual({ tag: 'integer', val: 2n ** 63n - 1n });
+    expect(toWasmSqlValue(-(2n ** 63n))).toEqual({ tag: 'integer', val: -(2n ** 63n) });
+    expect(() => toWasmSqlValue(2n ** 63n)).toThrow(/signed 64-bit range/);
+    expect(() => toWasmSqlValue(-(2n ** 63n) - 1n)).toThrow(/signed 64-bit range/);
     expect(toWasmSqlValue(true)).toEqual({ tag: 'integer', val: 1 });
     expect(toWasmSqlValue(false)).toEqual({ tag: 'integer', val: 0 });
     expect(toWasmSqlValue('text')).toEqual({ tag: 'text', val: 'text' });
@@ -76,6 +87,11 @@ describe('sql-value conversion', () => {
     expect(fromWasmSqlValue({ tag: 'integer', val: 42n })).toBe(42);
     expect(fromWasmSqlValue({ tag: 'integer', val: 7 })).toBe(7);
     expect(fromWasmSqlValue({ tag: 'integer', val: 2n ** 62n })).toBe(2n ** 62n);
+    expect(fromWasmSqlValue({ tag: 'integer', val: -(2n ** 63n) })).toBe(-(2n ** 63n));
+    expect(fromWasmSqlValue({ tag: 'integer', val: 2n ** 53n - 1n })).toBe(Number.MAX_SAFE_INTEGER);
+    // componentize-qjs 0.4.4-di.4 and older lift s64 as a Number; it passes through.
+    expect(fromWasmSqlValue({ tag: 'integer', val: -(2 ** 53) + 1 })).toBe(-(2 ** 53) + 1);
+    expect(fromWasmSqlValue({ tag: 'integer', val: 2 ** 62 })).toBe(2 ** 62);
     expect(fromWasmSqlValue({ tag: 'real', val: 2.5 })).toBe(2.5);
     expect(fromWasmSqlValue({ tag: 'text', val: 'hi' })).toBe('hi');
     const bytes = new Uint8Array([9]);
@@ -317,6 +333,48 @@ async function exerciseSqlDatabase(db: SqlDatabase) {
 }
 
 describe('Wasm SQLite adapter', () => {
+  for (const runtime of ['bigint', 'number'] as const) {
+    test(`round-trips 64-bit integers when s64 lifts as ${runtime === 'bigint' ? 'BigInt (0.4.4-di.5)' : 'Number (0.4.4-di.4)'}`, async () => {
+      const sent: WasmSqlValue[][] = [];
+      const stored = new Map<string, bigint>();
+      const lift = (value: bigint) => (runtime === 'bigint' ? value : Number(value));
+      const connection: WasmSqliteConnection = {
+        run: (_sql, params) => {
+          sent.push(params);
+          const [key, value] = params;
+          if (key?.tag !== 'text' || value?.tag !== 'integer') throw new Error('unexpected params');
+          stored.set(key.val, BigInt(value.val));
+          return lift(1n);
+        },
+        query: () =>
+          [...stored].map(
+            ([key, value]): WasmSqlRow => [
+              ['k', { tag: 'text', val: key }],
+              ['v', { tag: 'integer', val: lift(value) }],
+            ],
+          ),
+        first: () => null,
+        exec: () => undefined,
+        close: () => undefined,
+      };
+      const db = createSqlDatabaseFromWasmConnection(connection);
+      const big = 2n ** 62n + 1n;
+      expect((await db.run('INSERT', ['big', big])).changes).toBe(1);
+      await db.run('INSERT', ['safe', 2n ** 53n - 1n]);
+      await db.run('INSERT', ['number', 7]);
+      expect(sent.map((params) => params[1])).toEqual([
+        { tag: 'integer', val: big },
+        { tag: 'integer', val: Number.MAX_SAFE_INTEGER },
+        { tag: 'integer', val: 7 },
+      ]);
+      expect(await db.query('SELECT')).toEqual([
+        { k: 'big', v: runtime === 'bigint' ? big : Number(big) },
+        { k: 'safe', v: Number.MAX_SAFE_INTEGER },
+        { k: 'number', v: 7 },
+      ]);
+    });
+  }
+
   for (const resultRecords of [true, false]) {
     test(`adapts a WIT connection (${resultRecords ? 'result records' : 'thrown payloads'})`, async () => {
       const { module, log, opened } = mockWasmSqlite(resultRecords);
