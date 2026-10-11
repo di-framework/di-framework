@@ -95,11 +95,11 @@
     "test": "bun test"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "devDependencies": {
     "fast-check": "^4.10.2",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "files": [
     "dist",
