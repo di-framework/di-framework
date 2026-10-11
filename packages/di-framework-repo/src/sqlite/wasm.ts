@@ -186,6 +186,19 @@ export function unwrapWasmResult<T>(value: T | WasmResult<T>): T {
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
 
+/**
+ * The bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view, or
+ * `undefined` for any other value. Views share the underlying buffer.
+ */
+export function wasmBlobBytes(value: unknown): Uint8Array | undefined {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return undefined;
+}
+
 /** Converts a bound JavaScript parameter into a `sql-value` variant. */
 export function toWasmSqlValue(value: unknown): WasmSqlValue {
   if (value === null || value === undefined) return { tag: 'null' };
@@ -207,23 +220,14 @@ export function toWasmSqlValue(value: unknown): WasmSqlValue {
       return { tag: 'integer', val: value ? 1 : 0 };
     case 'string':
       return { tag: 'text', val: value };
-    case 'object':
-      if (value instanceof Uint8Array) {
-        return { tag: 'blob', val: value };
-      }
-      if (value instanceof ArrayBuffer) {
-        return { tag: 'blob', val: new Uint8Array(value) };
-      }
-      if (ArrayBuffer.isView(value)) {
-        return {
-          tag: 'blob',
-          val: new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
-        };
-      }
+    case 'object': {
+      const bytes = wasmBlobBytes(value);
+      if (bytes) return { tag: 'blob', val: bytes };
       if (value instanceof Date) {
         return { tag: 'text', val: value.toISOString() };
       }
       break;
+    }
   }
   const label =
     typeof value === 'object' ? ((value as object).constructor?.name ?? 'object') : typeof value;

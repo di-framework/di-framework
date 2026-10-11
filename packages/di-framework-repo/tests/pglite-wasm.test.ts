@@ -168,28 +168,27 @@ describe('toPgPlaceholders', () => {
     expect(toPgPlaceholders('SELECT 1')).toBe('SELECT 1');
   });
 
-  test('skips literals, identifiers, comments, and jsonb operators', () => {
-    expect(toPgPlaceholders("SELECT '?', 'it''s ?', ? FROM t")).toBe(
-      "SELECT '?', 'it''s ?', $1 FROM t",
-    );
-    expect(toPgPlaceholders("SELECT E'\\'?', e'\\\\', ?")).toBe("SELECT E'\\'?', e'\\\\', $1");
-    expect(toPgPlaceholders("SELECT ae'\\', ?")).toBe("SELECT ae'\\', $1");
-    expect(toPgPlaceholders('SELECT "a?", "b""?", ? FROM t')).toBe(
-      'SELECT "a?", "b""?", $1 FROM t',
-    );
-    expect(toPgPlaceholders('SELECT ? -- what?\n, ?')).toBe('SELECT $1 -- what?\n, $2');
-    expect(toPgPlaceholders('SELECT ? -- trailing?')).toBe('SELECT $1 -- trailing?');
-    expect(toPgPlaceholders('SELECT /* a /* ? */ ? */ ?')).toBe('SELECT /* a /* ? */ ? */ $1');
-    expect(toPgPlaceholders('SELECT ? /* open ?')).toBe('SELECT $1 /* open ?');
-    expect(toPgPlaceholders('SELECT $$?$$, $fn$ ? $fn$, ?')).toBe('SELECT $$?$$, $fn$ ? $fn$, $1');
-    expect(toPgPlaceholders('SELECT ?, $q$ open ?')).toBe('SELECT $1, $q$ open ?');
-    expect(toPgPlaceholders("SELECT ?, 'open ?")).toBe("SELECT $1, 'open ?");
-    expect(toPgPlaceholders('SELECT doc ?| ?, doc ?& ? FROM t')).toBe(
-      'SELECT doc ?| $1, doc ?& $2 FROM t',
-    );
-    expect(toPgPlaceholders('SELECT a$1, $x, ?')).toBe('SELECT a$1, $x, $1');
-    expect(toPgPlaceholders('SELECT 5 / 2, - 1, ?')).toBe('SELECT 5 / 2, - 1, $1');
-  });
+  const skipped: Array<[sql: string, expected: string]> = [
+    ["SELECT '?', 'it''s ?', ? FROM t", "SELECT '?', 'it''s ?', $1 FROM t"],
+    ["SELECT E'\\'?', e'\\\\', ?", "SELECT E'\\'?', e'\\\\', $1"],
+    ["SELECT ae'\\', ?", "SELECT ae'\\', $1"],
+    ['SELECT "a?", "b""?", ? FROM t', 'SELECT "a?", "b""?", $1 FROM t'],
+    ['SELECT ? -- what?\n, ?', 'SELECT $1 -- what?\n, $2'],
+    ['SELECT ? -- trailing?', 'SELECT $1 -- trailing?'],
+    ['SELECT /* a /* ? */ ? */ ?', 'SELECT /* a /* ? */ ? */ $1'],
+    ['SELECT ? /* open ?', 'SELECT $1 /* open ?'],
+    ['SELECT $$?$$, $fn$ ? $fn$, ?', 'SELECT $$?$$, $fn$ ? $fn$, $1'],
+    ['SELECT ?, $q$ open ?', 'SELECT $1, $q$ open ?'],
+    ["SELECT ?, 'open ?", "SELECT $1, 'open ?"],
+    ['SELECT doc ?| ?, doc ?& ? FROM t', 'SELECT doc ?| $1, doc ?& $2 FROM t'],
+    ['SELECT a$1, $x, ?', 'SELECT a$1, $x, $1'],
+    ['SELECT 5 / 2, - 1, ?', 'SELECT 5 / 2, - 1, $1'],
+  ];
+  for (const [sql, expected] of skipped) {
+    test(`skips quoted text, comments, and jsonb operators: ${sql}`, () => {
+      expect(toPgPlaceholders(sql)).toBe(expected);
+    });
+  }
 
   test('leaves $n statements alone and rejects mixed styles', () => {
     expect(toPgPlaceholders('SELECT $1, $2')).toBe('SELECT $1, $2');

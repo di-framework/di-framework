@@ -23,7 +23,7 @@ import {
   type SqlDatabase,
   type SqlRow,
 } from '../sqlite/sql-database';
-import type { WasmMaybeResult, WasmResult } from '../sqlite/wasm';
+import { type WasmMaybeResult, type WasmResult, wasmBlobBytes } from '../sqlite/wasm';
 
 export const WASM_PGLITE_MODULE_ID = 'di-framework:pglite/database@0.2.0';
 
@@ -78,7 +78,7 @@ export interface WasmPgliteErrorRecord {
 
 export interface WasmPgliteErrorPayload {
   tag: string;
-  val?: string | WasmPgliteErrorRecord | undefined;
+  val?: string | WasmPgliteErrorRecord;
 }
 
 /**
@@ -180,29 +180,21 @@ export function toWasmPgValue(value: unknown): WasmPgValue {
     case 'string':
       return { tag: 'text', val: value };
     case 'object':
-      if (value instanceof Uint8Array) {
-        return { tag: 'blob', val: value };
-      }
-      if (value instanceof ArrayBuffer) {
-        return { tag: 'blob', val: new Uint8Array(value) };
-      }
-      if (ArrayBuffer.isView(value)) {
-        return {
-          tag: 'blob',
-          val: new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
-        };
-      }
-      if (value instanceof Date) {
-        if (Number.isNaN(value.getTime())) {
-          throw new TypeError('Cannot bind an invalid Date as a PostgreSQL parameter');
-        }
-        return { tag: 'timestamp', val: value.toISOString() };
-      }
-      return { tag: 'json', val: JSON.stringify(value) };
+      return toWasmPgObject(value as object);
   }
   throw new TypeError(
     `Cannot bind ${typeof value} as a PostgreSQL parameter; use null, number, bigint, boolean, string, Date, Uint8Array, or a JSON object`,
   );
+}
+
+function toWasmPgObject(value: object): WasmPgValue {
+  const bytes = wasmBlobBytes(value);
+  if (bytes) return { tag: 'blob', val: bytes };
+  if (!(value instanceof Date)) return { tag: 'json', val: JSON.stringify(value) };
+  if (Number.isNaN(value.getTime())) {
+    throw new TypeError('Cannot bind an invalid Date as a PostgreSQL parameter');
+  }
+  return { tag: 'timestamp', val: value.toISOString() };
 }
 
 const RFC3339_UTC = /^(\d{4,}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z$/;
@@ -264,8 +256,8 @@ export function fromWasmPgRow(row: WasmPgRow): SqlRow {
   return result;
 }
 
-const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
-const DOLLAR_TAG = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
+const IDENTIFIER_CHAR = /[\w$]/;
+const DOLLAR_TAG = /^\$(?:[A-Za-z_]\w*)?\$/;
 const POSITIONAL = /^\$\d+/;
 
 function skipQuoted(sql: string, start: number, quote: string, backslashes: boolean): number {
@@ -323,38 +315,18 @@ export function toPgPlaceholders(sql: string): string {
   let count = 0;
   let positional = false;
   while (index < sql.length) {
-    const char = sql[index] as string;
-    const next = sql[index + 1];
-    let end = index + 1;
-    if (char === "'") {
-      end = skipQuoted(sql, index, "'", isEscapeString(sql, index));
-    } else if (char === '"') {
-      end = skipQuoted(sql, index, '"', false);
-    } else if (char === '-' && next === '-') {
-      const newline = sql.indexOf('\n', index);
-      end = newline < 0 ? sql.length : newline;
-    } else if (char === '/' && next === '*') {
-      end = skipBlockComment(sql, index);
-    } else if (char === '$' && !IDENTIFIER_CHAR.test(sql[index - 1] ?? '')) {
-      const rest = sql.slice(index);
-      const tag = DOLLAR_TAG.exec(rest)?.[0];
-      const number = POSITIONAL.exec(rest)?.[0];
-      if (tag) {
-        const close = sql.indexOf(tag, index + tag.length);
-        end = close < 0 ? sql.length : close + tag.length;
-      } else if (number) {
-        positional = true;
-        end = index + number.length;
-      }
-    } else if (char === '?') {
-      if (next === '|' || next === '&') {
-        end = index + 2;
-      } else {
-        out += `$${++count}`;
-        index++;
-        continue;
-      }
+    let end = skippedTokenEnd(sql, index);
+    if (end === undefined && sql[index] === '$') {
+      const dollar = dollarTokenEnd(sql, index);
+      end = dollar.end;
+      positional ||= dollar.positional;
     }
+    if (end === undefined && sql[index] === '?') {
+      out += `$${++count}`;
+      index++;
+      continue;
+    }
+    end ??= index + 1;
     out += sql.slice(index, end);
     index = end;
   }
@@ -362,6 +334,35 @@ export function toPgPlaceholders(sql: string): string {
     throw new TypeError('Cannot mix ? placeholders with $n placeholders in one statement');
   }
   return out;
+}
+
+/** End of the string, identifier, comment, or `?|`/`?&` operator at `index`. */
+function skippedTokenEnd(sql: string, index: number): number | undefined {
+  const char = sql[index];
+  const next = sql[index + 1];
+  if (char === "'") return skipQuoted(sql, index, "'", isEscapeString(sql, index));
+  if (char === '"') return skipQuoted(sql, index, '"', false);
+  if (char === '-' && next === '-') {
+    const newline = sql.indexOf('\n', index);
+    return newline < 0 ? sql.length : newline;
+  }
+  if (char === '/' && next === '*') return skipBlockComment(sql, index);
+  if (char === '?' && (next === '|' || next === '&')) return index + 2;
+  return undefined;
+}
+
+/** End of the `$tag$...$tag$` body or `$n` placeholder that starts at `index`. */
+function dollarTokenEnd(sql: string, index: number): { end: number; positional: boolean } {
+  if (IDENTIFIER_CHAR.test(sql[index - 1] ?? '')) return { end: index + 1, positional: false };
+  const rest = sql.slice(index);
+  const tag = DOLLAR_TAG.exec(rest)?.[0];
+  if (tag) {
+    const close = sql.indexOf(tag, index + tag.length);
+    return { end: close < 0 ? sql.length : close + tag.length, positional: false };
+  }
+  const number = POSITIONAL.exec(rest)?.[0];
+  if (number) return { end: index + number.length, positional: true };
+  return { end: index + 1, positional: false };
 }
 
 async function call<T>(fn: () => WasmMaybeResult<T>): Promise<T> {
@@ -519,17 +520,15 @@ let cachedModule: Promise<WasmPgliteModule> | undefined;
 
 /** Imports `di-framework:pglite/database@0.2.0`, provided by the composed provider component. */
 export function loadWasmPgliteModule(): Promise<WasmPgliteModule> {
-  if (!cachedModule) {
-    cachedModule = import('di-framework:pglite/database@0.2.0')
-      .then((module) => module as unknown as WasmPgliteModule)
-      .catch((error) => {
-        cachedModule = undefined;
-        throw new Error(
-          `The ${WASM_PGLITE_MODULE_ID} import is unavailable in this runtime; compose the component with the di-framework PGlite provider`,
-          { cause: error },
-        );
-      });
-  }
+  cachedModule ??= import('di-framework:pglite/database@0.2.0')
+    .then((module) => module as unknown as WasmPgliteModule)
+    .catch((error) => {
+      cachedModule = undefined;
+      throw new Error(
+        `The ${WASM_PGLITE_MODULE_ID} import is unavailable in this runtime; compose the component with the di-framework PGlite provider`,
+        { cause: error },
+      );
+    });
   return cachedModule;
 }
 
