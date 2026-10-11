@@ -17,6 +17,8 @@ export interface SqlDatabase {
    * issued outside a transaction. Nested `transaction()` calls on the callback
    * view join the outer one. Same-context statements on the outer handle while
    * a transaction is open still join it; concurrent tasks wait for the lock.
+   * Joining ends with the transaction: a continuation that runs afterwards (a
+   * timer scheduled inside it, a retained callback view) waits for the lock.
    */
   transaction<T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T>;
   close?(): Promise<void> | void;
@@ -100,14 +102,16 @@ export function createSqlDatabase(
 ): SqlDatabase {
   const begin = options.beginStatement ?? 'BEGIN IMMEDIATE';
   const mutex = new AsyncMutex();
-  const mutexHeld = new AsyncLocalStorage<true>();
-  const activeTransaction = new AsyncLocalStorage<SqlDatabase>();
+  // Leases are cleared when the lock or transaction ends, so a continuation
+  // that outlives it (a timer, a retained view) waits like any other caller.
+  const mutexHeld = new AsyncLocalStorage<{ active: boolean }>();
+  const activeTransaction = new AsyncLocalStorage<{ active: boolean }>();
 
-  const run = async (sql: string, params: unknown[] = []) =>
+  const run = async (sql: string, params: unknown[]) =>
     normalizeChanges(await driver.run(sql, params));
-  const query = async <T = SqlRow>(sql: string, params: unknown[] = []) =>
+  const query = async <T = SqlRow>(sql: string, params: unknown[]) =>
     (await driver.query(sql, params)) as T[];
-  const first = async <T = SqlRow>(sql: string, params: unknown[] = []): Promise<T | null> => {
+  const first = async <T = SqlRow>(sql: string, params: unknown[]): Promise<T | null> => {
     if (typeof driver.first === 'function') {
       return ((await driver.first(sql, params)) as T | null | undefined) ?? null;
     }
@@ -119,40 +123,50 @@ export function createSqlDatabase(
   };
 
   const locked = async <T>(fn: () => Promise<T>): Promise<T> => {
-    if (mutexHeld.getStore() === true) return fn();
-    return mutex.run(() => mutexHeld.run(true, fn));
+    if (mutexHeld.getStore()?.active) return fn();
+    return mutex.run(async () => {
+      const lease = { active: true };
+      try {
+        return await mutexHeld.run(lease, fn);
+      } finally {
+        lease.active = false;
+      }
+    });
+  };
+
+  const statements = {
+    [SQL_DATABASE_BRAND]: true,
+    run: (sql: string, params: unknown[] = []) => locked(() => run(sql, params)),
+    query: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => query<T>(sql, params)),
+    first: <T = SqlRow>(sql: string, params: unknown[] = []) => locked(() => first<T>(sql, params)),
+    exec: (sql: string) => locked(() => exec(sql)),
   };
 
   const transactionView: SqlDatabase = {
-    [SQL_DATABASE_BRAND]: true,
-    run,
-    query,
-    first,
-    exec,
-    transaction: (fn) => fn(transactionView),
+    ...statements,
+    transaction: (fn) => database.transaction(fn),
   } as SqlDatabase;
 
   const database: SqlDatabase = {
-    [SQL_DATABASE_BRAND]: true,
-    run: (sql, params = []) => locked(() => run(sql, params)),
-    query: (sql, params = []) => locked(() => query(sql, params)),
-    first: (sql, params = []) => locked(() => first(sql, params)),
-    exec: (sql) => locked(() => exec(sql)),
+    ...statements,
     transaction: async <T>(fn: (db: SqlDatabase) => Promise<T>): Promise<T> => {
-      if (activeTransaction.getStore() === transactionView) {
-        return fn(transactionView);
-      }
+      if (activeTransaction.getStore()?.active) return fn(transactionView);
       return locked(async () => {
-        await exec(begin);
+        const lease = { active: true };
         try {
-          const result = await activeTransaction.run(transactionView, () => fn(transactionView));
-          await exec('COMMIT');
-          return result;
-        } catch (error) {
+          await exec(begin);
           try {
-            await exec('ROLLBACK');
-          } catch {}
-          throw error;
+            const result = await activeTransaction.run(lease, () => fn(transactionView));
+            await exec('COMMIT');
+            return result;
+          } catch (error) {
+            try {
+              await exec('ROLLBACK');
+            } catch {}
+            throw error;
+          }
+        } finally {
+          lease.active = false;
         }
       });
     },

@@ -471,6 +471,57 @@ describe('SqlDatabase wrappers and backend registry', () => {
     await db.close?.();
   });
 
+  test('createSqlDatabase stops joining a transaction once it has ended', async () => {
+    const log: string[] = [];
+    const db = createSqlDatabase({
+      run: (sql) => {
+        log.push(sql);
+        return { changes: 1 };
+      },
+      query: (sql) => {
+        log.push(sql);
+        return [];
+      },
+      exec: (sql) => {
+        log.push(sql);
+      },
+    });
+    const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    let leaked!: Promise<unknown>;
+    let kept!: SqlDatabase;
+    await db.transaction(async (tx) => {
+      kept = tx;
+      await tx.transaction(async (nested) => nested.run('FIRST'));
+      leaked = tick(5).then(() => db.run('LEAKED'));
+    });
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const second = db.transaction(async (tx) => {
+      await tx.run('SECOND');
+      await hold;
+      throw new Error('drop second');
+    });
+    await tick(15);
+    const stale = kept.run('STALE');
+    const staleTx = kept.transaction(async (tx) => tx.query('STALE TX'));
+    await tick(5);
+    // Neither the timer nor the retained view runs inside the second transaction.
+    expect(log).toEqual(['BEGIN IMMEDIATE', 'FIRST', 'COMMIT', 'BEGIN IMMEDIATE', 'SECOND']);
+    release();
+    await expect(second).rejects.toThrow('drop second');
+    await Promise.all([leaked, stale, staleTx]);
+    expect(log.slice(5)).toEqual([
+      'ROLLBACK',
+      'LEAKED',
+      'STALE',
+      'BEGIN IMMEDIATE',
+      'STALE TX',
+      'COMMIT',
+    ]);
+  });
+
   test('AsyncMutex releases on failure and preserves order', async () => {
     const mutex = new AsyncMutex();
     const order: number[] = [];

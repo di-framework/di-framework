@@ -8,6 +8,7 @@
  * return `{ tag: 'ok' | 'err', val }` records, others throw an error object
  * carrying the variant as `payload`. Both shapes are normalized here.
  */
+import { wasmBlobBytes } from '../wasm-values';
 import { registerSqliteOpener } from './open';
 import { createSqlDatabase, type SqlDatabase, type SqlDriver, type SqlRow } from './sql-database';
 
@@ -185,19 +186,6 @@ export function unwrapWasmResult<T>(value: T | WasmResult<T>): T {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
-
-/**
- * The bytes of a `Uint8Array`, `ArrayBuffer`, or other `ArrayBuffer` view, or
- * `undefined` for any other value. Views share the underlying buffer.
- */
-export function wasmBlobBytes(value: unknown): Uint8Array | undefined {
-  if (value instanceof Uint8Array) return value;
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-  }
-  return undefined;
-}
 
 /** Converts a bound JavaScript parameter into a `sql-value` variant. */
 export function toWasmSqlValue(value: unknown): WasmSqlValue {

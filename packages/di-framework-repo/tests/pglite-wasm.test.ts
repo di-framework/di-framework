@@ -9,6 +9,7 @@ import {
   isUniqueViolation,
   normalizeWasmPgliteError,
   pgliteTimestampIso,
+  type SqlDatabase,
   toPgPlaceholders,
   toWasmPgParams,
   toWasmPgValue,
@@ -183,6 +184,22 @@ describe('toPgPlaceholders', () => {
     ['SELECT doc ?| ?, doc ?& ? FROM t', 'SELECT doc ?| $1, doc ?& $2 FROM t'],
     ['SELECT a$1, $x, ?', 'SELECT a$1, $x, $1'],
     ['SELECT 5 / 2, - 1, ?', 'SELECT 5 / 2, - 1, $1'],
+    // Shapes taken from identity-server's repositories.
+    ['SELECT * FROM users WHERE id = ?::uuid', 'SELECT * FROM users WHERE id = $1::uuid'],
+    [
+      'UPDATE t SET doc = ?::text::jsonb WHERE id = ?',
+      'UPDATE t SET doc = $1::text::jsonb WHERE id = $2',
+    ],
+    [
+      'SELECT pg_advisory_xact_lock(hashtextextended(?, 0))',
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+    ],
+    [
+      `SELECT id FROM t WHERE position('"invalidated":true' IN data) = 0 AND c = ?`,
+      `SELECT id FROM t WHERE position('"invalidated":true' IN data) = 0 AND c = $1`,
+    ],
+    ["SELECT 'is this ?' AS q, ? AS a", "SELECT 'is this ?' AS q, $1 AS a"],
+    ["SELECT ? || 'x' FROM t WHERE c = ?", "SELECT $1 || 'x' FROM t WHERE c = $2"],
   ];
   for (const [sql, expected] of skipped) {
     test(`skips quoted text, comments, and jsonb operators: ${sql}`, () => {
@@ -500,6 +517,93 @@ describe('pglite SqlDatabase adapter', () => {
       'run OUTSIDE $1',
       'BEGIN',
       'run SECOND $1',
+      'COMMIT',
+    ]);
+  });
+
+  test('a statement scheduled inside a transaction waits once that transaction has ended', async () => {
+    const { connection, log } = fakeConnection();
+    const db = createSqlDatabaseFromWasmPgliteConnection(connection);
+    let leaked!: Promise<unknown>;
+    await db.transaction(async (tx) => {
+      await tx.run('FIRST ?', [1]);
+      leaked = tick(5).then(() => db.run('LEAKED ?', [1]));
+    });
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const second = db.transaction(async (tx) => {
+      await tx.run('SECOND ?', [1]);
+      await hold;
+      throw new Error('drop second');
+    });
+    await tick(15);
+    // The leaked statement must not run inside the second transaction.
+    expect(log).toEqual(['BEGIN', 'run FIRST $1', 'COMMIT', 'BEGIN', 'run SECOND $1']);
+    release();
+    await expect(second).rejects.toThrow('drop second');
+    await leaked;
+    expect(log.slice(5)).toEqual(['ROLLBACK', 'run LEAKED $1']);
+  });
+
+  test('a callback view kept past its transaction queues and opens new transactions', async () => {
+    const { connection, log } = fakeConnection();
+    const db = createSqlDatabaseFromWasmPgliteConnection(connection);
+    let kept!: SqlDatabase;
+    await db.transaction(async (tx) => {
+      kept = tx;
+    });
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const other = db.transaction(async (tx) => {
+      await tx.run('OTHER ?', [1]);
+      await hold;
+      throw new Error('drop other');
+    });
+    await tick(5);
+    const stale = kept.run('STALE ?', [1]);
+    const staleTx = kept.transaction(async (tx) => tx.query('STALE TX ?', [1]));
+    await tick(5);
+    expect(log).toEqual(['BEGIN', 'COMMIT', 'BEGIN', 'run OTHER $1']);
+    release();
+    await expect(other).rejects.toThrow('drop other');
+    await stale;
+    expect(await staleTx).toEqual([{ n: 1 }]);
+    expect(log.slice(4)).toEqual([
+      'ROLLBACK',
+      'run STALE $1',
+      'BEGIN',
+      'query STALE TX $1',
+      'COMMIT',
+    ]);
+  });
+
+  test('a continuation that outlives its savepoint joins the still-open transaction', async () => {
+    const { connection, log } = fakeConnection();
+    const db = createSqlDatabaseFromWasmPgliteConnection(connection);
+    await db.transaction(async (tx) => {
+      let later!: Promise<unknown>;
+      await tx.transaction(async (savepoint) => {
+        await savepoint.run('IN SP ?', [1]);
+        later = tick(5).then(async () => {
+          await db.run('AFTER SP ?', [1]);
+          await db.transaction(async (inner) => inner.run('NEW SP ?', [1]));
+        });
+      });
+      await later;
+    });
+    expect(log).toEqual([
+      'BEGIN',
+      'SAVEPOINT di_sp_1',
+      'run IN SP $1',
+      'RELEASE di_sp_1',
+      'run AFTER SP $1',
+      'SAVEPOINT di_sp_2',
+      'run NEW SP $1',
+      'RELEASE di_sp_2',
       'COMMIT',
     ]);
   });
